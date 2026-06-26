@@ -1,3 +1,4 @@
+pub mod agent_runtime;
 pub mod approvals;
 pub mod campaigns;
 pub mod candidate_queue;
@@ -14,5 +15,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(approvals::migrations());
     migrations.extend(metrics::migrations());
     migrations.extend(workflows::migrations());
+    migrations.extend(agent_runtime::migrations());
     migrations
 }

@@ -288,6 +288,99 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type AgentRole =
+      | "researcher"
+      | "scorer"
+      | "drafter"
+      | "auditor"
+      | "scheduler"
+      | "analyst";
+
+    type AgentProviderKey =
+      | "dry_run"
+      | "openai"
+      | "anthropic"
+      | "google"
+      | "custom";
+
+    type AgentRunStatus =
+      | "queued"
+      | "running"
+      | "waiting_approval"
+      | "completed"
+      | "failed"
+      | "cancelled";
+
+    type AgentToolName =
+      | "research_posts"
+      | "score_relevance"
+      | "draft_post"
+      | "audit_post"
+      | "schedule_post"
+      | "collect_metrics";
+
+    type AgentToolCallStatus =
+      | "requested"
+      | "running"
+      | "waiting_approval"
+      | "completed"
+      | "failed"
+      | "rejected";
+
+    type AgentRunEventType =
+      | "run_created"
+      | "model_started"
+      | "model_streamed"
+      | "tool_requested"
+      | "tool_completed"
+      | "tool_failed"
+      | "approval_required"
+      | "run_completed"
+      | "run_failed"
+      | "run_cancelled";
+
+    type AgentRun = {
+      id: number;
+      campaign_id: number;
+      workflow_run_id: number | null;
+      workflow_step_id: number | null;
+      agent_role: AgentRole;
+      provider_key: AgentProviderKey;
+      model_name: string;
+      status: AgentRunStatus;
+      input_summary: string;
+      output_summary: string;
+      error_message: string;
+      iteration_count: number;
+      started_at: string | null;
+      completed_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type AgentToolCall = {
+      id: number;
+      agent_run_id: number;
+      provider_tool_call_id: string;
+      tool_name: AgentToolName;
+      status: AgentToolCallStatus;
+      requires_approval: number;
+      input_json: string;
+      output_json: string;
+      error_message: string;
+      started_at: string | null;
+      completed_at: string | null;
+      created_at: string;
+    };
+
+    type AgentRunEvent = {
+      id: number;
+      agent_run_id: number;
+      event_type: AgentRunEventType;
+      summary: string;
+      created_at: string;
+    };
+
     type TransactionSnapshot = {
       campaigns: Campaign[];
       keywords: Keyword[];
@@ -306,6 +399,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       workflowRuns: WorkflowRun[];
       workflowSteps: WorkflowStep[];
       workflowEvents: WorkflowEvent[];
+      agentRuns: AgentRun[];
+      agentToolCalls: AgentToolCall[];
+      agentRunEvents: AgentRunEvent[];
       nextCampaignId: number;
       nextKeywordId: number;
       nextTargetPostId: number;
@@ -323,6 +419,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextWorkflowRunId: number;
       nextWorkflowStepId: number;
       nextWorkflowEventId: number;
+      nextAgentRunId: number;
+      nextAgentToolCallId: number;
+      nextAgentRunEventId: number;
     };
 
     const w = window as unknown as Record<string, unknown>;
@@ -343,6 +442,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const workflowRuns: WorkflowRun[] = [];
     const workflowSteps: WorkflowStep[] = [];
     const workflowEvents: WorkflowEvent[] = [];
+    const agentRuns: AgentRun[] = [];
+    const agentToolCalls: AgentToolCall[] = [];
+    const agentRunEvents: AgentRunEvent[] = [];
     let nextCampaignId = 1;
     let nextKeywordId = 1;
     let nextTargetPostId = 1;
@@ -360,6 +462,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextWorkflowRunId = 1;
     let nextWorkflowStepId = 1;
     let nextWorkflowEventId = 1;
+    let nextAgentRunId = 1;
+    let nextAgentToolCallId = 1;
+    let nextAgentRunEventId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
@@ -406,6 +511,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         workflowRuns: cloneRows(workflowRuns),
         workflowSteps: cloneRows(workflowSteps),
         workflowEvents: cloneRows(workflowEvents),
+        agentRuns: cloneRows(agentRuns),
+        agentToolCalls: cloneRows(agentToolCalls),
+        agentRunEvents: cloneRows(agentRunEvents),
         nextCampaignId,
         nextKeywordId,
         nextTargetPostId,
@@ -423,6 +531,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextWorkflowRunId,
         nextWorkflowStepId,
         nextWorkflowEventId,
+        nextAgentRunId,
+        nextAgentToolCallId,
+        nextAgentRunEventId,
       };
     }
 
@@ -448,6 +559,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(workflowRuns, snapshot.workflowRuns);
       restoreRows(workflowSteps, snapshot.workflowSteps);
       restoreRows(workflowEvents, snapshot.workflowEvents);
+      restoreRows(agentRuns, snapshot.agentRuns);
+      restoreRows(agentToolCalls, snapshot.agentToolCalls);
+      restoreRows(agentRunEvents, snapshot.agentRunEvents);
       nextCampaignId = snapshot.nextCampaignId;
       nextKeywordId = snapshot.nextKeywordId;
       nextTargetPostId = snapshot.nextTargetPostId;
@@ -465,6 +579,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextWorkflowRunId = snapshot.nextWorkflowRunId;
       nextWorkflowStepId = snapshot.nextWorkflowStepId;
       nextWorkflowEventId = snapshot.nextWorkflowEventId;
+      nextAgentRunId = snapshot.nextAgentRunId;
+      nextAgentToolCallId = snapshot.nextAgentToolCallId;
+      nextAgentRunEventId = snapshot.nextAgentRunEventId;
     }
 
     function getCandidateJoinRow(
@@ -1093,6 +1210,102 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
     }
 
+    function selectAgentRunJoin(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return agentRuns
+        .filter((run) => campaignId === null || run.campaign_id === campaignId)
+        .map((run) => {
+          const campaign = campaigns.find((row) => row.id === run.campaign_id);
+          if (!campaign) return null;
+          return {
+            ...run,
+            campaign_name: campaign.name,
+            campaign_status: campaign.status,
+          };
+        })
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const order: Record<string, number> = {
+            running: 1,
+            waiting_approval: 2,
+            queued: 3,
+            failed: 4,
+            completed: 5,
+            cancelled: 6,
+          };
+          const statusDelta =
+            (order[String(left.status)] ?? 7) - (order[String(right.status)] ?? 7);
+          if (statusDelta !== 0) return statusDelta;
+          const updatedDelta = String(right.updated_at).localeCompare(
+            String(left.updated_at),
+          );
+          if (updatedDelta !== 0) return updatedDelta;
+          return Number(right.id) - Number(left.id);
+        });
+    }
+
+    function selectAgentRunValidation(values: unknown[]): unknown[] {
+      const runId = Number(values[0] ?? 0);
+      const run = agentRuns.find((row) => row.id === runId);
+      const campaign = run
+        ? campaigns.find((row) => row.id === run.campaign_id)
+        : undefined;
+      if (!run || !campaign) return [];
+      return [{ ...run, campaign_status: campaign.status }];
+    }
+
+    function selectAgentToolCalls(values: unknown[]): AgentToolCall[] {
+      const ids = new Set(
+        values.filter((value): value is number => typeof value === "number"),
+      );
+      return agentToolCalls
+        .filter((toolCall) => ids.has(toolCall.agent_run_id))
+        .sort((left, right) => {
+          if (left.agent_run_id !== right.agent_run_id) {
+            return left.agent_run_id - right.agent_run_id;
+          }
+          return left.id - right.id;
+        });
+    }
+
+    function selectAgentRunEvents(values: unknown[]): AgentRunEvent[] {
+      const ids = new Set(
+        values.filter((value): value is number => typeof value === "number"),
+      );
+      return agentRunEvents
+        .filter((event) => ids.has(event.agent_run_id))
+        .sort((left, right) => {
+          if (left.agent_run_id !== right.agent_run_id) {
+            return left.agent_run_id - right.agent_run_id;
+          }
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          if (createdDelta !== 0) return createdDelta;
+          return right.id - left.id;
+        });
+    }
+
+    function selectWorkflowRunById(values: unknown[]): unknown[] {
+      const runId = Number(values[0] ?? 0);
+      const run = workflowRuns.find((row) => row.id === runId);
+      return run ? [{ id: run.id, campaign_id: run.campaign_id }] : [];
+    }
+
+    function selectWorkflowStepOwnership(values: unknown[]): unknown[] {
+      const stepId = Number(values[0] ?? 0);
+      const step = workflowSteps.find((row) => row.id === stepId);
+      const run = step
+        ? workflowRuns.find((row) => row.id === step.workflow_run_id)
+        : undefined;
+      if (!step || !run) return [];
+      return [
+        {
+          id: step.id,
+          workflow_run_id: step.workflow_run_id,
+          campaign_id: run.campaign_id,
+        },
+      ];
+    }
+
     function parseUpdateColumns(query: string, tableName: string): string[] {
       return query
         .slice(
@@ -1153,6 +1366,31 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               .length,
           },
         ];
+      }
+      if (
+        query.includes("FROM agent_runs ar") &&
+        query.includes("c.name AS campaign_name")
+      ) {
+        return selectAgentRunJoin(values);
+      }
+      if (query.includes("FROM agent_runs ar")) {
+        return selectAgentRunValidation(values);
+      }
+      if (query.includes("FROM agent_tool_calls")) {
+        return selectAgentToolCalls(values);
+      }
+      if (query.includes("FROM agent_run_events")) {
+        return selectAgentRunEvents(values);
+      }
+      if (query.includes("FROM workflow_runs WHERE id")) {
+        return selectWorkflowRunById(values);
+      }
+      if (
+        query.includes("FROM workflow_steps ws") &&
+        query.includes("ws.workflow_run_id") &&
+        !query.includes("run_status")
+      ) {
+        return selectWorkflowStepOwnership(values);
       }
       if (query.includes("FROM workflow_steps ws")) {
         return selectWorkflowStepValidation(values);
@@ -1660,6 +1898,66 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: event.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO agent_runs")) {
+        const run: AgentRun = {
+          id: nextAgentRunId,
+          campaign_id: Number(values[0] ?? 0),
+          workflow_run_id: values[1] === null ? null : Number(values[1] ?? 0),
+          workflow_step_id: values[2] === null ? null : Number(values[2] ?? 0),
+          agent_role: values[3] as AgentRole,
+          provider_key: values[4] as AgentProviderKey,
+          model_name: String(values[5] ?? ""),
+          status: "queued",
+          input_summary: String(values[6] ?? ""),
+          output_summary: "",
+          error_message: "",
+          iteration_count: 0,
+          started_at: null,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        agentRuns.push(run);
+        nextAgentRunId += 1;
+        return { lastInsertId: run.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO agent_run_events")) {
+        const event: AgentRunEvent = {
+          id: nextAgentRunEventId,
+          agent_run_id: Number(values[0] ?? 0),
+          event_type: values[1] as AgentRunEventType,
+          summary: String(values[2] ?? ""),
+          created_at: now,
+        };
+        agentRunEvents.push(event);
+        nextAgentRunEventId += 1;
+        return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO agent_tool_calls")) {
+        const status = values[3] as AgentToolCallStatus;
+        const toolCall: AgentToolCall = {
+          id: nextAgentToolCallId,
+          agent_run_id: Number(values[0] ?? 0),
+          provider_tool_call_id: String(values[1] ?? ""),
+          tool_name: values[2] as AgentToolName,
+          status,
+          requires_approval: Number(values[4] ?? 0),
+          input_json: String(values[5] ?? "{}"),
+          output_json: String(values[6] ?? "{}"),
+          error_message: String(values[7] ?? ""),
+          started_at: now,
+          completed_at: ["completed", "failed", "rejected"].includes(status)
+            ? now
+            : null,
+          created_at: now,
+        };
+        agentToolCalls.push(toolCall);
+        nextAgentToolCallId += 1;
+        return { lastInsertId: toolCall.id, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT INTO workflow_runs")) {
         const run: WorkflowRun = {
           id: nextWorkflowRunId,
@@ -1712,6 +2010,44 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         workflowEvents.push(event);
         nextWorkflowEventId += 1;
         return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE agent_runs")) {
+        const literalRunning = query.includes("status = 'running'");
+        const literalCancelled = query.includes("status = 'cancelled'");
+        const id = literalRunning || literalCancelled
+          ? Number(values[0] ?? 0)
+          : Number(values[4] ?? 0);
+        const run = agentRuns.find((row) => row.id === id);
+        if (run) {
+          if (literalRunning) {
+            if (
+              query.includes("status IN ('queued', 'failed')") &&
+              !["queued", "failed"].includes(run.status)
+            ) {
+              return { lastInsertId: id, rowsAffected: 0 };
+            }
+            run.status = "running";
+            run.started_at = run.started_at ?? now;
+            run.completed_at = null;
+            run.error_message = "";
+          } else if (literalCancelled) {
+            run.status = "cancelled";
+            run.completed_at = now;
+          } else {
+            run.status = values[0] as AgentRunStatus;
+            run.output_summary = String(values[1] ?? "");
+            run.error_message = String(values[2] ?? "");
+            run.iteration_count = Number(values[3] ?? 0);
+            run.completed_at = ["completed", "failed", "cancelled"].includes(
+              run.status,
+            )
+              ? now
+              : null;
+          }
+          run.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
       }
 
       if (query.includes("UPDATE workflow_runs")) {
@@ -2093,6 +2429,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         removeRows(postMetrics, (metric) => metric.campaign_id === id);
         removeRows(campaignMemory, (memory) => memory.campaign_id === id);
         removeRows(learningEvents, (event) => event.campaign_id === id);
+        const removedAgentRunIds = agentRuns
+          .filter((run) => run.campaign_id === id)
+          .map((run) => run.id);
+        removeRows(agentRuns, (run) => run.campaign_id === id);
+        removeRows(agentToolCalls, (toolCall) =>
+          removedAgentRunIds.includes(toolCall.agent_run_id),
+        );
+        removeRows(agentRunEvents, (event) =>
+          removedAgentRunIds.includes(event.agent_run_id),
+        );
         removeRows(
           draftAudits,
           (audit) =>
@@ -2105,6 +2451,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       return { lastInsertId: 0, rowsAffected: 1 };
     }
+
+    w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
 
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
       campaigns: campaigns.length,
@@ -2121,6 +2469,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       postMetrics: postMetrics.length,
       campaignMemory: campaignMemory.length,
       learningEvents: learningEvents.length,
+      workflowRuns: workflowRuns.length,
+      workflowSteps: workflowSteps.length,
+      workflowEvents: workflowEvents.length,
+      agentRuns: agentRuns.length,
+      agentToolCalls: agentToolCalls.length,
+      agentRunEvents: agentRunEvents.length,
     });
 
     const mockWindow = {

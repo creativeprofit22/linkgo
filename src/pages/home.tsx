@@ -1,6 +1,7 @@
 import {
   Activity,
   BarChart3,
+  Bot,
   CheckCircle2,
   FileText,
   ListChecks,
@@ -14,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Toaster } from "@/components/ui/sonner";
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
 import { cn } from "@/lib/utils";
+import { AgentRuntimeView } from "@/features/agent-runtime";
 import { ApprovalsView } from "@/features/approvals";
 import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
 import { CandidateQueueView } from "@/features/candidate-queue";
@@ -27,7 +29,8 @@ type HomeTab =
   | "drafts"
   | "approvals"
   | "metrics"
-  | "workflows";
+  | "workflows"
+  | "agents";
 
 type RoadmapTab = {
   id: HomeTab;
@@ -86,6 +89,14 @@ const tabs: RoadmapTab[] = [
     icon: Workflow,
     enabled: true,
     docHref: "docs/features/workflows.md",
+  },
+  {
+    id: "agents",
+    label: "Agent Runtime",
+    description: "Typed local tool loop and dry-run provider.",
+    icon: Bot,
+    enabled: true,
+    docHref: "docs/features/agent-runtime.md",
   },
 ];
 
@@ -163,8 +174,10 @@ export function HomePage(): React.ReactNode {
             <ApprovalsView />
           ) : activeRoadmapTab.id === "metrics" ? (
             <MetricsView />
-          ) : (
+          ) : activeRoadmapTab.id === "workflows" ? (
             <WorkflowsView />
+          ) : (
+            <AgentRuntimeView />
           )}
         </section>
       </div>

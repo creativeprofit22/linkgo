@@ -19,7 +19,7 @@ test("app root renders campaigns by default", async ({ page }) => {
   await expect(page.getByText("No campaigns yet")).toBeVisible();
 });
 
-test("queue, drafts, approvals, metrics, and workflows render real views", async ({ page }) => {
+test("queue, drafts, approvals, metrics, workflows, and agent runtime render real views", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: /Queue/ }).click();
@@ -58,4 +58,12 @@ test("queue, drafts, approvals, metrics, and workflows render real views", async
     "aria-current",
     "page",
   );
+
+  await page.getByRole("button", { name: /Agent Runtime/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Agent Runtime", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Agent Runtime/ }),
+  ).toHaveAttribute("aria-current", "page");
 });

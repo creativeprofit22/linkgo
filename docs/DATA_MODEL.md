@@ -332,6 +332,66 @@ Stores append-only workflow lifecycle events.
 
 Indexes: `idx_workflow_events_run_id`, `idx_workflow_events_step_id`, `idx_workflow_events_event_type`, `idx_workflow_events_created_at`.
 
+### `agent_runs`
+
+Stores one local agent execution attempt for one campaign, optionally tied to a workflow run or step.
+
+| Column             | Type    | Notes                                                                                    |
+| ------------------ | ------- | ---------------------------------------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                                              |
+| `campaign_id`      | INTEGER | References `campaigns(id)` cascade delete                                                |
+| `workflow_run_id`  | INTEGER | Nullable, references `workflow_runs(id)` with `ON DELETE SET NULL`                       |
+| `workflow_step_id` | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL`                      |
+| `agent_role`       | TEXT    | `researcher`, `scorer`, `drafter`, `auditor`, `scheduler`, or `analyst`                  |
+| `provider_key`     | TEXT    | `dry_run`, `openai`, `anthropic`, `google`, or `custom`; only `dry_run` runs locally now |
+| `model_name`       | TEXT    | Provider model label                                                                     |
+| `status`           | TEXT    | `queued`, `running`, `waiting_approval`, `completed`, `failed`, or `cancelled`           |
+| `input_summary`    | TEXT    | Compact operator/runtime input                                                           |
+| `output_summary`   | TEXT    | Compact runtime result                                                                   |
+| `error_message`    | TEXT    | Failure reason, default empty string                                                     |
+| `iteration_count`  | INTEGER | Bounded `0` through `20`                                                                 |
+| `started_at`       | TEXT    | Nullable start timestamp                                                                 |
+| `completed_at`     | TEXT    | Nullable terminal timestamp                                                              |
+| `created_at`       | TEXT    | SQLite datetime                                                                          |
+| `updated_at`       | TEXT    | SQLite datetime                                                                          |
+
+Indexes: `idx_agent_runs_campaign_id`, `idx_agent_runs_workflow_run_id`, `idx_agent_runs_workflow_step_id`, `idx_agent_runs_status`, `idx_agent_runs_agent_role`, `idx_agent_runs_updated_at`.
+
+### `agent_tool_calls`
+
+Stores model-requested or dry-run tool calls with validated JSON inputs and outputs.
+
+| Column                  | Type    | Notes                                                                                                  |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `id`                    | INTEGER | Primary key                                                                                            |
+| `agent_run_id`          | INTEGER | References `agent_runs(id)` cascade delete                                                             |
+| `provider_tool_call_id` | TEXT    | Provider or deterministic dry-run tool-call correlation identifier, default empty string               |
+| `tool_name`             | TEXT    | `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, or `collect_metrics` |
+| `status`                | TEXT    | `requested`, `running`, `waiting_approval`, `completed`, `failed`, or `rejected`                       |
+| `requires_approval`     | INTEGER | Boolean-like flag constrained to `0` or `1`                                                            |
+| `input_json`            | TEXT    | Validated tool input JSON                                                                              |
+| `output_json`           | TEXT    | Validated tool output JSON when completed                                                              |
+| `error_message`         | TEXT    | Failure reason, default empty string                                                                   |
+| `started_at`            | TEXT    | Nullable start timestamp                                                                               |
+| `completed_at`          | TEXT    | Nullable terminal timestamp                                                                            |
+| `created_at`            | TEXT    | SQLite datetime                                                                                        |
+
+Indexes: `idx_agent_tool_calls_run_id`, `idx_agent_tool_calls_tool_name`, `idx_agent_tool_calls_status`.
+
+### `agent_run_events`
+
+Stores append-only runtime progress events.
+
+| Column         | Type    | Notes                                                                                                            |
+| -------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
+| `id`           | INTEGER | Primary key                                                                                                      |
+| `agent_run_id` | INTEGER | References `agent_runs(id)` cascade delete                                                                       |
+| `event_type`   | TEXT    | `run_created`, model events, tool events, `approval_required`, `run_completed`, `run_failed`, or `run_cancelled` |
+| `summary`      | TEXT    | Required event summary                                                                                           |
+| `created_at`   | TEXT    | SQLite datetime                                                                                                  |
+
+Indexes: `idx_agent_run_events_run_id`, `idx_agent_run_events_event_type`, `idx_agent_run_events_created_at`.
+
 ## Reserved future tables
 
 Future slices will add their own migrations for:

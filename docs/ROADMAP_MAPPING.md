@@ -106,13 +106,27 @@ Implemented now:
 
 Background jobs, AI execution, automatic scheduler execution, LinkedIn publishing, and generic workflow building are not implemented in this slice.
 
-## Future slices
-
 ### Agent runtime + tool schemas slice
 
-Adds model loop, provider abstraction, and typed tool contracts.
+Roadmap coverage:
 
-Roadmap sections: 1, 2, 17, 18.
+- Section 1: local model/tool loop contracts.
+- Section 2: streaming/provider layer foundation.
+- Section 17: role-based multi-agent worker foundation.
+- Section 18: typed skill/playbook slots through tool metadata.
+
+Implemented now:
+
+- Agent run, tool call, and runtime event tables.
+- Six Zod tool contracts: `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, and `collect_metrics`.
+- Provider-independent runtime interfaces and deterministic `dry_run` provider.
+- Agent Runtime tab with contract visibility and local run history.
+- Approval-gated `schedule_post` dry-run behavior.
+- Archived-campaign mutation blocking.
+
+Real AI provider calls, LinkedIn scraping, publishing, comments, and background workers are not implemented in this slice.
+
+## Future slices
 
 ### Safety + observability slice
 
