@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const previewPort = process.env.PLAYWRIGHT_PORT ?? "1422";
+const previewUrl = `http://127.0.0.1:${previewPort}`;
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
@@ -9,7 +12,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   timeout: 90000,
   use: {
-    baseURL: "http://localhost:1422",
+    baseURL: previewUrl,
     trace: "on-first-retry",
     launchOptions: {
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -22,9 +25,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      "VITE_PLAYWRIGHT=true bun run build && bun run preview -- --host 127.0.0.1 --port 1422",
-    url: "http://localhost:1422",
+    command: `bun run build && bun run preview -- --host 127.0.0.1 --port ${previewPort}`,
+    url: previewUrl,
     reuseExistingServer: true,
     timeout: 120000,
     env: {

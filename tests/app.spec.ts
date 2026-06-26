@@ -19,7 +19,7 @@ test("app root renders campaigns by default", async ({ page }) => {
   await expect(page.getByText("No campaigns yet")).toBeVisible();
 });
 
-test("queue, drafts, and approvals render real views", async ({ page }) => {
+test("queue, drafts, approvals, metrics, and workflows render real views", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: /Queue/ }).click();
@@ -37,6 +37,24 @@ test("queue, drafts, and approvals render real views", async ({ page }) => {
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /Approvals/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+
+  await page.getByRole("button", { name: /Metrics/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Metrics", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Metrics/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+
+  await page.getByRole("button", { name: /Workflows/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Workflows", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Workflows/ })).toHaveAttribute(
     "aria-current",
     "page",
   );

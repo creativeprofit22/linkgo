@@ -213,10 +213,127 @@ Constraints: checked platform and checked status values.
 
 Indexes: `idx_publish_attempts_approval_id`, `idx_publish_attempts_schedule_job_id`, `idx_publish_attempts_status`.
 
+### `post_metrics`
+
+Stores manual LinkedIn metric snapshots for published approvals.
+
+| Column               | Type    | Notes                                                                 |
+| -------------------- | ------- | --------------------------------------------------------------------- |
+| `id`                 | INTEGER | Primary key                                                           |
+| `campaign_id`        | INTEGER | References `campaigns(id)` cascade delete                             |
+| `approval_id`        | INTEGER | References `approvals(id)` cascade delete                             |
+| `publish_attempt_id` | INTEGER | Nullable, references `publish_attempts(id)` with `ON DELETE SET NULL` |
+| `platform`           | TEXT    | Defaults to `linkedin`, constrained to `linkedin`                     |
+| `measured_at`        | TEXT    | Operator-entered snapshot time                                        |
+| `impressions`        | INTEGER | Non-negative count, default `0`                                       |
+| `reactions`          | INTEGER | Non-negative count, default `0`                                       |
+| `comments`           | INTEGER | Non-negative count, default `0`                                       |
+| `reposts`            | INTEGER | Non-negative count, default `0`                                       |
+| `profile_visits`     | INTEGER | Non-negative count, default `0`                                       |
+| `link_clicks`        | INTEGER | Non-negative count, default `0`                                       |
+| `ctr`                | REAL    | Nullable percentage constrained to `0` through `100`                  |
+| `notes`              | TEXT    | Optional operator notes, default empty string                         |
+| `created_at`         | TEXT    | SQLite datetime                                                       |
+| `updated_at`         | TEXT    | SQLite datetime                                                       |
+
+Indexes: `idx_post_metrics_campaign_id`, `idx_post_metrics_approval_id`, `idx_post_metrics_publish_attempt_id`, `idx_post_metrics_measured_at`.
+
+### `campaign_memory`
+
+Stores human-approved campaign learning notes for future context injection.
+
+| Column           | Type    | Notes                                                             |
+| ---------------- | ------- | ----------------------------------------------------------------- |
+| `id`             | INTEGER | Primary key                                                       |
+| `campaign_id`    | INTEGER | References `campaigns(id)` cascade delete                         |
+| `post_metric_id` | INTEGER | Nullable, references `post_metrics(id)` with `ON DELETE SET NULL` |
+| `signal`         | TEXT    | `winner`, `underperformer`, `insight`, or `avoid`                 |
+| `summary`        | TEXT    | Required human-approved learning note                             |
+| `evidence`       | TEXT    | Optional supporting detail, default empty string                  |
+| `confidence`     | INTEGER | Integer `0` through `100`, default `50`                           |
+| `status`         | TEXT    | `active` or `archived`, default `active`                          |
+| `created_at`     | TEXT    | SQLite datetime                                                   |
+| `updated_at`     | TEXT    | SQLite datetime                                                   |
+
+Indexes: `idx_campaign_memory_campaign_id`, `idx_campaign_memory_post_metric_id`, `idx_campaign_memory_signal`, `idx_campaign_memory_status`.
+
+### `learning_events`
+
+Stores append-only lifecycle events for metric and memory activity.
+
+| Column               | Type    | Notes                                                                        |
+| -------------------- | ------- | ---------------------------------------------------------------------------- |
+| `id`                 | INTEGER | Primary key                                                                  |
+| `campaign_id`        | INTEGER | References `campaigns(id)` cascade delete                                    |
+| `post_metric_id`     | INTEGER | Nullable, references `post_metrics(id)` with `ON DELETE SET NULL`            |
+| `campaign_memory_id` | INTEGER | Nullable, references `campaign_memory(id)` with `ON DELETE SET NULL`         |
+| `event_type`         | TEXT    | `metric_recorded`, `memory_created`, `memory_archived`, or `memory_restored` |
+| `summary`            | TEXT    | Required event summary                                                       |
+| `created_at`         | TEXT    | SQLite datetime                                                              |
+
+Indexes: `idx_learning_events_campaign_id`, `idx_learning_events_metric_id`, `idx_learning_events_memory_id`, `idx_learning_events_event_type`, `idx_learning_events_created_at`.
+
+### `workflow_runs`
+
+Stores one resumable content pipeline workflow instance for one campaign.
+
+| Column             | Type    | Notes                                                                                  |
+| ------------------ | ------- | -------------------------------------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                                            |
+| `campaign_id`      | INTEGER | References `campaigns(id)` cascade delete                                              |
+| `workflow_type`    | TEXT    | Defaults to `content_pipeline`, constrained to `content_pipeline`                      |
+| `title`            | TEXT    | Required operator-facing run title                                                     |
+| `status`           | TEXT    | `queued`, `running`, `waiting_approval`, `blocked`, `completed`, `failed`, `cancelled` |
+| `current_step_key` | TEXT    | `research`, `score`, `draft`, `audit`, `approve`, `schedule`, or `measure`             |
+| `context_summary`  | TEXT    | Optional compact run context, default empty string                                     |
+| `started_at`       | TEXT    | Nullable start timestamp                                                               |
+| `completed_at`     | TEXT    | Nullable completion/cancellation timestamp                                             |
+| `created_at`       | TEXT    | SQLite datetime                                                                        |
+| `updated_at`       | TEXT    | SQLite datetime                                                                        |
+
+Indexes: `idx_workflow_runs_campaign_id`, `idx_workflow_runs_status`, `idx_workflow_runs_current_step_key`, `idx_workflow_runs_updated_at`.
+
+### `workflow_steps`
+
+Stores ordered state for each canonical pipeline step in a workflow run.
+
+| Column            | Type    | Notes                                                                                 |
+| ----------------- | ------- | ------------------------------------------------------------------------------------- |
+| `id`              | INTEGER | Primary key                                                                           |
+| `workflow_run_id` | INTEGER | References `workflow_runs(id)` cascade delete                                         |
+| `step_key`        | TEXT    | `research`, `score`, `draft`, `audit`, `approve`, `schedule`, or `measure`            |
+| `title`           | TEXT    | Required step label                                                                   |
+| `description`     | TEXT    | Required step description, default empty string                                       |
+| `sort_order`      | INTEGER | Integer `1` through `7`                                                               |
+| `status`          | TEXT    | `pending`, `running`, `waiting_approval`, `blocked`, `completed`, `failed`, `skipped` |
+| `output_summary`  | TEXT    | Optional compact result context, default empty string                                 |
+| `error_message`   | TEXT    | Optional error detail, default empty string                                           |
+| `started_at`      | TEXT    | Nullable step start timestamp                                                         |
+| `completed_at`    | TEXT    | Nullable step completion timestamp                                                    |
+| `created_at`      | TEXT    | SQLite datetime                                                                       |
+| `updated_at`      | TEXT    | SQLite datetime                                                                       |
+
+Constraints: unique `(workflow_run_id, step_key)`, unique `(workflow_run_id, sort_order)`, checked step key, checked sort order, and checked status values.
+
+Indexes: `idx_workflow_steps_run_id`, `idx_workflow_steps_status`, `idx_workflow_steps_step_key`.
+
+### `workflow_events`
+
+Stores append-only workflow lifecycle events.
+
+| Column             | Type    | Notes                                                                                                        |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `id`               | INTEGER | Primary key                                                                                                  |
+| `workflow_run_id`  | INTEGER | References `workflow_runs(id)` cascade delete                                                                |
+| `workflow_step_id` | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL`                                          |
+| `event_type`       | TEXT    | `run_created`, `run_started`, step lifecycle event values, `run_completed`, `run_cancelled`, or `note_added` |
+| `summary`          | TEXT    | Required event summary                                                                                       |
+| `created_at`       | TEXT    | SQLite datetime                                                                                              |
+
+Indexes: `idx_workflow_events_run_id`, `idx_workflow_events_step_id`, `idx_workflow_events_event_type`, `idx_workflow_events_created_at`.
+
 ## Reserved future tables
 
 Future slices will add their own migrations for:
 
-- Metrics and learning: `post_metrics`, `campaign_memory`, `learning_events`.
-- Workflows: `workflow_runs`, `workflow_steps`, `workflow_events`.
 - Safety and observability: `safety_limits`, `rate_limit_events`, `audit_events`, `error_queue`.

@@ -5,19 +5,12 @@ import {
   FileText,
   ListChecks,
   Target,
+  Workflow,
 } from "lucide-react";
 import { useState } from "react";
 import { MainTitleBar } from "@/components/main-title-bar";
 import { WindowFrame } from "@/components/window-frame";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Toaster } from "@/components/ui/sonner";
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
 import { cn } from "@/lib/utils";
@@ -25,8 +18,16 @@ import { ApprovalsView } from "@/features/approvals";
 import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
 import { CandidateQueueView } from "@/features/candidate-queue";
 import { DraftsView } from "@/features/drafts";
+import { MetricsView } from "@/features/metrics";
+import { WorkflowsView } from "@/features/workflows";
 
-type HomeTab = "campaigns" | "queue" | "drafts" | "approvals" | "metrics";
+type HomeTab =
+  | "campaigns"
+  | "queue"
+  | "drafts"
+  | "approvals"
+  | "metrics"
+  | "workflows";
 
 type RoadmapTab = {
   id: HomeTab;
@@ -73,10 +74,18 @@ const tabs: RoadmapTab[] = [
   {
     id: "metrics",
     label: "Metrics",
-    description: "Learning loops wait for published-post data.",
+    description: "Manual post metrics, campaign memory, and learning events.",
     icon: BarChart3,
-    enabled: false,
-    docHref: "docs/ROADMAP_MAPPING.md#metrics--learning-slice",
+    enabled: true,
+    docHref: "docs/features/metrics.md",
+  },
+  {
+    id: "workflows",
+    label: "Workflows",
+    description: "Resumable pipeline runs and progress events.",
+    icon: Workflow,
+    enabled: true,
+    docHref: "docs/features/workflows.md",
   },
 ];
 
@@ -152,37 +161,14 @@ export function HomePage(): React.ReactNode {
             <DraftsView />
           ) : activeRoadmapTab.id === "approvals" ? (
             <ApprovalsView />
+          ) : activeRoadmapTab.id === "metrics" ? (
+            <MetricsView />
           ) : (
-            <RoadmapPlaceholder tab={activeRoadmapTab} />
+            <WorkflowsView />
           )}
         </section>
       </div>
       <Toaster />
     </WindowFrame>
-  );
-}
-
-function RoadmapPlaceholder({ tab }: { tab: RoadmapTab }): React.ReactNode {
-  const Icon = tab.icon;
-
-  return (
-    <Card className="linkgo-card bg-card/75 mx-auto mt-10 max-w-2xl border-dashed">
-      <CardHeader>
-        <div className="bg-linkgo-blue/10 text-linkgo-blue mb-3 flex size-12 items-center justify-center rounded-xl">
-          <Icon className="size-6" />
-        </div>
-        <CardTitle>{tab.label} is queued on the roadmap</CardTitle>
-        <CardDescription>{tab.description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-muted-foreground text-sm">
-          This section renders intentionally as a disabled placeholder so Linkgo
-          stays runnable after each feature slice.
-        </p>
-        <Button asChild variant="outline">
-          <a href={tab.docHref}>Read roadmap mapping</a>
-        </Button>
-      </CardContent>
-    </Card>
   );
 }

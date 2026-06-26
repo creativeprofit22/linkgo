@@ -75,19 +75,38 @@ Implemented now:
 
 LinkedIn API publishing, OAuth/provider integration, and background scheduler execution are not implemented in this slice.
 
-## Future slices
-
 ### Metrics + learning slice
 
-Adds post metrics, campaign memory, and learning events.
+Roadmap coverage:
 
-Roadmap sections: 15.
+- Section 15: manual post metrics and campaign memory foundation.
+
+Implemented now:
+
+- Manual metric snapshots for published approvals.
+- Campaign memory notes approved by a human operator.
+- Append-only learning events for metric and memory actions.
+- Metrics tab with campaign filtering, summaries, metric cards, memory cards, and event stream.
+
+LinkedIn API collection, automatic refresh, AI learning loops, and background metric jobs are not implemented in this slice.
 
 ### Durable workflow engine slice
 
-Adds resumable workflow runs, steps, and progress events.
+Roadmap coverage:
 
-Roadmap sections: 11, 19.
+- Section 11: durable workflow engine with typed resumable pipeline steps.
+- Section 19: persistent task backlog foundation through resumable runs and progress events.
+
+Implemented now:
+
+- Workflow run, step, and event tables.
+- Manual content pipeline state machine: `research -> score -> draft -> audit -> approve -> schedule -> measure`.
+- Workflows tab with campaign filtering, summary cards, step controls, and event history.
+- Archived-campaign mutation blocking.
+
+Background jobs, AI execution, automatic scheduler execution, LinkedIn publishing, and generic workflow building are not implemented in this slice.
+
+## Future slices
 
 ### Agent runtime + tool schemas slice
 

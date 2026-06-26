@@ -156,6 +156,138 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type MemorySignal = "winner" | "underperformer" | "insight" | "avoid";
+
+    type CampaignMemoryStatus = "active" | "archived";
+
+    type LearningEventType =
+      | "metric_recorded"
+      | "memory_created"
+      | "memory_archived"
+      | "memory_restored";
+
+    type PostMetric = {
+      id: number;
+      campaign_id: number;
+      approval_id: number;
+      publish_attempt_id: number | null;
+      platform: "linkedin";
+      measured_at: string;
+      impressions: number;
+      reactions: number;
+      comments: number;
+      reposts: number;
+      profile_visits: number;
+      link_clicks: number;
+      ctr: number | null;
+      notes: string;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type CampaignMemory = {
+      id: number;
+      campaign_id: number;
+      post_metric_id: number | null;
+      signal: MemorySignal;
+      summary: string;
+      evidence: string;
+      confidence: number;
+      status: CampaignMemoryStatus;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type LearningEvent = {
+      id: number;
+      campaign_id: number;
+      post_metric_id: number | null;
+      campaign_memory_id: number | null;
+      event_type: LearningEventType;
+      summary: string;
+      created_at: string;
+    };
+
+    type WorkflowRunStatus =
+      | "queued"
+      | "running"
+      | "waiting_approval"
+      | "blocked"
+      | "completed"
+      | "failed"
+      | "cancelled";
+
+    type WorkflowStepKey =
+      | "research"
+      | "score"
+      | "draft"
+      | "audit"
+      | "approve"
+      | "schedule"
+      | "measure";
+
+    type WorkflowStepStatus =
+      | "pending"
+      | "running"
+      | "waiting_approval"
+      | "blocked"
+      | "completed"
+      | "failed"
+      | "skipped";
+
+    type WorkflowEventType =
+      | "run_created"
+      | "run_started"
+      | "step_started"
+      | "step_waiting_approval"
+      | "step_blocked"
+      | "step_completed"
+      | "step_failed"
+      | "step_skipped"
+      | "step_resumed"
+      | "run_completed"
+      | "run_cancelled"
+      | "note_added";
+
+    type WorkflowRun = {
+      id: number;
+      campaign_id: number;
+      workflow_type: "content_pipeline";
+      title: string;
+      status: WorkflowRunStatus;
+      current_step_key: WorkflowStepKey;
+      context_summary: string;
+      started_at: string | null;
+      completed_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type WorkflowStep = {
+      id: number;
+      workflow_run_id: number;
+      step_key: WorkflowStepKey;
+      title: string;
+      description: string;
+      sort_order: number;
+      status: WorkflowStepStatus;
+      output_summary: string;
+      error_message: string;
+      started_at: string | null;
+      completed_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type WorkflowEvent = {
+      id: number;
+      workflow_run_id: number;
+      workflow_step_id: number | null;
+      event_type: WorkflowEventType;
+      summary: string;
+      created_at: string;
+    };
+
     type TransactionSnapshot = {
       campaigns: Campaign[];
       keywords: Keyword[];
@@ -168,6 +300,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       approvals: Approval[];
       scheduleJobs: ScheduleJob[];
       publishAttempts: PublishAttempt[];
+      postMetrics: PostMetric[];
+      campaignMemory: CampaignMemory[];
+      learningEvents: LearningEvent[];
+      workflowRuns: WorkflowRun[];
+      workflowSteps: WorkflowStep[];
+      workflowEvents: WorkflowEvent[];
       nextCampaignId: number;
       nextKeywordId: number;
       nextTargetPostId: number;
@@ -179,6 +317,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextApprovalId: number;
       nextScheduleJobId: number;
       nextPublishAttemptId: number;
+      nextPostMetricId: number;
+      nextCampaignMemoryId: number;
+      nextLearningEventId: number;
+      nextWorkflowRunId: number;
+      nextWorkflowStepId: number;
+      nextWorkflowEventId: number;
     };
 
     const w = window as unknown as Record<string, unknown>;
@@ -193,6 +337,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const approvals: Approval[] = [];
     const scheduleJobs: ScheduleJob[] = [];
     const publishAttempts: PublishAttempt[] = [];
+    const postMetrics: PostMetric[] = [];
+    const campaignMemory: CampaignMemory[] = [];
+    const learningEvents: LearningEvent[] = [];
+    const workflowRuns: WorkflowRun[] = [];
+    const workflowSteps: WorkflowStep[] = [];
+    const workflowEvents: WorkflowEvent[] = [];
     let nextCampaignId = 1;
     let nextKeywordId = 1;
     let nextTargetPostId = 1;
@@ -204,6 +354,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextApprovalId = 1;
     let nextScheduleJobId = 1;
     let nextPublishAttemptId = 1;
+    let nextPostMetricId = 1;
+    let nextCampaignMemoryId = 1;
+    let nextLearningEventId = 1;
+    let nextWorkflowRunId = 1;
+    let nextWorkflowStepId = 1;
+    let nextWorkflowEventId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
@@ -244,6 +400,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         approvals: cloneRows(approvals),
         scheduleJobs: cloneRows(scheduleJobs),
         publishAttempts: cloneRows(publishAttempts),
+        postMetrics: cloneRows(postMetrics),
+        campaignMemory: cloneRows(campaignMemory),
+        learningEvents: cloneRows(learningEvents),
+        workflowRuns: cloneRows(workflowRuns),
+        workflowSteps: cloneRows(workflowSteps),
+        workflowEvents: cloneRows(workflowEvents),
         nextCampaignId,
         nextKeywordId,
         nextTargetPostId,
@@ -255,6 +417,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextApprovalId,
         nextScheduleJobId,
         nextPublishAttemptId,
+        nextPostMetricId,
+        nextCampaignMemoryId,
+        nextLearningEventId,
+        nextWorkflowRunId,
+        nextWorkflowStepId,
+        nextWorkflowEventId,
       };
     }
 
@@ -274,6 +442,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(approvals, snapshot.approvals);
       restoreRows(scheduleJobs, snapshot.scheduleJobs);
       restoreRows(publishAttempts, snapshot.publishAttempts);
+      restoreRows(postMetrics, snapshot.postMetrics);
+      restoreRows(campaignMemory, snapshot.campaignMemory);
+      restoreRows(learningEvents, snapshot.learningEvents);
+      restoreRows(workflowRuns, snapshot.workflowRuns);
+      restoreRows(workflowSteps, snapshot.workflowSteps);
+      restoreRows(workflowEvents, snapshot.workflowEvents);
       nextCampaignId = snapshot.nextCampaignId;
       nextKeywordId = snapshot.nextKeywordId;
       nextTargetPostId = snapshot.nextTargetPostId;
@@ -285,6 +459,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextApprovalId = snapshot.nextApprovalId;
       nextScheduleJobId = snapshot.nextScheduleJobId;
       nextPublishAttemptId = snapshot.nextPublishAttemptId;
+      nextPostMetricId = snapshot.nextPostMetricId;
+      nextCampaignMemoryId = snapshot.nextCampaignMemoryId;
+      nextLearningEventId = snapshot.nextLearningEventId;
+      nextWorkflowRunId = snapshot.nextWorkflowRunId;
+      nextWorkflowStepId = snapshot.nextWorkflowStepId;
+      nextWorkflowEventId = snapshot.nextWorkflowEventId;
     }
 
     function getCandidateJoinRow(
@@ -661,6 +841,258 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       ];
     }
 
+    function getLatestSuccessfulPublishAttempt(
+      approvalId: number,
+    ): PublishAttempt | undefined {
+      return publishAttempts
+        .filter(
+          (attempt) =>
+            attempt.approval_id === approvalId && attempt.status === "succeeded",
+        )
+        .sort((left, right) => {
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          if (createdDelta !== 0) return createdDelta;
+          return right.id - left.id;
+        })[0];
+    }
+
+    function getMetricJoinBase(
+      approval: Approval,
+    ): Record<string, unknown> | null {
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      const draft = drafts.find((row) => row.id === approval.draft_id);
+      const variant = draftVariants.find(
+        (row) => row.id === approval.draft_variant_id,
+      );
+      const candidate = draft
+        ? candidatePosts.find((row) => row.id === draft.candidate_post_id)
+        : undefined;
+      const target = candidate
+        ? targetPosts.find((row) => row.id === candidate.target_post_id)
+        : undefined;
+      if (!campaign || !draft || !variant || !candidate || !target) return null;
+      return {
+        campaign_id: campaign.id,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+        approval_id: approval.id,
+        approval_status: approval.status,
+        draft_id: draft.id,
+        draft_angle: draft.angle,
+        draft_notes: draft.notes,
+        variant_id: variant.id,
+        variant_number: variant.variant_number,
+        variant_hook: variant.hook,
+        variant_body: variant.body,
+        variant_cta: variant.cta,
+        variant_hashtags: variant.hashtags,
+        variant_status: variant.status,
+        target_author_name: target.author_name,
+        target_author_profile_url: target.author_profile_url,
+        target_content: target.content,
+        target_url: target.url,
+      };
+    }
+
+    function selectMetricEligibleApprovals(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return approvals
+        .filter(
+          (approval) =>
+            approval.status === "published" &&
+            (campaignId === null || approval.campaign_id === campaignId),
+        )
+        .map((approval) => {
+          const base = getMetricJoinBase(approval);
+          const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+          const publishAttempt = getLatestSuccessfulPublishAttempt(approval.id);
+          if (!base || !campaign || campaign.status === "archived" || !publishAttempt) {
+            return null;
+          }
+          return {
+            ...base,
+            publish_attempt_id: publishAttempt.id,
+            publish_external_post_url: publishAttempt.external_post_url,
+            publish_platform_post_id: publishAttempt.platform_post_id,
+            publish_created_at: publishAttempt.created_at,
+          };
+        })
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const createdDelta = String(right.publish_created_at).localeCompare(
+            String(left.publish_created_at),
+          );
+          if (createdDelta !== 0) return createdDelta;
+          return Number(right.approval_id) - Number(left.approval_id);
+        });
+    }
+
+    function selectPostMetricJoin(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return postMetrics
+        .filter(
+          (metric) => campaignId === null || metric.campaign_id === campaignId,
+        )
+        .map((metric) => {
+          const approval = approvals.find((row) => row.id === metric.approval_id);
+          const base = approval ? getMetricJoinBase(approval) : null;
+          const publishAttempt = metric.publish_attempt_id
+            ? publishAttempts.find((row) => row.id === metric.publish_attempt_id)
+            : undefined;
+          if (!approval || !base) return null;
+          return {
+            ...metric,
+            ...base,
+            id: metric.id,
+            approval_status: approval.status,
+            publish_external_post_url: publishAttempt?.external_post_url ?? null,
+            publish_platform_post_id: publishAttempt?.platform_post_id ?? null,
+            publish_created_at: publishAttempt?.created_at ?? null,
+          };
+        })
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const measuredDelta = String(right.measured_at).localeCompare(
+            String(left.measured_at),
+          );
+          if (measuredDelta !== 0) return measuredDelta;
+          return Number(right.id) - Number(left.id);
+        });
+    }
+
+    function selectApprovalMetricValidation(values: unknown[]): unknown[] {
+      const approvalId = Number(values[0] ?? 0);
+      const approval = approvals.find((row) => row.id === approvalId);
+      const campaign = approval
+        ? campaigns.find((row) => row.id === approval.campaign_id)
+        : undefined;
+      if (!approval || !campaign) return [];
+      return [
+        {
+          approval_id: approval.id,
+          campaign_id: approval.campaign_id,
+          campaign_status: campaign.status,
+          status: approval.status,
+        },
+      ];
+    }
+
+    function selectMemoryValidation(values: unknown[]): unknown[] {
+      const memoryId = Number(values[0] ?? 0);
+      const memory = campaignMemory.find((row) => row.id === memoryId);
+      const campaign = memory
+        ? campaigns.find((row) => row.id === memory.campaign_id)
+        : undefined;
+      if (!memory || !campaign) return [];
+      return [
+        {
+          id: memory.id,
+          campaign_id: memory.campaign_id,
+          status: memory.status,
+          campaign_status: campaign.status,
+        },
+      ];
+    }
+
+    function getWorkflowRunJoinRow(
+      run: WorkflowRun,
+    ): Record<string, unknown> | null {
+      const campaign = campaigns.find((row) => row.id === run.campaign_id);
+      if (!campaign) return null;
+      return {
+        ...run,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+      };
+    }
+
+    function selectWorkflowRunJoin(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return workflowRuns
+        .filter((run) => campaignId === null || run.campaign_id === campaignId)
+        .map(getWorkflowRunJoinRow)
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const order: Record<string, number> = {
+            running: 1,
+            waiting_approval: 2,
+            blocked: 3,
+            queued: 4,
+            failed: 5,
+            completed: 6,
+            cancelled: 7,
+          };
+          const statusDelta =
+            (order[String(left.status)] ?? 8) - (order[String(right.status)] ?? 8);
+          if (statusDelta !== 0) return statusDelta;
+          const updatedDelta = String(right.updated_at).localeCompare(
+            String(left.updated_at),
+          );
+          if (updatedDelta !== 0) return updatedDelta;
+          return Number(right.id) - Number(left.id);
+        });
+    }
+
+    function selectWorkflowRunValidation(values: unknown[]): unknown[] {
+      const runId = Number(values[0] ?? 0);
+      const run = workflowRuns.find((row) => row.id === runId);
+      const campaign = run
+        ? campaigns.find((row) => row.id === run.campaign_id)
+        : undefined;
+      if (!run || !campaign) return [];
+      return [{ ...run, campaign_status: campaign.status }];
+    }
+
+    function selectWorkflowStepValidation(values: unknown[]): unknown[] {
+      const stepId = Number(values[0] ?? 0);
+      const step = workflowSteps.find((row) => row.id === stepId);
+      const run = step
+        ? workflowRuns.find((row) => row.id === step.workflow_run_id)
+        : undefined;
+      const campaign = run
+        ? campaigns.find((row) => row.id === run.campaign_id)
+        : undefined;
+      if (!step || !run || !campaign) return [];
+      return [
+        {
+          ...step,
+          run_status: run.status,
+          campaign_id: run.campaign_id,
+          campaign_status: campaign.status,
+        },
+      ];
+    }
+
+    function selectWorkflowSteps(values: unknown[]): WorkflowStep[] {
+      const ids = new Set(
+        values.filter((value): value is number => typeof value === "number"),
+      );
+      return workflowSteps
+        .filter((step) => ids.has(step.workflow_run_id))
+        .sort((left, right) => {
+          if (left.workflow_run_id !== right.workflow_run_id) {
+            return left.workflow_run_id - right.workflow_run_id;
+          }
+          return left.sort_order - right.sort_order;
+        });
+    }
+
+    function selectWorkflowEvents(values: unknown[]): WorkflowEvent[] {
+      const ids = new Set(
+        values.filter((value): value is number => typeof value === "number"),
+      );
+      return workflowEvents
+        .filter((event) => ids.has(event.workflow_run_id))
+        .sort((left, right) => {
+          if (left.workflow_run_id !== right.workflow_run_id) {
+            return left.workflow_run_id - right.workflow_run_id;
+          }
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          if (createdDelta !== 0) return createdDelta;
+          return right.id - left.id;
+        });
+    }
+
     function parseUpdateColumns(query: string, tableName: string): string[] {
       return query
         .slice(
@@ -722,6 +1154,79 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           },
         ];
       }
+      if (query.includes("FROM workflow_steps ws")) {
+        return selectWorkflowStepValidation(values);
+      }
+      if (
+        query.includes("FROM workflow_runs wr") &&
+        query.includes("c.name AS campaign_name")
+      ) {
+        return selectWorkflowRunJoin(values);
+      }
+      if (query.includes("FROM workflow_runs wr")) {
+        return selectWorkflowRunValidation(values);
+      }
+      if (query.includes("FROM workflow_steps")) {
+        return selectWorkflowSteps(values);
+      }
+      if (query.includes("FROM workflow_events")) {
+        return selectWorkflowEvents(values);
+      }
+      if (query.includes("FROM post_metrics pm")) {
+        return selectPostMetricJoin(values);
+      }
+      if (
+        query.includes("FROM approvals a") &&
+        query.includes("INNER JOIN publish_attempts pa")
+      ) {
+        return selectMetricEligibleApprovals(values);
+      }
+      if (
+        query.includes("FROM approvals a") &&
+        query.includes("a.id AS approval_id")
+      ) {
+        return selectApprovalMetricValidation(values);
+      }
+      if (
+        query.includes("FROM campaign_memory cm") &&
+        query.includes("INNER JOIN campaigns c")
+      ) {
+        return selectMemoryValidation(values);
+      }
+      if (query.includes("FROM campaign_memory cm")) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        return campaignMemory
+          .filter(
+            (memory) => campaignId === null || memory.campaign_id === campaignId,
+          )
+          .sort((left, right) => {
+            const leftArchived = left.status === "archived" ? 1 : 0;
+            const rightArchived = right.status === "archived" ? 1 : 0;
+            if (leftArchived !== rightArchived)
+              return leftArchived - rightArchived;
+            const updatedDelta = right.updated_at.localeCompare(left.updated_at);
+            if (updatedDelta !== 0) return updatedDelta;
+            return right.id - left.id;
+          });
+      }
+      if (query.includes("FROM learning_events le")) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        return learningEvents
+          .filter(
+            (event) => campaignId === null || event.campaign_id === campaignId,
+          )
+          .sort((left, right) => {
+            const createdDelta = right.created_at.localeCompare(left.created_at);
+            if (createdDelta !== 0) return createdDelta;
+            return right.id - left.id;
+          });
+      }
+      if (query.includes("FROM post_metrics WHERE id")) {
+        const id = Number(values[0] ?? 0);
+        return postMetrics
+          .filter((metric) => metric.id === id)
+          .map((metric) => ({ id: metric.id, campaign_id: metric.campaign_id }));
+      }
       if (
         query.includes("FROM approvals a") &&
         query.includes("INNER JOIN drafts d")
@@ -756,11 +1261,22 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return scheduleJobs.filter((job) => ids.has(job.approval_id));
       }
       if (query.includes("FROM publish_attempts")) {
+        if (query.includes("WHERE id =")) {
+          const id = Number(values[0] ?? 0);
+          return publishAttempts.filter(
+            (attempt) => attempt.id === id && attempt.status === "succeeded",
+          );
+        }
         const ids = new Set(
           values.filter((value): value is number => typeof value === "number"),
         );
         return publishAttempts
           .filter((attempt) => ids.has(attempt.approval_id))
+          .filter(
+            (attempt) =>
+              !query.includes("status = 'succeeded'") ||
+              attempt.status === "succeeded",
+          )
           .sort((left, right) => {
             const createdDelta = right.created_at.localeCompare(
               left.created_at,
@@ -1086,6 +1602,170 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: publishAttempt.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO post_metrics")) {
+        const metric: PostMetric = {
+          id: nextPostMetricId,
+          campaign_id: Number(values[0] ?? 0),
+          approval_id: Number(values[1] ?? 0),
+          publish_attempt_id: values[2] === null ? null : Number(values[2] ?? 0),
+          platform: "linkedin",
+          measured_at: String(values[3] ?? ""),
+          impressions: Number(values[4] ?? 0),
+          reactions: Number(values[5] ?? 0),
+          comments: Number(values[6] ?? 0),
+          reposts: Number(values[7] ?? 0),
+          profile_visits: Number(values[8] ?? 0),
+          link_clicks: Number(values[9] ?? 0),
+          ctr: values[10] === null ? null : Number(values[10] ?? 0),
+          notes: String(values[11] ?? ""),
+          created_at: now,
+          updated_at: now,
+        };
+        postMetrics.push(metric);
+        nextPostMetricId += 1;
+        return { lastInsertId: metric.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO campaign_memory")) {
+        const memory: CampaignMemory = {
+          id: nextCampaignMemoryId,
+          campaign_id: Number(values[0] ?? 0),
+          post_metric_id: values[1] === null ? null : Number(values[1] ?? 0),
+          signal: values[2] as MemorySignal,
+          summary: String(values[3] ?? ""),
+          evidence: String(values[4] ?? ""),
+          confidence: Number(values[5] ?? 50),
+          status: "active",
+          created_at: now,
+          updated_at: now,
+        };
+        campaignMemory.push(memory);
+        nextCampaignMemoryId += 1;
+        return { lastInsertId: memory.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO learning_events")) {
+        const event: LearningEvent = {
+          id: nextLearningEventId,
+          campaign_id: Number(values[0] ?? 0),
+          post_metric_id: values[1] === null ? null : Number(values[1] ?? 0),
+          campaign_memory_id:
+            values[2] === null ? null : Number(values[2] ?? 0),
+          event_type: values[3] as LearningEventType,
+          summary: String(values[4] ?? ""),
+          created_at: now,
+        };
+        learningEvents.push(event);
+        nextLearningEventId += 1;
+        return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO workflow_runs")) {
+        const run: WorkflowRun = {
+          id: nextWorkflowRunId,
+          campaign_id: Number(values[0] ?? 0),
+          workflow_type: "content_pipeline",
+          title: String(values[1] ?? ""),
+          status: "queued",
+          current_step_key: "research",
+          context_summary: String(values[2] ?? ""),
+          started_at: null,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        workflowRuns.push(run);
+        nextWorkflowRunId += 1;
+        return { lastInsertId: run.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO workflow_steps")) {
+        const step: WorkflowStep = {
+          id: nextWorkflowStepId,
+          workflow_run_id: Number(values[0] ?? 0),
+          step_key: values[1] as WorkflowStepKey,
+          title: String(values[2] ?? ""),
+          description: String(values[3] ?? ""),
+          sort_order: Number(values[4] ?? 1),
+          status: "pending",
+          output_summary: "",
+          error_message: "",
+          started_at: null,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        workflowSteps.push(step);
+        nextWorkflowStepId += 1;
+        return { lastInsertId: step.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO workflow_events")) {
+        const event: WorkflowEvent = {
+          id: nextWorkflowEventId,
+          workflow_run_id: Number(values[0] ?? 0),
+          workflow_step_id: values[1] === null ? null : Number(values[1] ?? 0),
+          event_type: values[2] as WorkflowEventType,
+          summary: String(values[3] ?? ""),
+          created_at: now,
+        };
+        workflowEvents.push(event);
+        nextWorkflowEventId += 1;
+        return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE workflow_runs")) {
+        const id = query.includes("current_step_key = $2")
+          ? Number(values[2] ?? 0)
+          : Number(values[0] ?? 0);
+        const run = workflowRuns.find((row) => row.id === id);
+        if (run) {
+          if (query.includes("status = 'running'")) {
+            run.status = "running";
+            run.started_at = run.started_at ?? now;
+          } else if (query.includes("status = 'cancelled'")) {
+            run.status = "cancelled";
+            run.completed_at = now;
+          } else if (query.includes("current_step_key = $2")) {
+            run.status = values[0] as WorkflowRunStatus;
+            run.current_step_key = values[1] as WorkflowStepKey;
+            if (run.status === "running") {
+              run.started_at = run.started_at ?? now;
+            }
+            run.completed_at =
+              run.status === "completed" ? (run.completed_at ?? now) : null;
+          }
+          run.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
+      if (query.includes("UPDATE workflow_steps")) {
+        const literalRunning = query.includes("status = 'running'");
+        const id = literalRunning ? Number(values[0] ?? 0) : Number(values[3] ?? 0);
+        const step = workflowSteps.find((row) => row.id === id);
+        if (step) {
+          const status = literalRunning ? "running" : (values[0] as WorkflowStepStatus);
+          step.status = status;
+          if (!literalRunning) {
+            step.output_summary = String(values[1] ?? "");
+            step.error_message = String(values[2] ?? "");
+          }
+          if (status === "running") {
+            step.started_at = step.started_at ?? now;
+            step.completed_at = null;
+          }
+          if (status === "completed" || status === "skipped") {
+            step.completed_at = now;
+          }
+          if (["blocked", "failed", "waiting_approval"].includes(status)) {
+            step.completed_at = null;
+          }
+          step.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
       if (query.includes("UPDATE approvals")) {
         const literalStatus = query.includes("status = 'scheduled'")
           ? "scheduled"
@@ -1112,6 +1792,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             approval.rejected_at = now;
           }
           approval.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
+      if (query.includes("UPDATE campaign_memory")) {
+        const status = values[0] as CampaignMemoryStatus;
+        const id = Number(values[1] ?? 0);
+        const memory = campaignMemory.find((row) => row.id === id);
+        if (memory) {
+          memory.status = status;
+          memory.updated_at = now;
           return { lastInsertId: id, rowsAffected: 1 };
         }
       }
@@ -1332,6 +2023,28 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         removeRows(publishAttempts, (attempt) =>
           approvalIds.includes(attempt.approval_id),
         );
+        const removedMetricIds = postMetrics
+          .filter((metric) => approvalIds.includes(metric.approval_id))
+          .map((metric) => metric.id);
+        removeRows(postMetrics, (metric) =>
+          approvalIds.includes(metric.approval_id),
+        );
+        for (const memory of campaignMemory) {
+          if (
+            memory.post_metric_id !== null &&
+            removedMetricIds.includes(memory.post_metric_id)
+          ) {
+            memory.post_metric_id = null;
+          }
+        }
+        for (const event of learningEvents) {
+          if (
+            event.post_metric_id !== null &&
+            removedMetricIds.includes(event.post_metric_id)
+          ) {
+            event.post_metric_id = null;
+          }
+        }
         removeRows(
           draftAudits,
           (audit) =>
@@ -1377,6 +2090,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         removeRows(publishAttempts, (attempt) =>
           removedApprovalIds.includes(attempt.approval_id),
         );
+        removeRows(postMetrics, (metric) => metric.campaign_id === id);
+        removeRows(campaignMemory, (memory) => memory.campaign_id === id);
+        removeRows(learningEvents, (event) => event.campaign_id === id);
         removeRows(
           draftAudits,
           (audit) =>
@@ -1402,6 +2118,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       approvals: approvals.length,
       scheduleJobs: scheduleJobs.length,
       publishAttempts: publishAttempts.length,
+      postMetrics: postMetrics.length,
+      campaignMemory: campaignMemory.length,
+      learningEvents: learningEvents.length,
     });
 
     const mockWindow = {

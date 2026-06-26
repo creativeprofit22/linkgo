@@ -2,7 +2,7 @@
 
 Linkgo is a local-first Tauri desktop app for LinkedIn growth operations.
 
-Current status: the app shell, Campaigns slice, Candidate Queue slice, Drafting + Audit slice, and Approvals + Scheduler slice are implemented. LinkedIn scraping, AI generation, actual LinkedIn API publishing, background scheduler jobs, metrics collection, and comment automation remain intentionally not implemented.
+Current status: the app shell, Campaigns slice, Candidate Queue slice, Drafting + Audit slice, Approvals + Scheduler slice, Metrics + Learning slice, and Durable Workflow Engine slice are implemented. AI generation, LinkedIn scraping, actual LinkedIn API publishing, background scheduler jobs, automated metrics collection, and comment automation remain intentionally not implemented.
 
 ## Stack
 
@@ -48,6 +48,9 @@ src/features/campaigns First product slice: data, schemas, hooks, UI
 src/features/candidate-queue Manual candidate intake, dedupe, and triage
 src/features/drafts    Manual variants and deterministic audit checks
 src/features/approvals Human review, schedule records, and publish attempts
+src/features/metrics   Manual metrics, campaign memory, and learning events
+src/workflows/          Durable workflow contracts and SQLite state machine
+src/features/workflows Workflow cockpit hook and UI components
 docs/                   Architecture, data model, roadmap mapping, feature docs
 tests/                  Playwright specs and Tauri IPC mocks
 ```
@@ -57,7 +60,7 @@ tests/                  Playwright specs and Tauri IPC mocks
 Every new roadmap feature lands one slice at a time:
 
 1. SQL migration in `src-tauri/src/migrations`.
-2. Types and Zod schemas in `src/features/<feature>`.
+2. Types and Zod schemas in `src/features/<feature>` or shared orchestration folders such as `src/workflows`.
 3. Data API with typed SQL boundaries.
 4. React hook for state/actions.
 5. UI components.

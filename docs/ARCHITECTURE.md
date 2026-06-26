@@ -8,7 +8,7 @@ Linkgo is a Tauri v2 desktop app with a React frontend and local SQLite database
 - `src/lib/` owns frontend infrastructure such as environment detection, database access, window helpers, and utility functions.
 - `src/components/` owns reusable desktop shell and UI primitives.
 - `src/features/<feature>/` owns product slices: types, schemas, data, hooks, components, and exports.
-- `src/workflows/` will own durable orchestration once queue, drafts, approvals, and scheduling exist.
+- `src/workflows/` owns durable orchestration contracts, workflow state-machine data access, and resumable run history.
 - `src/agent/` will own tool schemas, provider interfaces, and model-loop adapters. UI must not import from agent runtime internals.
 
 ## Tauri boundary
