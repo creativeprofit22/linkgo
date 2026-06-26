@@ -58,13 +58,24 @@ Implemented now:
 
 AI draft generation and AI audit/rewrite loops are not implemented in this slice.
 
-## Future slices
-
 ### Approvals + scheduler slice
 
-Adds human approval states, schedule jobs, and publish attempt tracking behind approval gates.
+Roadmap coverage:
 
-Roadmap sections: 10, 12, 14.
+- Section 10: human approval records for selected clean draft variants.
+- Section 12: local schedule job records behind approval status.
+- Section 14 foundation: manual publish-attempt history.
+
+Implemented now:
+
+- Approval records for selected clean draft variants.
+- Local schedule job records behind approval status.
+- Manual publish-attempt history.
+- LinkedIn LittleText escaped preview for API-safe commentary review.
+
+LinkedIn API publishing, OAuth/provider integration, and background scheduler execution are not implemented in this slice.
+
+## Future slices
 
 ### Metrics + learning slice
 

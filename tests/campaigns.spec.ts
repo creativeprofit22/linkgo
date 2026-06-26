@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("new campaign dialog opens and creates a campaign", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await createCampaign(page);
 
@@ -37,7 +37,7 @@ test("new campaign dialog opens and creates a campaign", async ({ page }) => {
 });
 
 test("campaign card edit action updates campaign context", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
 
   await page
@@ -82,7 +82,7 @@ test("campaign card edit action updates campaign context", async ({ page }) => {
 test("campaign card status actions activate pause archive and restore", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
 
   await expectCampaignStatus(page, "Draft");
@@ -137,5 +137,7 @@ async function createCampaign(page: Page): Promise<void> {
   await page.getByLabel("Daily post limit").fill("2");
   await page.getByLabel("Daily comment limit").fill("7");
   await page.getByLabel("Autopilot intent").click();
-  await page.getByRole("button", { name: "Create campaign" }).click();
+  const dialog = page.getByRole("dialog", { name: "New campaign" });
+  await dialog.getByRole("button", { name: "Create campaign" }).click();
+  await expect(dialog).toBeHidden();
 }

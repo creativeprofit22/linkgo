@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("creates a campaign then adds and shows a candidate", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -33,7 +33,7 @@ test("creates a campaign then adds and shows a candidate", async ({ page }) => {
 });
 
 test("candidate intake fields expose schema max lengths", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -73,12 +73,12 @@ test("candidate intake fields expose schema max lengths", async ({ page }) => {
 test("duplicate candidate add shows toast and keeps one candidate", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
   await addCandidate(page);
-  await addCandidate(page);
+  await addCandidate(page, { expectSuccess: false });
 
   await expect(page.getByText("Candidate was not added")).toBeVisible();
   await expect(
@@ -101,7 +101,7 @@ test("duplicate candidate add shows toast and keeps one candidate", async ({
 });
 
 test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -110,7 +110,7 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
       window as unknown as { __LINKGO_FAIL_DEDUPE_KEY_TYPE__?: string }
     ).__LINKGO_FAIL_DEDUPE_KEY_TYPE__ = "content_hash";
   });
-  await addCandidate(page);
+  await addCandidate(page, { expectSuccess: false });
 
   await expect(page.getByText("Candidate was not added")).toBeVisible();
   await expect(page.getByText("Injected dedupe insert failure")).toBeVisible();
@@ -158,7 +158,7 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
 });
 
 test("archived campaign cannot receive a new candidate", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await archiveCampaign(page, "Founder-led growth");
   await createCampaign(page, "Active funnel");
@@ -167,7 +167,7 @@ test("archived campaign cannot receive a new candidate", async ({ page }) => {
   await page
     .getByRole("combobox")
     .selectOption({ label: "Founder-led growth (archived)" });
-  await addCandidate(page);
+  await addCandidate(page, { expectSuccess: false });
 
   await expect(page.getByText("Candidate was not added")).toBeVisible();
   await expect(page.getByText("Campaign is archived")).toBeVisible();
@@ -190,7 +190,7 @@ test("archived campaign cannot receive a new candidate", async ({ page }) => {
 test("candidate status actions move through triage states", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -215,7 +215,7 @@ test("candidate status actions move through triage states", async ({
 });
 
 test("candidate deletion requires confirmation", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -235,7 +235,7 @@ test("candidate deletion requires confirmation", async ({ page }) => {
 });
 
 test("queue renders no-campaign empty state", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await openQueue(page);
 
   await expect(
@@ -275,7 +275,9 @@ async function createCampaign(
   await page
     .getByLabel("Manual keywords")
     .fill("LinkedIn growth, founder content, outbound");
-  await page.getByRole("button", { name: "Create campaign" }).click();
+  const dialog = page.getByRole("dialog", { name: "New campaign" });
+  await dialog.getByRole("button", { name: "Create campaign" }).click();
+  await expect(dialog).toBeHidden();
 }
 
 async function archiveCampaign(page: Page, name: string): Promise<void> {
@@ -284,7 +286,10 @@ async function archiveCampaign(page: Page, name: string): Promise<void> {
   await expect(page.getByText("Archived", { exact: true })).toBeVisible();
 }
 
-async function addCandidate(page: Page): Promise<void> {
+async function addCandidate(
+  page: Page,
+  options: { expectSuccess: boolean } = { expectSuccess: true },
+): Promise<void> {
   await page.getByRole("button", { name: "Add candidate" }).first().click();
   await expect(
     page.getByRole("dialog", { name: "Add candidate" }),
@@ -305,8 +310,7 @@ async function addCandidate(page: Page): Promise<void> {
   await page.getByLabel("Relevance score").fill("87");
   await page.getByLabel("Score reason").fill("Strong audience overlap.");
   await page.getByLabel("Notes").fill("Good comment opportunity.");
-  await page
-    .getByRole("dialog", { name: "Add candidate" })
-    .getByRole("button", { name: "Add candidate" })
-    .click();
+  const dialog = page.getByRole("dialog", { name: "Add candidate" });
+  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  if (options.expectSuccess) await expect(dialog).toBeHidden();
 }

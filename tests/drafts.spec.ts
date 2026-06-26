@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 test("creates a draft with two variants and shows audit output", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -28,7 +28,7 @@ test("creates a draft with two variants and shows audit output", async ({
 test("creating a draft removes the drafted candidate from draft creation", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -42,7 +42,7 @@ test("creating a draft removes the drafted candidate from draft creation", async
 });
 
 test("audit blocks external links and too many hashtags", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -58,7 +58,7 @@ test("audit blocks external links and too many hashtags", async ({ page }) => {
 });
 
 test("blocked variant cannot be selected", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -75,7 +75,7 @@ test("blocked variant cannot be selected", async ({ page }) => {
 test("clean variant can be selected and draft status becomes ready", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -91,7 +91,7 @@ test("clean variant can be selected and draft status becomes ready", async ({
 test("editing a variant re-runs audit and clears an external link block", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -117,7 +117,7 @@ test("editing a variant re-runs audit and clears an external link block", async 
 test("rejected candidates are not available for draft creation", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -132,7 +132,7 @@ test("rejected candidates are not available for draft creation", async ({
 test("archived campaign candidates are not available for draft creation", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -235,7 +235,9 @@ async function createCampaign(
   await page
     .getByLabel("Manual keywords")
     .fill("LinkedIn growth, founder content, outbound");
-  await page.getByRole("button", { name: "Create campaign" }).click();
+  const dialog = page.getByRole("dialog", { name: "New campaign" });
+  await dialog.getByRole("button", { name: "Create campaign" }).click();
+  await expect(dialog).toBeHidden();
 }
 
 async function archiveCampaign(page: Page, name: string): Promise<void> {
@@ -265,10 +267,9 @@ async function addCandidate(page: Page): Promise<void> {
   await page.getByLabel("Relevance score").fill("87");
   await page.getByLabel("Score reason").fill("Strong audience overlap.");
   await page.getByLabel("Notes").fill("Good comment opportunity.");
-  await page
-    .getByRole("dialog", { name: "Add candidate" })
-    .getByRole("button", { name: "Add candidate" })
-    .click();
+  const dialog = page.getByRole("dialog", { name: "Add candidate" });
+  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  await expect(dialog).toBeHidden();
 }
 
 async function createDraft(
@@ -291,8 +292,7 @@ async function createDraft(
     await page.locator(`#draft-variant-${index}-hashtags`).fill(variant.hashtags);
   }
 
-  await page
-    .getByRole("dialog", { name: "Create draft" })
-    .getByRole("button", { name: "Create draft" })
-    .click();
+  const dialog = page.getByRole("dialog", { name: "Create draft" });
+  await dialog.getByRole("button", { name: "Create draft" }).click();
+  await expect(dialog).toBeHidden();
 }

@@ -152,11 +152,71 @@ Constraints: checked severity values.
 
 Indexes: `idx_draft_audits_variant_id`, `idx_draft_audits_severity`.
 
+### `approvals`
+
+Stores one human review record for one selected draft variant.
+
+| Column             | Type    | Notes                                                                                                  |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------ |
+| `id`               | INTEGER | Primary key                                                                                            |
+| `campaign_id`      | INTEGER | References `campaigns(id)` cascade delete                                                              |
+| `draft_id`         | INTEGER | References `drafts(id)` cascade delete; unique so one draft has one approval record                    |
+| `draft_variant_id` | INTEGER | References `draft_variants(id)` cascade delete; unique so one selected variant has one approval record |
+| `status`           | TEXT    | `needs_review`, `changes_requested`, `approved`, `rejected`, `scheduled`, `published`, or `cancelled`  |
+| `reviewer_notes`   | TEXT    | Optional operator notes, default empty string                                                          |
+| `approved_at`      | TEXT    | Nullable approval timestamp                                                                            |
+| `rejected_at`      | TEXT    | Nullable rejection timestamp                                                                           |
+| `created_at`       | TEXT    | SQLite datetime                                                                                        |
+| `updated_at`       | TEXT    | SQLite datetime                                                                                        |
+
+Constraints: unique `draft_id`, unique `draft_variant_id`, and checked status values.
+
+Indexes: `idx_approvals_campaign_id`, `idx_approvals_status`, `idx_approvals_draft_id`, `idx_approvals_variant_id`.
+
+### `schedule_jobs`
+
+Stores one local schedule record for an approved post. This table does not run a scheduler or publish to LinkedIn.
+
+| Column            | Type    | Notes                                                          |
+| ----------------- | ------- | -------------------------------------------------------------- |
+| `id`              | INTEGER | Primary key                                                    |
+| `approval_id`     | INTEGER | References `approvals(id)` cascade delete; unique per approval |
+| `platform`        | TEXT    | Defaults to `linkedin`, constrained to `linkedin`              |
+| `scheduled_for`   | TEXT    | Required local datetime string from the operator               |
+| `timezone`        | TEXT    | Optional label, default `local`                                |
+| `status`          | TEXT    | `scheduled`, `cancelled`, `completed`, or `failed`             |
+| `idempotency_key` | TEXT    | Required deterministic key, unique                             |
+| `created_at`      | TEXT    | SQLite datetime                                                |
+| `updated_at`      | TEXT    | SQLite datetime                                                |
+
+Constraints: unique `approval_id`, unique `idempotency_key`, checked platform, and checked status values.
+
+Indexes: `idx_schedule_jobs_approval_id`, `idx_schedule_jobs_status`, `idx_schedule_jobs_scheduled_for`.
+
+### `publish_attempts`
+
+Stores manual publish outcomes. Successful rows can include a LinkedIn URL or platform post ID; failed rows include an error message.
+
+| Column              | Type    | Notes                                                              |
+| ------------------- | ------- | ------------------------------------------------------------------ |
+| `id`                | INTEGER | Primary key                                                        |
+| `approval_id`       | INTEGER | References `approvals(id)` cascade delete                          |
+| `schedule_job_id`   | INTEGER | Nullable, references `schedule_jobs(id)` with `ON DELETE SET NULL` |
+| `platform`          | TEXT    | Defaults to `linkedin`, constrained to `linkedin`                  |
+| `status`            | TEXT    | `succeeded` or `failed`                                            |
+| `external_post_url` | TEXT    | Optional published LinkedIn URL                                    |
+| `platform_post_id`  | TEXT    | Optional LinkedIn/platform post ID                                 |
+| `error_message`     | TEXT    | Optional failure reason                                            |
+| `created_at`        | TEXT    | SQLite datetime                                                    |
+
+Constraints: checked platform and checked status values.
+
+Indexes: `idx_publish_attempts_approval_id`, `idx_publish_attempts_schedule_job_id`, `idx_publish_attempts_status`.
+
 ## Reserved future tables
 
 Future slices will add their own migrations for:
 
-- Approvals and scheduling: `approvals`, `schedule_jobs`, `publish_attempts`.
 - Metrics and learning: `post_metrics`, `campaign_memory`, `learning_events`.
 - Workflows: `workflow_runs`, `workflow_steps`, `workflow_events`.
 - Safety and observability: `safety_limits`, `rate_limit_events`, `audit_events`, `error_queue`.

@@ -106,6 +106,56 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type ApprovalStatus =
+      | "needs_review"
+      | "changes_requested"
+      | "approved"
+      | "rejected"
+      | "scheduled"
+      | "published"
+      | "cancelled";
+
+    type ScheduleJobStatus = "scheduled" | "cancelled" | "completed" | "failed";
+
+    type PublishAttemptStatus = "succeeded" | "failed";
+
+    type Approval = {
+      id: number;
+      campaign_id: number;
+      draft_id: number;
+      draft_variant_id: number;
+      status: ApprovalStatus;
+      reviewer_notes: string;
+      approved_at: string | null;
+      rejected_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type ScheduleJob = {
+      id: number;
+      approval_id: number;
+      platform: "linkedin";
+      scheduled_for: string;
+      timezone: string;
+      status: ScheduleJobStatus;
+      idempotency_key: string;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type PublishAttempt = {
+      id: number;
+      approval_id: number;
+      schedule_job_id: number | null;
+      platform: "linkedin";
+      status: PublishAttemptStatus;
+      external_post_url: string;
+      platform_post_id: string;
+      error_message: string;
+      created_at: string;
+    };
+
     type TransactionSnapshot = {
       campaigns: Campaign[];
       keywords: Keyword[];
@@ -115,6 +165,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       drafts: Draft[];
       draftVariants: DraftVariant[];
       draftAudits: DraftAudit[];
+      approvals: Approval[];
+      scheduleJobs: ScheduleJob[];
+      publishAttempts: PublishAttempt[];
       nextCampaignId: number;
       nextKeywordId: number;
       nextTargetPostId: number;
@@ -123,6 +176,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftId: number;
       nextDraftVariantId: number;
       nextDraftAuditId: number;
+      nextApprovalId: number;
+      nextScheduleJobId: number;
+      nextPublishAttemptId: number;
     };
 
     const w = window as unknown as Record<string, unknown>;
@@ -134,6 +190,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const drafts: Draft[] = [];
     const draftVariants: DraftVariant[] = [];
     const draftAudits: DraftAudit[] = [];
+    const approvals: Approval[] = [];
+    const scheduleJobs: ScheduleJob[] = [];
+    const publishAttempts: PublishAttempt[] = [];
     let nextCampaignId = 1;
     let nextKeywordId = 1;
     let nextTargetPostId = 1;
@@ -142,6 +201,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextDraftId = 1;
     let nextDraftVariantId = 1;
     let nextDraftAuditId = 1;
+    let nextApprovalId = 1;
+    let nextScheduleJobId = 1;
+    let nextPublishAttemptId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
@@ -179,6 +241,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         drafts: cloneRows(drafts),
         draftVariants: cloneRows(draftVariants),
         draftAudits: cloneRows(draftAudits),
+        approvals: cloneRows(approvals),
+        scheduleJobs: cloneRows(scheduleJobs),
+        publishAttempts: cloneRows(publishAttempts),
         nextCampaignId,
         nextKeywordId,
         nextTargetPostId,
@@ -187,6 +252,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextDraftId,
         nextDraftVariantId,
         nextDraftAuditId,
+        nextApprovalId,
+        nextScheduleJobId,
+        nextPublishAttemptId,
       };
     }
 
@@ -203,6 +271,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(drafts, snapshot.drafts);
       restoreRows(draftVariants, snapshot.draftVariants);
       restoreRows(draftAudits, snapshot.draftAudits);
+      restoreRows(approvals, snapshot.approvals);
+      restoreRows(scheduleJobs, snapshot.scheduleJobs);
+      restoreRows(publishAttempts, snapshot.publishAttempts);
       nextCampaignId = snapshot.nextCampaignId;
       nextKeywordId = snapshot.nextKeywordId;
       nextTargetPostId = snapshot.nextTargetPostId;
@@ -211,13 +282,20 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftId = snapshot.nextDraftId;
       nextDraftVariantId = snapshot.nextDraftVariantId;
       nextDraftAuditId = snapshot.nextDraftAuditId;
+      nextApprovalId = snapshot.nextApprovalId;
+      nextScheduleJobId = snapshot.nextScheduleJobId;
+      nextPublishAttemptId = snapshot.nextPublishAttemptId;
     }
 
     function getCandidateJoinRow(
       candidate: CandidatePost,
     ): Record<string, unknown> | null {
-      const target = targetPosts.find((row) => row.id === candidate.target_post_id);
-      const campaign = campaigns.find((row) => row.id === candidate.campaign_id);
+      const target = targetPosts.find(
+        (row) => row.id === candidate.target_post_id,
+      );
+      const campaign = campaigns.find(
+        (row) => row.id === candidate.campaign_id,
+      );
       if (!target || !campaign) return null;
       return {
         id: candidate.id,
@@ -257,7 +335,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         .sort((left, right) => {
           const leftRejected = left.status === "rejected" ? 1 : 0;
           const rightRejected = right.status === "rejected" ? 1 : 0;
-          if (leftRejected !== rightRejected) return leftRejected - rightRejected;
+          if (leftRejected !== rightRejected)
+            return leftRejected - rightRejected;
           const updatedDelta = String(right.updated_at).localeCompare(
             String(left.updated_at),
           );
@@ -270,8 +349,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const candidateId = Number(values[0] ?? 0);
       const candidate = candidatePosts.find((row) => row.id === candidateId);
       if (!candidate) return [];
-      const campaign = campaigns.find((row) => row.id === candidate.campaign_id);
-      const target = targetPosts.find((row) => row.id === candidate.target_post_id);
+      const campaign = campaigns.find(
+        (row) => row.id === candidate.campaign_id,
+      );
+      const target = targetPosts.find(
+        (row) => row.id === candidate.target_post_id,
+      );
       if (!campaign || !target) return [];
       return [
         {
@@ -340,7 +423,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       });
     }
 
-    function selectDraftVariants(query: string, values: unknown[]): DraftVariant[] {
+    function selectDraftVariants(
+      query: string,
+      values: unknown[],
+    ): DraftVariant[] {
       if (query.includes("WHERE id =")) {
         return draftVariants.filter(
           (variant) => variant.id === Number(values[0] ?? 0),
@@ -362,9 +448,224 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return draftAudits.filter((audit) => ids.has(audit.draft_variant_id));
     }
 
+    function getApprovalDetailRow(
+      approval: Approval,
+    ): Record<string, unknown> | null {
+      const draft = drafts.find((row) => row.id === approval.draft_id);
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      const variant = draftVariants.find(
+        (row) => row.id === approval.draft_variant_id,
+      );
+      const candidate = draft
+        ? candidatePosts.find((row) => row.id === draft.candidate_post_id)
+        : undefined;
+      const target = candidate
+        ? targetPosts.find((row) => row.id === candidate.target_post_id)
+        : undefined;
+      if (!draft || !campaign || !variant || !candidate || !target) return null;
+      return {
+        id: approval.id,
+        campaign_id: approval.campaign_id,
+        draft_id: approval.draft_id,
+        draft_variant_id: approval.draft_variant_id,
+        status: approval.status,
+        reviewer_notes: approval.reviewer_notes,
+        approved_at: approval.approved_at,
+        rejected_at: approval.rejected_at,
+        created_at: approval.created_at,
+        updated_at: approval.updated_at,
+        draft_candidate_post_id: draft.candidate_post_id,
+        draft_angle: draft.angle,
+        draft_notes: draft.notes,
+        draft_status: draft.status,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+        candidate_source_keyword: candidate.source_keyword,
+        target_url: target.url,
+        target_author_name: target.author_name,
+        target_author_profile_url: target.author_profile_url,
+        target_content: target.content,
+        variant_number: variant.variant_number,
+        variant_hook: variant.hook,
+        variant_body: variant.body,
+        variant_cta: variant.cta,
+        variant_hashtags: variant.hashtags,
+        variant_status: variant.status,
+      };
+    }
+
+    function getEligibleApprovalDraftRow(
+      draft: Draft,
+    ): Record<string, unknown> | null {
+      if (draft.status !== "ready_for_review") return null;
+      if (approvals.some((approval) => approval.draft_id === draft.id))
+        return null;
+      const campaign = campaigns.find((row) => row.id === draft.campaign_id);
+      if (!campaign || campaign.status === "archived") return null;
+      const selectedVariants = draftVariants.filter(
+        (row) => row.draft_id === draft.id && row.status === "selected",
+      );
+      const variant = selectedVariants[0];
+      if (selectedVariants.length !== 1 || !variant) return null;
+      if (
+        draftAudits.some(
+          (audit) =>
+            audit.draft_variant_id === variant.id && audit.severity === "block",
+        )
+      ) {
+        return null;
+      }
+      const candidate = candidatePosts.find(
+        (row) => row.id === draft.candidate_post_id,
+      );
+      const target = candidate
+        ? targetPosts.find((row) => row.id === candidate.target_post_id)
+        : undefined;
+      if (!candidate || !target) return null;
+      return {
+        id: 0,
+        campaign_id: draft.campaign_id,
+        draft_id: draft.id,
+        draft_variant_id: variant.id,
+        status: "needs_review",
+        reviewer_notes: "",
+        approved_at: null,
+        rejected_at: null,
+        created_at: draft.created_at,
+        updated_at: draft.updated_at,
+        draft_candidate_post_id: draft.candidate_post_id,
+        draft_angle: draft.angle,
+        draft_notes: draft.notes,
+        draft_status: draft.status,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+        candidate_source_keyword: candidate.source_keyword,
+        target_url: target.url,
+        target_author_name: target.author_name,
+        target_author_profile_url: target.author_profile_url,
+        target_content: target.content,
+        variant_number: variant.variant_number,
+        variant_hook: variant.hook,
+        variant_body: variant.body,
+        variant_cta: variant.cta,
+        variant_hashtags: variant.hashtags,
+        variant_status: variant.status,
+      };
+    }
+
+    function selectApprovalJoin(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return approvals
+        .filter(
+          (approval) =>
+            campaignId === null || approval.campaign_id === campaignId,
+        )
+        .map(getApprovalDetailRow)
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const leftTerminal = ["published", "cancelled", "rejected"].includes(
+            String(left.status),
+          )
+            ? 1
+            : 0;
+          const rightTerminal = ["published", "cancelled", "rejected"].includes(
+            String(right.status),
+          )
+            ? 1
+            : 0;
+          if (leftTerminal !== rightTerminal)
+            return leftTerminal - rightTerminal;
+          const updatedDelta = String(right.updated_at).localeCompare(
+            String(left.updated_at),
+          );
+          if (updatedDelta !== 0) return updatedDelta;
+          return Number(right.id) - Number(left.id);
+        });
+    }
+
+    function selectApprovalEligibleDrafts(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return drafts
+        .filter(
+          (draft) => campaignId === null || draft.campaign_id === campaignId,
+        )
+        .map(getEligibleApprovalDraftRow)
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const updatedDelta = String(right.updated_at).localeCompare(
+            String(left.updated_at),
+          );
+          if (updatedDelta !== 0) return updatedDelta;
+          return Number(right.draft_id) - Number(left.draft_id);
+        });
+    }
+
+    function selectApprovalValidation(values: unknown[]): unknown[] {
+      const draftId = Number(values[0] ?? 0);
+      const draft = drafts.find((row) => row.id === draftId);
+      if (!draft) return [];
+      const campaign = campaigns.find((row) => row.id === draft.campaign_id);
+      if (!campaign) return [];
+      const selectedVariants = draftVariants.filter(
+        (variant) =>
+          variant.draft_id === draft.id && variant.status === "selected",
+      );
+      const selected = selectedVariants[0];
+      return [
+        {
+          draft_id: draft.id,
+          campaign_id: draft.campaign_id,
+          campaign_status: campaign.status,
+          draft_status: draft.status,
+          draft_variant_id: selected?.id ?? null,
+          selected_count: selectedVariants.length,
+        },
+      ];
+    }
+
+    function selectApprovalCampaign(values: unknown[]): unknown[] {
+      const approvalId = Number(values[0] ?? 0);
+      const approval = approvals.find((row) => row.id === approvalId);
+      if (!approval) return [];
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      if (!campaign) return [];
+      return [
+        {
+          id: approval.id,
+          campaign_id: approval.campaign_id,
+          campaign_status: campaign.status,
+          status: approval.status,
+          draft_id: approval.draft_id,
+        },
+      ];
+    }
+
+    function selectScheduleValidation(values: unknown[]): unknown[] {
+      const scheduleId = Number(values[0] ?? 0);
+      const schedule = scheduleJobs.find((row) => row.id === scheduleId);
+      if (!schedule) return [];
+      const approval = approvals.find((row) => row.id === schedule.approval_id);
+      const campaign = approval
+        ? campaigns.find((row) => row.id === approval.campaign_id)
+        : undefined;
+      if (!approval || !campaign) return [];
+      return [
+        {
+          id: schedule.id,
+          approval_id: schedule.approval_id,
+          status: schedule.status,
+          approval_status: approval.status,
+          campaign_id: approval.campaign_id,
+          campaign_status: campaign.status,
+        },
+      ];
+    }
+
     function parseUpdateColumns(query: string, tableName: string): string[] {
       return query
-        .slice(query.indexOf(`UPDATE ${tableName}`) + `UPDATE ${tableName}`.length)
+        .slice(
+          query.indexOf(`UPDATE ${tableName}`) + `UPDATE ${tableName}`.length,
+        )
         .split(", updated_at")[0]
         .replace("SET", "")
         .split(",")
@@ -385,6 +686,89 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           },
         ];
       }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM draft_audits")
+      ) {
+        const variantId = Number(values[0] ?? 0);
+        return [
+          {
+            count: draftAudits.filter(
+              (audit) =>
+                audit.draft_variant_id === variantId &&
+                audit.severity === "block",
+            ).length,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM approvals")
+      ) {
+        const draftId = Number(values[0] ?? 0);
+        return [
+          { count: approvals.filter((row) => row.draft_id === draftId).length },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM schedule_jobs")
+      ) {
+        const approvalId = Number(values[0] ?? 0);
+        return [
+          {
+            count: scheduleJobs.filter((row) => row.approval_id === approvalId)
+              .length,
+          },
+        ];
+      }
+      if (
+        query.includes("FROM approvals a") &&
+        query.includes("INNER JOIN drafts d")
+      ) {
+        return selectApprovalJoin(values);
+      }
+      if (
+        query.includes("FROM drafts d") &&
+        query.includes("LEFT JOIN approvals a")
+      ) {
+        return selectApprovalEligibleDrafts(values);
+      }
+      if (
+        query.includes("FROM drafts d") &&
+        query.includes("LEFT JOIN draft_variants dv")
+      ) {
+        return selectApprovalValidation(values);
+      }
+      if (
+        query.includes("FROM approvals a") &&
+        query.includes("c.status AS campaign_status")
+      ) {
+        return selectApprovalCampaign(values);
+      }
+      if (query.includes("FROM schedule_jobs sj")) {
+        return selectScheduleValidation(values);
+      }
+      if (query.includes("FROM schedule_jobs")) {
+        const ids = new Set(
+          values.filter((value): value is number => typeof value === "number"),
+        );
+        return scheduleJobs.filter((job) => ids.has(job.approval_id));
+      }
+      if (query.includes("FROM publish_attempts")) {
+        const ids = new Set(
+          values.filter((value): value is number => typeof value === "number"),
+        );
+        return publishAttempts
+          .filter((attempt) => ids.has(attempt.approval_id))
+          .sort((left, right) => {
+            const createdDelta = right.created_at.localeCompare(
+              left.created_at,
+            );
+            if (createdDelta !== 0) return createdDelta;
+            return right.id - left.id;
+          });
+      }
       if (query.includes("c.status AS campaign_status")) {
         return selectDraftCandidate(values);
       }
@@ -393,7 +777,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return selectDraftVariants(query, values);
       }
       if (query.includes("FROM draft_audits")) return selectDraftAudits(values);
-      if (query.includes("FROM candidate_posts cp")) return selectCandidateJoin(values);
+      if (query.includes("FROM candidate_posts cp"))
+        return selectCandidateJoin(values);
       if (query.includes("FROM dedupe_keys")) {
         const campaignId = Number(values[0] ?? 0);
         const normalizedUrl = String(values[1] ?? "");
@@ -403,7 +788,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             key.campaign_id === campaignId &&
             ((key.key_type === "normalized_url" &&
               key.key_value === normalizedUrl) ||
-              (key.key_type === "content_hash" && key.key_value === contentHash)),
+              (key.key_type === "content_hash" &&
+                key.key_value === contentHash)),
         );
       }
       if (query.includes("FROM target_posts")) {
@@ -431,7 +817,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return [...campaigns].sort((left, right) => {
           const leftArchived = left.status === "archived" ? 1 : 0;
           const rightArchived = right.status === "archived" ? 1 : 0;
-          if (leftArchived !== rightArchived) return leftArchived - rightArchived;
+          if (leftArchived !== rightArchived)
+            return leftArchived - rightArchived;
           const updatedDelta = right.updated_at.localeCompare(left.updated_at);
           if (updatedDelta !== 0) return updatedDelta;
           return right.id - left.id;
@@ -623,6 +1010,149 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: audit.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO approvals")) {
+        const draftId = Number(values[1] ?? 0);
+        const variantId = Number(values[2] ?? 0);
+        if (approvals.some((row) => row.draft_id === draftId)) {
+          throw new Error("UNIQUE constraint failed: approvals.draft_id");
+        }
+        if (approvals.some((row) => row.draft_variant_id === variantId)) {
+          throw new Error(
+            "UNIQUE constraint failed: approvals.draft_variant_id",
+          );
+        }
+        const approval: Approval = {
+          id: nextApprovalId,
+          campaign_id: Number(values[0] ?? 0),
+          draft_id: draftId,
+          draft_variant_id: variantId,
+          status: "needs_review",
+          reviewer_notes: String(values[3] ?? ""),
+          approved_at: null,
+          rejected_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        approvals.push(approval);
+        nextApprovalId += 1;
+        return { lastInsertId: approval.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO schedule_jobs")) {
+        const approvalId = Number(values[0] ?? 0);
+        if (scheduleJobs.some((row) => row.approval_id === approvalId)) {
+          throw new Error(
+            "UNIQUE constraint failed: schedule_jobs.approval_id",
+          );
+        }
+        const idempotencyKey = String(values[3] ?? "");
+        if (
+          scheduleJobs.some((row) => row.idempotency_key === idempotencyKey)
+        ) {
+          throw new Error(
+            "UNIQUE constraint failed: schedule_jobs.idempotency_key",
+          );
+        }
+        const scheduleJob: ScheduleJob = {
+          id: nextScheduleJobId,
+          approval_id: approvalId,
+          platform: "linkedin",
+          scheduled_for: String(values[1] ?? ""),
+          timezone: String(values[2] ?? "local"),
+          status: "scheduled",
+          idempotency_key: idempotencyKey,
+          created_at: now,
+          updated_at: now,
+        };
+        scheduleJobs.push(scheduleJob);
+        nextScheduleJobId += 1;
+        return { lastInsertId: scheduleJob.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO publish_attempts")) {
+        const publishAttempt: PublishAttempt = {
+          id: nextPublishAttemptId,
+          approval_id: Number(values[0] ?? 0),
+          schedule_job_id: values[1] === null ? null : Number(values[1] ?? 0),
+          platform: "linkedin",
+          status: values[2] as PublishAttemptStatus,
+          external_post_url: String(values[3] ?? ""),
+          platform_post_id: String(values[4] ?? ""),
+          error_message: String(values[5] ?? ""),
+          created_at: now,
+        };
+        publishAttempts.push(publishAttempt);
+        nextPublishAttemptId += 1;
+        return { lastInsertId: publishAttempt.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE approvals")) {
+        const literalStatus = query.includes("status = 'scheduled'")
+          ? "scheduled"
+          : query.includes("status = 'published'")
+            ? "published"
+            : query.includes("status = 'approved'")
+              ? "approved"
+              : null;
+        const id =
+          literalStatus === null
+            ? Number(values.at(-1) ?? 0)
+            : Number(values[0] ?? 0);
+        const approval = approvals.find((row) => row.id === id);
+        if (approval) {
+          approval.status = (literalStatus ?? values[0]) as ApprovalStatus;
+          if (query.includes("reviewer_notes")) {
+            approval.reviewer_notes = String(values[1] ?? "");
+          }
+          if (query.includes("approved_at = datetime('now')")) {
+            approval.approved_at = now;
+            approval.rejected_at = null;
+          }
+          if (query.includes("rejected_at = datetime('now')")) {
+            approval.rejected_at = now;
+          }
+          approval.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
+      if (query.includes("UPDATE schedule_jobs")) {
+        const status = query.includes("status = 'cancelled'")
+          ? "cancelled"
+          : query.includes("status = 'completed'")
+            ? "completed"
+            : query.includes("status = 'failed'")
+              ? "failed"
+              : "scheduled";
+        const id = query.includes("scheduled_for = $1")
+          ? Number(values[3] ?? 0)
+          : Number(values[0] ?? 0);
+        const scheduleJob = scheduleJobs.find((row) => row.id === id);
+        if (scheduleJob) {
+          const nextIdempotencyKey = query.includes("idempotency_key = $3")
+            ? String(values[2] ?? "")
+            : scheduleJob.idempotency_key;
+          if (
+            scheduleJobs.some(
+              (row) =>
+                row.id !== id && row.idempotency_key === nextIdempotencyKey,
+            )
+          ) {
+            throw new Error(
+              "UNIQUE constraint failed: schedule_jobs.idempotency_key",
+            );
+          }
+          scheduleJob.status = status;
+          if (query.includes("scheduled_for = $1")) {
+            scheduleJob.scheduled_for = String(values[0] ?? "");
+            scheduleJob.timezone = String(values[1] ?? "local");
+            scheduleJob.idempotency_key = nextIdempotencyKey;
+          }
+          scheduleJob.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
       if (query.includes("UPDATE campaigns SET status")) {
         const status = values[0] as Campaign["status"];
         const id = Number(values[1] ?? 0);
@@ -642,21 +1172,27 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         if (campaign) {
           columns.forEach((column, index) => {
             const value = values[index];
-            if (column === "name") campaign.name = String(value ?? campaign.name);
+            if (column === "name")
+              campaign.name = String(value ?? campaign.name);
             if (column === "product") {
               campaign.product = String(value ?? campaign.product);
             }
             if (column === "audience") {
               campaign.audience = String(value ?? campaign.audience);
             }
-            if (column === "voice") campaign.voice = String(value ?? campaign.voice);
-            if (column === "tone") campaign.tone = String(value ?? campaign.tone);
+            if (column === "voice")
+              campaign.voice = String(value ?? campaign.voice);
+            if (column === "tone")
+              campaign.tone = String(value ?? campaign.tone);
             if (column === "auto_pilot") {
               campaign.auto_pilot = Number(value ?? campaign.auto_pilot);
             }
-            if (column === "status") campaign.status = value as Campaign["status"];
+            if (column === "status")
+              campaign.status = value as Campaign["status"];
             if (column === "daily_post_limit") {
-              campaign.daily_post_limit = Number(value ?? campaign.daily_post_limit);
+              campaign.daily_post_limit = Number(
+                value ?? campaign.daily_post_limit,
+              );
             }
             if (column === "daily_comment_limit") {
               campaign.daily_comment_limit = Number(
@@ -679,7 +1215,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             const columns = parseUpdateColumns(query, "candidate_posts");
             columns.forEach((column, index) => {
               const value = values[index];
-              if (column === "status") candidate.status = value as CandidateStatus;
+              if (column === "status")
+                candidate.status = value as CandidateStatus;
               if (column === "relevance_score") {
                 candidate.relevance_score =
                   value === null ? null : Number(value ?? 0);
@@ -779,12 +1316,28 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const draftIds = drafts
           .filter((draft) => draft.candidate_post_id === id)
           .map((draft) => draft.id);
+        const approvalIds = approvals
+          .filter((approval) => draftIds.includes(approval.draft_id))
+          .map((approval) => approval.id);
         removeRows(drafts, (draft) => draft.candidate_post_id === id);
-        removeRows(draftVariants, (variant) => draftIds.includes(variant.draft_id));
+        removeRows(draftVariants, (variant) =>
+          draftIds.includes(variant.draft_id),
+        );
+        removeRows(approvals, (approval) =>
+          draftIds.includes(approval.draft_id),
+        );
+        removeRows(scheduleJobs, (job) =>
+          approvalIds.includes(job.approval_id),
+        );
+        removeRows(publishAttempts, (attempt) =>
+          approvalIds.includes(attempt.approval_id),
+        );
         removeRows(
           draftAudits,
           (audit) =>
-            !draftVariants.some((variant) => variant.id === audit.draft_variant_id),
+            !draftVariants.some(
+              (variant) => variant.id === audit.draft_variant_id,
+            ),
         );
         return { lastInsertId: 0, rowsAffected };
       }
@@ -800,10 +1353,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       if (query.includes("DELETE FROM campaigns")) {
         const id = Number(values[0] ?? 0);
-        const rowsAffected = removeRows(campaigns, (campaign) => campaign.id === id);
+        const rowsAffected = removeRows(
+          campaigns,
+          (campaign) => campaign.id === id,
+        );
         const removedDraftIds = drafts
           .filter((draft) => draft.campaign_id === id)
           .map((draft) => draft.id);
+        const removedApprovalIds = approvals
+          .filter((approval) => approval.campaign_id === id)
+          .map((approval) => approval.id);
         removeRows(keywords, (keyword) => keyword.campaign_id === id);
         removeRows(candidatePosts, (candidate) => candidate.campaign_id === id);
         removeRows(dedupeKeys, (key) => key.campaign_id === id);
@@ -811,10 +1370,19 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         removeRows(draftVariants, (variant) =>
           removedDraftIds.includes(variant.draft_id),
         );
+        removeRows(approvals, (approval) => approval.campaign_id === id);
+        removeRows(scheduleJobs, (job) =>
+          removedApprovalIds.includes(job.approval_id),
+        );
+        removeRows(publishAttempts, (attempt) =>
+          removedApprovalIds.includes(attempt.approval_id),
+        );
         removeRows(
           draftAudits,
           (audit) =>
-            !draftVariants.some((variant) => variant.id === audit.draft_variant_id),
+            !draftVariants.some(
+              (variant) => variant.id === audit.draft_variant_id,
+            ),
         );
         return { lastInsertId: 0, rowsAffected };
       }
@@ -831,6 +1399,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       drafts: drafts.length,
       draftVariants: draftVariants.length,
       draftAudits: draftAudits.length,
+      approvals: approvals.length,
+      scheduleJobs: scheduleJobs.length,
+      publishAttempts: publishAttempts.length,
     });
 
     const mockWindow = {
@@ -860,8 +1431,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     w.__TAURI_INTERNALS__ = {
       invoke: (cmd: string, args?: unknown) => {
-        if (cmd === "plugin:sql|select") return Promise.resolve(selectSql(args));
-        if (cmd === "plugin:sql|execute") return Promise.resolve(executeSql(args));
+        if (cmd === "plugin:sql|select")
+          return Promise.resolve(selectSql(args));
+        if (cmd === "plugin:sql|execute")
+          return Promise.resolve(executeSql(args));
         if (cmd === "plugin:sql|close") return Promise.resolve(true);
         if (cmd === "plugin:sql|load") return Promise.resolve("");
         if (cmd === "update_tray_menu") return Promise.resolve(null);

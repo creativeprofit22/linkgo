@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("app root renders campaigns by default", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expect(page).toHaveTitle("Linkgo");
   await expect(
@@ -19,8 +19,8 @@ test("app root renders campaigns by default", async ({ page }) => {
   await expect(page.getByText("No campaigns yet")).toBeVisible();
 });
 
-test("queue and drafts render real views", async ({ page }) => {
-  await page.goto("/");
+test("queue, drafts, and approvals render real views", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: /Queue/ }).click();
   await expect(
@@ -31,7 +31,12 @@ test("queue and drafts render real views", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Drafts/ })).toHaveAttribute(
+
+  await page.getByRole("button", { name: /Approvals/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Approvals", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Approvals/ })).toHaveAttribute(
     "aria-current",
     "page",
   );

@@ -1,0 +1,809 @@
+import { getDb, type LinkgoDatabase } from "@/lib/db";
+import {
+  cancelScheduleSchema,
+  createApprovalSchema,
+  recordPublishAttemptSchema,
+  scheduleApprovalSchema,
+  setApprovalStatusSchema,
+} from "@/features/approvals/schemas";
+import type {
+  Approval,
+  ApprovalDraftSnapshot,
+  ApprovalEligibleDraft,
+  ApprovalStatus,
+  ApprovalVariantSnapshot,
+  ApprovalWithDetails,
+  CancelScheduleInput,
+  CreateApprovalInput,
+  PublishAttempt,
+  RecordPublishAttemptInput,
+  ScheduleApprovalInput,
+  ScheduleJob,
+  SetApprovalStatusInput,
+} from "@/features/approvals/types";
+import type { CampaignStatus } from "@/features/campaigns/types";
+import { getAuditSeverity, mapDraftAudit } from "@/features/drafts/data";
+import type {
+  DraftAuditFinding,
+  DraftAuditSeverity,
+  DraftStatus,
+  DraftVariantStatus,
+} from "@/features/drafts/types";
+
+interface ApprovalDetailRow {
+  id: number;
+  campaign_id: number;
+  draft_id: number;
+  draft_variant_id: number;
+  status: ApprovalStatus;
+  reviewer_notes: string;
+  approved_at: string | null;
+  rejected_at: string | null;
+  created_at: string;
+  updated_at: string;
+  draft_candidate_post_id: number;
+  draft_angle: string;
+  draft_notes: string;
+  draft_status: DraftStatus;
+  campaign_name: string;
+  campaign_status: CampaignStatus;
+  candidate_source_keyword: string;
+  target_url: string;
+  target_author_name: string;
+  target_author_profile_url: string;
+  target_content: string;
+  variant_number: number;
+  variant_hook: string;
+  variant_body: string;
+  variant_cta: string;
+  variant_hashtags: string;
+  variant_status: DraftVariantStatus;
+}
+
+interface ApprovalAuditRow {
+  id: number;
+  draft_variant_id: number;
+  rule_key: string;
+  severity: DraftAuditSeverity;
+  message: string;
+  created_at: string;
+}
+
+interface ApprovalValidationRow {
+  draft_id: number;
+  campaign_id: number;
+  campaign_status: CampaignStatus;
+  draft_status: DraftStatus;
+  draft_variant_id: number | null;
+  selected_count: number;
+}
+
+interface ApprovalCampaignRow {
+  id: number;
+  campaign_id: number;
+  campaign_status: CampaignStatus;
+  status: ApprovalStatus;
+  draft_id: number;
+}
+
+interface ScheduleValidationRow {
+  id: number;
+  approval_id: number;
+  status: ScheduleJob["status"];
+  approval_status: ApprovalStatus;
+  campaign_id: number;
+  campaign_status: CampaignStatus;
+}
+
+interface CountRow {
+  count: number;
+}
+
+function getPlaceholders(ids: number[]): string {
+  return ids.map((_, index) => `$${index + 1}`).join(", ");
+}
+
+function mapApproval(row: ApprovalDetailRow): Approval {
+  return {
+    id: row.id,
+    campaign_id: row.campaign_id,
+    draft_id: row.draft_id,
+    draft_variant_id: row.draft_variant_id,
+    status: row.status,
+    reviewer_notes: row.reviewer_notes,
+    approved_at: row.approved_at,
+    rejected_at: row.rejected_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function mapDraftSnapshot(row: ApprovalDetailRow): ApprovalDraftSnapshot {
+  return {
+    id: row.draft_id,
+    campaign_id: row.campaign_id,
+    candidate_post_id: row.draft_candidate_post_id,
+    angle: row.draft_angle,
+    notes: row.draft_notes,
+    status: row.draft_status,
+    campaign_name: row.campaign_name,
+    campaign_status: row.campaign_status,
+    candidate_source_keyword: row.candidate_source_keyword,
+    target_url: row.target_url,
+    target_author_name: row.target_author_name,
+    target_author_profile_url: row.target_author_profile_url,
+    target_content: row.target_content,
+  };
+}
+
+function mapVariantSnapshot(
+  row: ApprovalDetailRow,
+  auditSeverity: DraftAuditSeverity,
+): ApprovalVariantSnapshot {
+  return {
+    id: row.draft_variant_id,
+    variant_number: row.variant_number,
+    hook: row.variant_hook,
+    body: row.variant_body,
+    cta: row.variant_cta,
+    hashtags: row.variant_hashtags,
+    status: row.variant_status,
+    auditSeverity,
+  };
+}
+
+function mapScheduleJob(row: ScheduleJob): ScheduleJob {
+  return row;
+}
+
+function mapPublishAttempt(row: PublishAttempt): PublishAttempt {
+  return row;
+}
+
+async function getAuditSeverityByVariantId(
+  db: LinkgoDatabase,
+  variantIds: number[],
+): Promise<Map<number, DraftAuditSeverity>> {
+  if (variantIds.length === 0) return new Map();
+
+  const rows = await db.select<ApprovalAuditRow[]>(
+    `SELECT * FROM draft_audits
+    WHERE draft_variant_id IN (${getPlaceholders(variantIds)})`,
+    variantIds,
+  );
+
+  const auditsByVariantId = new Map<number, DraftAuditFinding[]>();
+  for (const row of rows) {
+    const audits = auditsByVariantId.get(row.draft_variant_id) ?? [];
+    audits.push(mapDraftAudit(row));
+    auditsByVariantId.set(row.draft_variant_id, audits);
+  }
+
+  const severityByVariantId = new Map<number, DraftAuditSeverity>();
+  for (const variantId of variantIds) {
+    severityByVariantId.set(
+      variantId,
+      getAuditSeverity(auditsByVariantId.get(variantId) ?? []),
+    );
+  }
+  return severityByVariantId;
+}
+
+export async function listApprovals(
+  campaignId?: number,
+): Promise<ApprovalWithDetails[]> {
+  const db = await getDb();
+  const values: unknown[] = [];
+  const whereClause =
+    campaignId === undefined ? "" : "WHERE a.campaign_id = $1";
+  if (campaignId !== undefined) values.push(campaignId);
+
+  const rows = await db.select<ApprovalDetailRow[]>(
+    `SELECT
+      a.id,
+      a.campaign_id,
+      a.draft_id,
+      a.draft_variant_id,
+      a.status,
+      a.reviewer_notes,
+      a.approved_at,
+      a.rejected_at,
+      a.created_at,
+      a.updated_at,
+      d.candidate_post_id AS draft_candidate_post_id,
+      d.angle AS draft_angle,
+      d.notes AS draft_notes,
+      d.status AS draft_status,
+      c.name AS campaign_name,
+      c.status AS campaign_status,
+      cp.source_keyword AS candidate_source_keyword,
+      tp.url AS target_url,
+      tp.author_name AS target_author_name,
+      tp.author_profile_url AS target_author_profile_url,
+      tp.content AS target_content,
+      dv.variant_number,
+      dv.hook AS variant_hook,
+      dv.body AS variant_body,
+      dv.cta AS variant_cta,
+      dv.hashtags AS variant_hashtags,
+      dv.status AS variant_status
+    FROM approvals a
+    INNER JOIN campaigns c ON c.id = a.campaign_id
+    INNER JOIN drafts d ON d.id = a.draft_id
+    INNER JOIN draft_variants dv ON dv.id = a.draft_variant_id
+    INNER JOIN candidate_posts cp ON cp.id = d.candidate_post_id
+    INNER JOIN target_posts tp ON tp.id = cp.target_post_id
+    ${whereClause}
+    ORDER BY a.status IN ('published', 'cancelled', 'rejected'), datetime(a.updated_at) DESC, a.id DESC`,
+    values,
+  );
+
+  if (rows.length === 0) return [];
+
+  const approvalIds = rows.map((row) => row.id);
+  const variantIds = rows.map((row) => row.draft_variant_id);
+  const [scheduleRows, publishRows, severityByVariantId] = await Promise.all([
+    db.select<ScheduleJob[]>(
+      `SELECT * FROM schedule_jobs
+      WHERE approval_id IN (${getPlaceholders(approvalIds)})
+      ORDER BY datetime(updated_at) DESC, id DESC`,
+      approvalIds,
+    ),
+    db.select<PublishAttempt[]>(
+      `SELECT * FROM publish_attempts
+      WHERE approval_id IN (${getPlaceholders(approvalIds)})
+      ORDER BY datetime(created_at) DESC, id DESC`,
+      approvalIds,
+    ),
+    getAuditSeverityByVariantId(db, variantIds),
+  ]);
+
+  const scheduleByApprovalId = new Map<number, ScheduleJob>();
+  for (const row of scheduleRows) {
+    scheduleByApprovalId.set(row.approval_id, mapScheduleJob(row));
+  }
+
+  const attemptsByApprovalId = new Map<number, PublishAttempt[]>();
+  for (const row of publishRows) {
+    const attempts = attemptsByApprovalId.get(row.approval_id) ?? [];
+    attempts.push(mapPublishAttempt(row));
+    attemptsByApprovalId.set(row.approval_id, attempts);
+  }
+
+  return rows.map((row) => ({
+    ...mapApproval(row),
+    scheduleJob: scheduleByApprovalId.get(row.id) ?? null,
+    publishAttempts: attemptsByApprovalId.get(row.id) ?? [],
+    draft: mapDraftSnapshot(row),
+    variant: mapVariantSnapshot(
+      row,
+      severityByVariantId.get(row.draft_variant_id) ?? "pass",
+    ),
+  }));
+}
+
+export async function listApprovalEligibleDrafts(
+  campaignId?: number,
+): Promise<ApprovalEligibleDraft[]> {
+  const db = await getDb();
+  const values: unknown[] = [];
+  const campaignFilter =
+    campaignId === undefined ? "" : "AND d.campaign_id = $1";
+  if (campaignId !== undefined) values.push(campaignId);
+
+  const rows = await db.select<ApprovalDetailRow[]>(
+    `SELECT
+      0 AS id,
+      d.campaign_id,
+      d.id AS draft_id,
+      dv.id AS draft_variant_id,
+      'needs_review' AS status,
+      '' AS reviewer_notes,
+      NULL AS approved_at,
+      NULL AS rejected_at,
+      d.created_at,
+      d.updated_at,
+      d.candidate_post_id AS draft_candidate_post_id,
+      d.angle AS draft_angle,
+      d.notes AS draft_notes,
+      d.status AS draft_status,
+      c.name AS campaign_name,
+      c.status AS campaign_status,
+      cp.source_keyword AS candidate_source_keyword,
+      tp.url AS target_url,
+      tp.author_name AS target_author_name,
+      tp.author_profile_url AS target_author_profile_url,
+      tp.content AS target_content,
+      dv.variant_number,
+      dv.hook AS variant_hook,
+      dv.body AS variant_body,
+      dv.cta AS variant_cta,
+      dv.hashtags AS variant_hashtags,
+      dv.status AS variant_status
+    FROM drafts d
+    INNER JOIN campaigns c ON c.id = d.campaign_id
+    INNER JOIN candidate_posts cp ON cp.id = d.candidate_post_id
+    INNER JOIN target_posts tp ON tp.id = cp.target_post_id
+    INNER JOIN draft_variants dv ON dv.draft_id = d.id AND dv.status = 'selected'
+    LEFT JOIN approvals a ON a.draft_id = d.id
+    WHERE d.status = 'ready_for_review'
+      AND a.id IS NULL
+      AND c.status <> 'archived'
+      ${campaignFilter}
+      AND (
+        SELECT COUNT(*) FROM draft_variants selected_dv
+        WHERE selected_dv.draft_id = d.id AND selected_dv.status = 'selected'
+      ) = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM draft_audits da
+        WHERE da.draft_variant_id = dv.id AND da.severity = 'block'
+      )
+    ORDER BY datetime(d.updated_at) DESC, d.id DESC`,
+    values,
+  );
+
+  if (rows.length === 0) return [];
+
+  const severityByVariantId = await getAuditSeverityByVariantId(
+    db,
+    rows.map((row) => row.draft_variant_id),
+  );
+
+  return rows.map((row) => ({
+    ...mapDraftSnapshot(row),
+    variant: mapVariantSnapshot(
+      row,
+      severityByVariantId.get(row.draft_variant_id) ?? "pass",
+    ),
+  }));
+}
+
+export async function createApproval(
+  input: CreateApprovalInput,
+): Promise<number> {
+  const parsed = createApprovalSchema.parse(input);
+  const db = await getDb();
+
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const draftRows = await db.select<ApprovalValidationRow[]>(
+      `SELECT
+        d.id AS draft_id,
+        d.campaign_id,
+        c.status AS campaign_status,
+        d.status AS draft_status,
+        dv.id AS draft_variant_id,
+        (
+          SELECT COUNT(*) FROM draft_variants selected_dv
+          WHERE selected_dv.draft_id = d.id AND selected_dv.status = 'selected'
+        ) AS selected_count
+      FROM drafts d
+      INNER JOIN campaigns c ON c.id = d.campaign_id
+      LEFT JOIN draft_variants dv ON dv.draft_id = d.id AND dv.status = 'selected'
+      WHERE d.id = $1`,
+      [parsed.draftId],
+    );
+    const draft = draftRows[0];
+    if (draft === undefined) throw new Error("Draft was not found");
+    if (draft.campaign_status === "archived") {
+      throw new Error("Campaign is archived");
+    }
+    if (draft.draft_status !== "ready_for_review") {
+      throw new Error("Draft is not ready for review");
+    }
+    if (draft.draft_variant_id === null || draft.selected_count !== 1) {
+      throw new Error("Select a draft variant before review");
+    }
+
+    const blockRows = await db.select<CountRow[]>(
+      `SELECT COUNT(*) AS count
+      FROM draft_audits
+      WHERE draft_variant_id = $1 AND severity = 'block'`,
+      [draft.draft_variant_id],
+    );
+    if ((blockRows[0]?.count ?? 0) > 0) {
+      throw new Error("Blocked variants cannot be sent for approval");
+    }
+
+    const existingRows = await db.select<CountRow[]>(
+      `SELECT COUNT(*) AS count FROM approvals WHERE draft_id = $1`,
+      [parsed.draftId],
+    );
+    if ((existingRows[0]?.count ?? 0) > 0) {
+      throw new Error("Draft already has an approval record");
+    }
+
+    const result = await db.execute(
+      `INSERT INTO approvals (
+        campaign_id,
+        draft_id,
+        draft_variant_id,
+        status,
+        reviewer_notes,
+        updated_at
+      ) VALUES ($1, $2, $3, 'needs_review', $4, datetime('now'))`,
+      [
+        draft.campaign_id,
+        parsed.draftId,
+        draft.draft_variant_id,
+        parsed.reviewerNotes,
+      ],
+    );
+    await db.execute("COMMIT");
+    return result.lastInsertId;
+  } catch (error) {
+    await rollbackApprovalTransaction(db);
+    throw error;
+  }
+}
+
+function assertTransition(
+  currentStatus: ApprovalStatus,
+  nextStatus: ApprovalStatus,
+): void {
+  const allowed: Partial<Record<ApprovalStatus, ApprovalStatus[]>> = {
+    needs_review: ["approved", "changes_requested", "rejected", "cancelled"],
+    changes_requested: ["needs_review", "approved", "rejected", "cancelled"],
+    approved: ["needs_review", "changes_requested", "cancelled"],
+    cancelled: ["needs_review"],
+  };
+  if (!(allowed[currentStatus] ?? []).includes(nextStatus)) {
+    throw new Error("Unsupported approval transition");
+  }
+}
+
+export async function setApprovalStatus(
+  input: SetApprovalStatusInput,
+): Promise<void> {
+  const parsed = setApprovalStatusSchema.parse(input);
+  const db = await getDb();
+
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const rows = await db.select<ApprovalCampaignRow[]>(
+      `SELECT
+        a.id,
+        a.campaign_id,
+        c.status AS campaign_status,
+        a.status,
+        a.draft_id
+      FROM approvals a
+      INNER JOIN campaigns c ON c.id = a.campaign_id
+      WHERE a.id = $1
+      LIMIT 1`,
+      [parsed.id],
+    );
+    const approval = rows[0];
+    if (approval === undefined) throw new Error("Approval was not found");
+    if (approval.campaign_status === "archived") {
+      throw new Error("Campaign is archived");
+    }
+
+    assertTransition(approval.status, parsed.status);
+
+    const values: unknown[] = [parsed.status];
+    const updates = ["status = $1"];
+    if (parsed.reviewerNotes !== undefined) {
+      values.push(parsed.reviewerNotes);
+      updates.push(`reviewer_notes = $${values.length}`);
+    }
+    if (parsed.status === "approved") {
+      updates.push("approved_at = datetime('now')", "rejected_at = NULL");
+    }
+    if (parsed.status === "rejected") {
+      updates.push("rejected_at = datetime('now')");
+    }
+
+    values.push(parsed.id);
+    await db.execute(
+      `UPDATE approvals
+      SET ${updates.join(", ")}, updated_at = datetime('now')
+      WHERE id = $${values.length}`,
+      values,
+    );
+
+    if (parsed.status === "changes_requested") {
+      await db.execute(
+        `UPDATE drafts
+        SET status = 'needs_revision', updated_at = datetime('now')
+        WHERE id = $1`,
+        [approval.draft_id],
+      );
+    }
+    if (parsed.status === "needs_review") {
+      await db.execute(
+        `UPDATE drafts
+        SET status = 'ready_for_review', updated_at = datetime('now')
+        WHERE id = $1`,
+        [approval.draft_id],
+      );
+    }
+
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackApprovalTransaction(db);
+    throw error;
+  }
+}
+
+export async function scheduleApproval(
+  input: ScheduleApprovalInput,
+): Promise<number> {
+  const parsed = scheduleApprovalSchema.parse(input);
+  const db = await getDb();
+
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const rows = await db.select<ApprovalCampaignRow[]>(
+      `SELECT
+        a.id,
+        a.campaign_id,
+        c.status AS campaign_status,
+        a.status,
+        a.draft_id
+      FROM approvals a
+      INNER JOIN campaigns c ON c.id = a.campaign_id
+      WHERE a.id = $1
+      LIMIT 1`,
+      [parsed.approvalId],
+    );
+    const approval = rows[0];
+    if (approval === undefined) throw new Error("Approval was not found");
+    if (approval.campaign_status === "archived") {
+      throw new Error("Campaign is archived");
+    }
+    if (approval.status !== "approved") {
+      throw new Error("Only approved posts can be scheduled");
+    }
+
+    const existingRows = await db.select<ScheduleJob[]>(
+      `SELECT * FROM schedule_jobs WHERE approval_id = $1 LIMIT 1`,
+      [parsed.approvalId],
+    );
+    const existingSchedule = existingRows[0];
+    if (
+      existingSchedule !== undefined &&
+      !["cancelled", "failed"].includes(existingSchedule.status)
+    ) {
+      throw new Error("Approval already has an active schedule job");
+    }
+
+    const idempotencyKey = `approval:${parsed.approvalId}:linkedin:${parsed.scheduledFor}`;
+    const scheduleJobId = existingSchedule?.id;
+    if (scheduleJobId === undefined) {
+      const result = await db.execute(
+        `INSERT INTO schedule_jobs (
+          approval_id,
+          platform,
+          scheduled_for,
+          timezone,
+          status,
+          idempotency_key,
+          updated_at
+        ) VALUES ($1, 'linkedin', $2, $3, 'scheduled', $4, datetime('now'))`,
+        [
+          parsed.approvalId,
+          parsed.scheduledFor,
+          parsed.timezone,
+          idempotencyKey,
+        ],
+      );
+      await db.execute(
+        `UPDATE approvals
+        SET status = 'scheduled', updated_at = datetime('now')
+        WHERE id = $1`,
+        [parsed.approvalId],
+      );
+      await db.execute("COMMIT");
+      return result.lastInsertId;
+    }
+
+    await db.execute(
+      `UPDATE schedule_jobs
+      SET status = 'scheduled',
+        scheduled_for = $1,
+        timezone = $2,
+        idempotency_key = $3,
+        updated_at = datetime('now')
+      WHERE id = $4`,
+      [parsed.scheduledFor, parsed.timezone, idempotencyKey, scheduleJobId],
+    );
+
+    await db.execute(
+      `UPDATE approvals
+      SET status = 'scheduled', updated_at = datetime('now')
+      WHERE id = $1`,
+      [parsed.approvalId],
+    );
+    await db.execute("COMMIT");
+    return scheduleJobId;
+  } catch (error) {
+    await rollbackApprovalTransaction(db);
+    throw error;
+  }
+}
+
+export async function cancelSchedule(
+  input: CancelScheduleInput,
+): Promise<void> {
+  const parsed = cancelScheduleSchema.parse(input);
+  const db = await getDb();
+
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const rows = await db.select<ScheduleValidationRow[]>(
+      `SELECT
+        sj.id,
+        sj.approval_id,
+        sj.status,
+        a.status AS approval_status,
+        a.campaign_id,
+        c.status AS campaign_status
+      FROM schedule_jobs sj
+      INNER JOIN approvals a ON a.id = sj.approval_id
+      INNER JOIN campaigns c ON c.id = a.campaign_id
+      WHERE sj.id = $1
+      LIMIT 1`,
+      [parsed.id],
+    );
+    const schedule = rows[0];
+    if (schedule === undefined) throw new Error("Schedule job was not found");
+    if (schedule.status === "completed") {
+      throw new Error("Completed schedules cannot be cancelled");
+    }
+
+    await db.execute(
+      `UPDATE schedule_jobs
+      SET status = 'cancelled', updated_at = datetime('now')
+      WHERE id = $1`,
+      [parsed.id],
+    );
+
+    if (schedule.approval_status !== "published") {
+      await db.execute(
+        `UPDATE approvals
+        SET status = 'approved', updated_at = datetime('now')
+        WHERE id = $1`,
+        [schedule.approval_id],
+      );
+    }
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackApprovalTransaction(db);
+    throw error;
+  }
+}
+
+export async function recordPublishAttempt(
+  input: RecordPublishAttemptInput,
+): Promise<number> {
+  const parsed = recordPublishAttemptSchema.parse(input);
+  const db = await getDb();
+
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const rows = await db.select<ApprovalCampaignRow[]>(
+      `SELECT
+        a.id,
+        a.campaign_id,
+        c.status AS campaign_status,
+        a.status,
+        a.draft_id
+      FROM approvals a
+      INNER JOIN campaigns c ON c.id = a.campaign_id
+      WHERE a.id = $1
+      LIMIT 1`,
+      [parsed.approvalId],
+    );
+    const approval = rows[0];
+    if (approval === undefined) throw new Error("Approval was not found");
+    if (approval.campaign_status === "archived") {
+      throw new Error("Campaign is archived");
+    }
+    if (!["approved", "scheduled", "published"].includes(approval.status)) {
+      throw new Error(
+        "Only approved, scheduled, or published posts can record publish attempts",
+      );
+    }
+    if (approval.status === "published" && parsed.status !== "failed") {
+      throw new Error(
+        "Published approvals can only record failed follow-up attempts",
+      );
+    }
+
+    if (parsed.scheduleJobId !== undefined) {
+      const scheduleRows = await db.select<ScheduleValidationRow[]>(
+        `SELECT
+          sj.id,
+          sj.approval_id,
+          sj.status,
+          a.status AS approval_status,
+          a.campaign_id,
+          c.status AS campaign_status
+        FROM schedule_jobs sj
+        INNER JOIN approvals a ON a.id = sj.approval_id
+        INNER JOIN campaigns c ON c.id = a.campaign_id
+        WHERE sj.id = $1
+        LIMIT 1`,
+        [parsed.scheduleJobId],
+      );
+      const schedule = scheduleRows[0];
+      if (
+        schedule === undefined ||
+        schedule.approval_id !== parsed.approvalId
+      ) {
+        throw new Error("Schedule job was not found");
+      }
+    }
+
+    const result = await db.execute(
+      `INSERT INTO publish_attempts (
+        approval_id,
+        schedule_job_id,
+        platform,
+        status,
+        external_post_url,
+        platform_post_id,
+        error_message
+      ) VALUES ($1, $2, 'linkedin', $3, $4, $5, $6)`,
+      [
+        parsed.approvalId,
+        parsed.scheduleJobId ?? null,
+        parsed.status,
+        parsed.externalPostUrl,
+        parsed.platformPostId,
+        parsed.errorMessage,
+      ],
+    );
+
+    if (parsed.status === "succeeded") {
+      await db.execute(
+        `UPDATE approvals
+        SET status = 'published', updated_at = datetime('now')
+        WHERE id = $1`,
+        [parsed.approvalId],
+      );
+      if (parsed.scheduleJobId !== undefined) {
+        await db.execute(
+          `UPDATE schedule_jobs
+          SET status = 'completed', updated_at = datetime('now')
+          WHERE id = $1`,
+          [parsed.scheduleJobId],
+        );
+      }
+    }
+
+    if (parsed.status === "failed" && approval.status !== "published") {
+      await db.execute(
+        `UPDATE approvals
+        SET status = 'approved', updated_at = datetime('now')
+        WHERE id = $1`,
+        [parsed.approvalId],
+      );
+      if (parsed.scheduleJobId !== undefined) {
+        await db.execute(
+          `UPDATE schedule_jobs
+          SET status = 'failed', updated_at = datetime('now')
+          WHERE id = $1`,
+          [parsed.scheduleJobId],
+        );
+      }
+    }
+
+    await db.execute("COMMIT");
+    return result.lastInsertId;
+  } catch (error) {
+    await rollbackApprovalTransaction(db);
+    throw error;
+  }
+}
+
+export async function rollbackApprovalTransaction(
+  db: LinkgoDatabase,
+): Promise<void> {
+  try {
+    await db.execute("ROLLBACK");
+  } catch {
+    // Preserve the original transaction failure.
+  }
+}

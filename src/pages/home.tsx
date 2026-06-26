@@ -21,6 +21,7 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
 import { cn } from "@/lib/utils";
+import { ApprovalsView } from "@/features/approvals";
 import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
 import { CandidateQueueView } from "@/features/candidate-queue";
 import { DraftsView } from "@/features/drafts";
@@ -64,10 +65,10 @@ const tabs: RoadmapTab[] = [
   {
     id: "approvals",
     label: "Approvals",
-    description: "Human review and scheduling stay conservative.",
+    description: "Human review, scheduling, and publish attempt tracking.",
     icon: CheckCircle2,
-    enabled: false,
-    docHref: "docs/ROADMAP_MAPPING.md#approvals--scheduler-slice",
+    enabled: true,
+    docHref: "docs/features/approvals.md",
   },
   {
     id: "metrics",
@@ -149,6 +150,8 @@ export function HomePage(): React.ReactNode {
             <CandidateQueueView />
           ) : activeRoadmapTab.id === "drafts" ? (
             <DraftsView />
+          ) : activeRoadmapTab.id === "approvals" ? (
+            <ApprovalsView />
           ) : (
             <RoadmapPlaceholder tab={activeRoadmapTab} />
           )}
