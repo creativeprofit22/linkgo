@@ -648,6 +648,9 @@ export async function cancelSchedule(
     );
     const schedule = rows[0];
     if (schedule === undefined) throw new Error("Schedule job was not found");
+    if (schedule.campaign_status === "archived") {
+      throw new Error("Campaign is archived");
+    }
     if (schedule.status === "completed") {
       throw new Error("Completed schedules cannot be cancelled");
     }
