@@ -21,8 +21,14 @@ pub struct LinkedInOAuthStart {
 }
 
 pub fn start_linkedin_oauth(scopes: Vec<String>) -> Result<LinkedInOAuthStart, String> {
-    let client_id =
-        std::env::var(DEFAULT_CLIENT_ID_ENV).unwrap_or_else(|_| "linkgo-local-client".to_string());
+    let client_id = std::env::var(DEFAULT_CLIENT_ID_ENV).unwrap_or_default();
+    let client_secret = std::env::var(DEFAULT_CLIENT_SECRET_ENV).unwrap_or_default();
+    if client_id.trim().is_empty() || client_secret.trim().is_empty() {
+        return Err(format!(
+            "LinkedIn OAuth is not configured; set {} and {}",
+            DEFAULT_CLIENT_ID_ENV, DEFAULT_CLIENT_SECRET_ENV
+        ));
+    }
     let redirect_uri = std::env::var("LINKGO_LINKEDIN_REDIRECT_URI")
         .unwrap_or_else(|_| DEFAULT_REDIRECT_URI.to_string());
     let security = create_oauth_security_material();
@@ -165,11 +171,32 @@ pub fn refresh_linkedin_credential(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Mutex, OnceLock};
+
     use super::{exchange_linkedin_code, start_linkedin_oauth};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn restore_env(key: &str, value: Option<String>) {
+        match value {
+            Some(previous) => std::env::set_var(key, previous),
+            None => std::env::remove_var(key),
+        }
+    }
 
     #[test]
     fn linkedin_oauth_url_uses_code_flow_fields() {
+        let _guard = env_lock().lock().unwrap();
+        let previous_client_id = std::env::var("LINKGO_LINKEDIN_CLIENT_ID").ok();
+        let previous_client_secret = std::env::var("LINKGO_LINKEDIN_CLIENT_SECRET").ok();
+        std::env::set_var("LINKGO_LINKEDIN_CLIENT_ID", "test-linkedin-client");
+        std::env::set_var("LINKGO_LINKEDIN_CLIENT_SECRET", "test-linkedin-secret");
         let start = start_linkedin_oauth(vec!["openid".to_string()]).unwrap();
+        restore_env("LINKGO_LINKEDIN_CLIENT_ID", previous_client_id);
+        restore_env("LINKGO_LINKEDIN_CLIENT_SECRET", previous_client_secret);
         assert!(start.auth_url.contains("response_type=code"));
         assert!(start.auth_url.contains("state="));
         assert!(start.auth_url.contains("scope=openid"));
@@ -187,14 +214,17 @@ mod tests {
     }
 
     #[test]
-    fn linkedin_exchange_requires_client_configuration() {
-        if std::env::var("LINKGO_LINKEDIN_CLIENT_ID").is_ok()
-            || std::env::var("LINKGO_LINKEDIN_CLIENT_SECRET").is_ok()
-        {
-            return;
-        }
-
-        let error = exchange_linkedin_code("code", "state", "verifier").unwrap_err();
-        assert!(error.contains("LinkedIn OAuth is not configured"));
+    fn linkedin_oauth_requires_client_configuration() {
+        let _guard = env_lock().lock().unwrap();
+        let previous_client_id = std::env::var("LINKGO_LINKEDIN_CLIENT_ID").ok();
+        let previous_client_secret = std::env::var("LINKGO_LINKEDIN_CLIENT_SECRET").ok();
+        std::env::remove_var("LINKGO_LINKEDIN_CLIENT_ID");
+        std::env::remove_var("LINKGO_LINKEDIN_CLIENT_SECRET");
+        let start_error = start_linkedin_oauth(vec!["openid".to_string()]).unwrap_err();
+        let exchange_error = exchange_linkedin_code("code", "state", "verifier").unwrap_err();
+        restore_env("LINKGO_LINKEDIN_CLIENT_ID", previous_client_id);
+        restore_env("LINKGO_LINKEDIN_CLIENT_SECRET", previous_client_secret);
+        assert!(start_error.contains("LinkedIn OAuth is not configured"));
+        assert!(exchange_error.contains("LinkedIn OAuth is not configured"));
     }
 }

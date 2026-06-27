@@ -5,7 +5,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
     key: "openai",
     label: "OpenAI",
     description:
-      "Provider-backed agent runs for research, drafting, scoring, and audits.",
+      "API-key storage for future native OpenAI-backed agent execution.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -17,7 +17,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
     key: "anthropic",
     label: "Anthropic",
     description:
-      "Claude-backed agent runs through a native credential boundary.",
+      "API-key storage for future native Claude-backed agent execution.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -28,7 +28,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
   {
     key: "google",
     label: "Gemini",
-    description: "Google Gemini agent runs for non-coding Linkgo workflows.",
+    description: "API-key storage for future native Gemini agent execution.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -39,7 +39,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
   {
     key: "custom",
     label: "Custom API",
-    description: "OpenAI-compatible provider endpoint for model calls.",
+    description: "OpenAI-compatible endpoint storage for future native model calls.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],

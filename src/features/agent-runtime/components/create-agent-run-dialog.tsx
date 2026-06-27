@@ -127,8 +127,8 @@ export function CreateAgentRunDialog({
             <Bot className="size-5" /> Create agent run
           </DialogTitle>
           <DialogDescription>
-            Queue a dry-run or provider-backed runtime pass. Disconnected
-            providers stay blocked.
+            Queue a dry-run or provider-backed runtime pass. Provider runs stay
+            queued until native execution lands.
           </DialogDescription>
         </DialogHeader>
         <form

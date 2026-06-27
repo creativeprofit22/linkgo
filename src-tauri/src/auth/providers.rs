@@ -21,7 +21,7 @@ pub fn auth_providers() -> Vec<AuthProvider> {
         AuthProvider {
             key: "openai",
             label: "OpenAI",
-            description: "Provider-backed agent runs for research, drafting, scoring, and audits.",
+            description: "API-key storage for future native OpenAI-backed agent execution.",
             methods: vec![AuthMethod::ApiKey],
             default_method: AuthMethod::ApiKey,
             scopes: vec![],
@@ -32,7 +32,7 @@ pub fn auth_providers() -> Vec<AuthProvider> {
         AuthProvider {
             key: "anthropic",
             label: "Anthropic",
-            description: "Claude-backed agent runs through a native credential boundary.",
+            description: "API-key storage for future native Claude-backed agent execution.",
             methods: vec![AuthMethod::ApiKey],
             default_method: AuthMethod::ApiKey,
             scopes: vec![],
@@ -43,7 +43,7 @@ pub fn auth_providers() -> Vec<AuthProvider> {
         AuthProvider {
             key: "google",
             label: "Gemini",
-            description: "Google Gemini agent runs for non-coding Linkgo workflows.",
+            description: "API-key storage for future native Gemini agent execution.",
             methods: vec![AuthMethod::ApiKey],
             default_method: AuthMethod::ApiKey,
             scopes: vec![],
@@ -54,7 +54,7 @@ pub fn auth_providers() -> Vec<AuthProvider> {
         AuthProvider {
             key: "custom",
             label: "Custom API",
-            description: "OpenAI-compatible provider endpoint for model calls.",
+            description: "OpenAI-compatible endpoint storage for future native model calls.",
             methods: vec![AuthMethod::ApiKey],
             default_method: AuthMethod::ApiKey,
             scopes: vec![],

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Agent Runtime slice adds a provider-capable foundation for model/tool loops while keeping dry-run available without credentials.
+The Agent Runtime slice adds a provider-capable foundation for model/tool loops while keeping only dry-run executable until provider execution moves native.
 
 It makes the automation layer visible and testable: typed tool contracts, provider-independent loop types, a deterministic dry-run provider, GG AI stream mapping, durable run history, tool-call history, approval interrupts, retries, and runtime events.
 
@@ -29,6 +29,7 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 - Autonomous LinkedIn publishing/commenting.
 - LinkedIn scraping.
 - Frontend secret access.
+- Provider-backed run execution from the React/webview layer.
 - LinkedIn scraping.
 - LinkedIn publishing.
 - Comment automation.
@@ -64,7 +65,7 @@ Stores append-only runtime progress events such as model start, streamed text, t
 
 The runtime is local-first and deterministic in this slice.
 
-Disconnected non-dry providers are blocked before start.
+Non-dry provider runs can be queued but stay blocked before start until provider execution runs behind the native credential boundary.
 
 `dry_run` remains executable with no credentials.
 
