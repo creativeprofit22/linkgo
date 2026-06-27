@@ -4,6 +4,7 @@ pub mod campaigns;
 pub mod candidate_queue;
 pub mod drafts;
 pub mod metrics;
+pub mod safety;
 pub mod workflows;
 
 use tauri_plugin_sql::Migration;
@@ -16,5 +17,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(metrics::migrations());
     migrations.extend(workflows::migrations());
     migrations.extend(agent_runtime::migrations());
+    migrations.extend(safety::migrations());
     migrations
 }

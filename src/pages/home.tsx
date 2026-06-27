@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FileText,
   ListChecks,
+  ShieldAlert,
   Target,
   Workflow,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
 import { CandidateQueueView } from "@/features/candidate-queue";
 import { DraftsView } from "@/features/drafts";
 import { MetricsView } from "@/features/metrics";
+import { SafetyView } from "@/features/safety";
 import { WorkflowsView } from "@/features/workflows";
 
 type HomeTab =
@@ -30,7 +32,8 @@ type HomeTab =
   | "approvals"
   | "metrics"
   | "workflows"
-  | "agents";
+  | "agents"
+  | "safety";
 
 type RoadmapTab = {
   id: HomeTab;
@@ -97,6 +100,14 @@ const tabs: RoadmapTab[] = [
     icon: Bot,
     enabled: true,
     docHref: "docs/features/agent-runtime.md",
+  },
+  {
+    id: "safety",
+    label: "Safety",
+    description: "Kill switch, rate limits, and error queue.",
+    icon: ShieldAlert,
+    enabled: true,
+    docHref: "docs/features/safety-observability.md",
   },
 ];
 
@@ -176,8 +187,10 @@ export function HomePage(): React.ReactNode {
             <MetricsView />
           ) : activeRoadmapTab.id === "workflows" ? (
             <WorkflowsView />
-          ) : (
+          ) : activeRoadmapTab.id === "agents" ? (
             <AgentRuntimeView />
+          ) : (
+            <SafetyView />
           )}
         </section>
       </div>

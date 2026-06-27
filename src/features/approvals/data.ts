@@ -23,6 +23,13 @@ import type {
 } from "@/features/approvals/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import { getAuditSeverity, mapDraftAudit } from "@/features/drafts/data";
+import {
+  assertSafetyKillSwitchOff,
+  getSchedulePostLimitDecision,
+  recordRateLimitEvent,
+  recordSafetyAuditEvent,
+  upsertErrorQueueItem,
+} from "@/features/safety/data";
 import type {
   DraftAuditFinding,
   DraftAuditSeverity,
@@ -82,6 +89,7 @@ interface ApprovalCampaignRow {
   id: number;
   campaign_id: number;
   campaign_status: CampaignStatus;
+  daily_post_limit: number;
   status: ApprovalStatus;
   draft_id: number;
 }
@@ -465,6 +473,7 @@ export async function setApprovalStatus(
         a.id,
         a.campaign_id,
         c.status AS campaign_status,
+        c.daily_post_limit,
         a.status,
         a.draft_id
       FROM approvals a
@@ -519,6 +528,28 @@ export async function setApprovalStatus(
       );
     }
 
+    if (parsed.status === "rejected") {
+      const detail =
+        parsed.reviewerNotes?.trim() || "Approval rejected by operator review";
+      await recordSafetyAuditEvent(db, {
+        campaignId: approval.campaign_id,
+        subjectType: "approval",
+        subjectId: approval.id,
+        eventType: "approval_rejected",
+        severity: "warning",
+        summary: "Approval rejected",
+        metadata: { reviewerNotes: detail },
+      });
+      await upsertErrorQueueItem(db, {
+        campaignId: approval.campaign_id,
+        sourceType: "approval",
+        sourceId: approval.id,
+        title: "Approval rejected",
+        detail,
+        severity: "warning",
+      });
+    }
+
     await db.execute("COMMIT");
   } catch (error) {
     await rollbackApprovalTransaction(db);
@@ -532,13 +563,15 @@ export async function scheduleApproval(
   const parsed = scheduleApprovalSchema.parse(input);
   const db = await getDb();
 
-  await db.execute("BEGIN TRANSACTION");
+  await db.execute("BEGIN IMMEDIATE");
+  let committed = false;
   try {
     const rows = await db.select<ApprovalCampaignRow[]>(
       `SELECT
         a.id,
         a.campaign_id,
         c.status AS campaign_status,
+        c.daily_post_limit,
         a.status,
         a.draft_id
       FROM approvals a
@@ -568,6 +601,68 @@ export async function scheduleApproval(
       throw new Error("Approval already has an active schedule job");
     }
 
+    try {
+      await assertSafetyKillSwitchOff(db, {
+        campaignId: approval.campaign_id,
+        subjectType: "schedule_job",
+        subjectId: existingSchedule?.id ?? null,
+        summary: "Post scheduling",
+      });
+    } catch (error) {
+      const decision = await getSchedulePostLimitDecision(db, {
+        campaignId: approval.campaign_id,
+        scheduledFor: parsed.scheduledFor,
+        limitValue: approval.daily_post_limit,
+      });
+      await recordRateLimitEvent(db, {
+        campaignId: decision.campaignId,
+        action: "schedule_post",
+        windowKey: decision.windowKey,
+        limitValue: decision.limitValue,
+        currentCount: decision.currentCount,
+        decision: "blocked",
+        summary: `Post scheduling blocked by global kill switch for ${decision.windowKey}: ${decision.currentCount}/${decision.limitValue} used`,
+      });
+      await db.execute("COMMIT");
+      committed = true;
+      throw error;
+    }
+
+    const limitDecision = await getSchedulePostLimitDecision(db, {
+      campaignId: approval.campaign_id,
+      approvalId: approval.id,
+      scheduledFor: parsed.scheduledFor,
+      limitValue: approval.daily_post_limit,
+    });
+
+    if (!limitDecision.allowed) {
+      await recordRateLimitEvent(db, {
+        campaignId: limitDecision.campaignId,
+        action: "schedule_post",
+        windowKey: limitDecision.windowKey,
+        limitValue: limitDecision.limitValue,
+        currentCount: limitDecision.currentCount,
+        decision: "blocked",
+        summary: limitDecision.summary,
+      });
+      await recordSafetyAuditEvent(db, {
+        campaignId: limitDecision.campaignId,
+        subjectType: "approval",
+        subjectId: approval.id,
+        eventType: "schedule_blocked",
+        severity: "block",
+        summary: limitDecision.summary,
+        metadata: {
+          windowKey: limitDecision.windowKey,
+          limitValue: limitDecision.limitValue,
+          currentCount: limitDecision.currentCount,
+        },
+      });
+      await db.execute("COMMIT");
+      committed = true;
+      throw new Error(limitDecision.summary);
+    }
+
     const idempotencyKey = `approval:${parsed.approvalId}:linkedin:${parsed.scheduledFor}`;
     const scheduleJobId = existingSchedule?.id;
     if (scheduleJobId === undefined) {
@@ -594,7 +689,29 @@ export async function scheduleApproval(
         WHERE id = $1`,
         [parsed.approvalId],
       );
+      await recordRateLimitEvent(db, {
+        campaignId: limitDecision.campaignId,
+        action: "schedule_post",
+        windowKey: limitDecision.windowKey,
+        limitValue: limitDecision.limitValue,
+        currentCount: limitDecision.currentCount,
+        decision: "allowed",
+        summary: limitDecision.summary,
+      });
+      await recordSafetyAuditEvent(db, {
+        campaignId: approval.campaign_id,
+        subjectType: "schedule_job",
+        subjectId: result.lastInsertId,
+        eventType: "schedule_allowed",
+        severity: "info",
+        summary: limitDecision.summary,
+        metadata: {
+          approvalId: approval.id,
+          scheduledFor: parsed.scheduledFor,
+        },
+      });
       await db.execute("COMMIT");
+      committed = true;
       return result.lastInsertId;
     }
 
@@ -615,10 +732,31 @@ export async function scheduleApproval(
       WHERE id = $1`,
       [parsed.approvalId],
     );
+    await recordRateLimitEvent(db, {
+      campaignId: limitDecision.campaignId,
+      action: "schedule_post",
+      windowKey: limitDecision.windowKey,
+      limitValue: limitDecision.limitValue,
+      currentCount: limitDecision.currentCount,
+      decision: "allowed",
+      summary: limitDecision.summary,
+    });
+    await recordSafetyAuditEvent(db, {
+      campaignId: approval.campaign_id,
+      subjectType: "schedule_job",
+      subjectId: scheduleJobId,
+      eventType: "schedule_allowed",
+      severity: "info",
+      summary: limitDecision.summary,
+      metadata: { approvalId: approval.id, scheduledFor: parsed.scheduledFor },
+    });
     await db.execute("COMMIT");
+    committed = true;
     return scheduleJobId;
   } catch (error) {
-    await rollbackApprovalTransaction(db);
+    if (!committed) {
+      await rollbackApprovalTransaction(db);
+    }
     throw error;
   }
 }
@@ -670,6 +808,15 @@ export async function cancelSchedule(
         [schedule.approval_id],
       );
     }
+    await recordSafetyAuditEvent(db, {
+      campaignId: schedule.campaign_id,
+      subjectType: "schedule_job",
+      subjectId: schedule.id,
+      eventType: "schedule_cancelled",
+      severity: "info",
+      summary: "Schedule cancelled",
+      metadata: { approvalId: schedule.approval_id },
+    });
     await db.execute("COMMIT");
   } catch (error) {
     await rollbackApprovalTransaction(db);
@@ -690,6 +837,7 @@ export async function recordPublishAttempt(
         a.id,
         a.campaign_id,
         c.status AS campaign_status,
+        c.daily_post_limit,
         a.status,
         a.draft_id
       FROM approvals a
@@ -791,6 +939,34 @@ export async function recordPublishAttempt(
           [parsed.scheduleJobId],
         );
       }
+    }
+
+    await recordSafetyAuditEvent(db, {
+      campaignId: approval.campaign_id,
+      subjectType: "publish_attempt",
+      subjectId: result.lastInsertId,
+      eventType:
+        parsed.status === "succeeded" ? "publish_succeeded" : "publish_failed",
+      severity: parsed.status === "succeeded" ? "info" : "warning",
+      summary:
+        parsed.status === "succeeded"
+          ? "Publish attempt succeeded"
+          : "Publish attempt failed",
+      metadata: {
+        approvalId: approval.id,
+        scheduleJobId: parsed.scheduleJobId ?? null,
+        errorMessage: parsed.errorMessage,
+      },
+    });
+    if (parsed.status === "failed") {
+      await upsertErrorQueueItem(db, {
+        campaignId: approval.campaign_id,
+        sourceType: "publish_attempt",
+        sourceId: result.lastInsertId,
+        title: "Publish attempt failed",
+        detail: parsed.errorMessage,
+        severity: "error",
+      });
     }
 
     await db.execute("COMMIT");

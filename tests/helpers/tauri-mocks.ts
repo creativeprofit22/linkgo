@@ -381,6 +381,97 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type SafetyAuditSubjectType =
+      | "campaign"
+      | "approval"
+      | "schedule_job"
+      | "publish_attempt"
+      | "agent_run"
+      | "workflow_run"
+      | "error_queue_item"
+      | "safety_settings";
+
+    type SafetyAuditEventType =
+      | "kill_switch_enabled"
+      | "kill_switch_disabled"
+      | "schedule_allowed"
+      | "schedule_blocked"
+      | "schedule_cancelled"
+      | "publish_succeeded"
+      | "publish_failed"
+      | "approval_rejected"
+      | "agent_run_started"
+      | "agent_run_failed"
+      | "error_item_created"
+      | "error_item_updated";
+
+    type SafetyAuditSeverity = "info" | "warning" | "block";
+    type RateLimitAction =
+      | "schedule_post"
+      | "publish_post"
+      | "comment"
+      | "agent_run";
+    type RateLimitDecision = "allowed" | "blocked";
+    type ErrorQueueSourceType =
+      | "approval"
+      | "publish_attempt"
+      | "schedule_job"
+      | "agent_run"
+      | "workflow_run"
+      | "manual";
+    type ErrorQueueSeverity = "warning" | "error" | "critical";
+    type ErrorQueueStatus =
+      | "open"
+      | "in_progress"
+      | "awaiting_review"
+      | "resolved"
+      | "failed";
+
+    type SafetySettings = {
+      id: 1;
+      global_kill_switch: number;
+      kill_switch_reason: string;
+      updated_at: string;
+    };
+
+    type SafetyAuditEvent = {
+      id: number;
+      campaign_id: number | null;
+      subject_type: SafetyAuditSubjectType;
+      subject_id: number | null;
+      event_type: SafetyAuditEventType;
+      severity: SafetyAuditSeverity;
+      summary: string;
+      metadata_json: string;
+      created_at: string;
+    };
+
+    type RateLimitEvent = {
+      id: number;
+      campaign_id: number;
+      action: RateLimitAction;
+      window_key: string;
+      limit_value: number;
+      current_count: number;
+      decision: RateLimitDecision;
+      summary: string;
+      created_at: string;
+    };
+
+    type ErrorQueueItem = {
+      id: number;
+      campaign_id: number | null;
+      source_type: ErrorQueueSourceType;
+      source_id: number | null;
+      title: string;
+      detail: string;
+      severity: ErrorQueueSeverity;
+      status: ErrorQueueStatus;
+      resolution_notes: string;
+      created_at: string;
+      updated_at: string;
+    };
+
     type TransactionSnapshot = {
       campaigns: Campaign[];
       keywords: Keyword[];
@@ -402,6 +493,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       agentRuns: AgentRun[];
       agentToolCalls: AgentToolCall[];
       agentRunEvents: AgentRunEvent[];
+      safetySettings: SafetySettings;
+      safetyAuditEvents: SafetyAuditEvent[];
+      rateLimitEvents: RateLimitEvent[];
+      errorQueueItems: ErrorQueueItem[];
       nextCampaignId: number;
       nextKeywordId: number;
       nextTargetPostId: number;
@@ -422,6 +517,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextAgentRunId: number;
       nextAgentToolCallId: number;
       nextAgentRunEventId: number;
+      nextSafetyAuditEventId: number;
+      nextRateLimitEventId: number;
+      nextErrorQueueItemId: number;
     };
 
     const w = window as unknown as Record<string, unknown>;
@@ -445,6 +543,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const agentRuns: AgentRun[] = [];
     const agentToolCalls: AgentToolCall[] = [];
     const agentRunEvents: AgentRunEvent[] = [];
+    const safetySettings: SafetySettings = {
+      id: 1,
+      global_kill_switch: 0,
+      kill_switch_reason: "",
+      updated_at: new Date().toISOString(),
+    };
+    const safetyAuditEvents: SafetyAuditEvent[] = [];
+    const rateLimitEvents: RateLimitEvent[] = [];
+    const errorQueueItems: ErrorQueueItem[] = [];
     let nextCampaignId = 1;
     let nextKeywordId = 1;
     let nextTargetPostId = 1;
@@ -465,6 +572,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextAgentRunId = 1;
     let nextAgentToolCallId = 1;
     let nextAgentRunEventId = 1;
+    let nextSafetyAuditEventId = 1;
+    let nextRateLimitEventId = 1;
+    let nextErrorQueueItemId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
@@ -514,6 +624,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         agentRuns: cloneRows(agentRuns),
         agentToolCalls: cloneRows(agentToolCalls),
         agentRunEvents: cloneRows(agentRunEvents),
+        safetySettings: { ...safetySettings },
+        safetyAuditEvents: cloneRows(safetyAuditEvents),
+        rateLimitEvents: cloneRows(rateLimitEvents),
+        errorQueueItems: cloneRows(errorQueueItems),
         nextCampaignId,
         nextKeywordId,
         nextTargetPostId,
@@ -534,6 +648,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextAgentRunId,
         nextAgentToolCallId,
         nextAgentRunEventId,
+        nextSafetyAuditEventId,
+        nextRateLimitEventId,
+        nextErrorQueueItemId,
       };
     }
 
@@ -562,6 +679,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(agentRuns, snapshot.agentRuns);
       restoreRows(agentToolCalls, snapshot.agentToolCalls);
       restoreRows(agentRunEvents, snapshot.agentRunEvents);
+      safetySettings.global_kill_switch = snapshot.safetySettings.global_kill_switch;
+      safetySettings.kill_switch_reason = snapshot.safetySettings.kill_switch_reason;
+      safetySettings.updated_at = snapshot.safetySettings.updated_at;
+      restoreRows(safetyAuditEvents, snapshot.safetyAuditEvents);
+      restoreRows(rateLimitEvents, snapshot.rateLimitEvents);
+      restoreRows(errorQueueItems, snapshot.errorQueueItems);
       nextCampaignId = snapshot.nextCampaignId;
       nextKeywordId = snapshot.nextKeywordId;
       nextTargetPostId = snapshot.nextTargetPostId;
@@ -582,6 +705,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextAgentRunId = snapshot.nextAgentRunId;
       nextAgentToolCallId = snapshot.nextAgentToolCallId;
       nextAgentRunEventId = snapshot.nextAgentRunEventId;
+      nextSafetyAuditEventId = snapshot.nextSafetyAuditEventId;
+      nextRateLimitEventId = snapshot.nextRateLimitEventId;
+      nextErrorQueueItemId = snapshot.nextErrorQueueItemId;
     }
 
     function getCandidateJoinRow(
@@ -916,6 +1042,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           draft_status: draft.status,
           draft_variant_id: selected?.id ?? null,
           selected_count: selectedVariants.length,
+          daily_post_limit: campaign.daily_post_limit,
         },
       ];
     }
@@ -931,6 +1058,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           id: approval.id,
           campaign_id: approval.campaign_id,
           campaign_status: campaign.status,
+          daily_post_limit: campaign.daily_post_limit,
           status: approval.status,
           draft_id: approval.draft_id,
         },
@@ -1284,6 +1412,55 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
     }
 
+    function selectSafetyErrorQueue(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return errorQueueItems
+        .filter((item) => campaignId === null || item.campaign_id === campaignId)
+        .map((item) => {
+          const campaign = item.campaign_id
+            ? campaigns.find((row) => row.id === item.campaign_id)
+            : undefined;
+          return {
+            ...item,
+            campaign_name: campaign?.name ?? null,
+            campaign_status: campaign?.status ?? null,
+          };
+        })
+        .sort((left, right) => {
+          const leftResolved = left.status === "resolved" ? 1 : 0;
+          const rightResolved = right.status === "resolved" ? 1 : 0;
+          if (leftResolved !== rightResolved) return leftResolved - rightResolved;
+          const updatedDelta = right.updated_at.localeCompare(left.updated_at);
+          if (updatedDelta !== 0) return updatedDelta;
+          return right.id - left.id;
+        })
+        .slice(0, 50);
+    }
+
+    function selectRateLimitEvents(values: unknown[]): RateLimitEvent[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return rateLimitEvents
+        .filter((event) => campaignId === null || event.campaign_id === campaignId)
+        .sort((left, right) => {
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          if (createdDelta !== 0) return createdDelta;
+          return right.id - left.id;
+        })
+        .slice(0, 50);
+    }
+
+    function selectSafetyAuditEvents(values: unknown[]): SafetyAuditEvent[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return safetyAuditEvents
+        .filter((event) => campaignId === null || event.campaign_id === campaignId)
+        .sort((left, right) => {
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          if (createdDelta !== 0) return createdDelta;
+          return right.id - left.id;
+        })
+        .slice(0, 50);
+    }
+
     function selectWorkflowRunById(values: unknown[]): unknown[] {
       const runId = Number(values[0] ?? 0);
       const run = workflowRuns.find((row) => row.id === runId);
@@ -1331,6 +1508,79 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           },
         ];
       }
+      if (query.includes("FROM safety_settings")) {
+        return [{ ...safetySettings }];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM error_queue_items")
+      ) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        return [
+          {
+            count: errorQueueItems.filter(
+              (item) =>
+                ["open", "in_progress", "awaiting_review"].includes(
+                  item.status,
+                ) && (campaignId === null || item.campaign_id === campaignId),
+            ).length,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM rate_limit_events")
+      ) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        const decision = query.includes("decision = 'blocked'")
+          ? "blocked"
+          : "allowed";
+        return [
+          {
+            count: rateLimitEvents.filter(
+              (event) =>
+                event.decision === decision &&
+                (campaignId === null || event.campaign_id === campaignId),
+            ).length,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM safety_audit_events")
+      ) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        return [
+          {
+            count: safetyAuditEvents.filter(
+              (event) => campaignId === null || event.campaign_id === campaignId,
+            ).length,
+          },
+        ];
+      }
+      if (query.includes("FROM error_queue_items eqi")) {
+        if (query.includes("WHERE eqi.id =")) {
+          const id = Number(values[0] ?? 0);
+          return selectSafetyErrorQueue([]).filter((item) => item.id === id);
+        }
+        return selectSafetyErrorQueue(values);
+      }
+      if (query.includes("FROM error_queue_items")) {
+        const sourceType = String(values[0] ?? "");
+        const sourceId = Number(values[1] ?? 0);
+        return errorQueueItems.filter(
+          (item) =>
+            item.source_type === sourceType &&
+            item.source_id === sourceId &&
+            ["open", "in_progress", "awaiting_review"].includes(item.status),
+        );
+      }
+      if (query.includes("FROM rate_limit_events")) {
+        return selectRateLimitEvents(values);
+      }
+      if (query.includes("FROM safety_audit_events")) {
+        return selectSafetyAuditEvents(values);
+      }
       if (
         query.includes("COUNT(*) AS count") &&
         query.includes("FROM draft_audits")
@@ -1359,6 +1609,30 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         query.includes("COUNT(*) AS count") &&
         query.includes("FROM schedule_jobs")
       ) {
+        if (query.includes("INNER JOIN approvals a")) {
+          const campaignId = Number(values[0] ?? 0);
+          const scheduledDay = String(values[1] ?? "").trim().slice(0, 10);
+          const statusMatches = query.match(/sj\.status IN \(([^)]*)\)/);
+          const statuses = statusMatches
+            ? statusMatches[1]
+                .split(",")
+                .map((status) => status.trim().replace(/'/g, ""))
+            : ["scheduled", "completed"];
+          return [
+            {
+              count: scheduleJobs.filter((job) => {
+                const approval = approvals.find(
+                  (row) => row.id === job.approval_id,
+                );
+                return (
+                  approval?.campaign_id === campaignId &&
+                  job.scheduled_for.trim().slice(0, 10) === scheduledDay &&
+                  statuses.includes(job.status)
+                );
+              }).length,
+            },
+          ];
+        }
         const approvalId = Number(values[0] ?? 0);
         return [
           {
@@ -1611,6 +1885,70 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           transactionSnapshot = null;
         }
         return { lastInsertId: 0, rowsAffected: 0 };
+      }
+
+      if (query.includes("INSERT OR IGNORE INTO safety_settings")) {
+        return { lastInsertId: 1, rowsAffected: 0 };
+      }
+
+      if (query.includes("UPDATE safety_settings")) {
+        safetySettings.global_kill_switch = Number(values[0] ?? 0);
+        safetySettings.kill_switch_reason = String(values[1] ?? "");
+        safetySettings.updated_at = now;
+        return { lastInsertId: 1, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO safety_audit_events")) {
+        const event: SafetyAuditEvent = {
+          id: nextSafetyAuditEventId,
+          campaign_id: values[0] === null ? null : Number(values[0] ?? 0),
+          subject_type: values[1] as SafetyAuditSubjectType,
+          subject_id: values[2] === null ? null : Number(values[2] ?? 0),
+          event_type: values[3] as SafetyAuditEventType,
+          severity: values[4] as SafetyAuditSeverity,
+          summary: String(values[5] ?? ""),
+          metadata_json: String(values[6] ?? "{}"),
+          created_at: now,
+        };
+        safetyAuditEvents.push(event);
+        nextSafetyAuditEventId += 1;
+        return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO rate_limit_events")) {
+        const event: RateLimitEvent = {
+          id: nextRateLimitEventId,
+          campaign_id: Number(values[0] ?? 0),
+          action: values[1] as RateLimitAction,
+          window_key: String(values[2] ?? ""),
+          limit_value: Number(values[3] ?? 0),
+          current_count: Number(values[4] ?? 0),
+          decision: values[5] as RateLimitDecision,
+          summary: String(values[6] ?? ""),
+          created_at: now,
+        };
+        rateLimitEvents.push(event);
+        nextRateLimitEventId += 1;
+        return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO error_queue_items")) {
+        const item: ErrorQueueItem = {
+          id: nextErrorQueueItemId,
+          campaign_id: values[0] === null ? null : Number(values[0] ?? 0),
+          source_type: values[1] as ErrorQueueSourceType,
+          source_id: values[2] === null ? null : Number(values[2] ?? 0),
+          title: String(values[3] ?? ""),
+          detail: String(values[4] ?? ""),
+          severity: values[5] as ErrorQueueSeverity,
+          status: "open",
+          resolution_notes: "",
+          created_at: now,
+          updated_at: now,
+        };
+        errorQueueItems.push(item);
+        nextErrorQueueItemId += 1;
+        return { lastInsertId: item.id, rowsAffected: 1 };
       }
 
       if (query.includes("INSERT INTO campaigns")) {
@@ -2143,6 +2481,24 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
       }
 
+      if (query.includes("UPDATE error_queue_items")) {
+        const id = Number(values.at(-1) ?? 0);
+        const item = errorQueueItems.find((row) => row.id === id);
+        if (item) {
+          if (query.includes("status = $1")) {
+            item.status = values[0] as ErrorQueueStatus;
+            item.resolution_notes = String(values[1] ?? "");
+          } else {
+            item.campaign_id = values[0] === null ? null : Number(values[0] ?? 0);
+            item.title = String(values[1] ?? item.title);
+            item.detail = String(values[2] ?? item.detail);
+            item.severity = values[3] as ErrorQueueSeverity;
+          }
+          item.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
       if (query.includes("UPDATE schedule_jobs")) {
         const status = query.includes("status = 'cancelled'")
           ? "cancelled"
@@ -2453,6 +2809,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     }
 
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
+    w.__LINKGO_SQL_SAFETY_SETTINGS__ = () => ({ ...safetySettings });
+    w.__LINKGO_SQL_SAFETY_AUDIT_EVENTS__ = () => cloneRows(safetyAuditEvents);
+    w.__LINKGO_SQL_RATE_LIMIT_EVENTS__ = () => cloneRows(rateLimitEvents);
+    w.__LINKGO_SQL_ERROR_QUEUE_ITEMS__ = () => cloneRows(errorQueueItems);
 
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
       campaigns: campaigns.length,
@@ -2475,6 +2835,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       agentRuns: agentRuns.length,
       agentToolCalls: agentToolCalls.length,
       agentRunEvents: agentRunEvents.length,
+      safetySettings: 1,
+      safetyAuditEvents: safetyAuditEvents.length,
+      rateLimitEvents: rateLimitEvents.length,
+      errorQueueItems: errorQueueItems.length,
     });
 
     const mockWindow = {

@@ -23,6 +23,8 @@ import type {
 
 interface ApprovalCardProps {
   approval: ApprovalWithDetails;
+  killSwitchEnabled: boolean;
+  killSwitchReason: string;
   onSetStatus: (input: SetApprovalStatusInput) => Promise<void>;
   onSchedule: (input: ScheduleApprovalInput) => Promise<void>;
   onCancelSchedule: (input: CancelScheduleInput) => Promise<void>;
@@ -31,6 +33,8 @@ interface ApprovalCardProps {
 
 export function ApprovalCard({
   approval,
+  killSwitchEnabled,
+  killSwitchReason,
   onSetStatus,
   onSchedule,
   onCancelSchedule,
@@ -51,6 +55,7 @@ export function ApprovalCard({
     ["needs_review", "changes_requested"].includes(approval.status);
   const canSchedule =
     !isArchivedCampaign &&
+    !killSwitchEnabled &&
     approval.status === "approved" &&
     (!approval.scheduleJob ||
       ["cancelled", "failed"].includes(approval.scheduleJob.status));
@@ -60,6 +65,12 @@ export function ApprovalCard({
     approval.status === "scheduled";
   const canRecordPublish =
     !isArchivedCampaign && ["approved", "scheduled"].includes(approval.status);
+  const scheduleBlockedByKillSwitch =
+    !isArchivedCampaign &&
+    killSwitchEnabled &&
+    approval.status === "approved" &&
+    (!approval.scheduleJob ||
+      ["cancelled", "failed"].includes(approval.scheduleJob.status));
 
   function rejectApproval(): void {
     if (
@@ -157,6 +168,12 @@ export function ApprovalCard({
                 approvalId={approval.id}
                 onSchedule={onSchedule}
               />
+            )}
+            {scheduleBlockedByKillSwitch && (
+              <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
+                Global kill switch is enabled.
+                {killSwitchReason ? ` ${killSwitchReason}` : ""}
+              </p>
             )}
             {canCancelSchedule && (
               <Button

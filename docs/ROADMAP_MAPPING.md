@@ -126,13 +126,24 @@ Implemented now:
 
 Real AI provider calls, LinkedIn scraping, publishing, comments, and background workers are not implemented in this slice.
 
-## Future slices
-
 ### Safety + observability slice
 
-Adds safety limits, audit events, rate-limit events, and error queue.
+Roadmap coverage:
 
-Roadmap sections: 16, 20.
+- Section 16: conservative daily scheduling caps and emergency stop controls.
+- Section 20: local observability through audit history, rate-limit events, and an operator error queue.
+
+Implemented now:
+
+- Global app-level kill switch for local schedule starts and agent dry-run starts.
+- Daily post scheduling cap enforcement using each campaign's `daily_post_limit`.
+- Append-only safety audit events and rate-limit decisions.
+- Error queue items for failed publish attempts, rejected approvals, and failed agent runs.
+- Safety tab with summaries, campaign filtering, kill switch controls, event history, and status transitions.
+
+LinkedIn OAuth, real publishing, comments, background execution, and external telemetry are not implemented in this slice.
+
+## Future slices
 
 ### Comment/reply agent slice
 

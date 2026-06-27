@@ -20,6 +20,8 @@ import type {
 } from "@/features/approvals/types";
 import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
+import { getSafetySettings } from "@/features/safety/data";
+import type { SafetySettings } from "@/features/safety/types";
 
 interface UseApprovalsState {
   approvals: ApprovalWithDetails[];
@@ -28,6 +30,8 @@ interface UseApprovalsState {
   selectedCampaignId: number | null;
   loading: boolean;
   error: string | null;
+  killSwitchEnabled: boolean;
+  killSwitchReason: string;
   loadApprovals: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
   createReview: (input: CreateApprovalInput) => Promise<void>;
@@ -62,6 +66,9 @@ export function useApprovals(): UseApprovalsState {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [safetySettings, setSafetySettings] = useState<SafetySettings | null>(
+    null,
+  );
 
   const loadApprovalsForCampaign = useCallback(
     async (campaignId: number | null) => {
@@ -85,8 +92,12 @@ export function useApprovals(): UseApprovalsState {
     setLoading(true);
     setError(null);
     try {
-      const loadedCampaigns = await listCampaigns();
+      const [loadedCampaigns, loadedSafetySettings] = await Promise.all([
+        listCampaigns(),
+        getSafetySettings(),
+      ]);
       setCampaigns(loadedCampaigns);
+      setSafetySettings(loadedSafetySettings);
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === selectedCampaignId,
       );
@@ -154,6 +165,9 @@ export function useApprovals(): UseApprovalsState {
         await loadApprovalsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
+        void getSafetySettings()
+          .then(setSafetySettings)
+          .catch(() => undefined);
         toast.error("Approval was not scheduled", { description: message });
         throw caught;
       }
@@ -199,6 +213,8 @@ export function useApprovals(): UseApprovalsState {
       selectedCampaignId,
       loading,
       error,
+      killSwitchEnabled: safetySettings?.global_kill_switch === 1,
+      killSwitchReason: safetySettings?.kill_switch_reason ?? "",
       loadApprovals,
       selectCampaign,
       createReview,
@@ -214,6 +230,7 @@ export function useApprovals(): UseApprovalsState {
       selectedCampaignId,
       loading,
       error,
+      safetySettings,
       loadApprovals,
       selectCampaign,
       createReview,

@@ -16,6 +16,8 @@ export function AgentRuntimeView(): React.ReactNode {
     toolContracts,
     loading,
     error,
+    killSwitchEnabled,
+    killSwitchReason,
     loadAgentRuntime,
     selectCampaign,
     createRun,
@@ -143,6 +145,8 @@ export function AgentRuntimeView(): React.ReactNode {
                   key={run.id}
                   run={run}
                   selectedCampaignArchived={selectedCampaignArchived}
+                  killSwitchEnabled={killSwitchEnabled}
+                  killSwitchReason={killSwitchReason}
                   onStartDryRun={startDryRun}
                   onCancelRun={cancelRun}
                 />

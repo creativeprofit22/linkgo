@@ -14,6 +14,8 @@ export function ApprovalsView(): React.ReactNode {
     selectedCampaignId,
     loading,
     error,
+    killSwitchEnabled,
+    killSwitchReason,
     loadApprovals,
     selectCampaign,
     createReview,
@@ -136,6 +138,8 @@ export function ApprovalsView(): React.ReactNode {
                 <ApprovalCard
                   key={approval.id}
                   approval={approval}
+                  killSwitchEnabled={killSwitchEnabled}
+                  killSwitchReason={killSwitchReason}
                   onSetStatus={setReviewStatus}
                   onSchedule={scheduleReview}
                   onCancelSchedule={cancelScheduleJob}

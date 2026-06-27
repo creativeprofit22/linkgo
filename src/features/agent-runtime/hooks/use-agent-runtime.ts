@@ -16,6 +16,8 @@ import type {
   CreateAgentRunInput,
   StartAgentRunInput,
 } from "@/features/agent-runtime/types";
+import { getSafetySettings } from "@/features/safety/data";
+import type { SafetySettings } from "@/features/safety/types";
 import { listWorkflowRuns } from "@/workflows/data";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
 
@@ -27,6 +29,8 @@ interface UseAgentRuntimeState {
   toolContracts: AgentToolMetadata[];
   loading: boolean;
   error: string | null;
+  killSwitchEnabled: boolean;
+  killSwitchReason: string;
   loadAgentRuntime: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
   createRun: (input: CreateAgentRunInput) => Promise<number>;
@@ -64,6 +68,9 @@ export function useAgentRuntime(): UseAgentRuntimeState {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [safetySettings, setSafetySettings] = useState<SafetySettings | null>(
+    null,
+  );
 
   const loadForCampaign = useCallback(async (campaignId: number | null) => {
     if (campaignId === null) {
@@ -83,8 +90,12 @@ export function useAgentRuntime(): UseAgentRuntimeState {
     setLoading(true);
     setError(null);
     try {
-      const loadedCampaigns = await listCampaigns();
+      const [loadedCampaigns, loadedSafetySettings] = await Promise.all([
+        listCampaigns(),
+        getSafetySettings(),
+      ]);
       setCampaigns(loadedCampaigns);
+      setSafetySettings(loadedSafetySettings);
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === selectedCampaignId,
       );
@@ -135,6 +146,9 @@ export function useAgentRuntime(): UseAgentRuntimeState {
         await startDryRunAgentRun(input);
         await loadForCampaign(selectedCampaignId);
       } catch (caught) {
+        void getSafetySettings()
+          .then(setSafetySettings)
+          .catch(() => undefined);
         toast.error("Agent run was not started", {
           description: getErrorMessage(caught),
         });
@@ -168,6 +182,8 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       toolContracts,
       loading,
       error,
+      killSwitchEnabled: safetySettings?.global_kill_switch === 1,
+      killSwitchReason: safetySettings?.kill_switch_reason ?? "",
       loadAgentRuntime,
       selectCampaign,
       createRun,
@@ -182,6 +198,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       toolContracts,
       loading,
       error,
+      safetySettings,
       loadAgentRuntime,
       selectCampaign,
       createRun,

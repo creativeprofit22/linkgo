@@ -392,8 +392,75 @@ Stores append-only runtime progress events.
 
 Indexes: `idx_agent_run_events_run_id`, `idx_agent_run_events_event_type`, `idx_agent_run_events_created_at`.
 
+### `safety_settings`
+
+Stores singleton app-level safety gates.
+
+| Column               | Type    | Notes                                                 |
+| -------------------- | ------- | ----------------------------------------------------- |
+| `id`                 | INTEGER | Primary key constrained to `1`                        |
+| `global_kill_switch` | INTEGER | Boolean-like emergency stop constrained to `0` or `1` |
+| `kill_switch_reason` | TEXT    | Operator-facing reason, default empty string          |
+| `updated_at`         | TEXT    | SQLite datetime                                       |
+
+The migration seeds `id = 1` with `INSERT OR IGNORE`.
+
+### `safety_audit_events`
+
+Stores append-only operator/system safety history.
+
+| Column          | Type    | Notes                                                                                                                            |
+| --------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | INTEGER | Primary key                                                                                                                      |
+| `campaign_id`   | INTEGER | Nullable, references `campaigns(id)` with `ON DELETE SET NULL`                                                                   |
+| `subject_type`  | TEXT    | `campaign`, `approval`, `schedule_job`, `publish_attempt`, `agent_run`, `workflow_run`, `error_queue_item`, or `safety_settings` |
+| `subject_id`    | INTEGER | Nullable subject identifier                                                                                                      |
+| `event_type`    | TEXT    | Kill switch, schedule, publish, approval, agent-run, or error-item lifecycle event                                               |
+| `severity`      | TEXT    | `info`, `warning`, or `block`                                                                                                    |
+| `summary`       | TEXT    | Required operator-facing event summary                                                                                           |
+| `metadata_json` | TEXT    | JSON detail string, default `{}`                                                                                                 |
+| `created_at`    | TEXT    | SQLite datetime                                                                                                                  |
+
+Indexes: `idx_safety_audit_events_campaign_id`, `idx_safety_audit_events_subject`, `idx_safety_audit_events_event_type`, `idx_safety_audit_events_severity`, `idx_safety_audit_events_created_at`.
+
+### `rate_limit_events`
+
+Stores append-only allowed/blocked rate-limit decisions.
+
+| Column          | Type    | Notes                                                      |
+| --------------- | ------- | ---------------------------------------------------------- |
+| `id`            | INTEGER | Primary key                                                |
+| `campaign_id`   | INTEGER | References `campaigns(id)` cascade delete                  |
+| `action`        | TEXT    | `schedule_post`, `publish_post`, `comment`, or `agent_run` |
+| `window_key`    | TEXT    | Local window key such as `YYYY-MM-DD`                      |
+| `limit_value`   | INTEGER | Non-negative configured cap                                |
+| `current_count` | INTEGER | Non-negative count at decision time                        |
+| `decision`      | TEXT    | `allowed` or `blocked`                                     |
+| `summary`       | TEXT    | Required operator-facing decision summary                  |
+| `created_at`    | TEXT    | SQLite datetime                                            |
+
+Indexes: `idx_rate_limit_events_campaign_id`, `idx_rate_limit_events_action`, `idx_rate_limit_events_window_key`, `idx_rate_limit_events_decision`, `idx_rate_limit_events_created_at`.
+
+### `error_queue_items`
+
+Stores fixable operational failures for operator follow-up.
+
+| Column             | Type    | Notes                                                                                   |
+| ------------------ | ------- | --------------------------------------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                                             |
+| `campaign_id`      | INTEGER | Nullable, references `campaigns(id)` with `ON DELETE SET NULL`                          |
+| `source_type`      | TEXT    | `approval`, `publish_attempt`, `schedule_job`, `agent_run`, `workflow_run`, or `manual` |
+| `source_id`        | INTEGER | Nullable source identifier                                                              |
+| `title`            | TEXT    | Required short title                                                                    |
+| `detail`           | TEXT    | Optional detail, default empty string                                                   |
+| `severity`         | TEXT    | `warning`, `error`, or `critical`                                                       |
+| `status`           | TEXT    | `open`, `in_progress`, `awaiting_review`, `resolved`, or `failed`                       |
+| `resolution_notes` | TEXT    | Optional operator notes, default empty string                                           |
+| `created_at`       | TEXT    | SQLite datetime                                                                         |
+| `updated_at`       | TEXT    | SQLite datetime                                                                         |
+
+Indexes: `idx_error_queue_items_campaign_id`, `idx_error_queue_items_source`, `idx_error_queue_items_status`, `idx_error_queue_items_severity`, `idx_error_queue_items_updated_at`, and partial unique `idx_error_queue_items_active_source` on active `(source_type, source_id)` rows.
+
 ## Reserved future tables
 
-Future slices will add their own migrations for:
-
-- Safety and observability: `safety_limits`, `rate_limit_events`, `audit_events`, `error_queue`.
+Future slices will add their own migrations for comment/reply automation and any external integrations.

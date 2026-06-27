@@ -10,6 +10,11 @@ import { getDb, type LinkgoDatabase } from "@/lib/db";
 import { IS_TEST } from "@/lib/env";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import {
+  assertSafetyKillSwitchOff,
+  recordSafetyAuditEvent,
+  upsertErrorQueueItem,
+} from "@/features/safety/data";
+import {
   cancelAgentRunSchema,
   createAgentRunSchema,
   recordAgentRunEventSchema,
@@ -397,23 +402,28 @@ export async function startDryRunAgentRun(
   const parsed = startAgentRunSchema.parse(input);
   const db = await getDb();
 
+  const run = await getAgentRunValidation(db, parsed.id);
+  if (run.campaign_status === "archived")
+    throw new Error("Campaign is archived");
+  if (run.provider_key !== "dry_run") {
+    throw new Error("Only dry-run agent runs can be started");
+  }
+  if (["completed", "cancelled"].includes(run.status)) {
+    throw new Error("Terminal agent runs cannot be restarted");
+  }
+  if (run.status === "running") throw new Error("Agent run is already running");
+  if (run.status === "waiting_approval") {
+    throw new Error("Agent run is waiting for approval");
+  }
+  await assertSafetyKillSwitchOff(db, {
+    campaignId: run.campaign_id,
+    subjectType: "agent_run",
+    subjectId: run.id,
+    summary: "Agent dry run start",
+  });
+
   await db.execute("BEGIN TRANSACTION");
   try {
-    const run = await getAgentRunValidation(db, parsed.id);
-    if (run.campaign_status === "archived")
-      throw new Error("Campaign is archived");
-    if (run.provider_key !== "dry_run") {
-      throw new Error("Only dry-run agent runs can be started");
-    }
-    if (["completed", "cancelled"].includes(run.status)) {
-      throw new Error("Terminal agent runs cannot be restarted");
-    }
-    if (run.status === "running")
-      throw new Error("Agent run is already running");
-    if (run.status === "waiting_approval") {
-      throw new Error("Agent run is waiting for approval");
-    }
-
     const claimResult = await db.execute(
       `UPDATE agent_runs
       SET status = 'running',
@@ -428,6 +438,15 @@ export async function startDryRunAgentRun(
     if (claimResult.rowsAffected !== 1) {
       throw new Error("Agent run could not be claimed for start");
     }
+    await recordSafetyAuditEvent(db, {
+      campaignId: run.campaign_id,
+      subjectType: "agent_run",
+      subjectId: run.id,
+      eventType: "agent_run_started",
+      severity: "info",
+      summary: "Agent dry run started",
+      metadata: { agentRole: run.agent_role },
+    });
 
     const provider = createDryRunProvider(run.model_name || "dry-run-local");
     const result = await runAgentLoop({
@@ -481,6 +500,26 @@ export async function startDryRunAgentRun(
         run.id,
       ],
     );
+
+    if (result.status === "failed") {
+      await recordSafetyAuditEvent(db, {
+        campaignId: run.campaign_id,
+        subjectType: "agent_run",
+        subjectId: run.id,
+        eventType: "agent_run_failed",
+        severity: "warning",
+        summary: result.errorMessage || "Agent dry run failed",
+        metadata: { iterationCount: result.iterationCount },
+      });
+      await upsertErrorQueueItem(db, {
+        campaignId: run.campaign_id,
+        sourceType: "agent_run",
+        sourceId: run.id,
+        title: "Agent run failed",
+        detail: result.errorMessage || "Agent dry run failed",
+        severity: "error",
+      });
+    }
 
     await db.execute("COMMIT");
   } catch (error) {

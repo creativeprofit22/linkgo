@@ -16,6 +16,8 @@ import type {
 interface AgentRunCardProps {
   run: AgentRunWithDetails;
   selectedCampaignArchived: boolean;
+  killSwitchEnabled: boolean;
+  killSwitchReason: string;
   onStartDryRun: (input: StartAgentRunInput) => Promise<void>;
   onCancelRun: (input: CancelAgentRunInput) => Promise<void>;
 }
@@ -29,10 +31,17 @@ function formatJson(value: unknown): string {
 export function AgentRunCard({
   run,
   selectedCampaignArchived,
+  killSwitchEnabled,
+  killSwitchReason,
   onStartDryRun,
   onCancelRun,
 }: AgentRunCardProps): React.ReactNode {
-  const canStart = ["queued", "failed"].includes(run.status);
+  const canStart =
+    ["queued", "failed"].includes(run.status) && !killSwitchEnabled;
+  const startBlockedByKillSwitch =
+    ["queued", "failed"].includes(run.status) &&
+    run.provider_key === "dry_run" &&
+    killSwitchEnabled;
   const canCancel = !terminalStatuses.includes(run.status);
 
   return (
@@ -85,6 +94,12 @@ export function AgentRunCard({
                 >
                   Start dry-run
                 </Button>
+              )}
+              {startBlockedByKillSwitch && (
+                <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
+                  Global kill switch is enabled.
+                  {killSwitchReason ? ` ${killSwitchReason}` : ""}
+                </p>
               )}
               {canCancel && (
                 <Button

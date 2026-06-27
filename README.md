@@ -2,7 +2,7 @@
 
 Linkgo is a local-first Tauri desktop app for LinkedIn growth operations.
 
-Current status: the app shell, Campaigns slice, Candidate Queue slice, Drafting + Audit slice, Approvals + Scheduler slice, Metrics + Learning slice, Durable Workflow Engine slice, and Agent Runtime + Tool Schemas slice are implemented. Real AI provider calls, LinkedIn scraping, actual LinkedIn API publishing, background scheduler jobs, automated metrics collection, and comment automation remain intentionally not implemented.
+Current status: the app shell, Campaigns slice, Candidate Queue slice, Drafting + Audit slice, Approvals + Scheduler slice, Metrics + Learning slice, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, and Safety + Observability slice are implemented. Real AI provider calls, LinkedIn scraping, actual LinkedIn API publishing, background scheduler jobs, automated metrics collection, external telemetry, and comment automation remain intentionally not implemented.
 
 ## Stack
 
@@ -53,6 +53,7 @@ src/workflows/          Durable workflow contracts and SQLite state machine
 src/features/workflows Workflow cockpit hook and UI components
 src/agent/              Tool contracts, provider interfaces, dry-run loop
 src/features/agent-runtime Agent runtime history, hooks, and UI components
+src/features/safety   Kill switch, rate limits, audit events, and error queue
 docs/                   Architecture, data model, roadmap mapping, feature docs
 tests/                  Playwright specs and Tauri IPC mocks
 ```
