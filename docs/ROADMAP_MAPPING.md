@@ -141,12 +141,27 @@ Implemented now:
 - Error queue items for failed publish attempts, rejected approvals, and failed agent runs.
 - Safety tab with summaries, campaign filtering, kill switch controls, event history, and status transitions.
 
-LinkedIn OAuth, real publishing, comments, background execution, and external telemetry are not implemented in this slice.
-
-## Future slices
+LinkedIn OAuth, real publishing, background execution, and external telemetry are not implemented in this slice.
 
 ### Comment/reply agent slice
 
-Adds approval-gated comment candidate and reply generation workflows.
+Roadmap coverage:
 
-Roadmap section: 13.
+- Section 13: comment/reply agent.
+- Section 16 foundation: conservative daily comment-limit enforcement using `campaigns.daily_comment_limit` and `rate_limit_events.action = 'comment'`.
+
+Implemented now:
+
+- Local comment threads for eligible shortlisted or drafted candidate posts.
+- One-to-three manual reply variants with deterministic audit findings.
+- Human review statuses before a comment can be manually marked posted.
+- Manual posted/failed attempt history.
+- Failed manual attempts create error queue items with `source_type = 'manual'`.
+- Global kill switch and daily comment caps block successful posting records.
+- Comments tab with campaign filtering, summaries, variant preview, audit display, review actions, and attempt dialogs.
+
+LinkedIn OAuth, LinkedIn API commenting, scraping, background workers, real AI provider calls, and automated comment posting are not implemented in this slice.
+
+## Future slices
+
+Future slices will add external integrations and automation only behind explicit approval gates.

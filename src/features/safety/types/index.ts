@@ -165,6 +165,13 @@ export interface AssertSchedulePostLimitInput {
   limitValue?: number;
 }
 
+export interface AssertCommentLimitInput {
+  campaignId: number;
+  commentedAt?: string;
+  commentThreadId?: number;
+  limitValue?: number;
+}
+
 export interface SchedulePostLimitDecision {
   campaignId: number;
   windowKey: string;
@@ -173,3 +180,5 @@ export interface SchedulePostLimitDecision {
   allowed: boolean;
   summary: string;
 }
+
+export type CommentLimitDecision = SchedulePostLimitDecision;

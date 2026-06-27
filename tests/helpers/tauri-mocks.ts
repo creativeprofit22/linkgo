@@ -156,6 +156,62 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type CommentThreadStatus =
+      | "drafting"
+      | "needs_review"
+      | "changes_requested"
+      | "approved"
+      | "rejected"
+      | "posted"
+      | "cancelled";
+    type CommentVariantStatus = "draft" | "selected" | "rejected";
+    type CommentAuditSeverity = "pass" | "warning" | "block";
+    type CommentAttemptStatus = "succeeded" | "failed";
+
+    type CommentThread = {
+      id: number;
+      campaign_id: number;
+      candidate_post_id: number;
+      status: CommentThreadStatus;
+      operator_notes: string;
+      reviewer_notes: string;
+      approved_at: string | null;
+      rejected_at: string | null;
+      posted_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type CommentVariant = {
+      id: number;
+      comment_thread_id: number;
+      variant_number: number;
+      body: string;
+      status: CommentVariantStatus;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type CommentAudit = {
+      id: number;
+      comment_variant_id: number;
+      rule_key: string;
+      severity: CommentAuditSeverity;
+      message: string;
+      created_at: string;
+    };
+
+    type CommentAttempt = {
+      id: number;
+      comment_thread_id: number;
+      platform: "linkedin";
+      status: CommentAttemptStatus;
+      external_comment_url: string;
+      platform_comment_id: string;
+      error_message: string;
+      created_at: string;
+    };
+
     type MemorySignal = "winner" | "underperformer" | "insight" | "avoid";
 
     type CampaignMemoryStatus = "active" | "archived";
@@ -484,6 +540,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       approvals: Approval[];
       scheduleJobs: ScheduleJob[];
       publishAttempts: PublishAttempt[];
+      commentThreads: CommentThread[];
+      commentVariants: CommentVariant[];
+      commentAudits: CommentAudit[];
+      commentAttempts: CommentAttempt[];
       postMetrics: PostMetric[];
       campaignMemory: CampaignMemory[];
       learningEvents: LearningEvent[];
@@ -508,6 +568,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextApprovalId: number;
       nextScheduleJobId: number;
       nextPublishAttemptId: number;
+      nextCommentThreadId: number;
+      nextCommentVariantId: number;
+      nextCommentAuditId: number;
+      nextCommentAttemptId: number;
       nextPostMetricId: number;
       nextCampaignMemoryId: number;
       nextLearningEventId: number;
@@ -534,6 +598,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const approvals: Approval[] = [];
     const scheduleJobs: ScheduleJob[] = [];
     const publishAttempts: PublishAttempt[] = [];
+    const commentThreads: CommentThread[] = [];
+    const commentVariants: CommentVariant[] = [];
+    const commentAudits: CommentAudit[] = [];
+    const commentAttempts: CommentAttempt[] = [];
     const postMetrics: PostMetric[] = [];
     const campaignMemory: CampaignMemory[] = [];
     const learningEvents: LearningEvent[] = [];
@@ -563,6 +631,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextApprovalId = 1;
     let nextScheduleJobId = 1;
     let nextPublishAttemptId = 1;
+    let nextCommentThreadId = 1;
+    let nextCommentVariantId = 1;
+    let nextCommentAuditId = 1;
+    let nextCommentAttemptId = 1;
     let nextPostMetricId = 1;
     let nextCampaignMemoryId = 1;
     let nextLearningEventId = 1;
@@ -615,6 +687,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         approvals: cloneRows(approvals),
         scheduleJobs: cloneRows(scheduleJobs),
         publishAttempts: cloneRows(publishAttempts),
+        commentThreads: cloneRows(commentThreads),
+        commentVariants: cloneRows(commentVariants),
+        commentAudits: cloneRows(commentAudits),
+        commentAttempts: cloneRows(commentAttempts),
         postMetrics: cloneRows(postMetrics),
         campaignMemory: cloneRows(campaignMemory),
         learningEvents: cloneRows(learningEvents),
@@ -639,6 +715,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextApprovalId,
         nextScheduleJobId,
         nextPublishAttemptId,
+        nextCommentThreadId,
+        nextCommentVariantId,
+        nextCommentAuditId,
+        nextCommentAttemptId,
         nextPostMetricId,
         nextCampaignMemoryId,
         nextLearningEventId,
@@ -670,6 +750,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(approvals, snapshot.approvals);
       restoreRows(scheduleJobs, snapshot.scheduleJobs);
       restoreRows(publishAttempts, snapshot.publishAttempts);
+      restoreRows(commentThreads, snapshot.commentThreads);
+      restoreRows(commentVariants, snapshot.commentVariants);
+      restoreRows(commentAudits, snapshot.commentAudits);
+      restoreRows(commentAttempts, snapshot.commentAttempts);
       restoreRows(postMetrics, snapshot.postMetrics);
       restoreRows(campaignMemory, snapshot.campaignMemory);
       restoreRows(learningEvents, snapshot.learningEvents);
@@ -696,6 +780,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextApprovalId = snapshot.nextApprovalId;
       nextScheduleJobId = snapshot.nextScheduleJobId;
       nextPublishAttemptId = snapshot.nextPublishAttemptId;
+      nextCommentThreadId = snapshot.nextCommentThreadId;
+      nextCommentVariantId = snapshot.nextCommentVariantId;
+      nextCommentAuditId = snapshot.nextCommentAuditId;
+      nextCommentAttemptId = snapshot.nextCommentAttemptId;
       nextPostMetricId = snapshot.nextPostMetricId;
       nextCampaignMemoryId = snapshot.nextCampaignMemoryId;
       nextLearningEventId = snapshot.nextLearningEventId;
@@ -1412,6 +1500,131 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
     }
 
+    function selectCommentCandidateRow(candidate: CandidatePost): Record<string, unknown> | null {
+      const campaign = campaigns.find((row) => row.id === candidate.campaign_id);
+      const target = targetPosts.find((row) => row.id === candidate.target_post_id);
+      if (!campaign || !target) return null;
+      return {
+        candidate_id: candidate.id,
+        campaign_id: candidate.campaign_id,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+        candidate_status: candidate.status,
+        source_keyword: candidate.source_keyword,
+        relevance_score: candidate.relevance_score,
+        target_post_id: target.id,
+        target_url: target.url,
+        target_author_name: target.author_name,
+        target_author_profile_url: target.author_profile_url,
+        target_content: target.content,
+        target_posted_at: target.posted_at,
+      };
+    }
+
+    function selectCommentThreads(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return commentThreads
+        .filter((thread) => campaignId === null || thread.campaign_id === campaignId)
+        .map((thread) => {
+          const campaign = campaigns.find((row) => row.id === thread.campaign_id);
+          const candidate = candidatePosts.find(
+            (row) => row.id === thread.candidate_post_id,
+          );
+          const target = candidate
+            ? targetPosts.find((row) => row.id === candidate.target_post_id)
+            : undefined;
+          if (!campaign || !candidate || !target) return null;
+          return {
+            ...thread,
+            campaign_name: campaign.name,
+            campaign_status: campaign.status,
+            candidate_status: candidate.status,
+            candidate_source_keyword: candidate.source_keyword,
+            candidate_relevance_score: candidate.relevance_score,
+            target_post_id: target.id,
+            target_url: target.url,
+            target_author_name: target.author_name,
+            target_author_profile_url: target.author_profile_url,
+            target_content: target.content,
+            target_posted_at: target.posted_at,
+          };
+        })
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const leftHistory = ["posted", "rejected", "cancelled"].includes(
+            String(left.status),
+          )
+            ? 1
+            : 0;
+          const rightHistory = ["posted", "rejected", "cancelled"].includes(
+            String(right.status),
+          )
+            ? 1
+            : 0;
+          if (leftHistory !== rightHistory) return leftHistory - rightHistory;
+          const updatedDelta = String(right.updated_at).localeCompare(
+            String(left.updated_at),
+          );
+          if (updatedDelta !== 0) return updatedDelta;
+          return Number(right.id) - Number(left.id);
+        });
+    }
+
+    function selectCommentEligibleCandidates(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return candidatePosts
+        .filter((candidate) => {
+          const campaign = campaigns.find((row) => row.id === candidate.campaign_id);
+          const existingThread = commentThreads.find(
+            (thread) => thread.candidate_post_id === candidate.id,
+          );
+          return (
+            campaign?.status !== "archived" &&
+            ["shortlisted", "drafted"].includes(candidate.status) &&
+            existingThread === undefined &&
+            (campaignId === null || candidate.campaign_id === campaignId)
+          );
+        })
+        .map(selectCommentCandidateRow)
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => Number(right.candidate_id) - Number(left.candidate_id));
+    }
+
+    function selectCommentThreadValidation(values: unknown[]): unknown[] {
+      const threadId = Number(values[0] ?? 0);
+      const thread = commentThreads.find((row) => row.id === threadId);
+      const campaign = thread
+        ? campaigns.find((row) => row.id === thread.campaign_id)
+        : undefined;
+      if (!thread || !campaign) return [];
+      return [
+        {
+          id: thread.id,
+          campaign_id: thread.campaign_id,
+          candidate_post_id: thread.candidate_post_id,
+          status: thread.status,
+          campaign_status: campaign.status,
+          daily_comment_limit: campaign.daily_comment_limit,
+        },
+      ];
+    }
+
+    function selectCommentSelectedVariant(values: unknown[]): unknown[] {
+      const threadId = Number(values[0] ?? 0);
+      return commentVariants
+        .filter(
+          (variant) =>
+            variant.comment_thread_id === threadId && variant.status === "selected",
+        )
+        .map((variant) => ({
+          ...variant,
+          blocked_count: commentAudits.filter(
+            (audit) =>
+              audit.comment_variant_id === variant.id && audit.severity === "block",
+          ).length,
+        }));
+    }
+
     function selectSafetyErrorQueue(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return errorQueueItems
@@ -1547,6 +1760,40 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (
         query.includes("COUNT(*) AS count") &&
+        query.includes("FROM comment_attempts ca")
+      ) {
+        const campaignId = Number(values[0] ?? 0);
+        const day = String(values[1] ?? "").trim().slice(0, 10);
+        return [
+          {
+            count: commentAttempts.filter((attempt) => {
+              const thread = commentThreads.find(
+                (row) => row.id === attempt.comment_thread_id,
+              );
+              return (
+                thread?.campaign_id === campaignId &&
+                attempt.status === "succeeded" &&
+                attempt.created_at.trim().slice(0, 10) === day
+              );
+            }).length,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM comment_threads")
+      ) {
+        const candidateId = Number(values[0] ?? 0);
+        return [
+          {
+            count: commentThreads.filter(
+              (thread) => thread.candidate_post_id === candidateId,
+            ).length,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
         query.includes("FROM safety_audit_events")
       ) {
         const campaignId = typeof values[0] === "number" ? values[0] : null;
@@ -1577,6 +1824,58 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (query.includes("FROM rate_limit_events")) {
         return selectRateLimitEvents(values);
+      }
+      if (query.includes("FROM comment_threads ct")) {
+        if (query.includes("WHERE ct.id = $1")) return selectCommentThreadValidation(values);
+        return selectCommentThreads(values);
+      }
+      if (
+        query.includes("FROM candidate_posts cp") &&
+        query.includes("LEFT JOIN comment_threads ct")
+      ) {
+        return selectCommentEligibleCandidates(values);
+      }
+      if (
+        query.includes("FROM candidate_posts cp") &&
+        query.includes("WHERE cp.id = $1") &&
+        query.includes("target_posted_at")
+      ) {
+        const candidateId = Number(values[0] ?? 0);
+        const candidate = candidatePosts.find((row) => row.id === candidateId);
+        return candidate ? [selectCommentCandidateRow(candidate)].filter(Boolean) : [];
+      }
+      if (query.includes("FROM comment_variants")) {
+        if (query.includes("cv.status = 'selected'")) {
+          return selectCommentSelectedVariant(values);
+        }
+        if (query.includes("WHERE id = $1")) {
+          const id = Number(values[0] ?? 0);
+          return commentVariants.filter((variant) => variant.id === id);
+        }
+        const ids = new Set(
+          values.filter((value): value is number => typeof value === "number"),
+        );
+        return commentVariants
+          .filter((variant) => ids.has(variant.comment_thread_id))
+          .sort((left, right) => left.variant_number - right.variant_number);
+      }
+      if (query.includes("FROM comment_audits")) {
+        const ids = new Set(
+          values.filter((value): value is number => typeof value === "number"),
+        );
+        return commentAudits.filter((audit) => ids.has(audit.comment_variant_id));
+      }
+      if (query.includes("FROM comment_attempts")) {
+        const ids = new Set(
+          values.filter((value): value is number => typeof value === "number"),
+        );
+        return commentAttempts
+          .filter((attempt) => ids.has(attempt.comment_thread_id))
+          .sort((left, right) => {
+            const createdDelta = right.created_at.localeCompare(left.created_at);
+            if (createdDelta !== 0) return createdDelta;
+            return right.id - left.id;
+          });
       }
       if (query.includes("FROM safety_audit_events")) {
         return selectSafetyAuditEvents(values);
@@ -1869,7 +2168,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const now = getNow();
       const normalizedQuery = query.trim().toLocaleUpperCase();
 
-      if (normalizedQuery === "BEGIN TRANSACTION") {
+      if (
+        normalizedQuery === "BEGIN TRANSACTION" ||
+        normalizedQuery === "BEGIN IMMEDIATE"
+      ) {
         transactionSnapshot = createTransactionSnapshot();
         return { lastInsertId: 0, rowsAffected: 0 };
       }
@@ -2178,6 +2480,70 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: publishAttempt.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO comment_threads")) {
+        const thread: CommentThread = {
+          id: nextCommentThreadId,
+          campaign_id: Number(values[0] ?? 0),
+          candidate_post_id: Number(values[1] ?? 0),
+          status: "drafting",
+          operator_notes: String(values[2] ?? ""),
+          reviewer_notes: "",
+          approved_at: null,
+          rejected_at: null,
+          posted_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        commentThreads.push(thread);
+        nextCommentThreadId += 1;
+        return { lastInsertId: thread.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO comment_variants")) {
+        const variant: CommentVariant = {
+          id: nextCommentVariantId,
+          comment_thread_id: Number(values[0] ?? 0),
+          variant_number: Number(values[1] ?? 1),
+          body: String(values[2] ?? ""),
+          status: "draft",
+          created_at: now,
+          updated_at: now,
+        };
+        commentVariants.push(variant);
+        nextCommentVariantId += 1;
+        return { lastInsertId: variant.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO comment_audits")) {
+        const audit: CommentAudit = {
+          id: nextCommentAuditId,
+          comment_variant_id: Number(values[0] ?? 0),
+          rule_key: String(values[1] ?? ""),
+          severity: values[2] as CommentAuditSeverity,
+          message: String(values[3] ?? ""),
+          created_at: now,
+        };
+        commentAudits.push(audit);
+        nextCommentAuditId += 1;
+        return { lastInsertId: audit.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO comment_attempts")) {
+        const attempt: CommentAttempt = {
+          id: nextCommentAttemptId,
+          comment_thread_id: Number(values[0] ?? 0),
+          platform: "linkedin",
+          status: values[1] as CommentAttemptStatus,
+          external_comment_url: String(values[2] ?? ""),
+          platform_comment_id: String(values[3] ?? ""),
+          error_message: String(values[4] ?? ""),
+          created_at: now,
+        };
+        commentAttempts.push(attempt);
+        nextCommentAttemptId += 1;
+        return { lastInsertId: attempt.id, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT INTO post_metrics")) {
         const metric: PostMetric = {
           id: nextPostMetricId,
@@ -2440,6 +2806,81 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
       }
 
+      if (query.includes("UPDATE comment_threads")) {
+        const id = Number(values.at(-1) ?? 0);
+        const thread = commentThreads.find((row) => row.id === id);
+        if (thread) {
+          if (query.includes("status = 'posted'")) {
+            thread.status = "posted";
+            thread.posted_at = now;
+          } else if (
+            query.includes(
+              "status = CASE WHEN status IN ('needs_review', 'approved')",
+            )
+          ) {
+            if (["needs_review", "approved"].includes(thread.status)) {
+              thread.status = "changes_requested";
+            }
+          } else if (query.includes("status = $1")) {
+            thread.status = values[0] as CommentThreadStatus;
+            if (query.includes("reviewer_notes")) {
+              const reviewerNotes = values[1];
+              if (reviewerNotes !== null && reviewerNotes !== undefined) {
+                thread.reviewer_notes = String(reviewerNotes);
+              }
+            }
+            if (thread.status === "approved") {
+              thread.approved_at = now;
+            }
+            if (thread.status === "rejected") {
+              thread.rejected_at = now;
+            }
+          } else {
+            const columns = parseUpdateColumns(query, "comment_threads");
+            columns.forEach((column, index) => {
+              const value = values[index];
+              if (column === "operator_notes") thread.operator_notes = String(value ?? "");
+              if (column === "reviewer_notes") thread.reviewer_notes = String(value ?? "");
+              if (column === "status") thread.status = value as CommentThreadStatus;
+            });
+          }
+          thread.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
+      if (query.includes("UPDATE comment_variants")) {
+        if (query.includes("WHERE comment_thread_id = $1 AND id <> $2")) {
+          const threadId = Number(values[0] ?? 0);
+          const excludedId = Number(values[1] ?? 0);
+          let rowsAffected = 0;
+          for (const variant of commentVariants) {
+            if (variant.comment_thread_id === threadId && variant.id !== excludedId) {
+              variant.status = "draft";
+              variant.updated_at = now;
+              rowsAffected += 1;
+            }
+          }
+          return { lastInsertId: 0, rowsAffected };
+        }
+        const id = Number(values.at(-1) ?? 0);
+        const variant = commentVariants.find((row) => row.id === id);
+        if (variant) {
+          if (query.includes("status = 'selected'")) {
+            variant.status = "selected";
+          } else {
+            const columns = parseUpdateColumns(query, "comment_variants");
+            columns.forEach((column, index) => {
+              const value = values[index];
+              if (column === "body") variant.body = String(value ?? "");
+              if (column === "status") variant.status = value as CommentVariantStatus;
+            });
+          }
+          variant.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
       if (query.includes("UPDATE approvals")) {
         const literalStatus = query.includes("status = 'scheduled'")
           ? "scheduled"
@@ -2684,6 +3125,44 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: 0, rowsAffected };
       }
 
+      if (query.includes("DELETE FROM comment_audits")) {
+        const variantId = Number(values[0] ?? 0);
+        const rowsAffected = removeRows(
+          commentAudits,
+          (audit) => audit.comment_variant_id === variantId,
+        );
+        return { lastInsertId: 0, rowsAffected };
+      }
+
+      if (query.includes("DELETE FROM comment_variants")) {
+        const threadId = Number(values[0] ?? 0);
+        const removedVariantIds = commentVariants
+          .filter((variant) => variant.comment_thread_id === threadId)
+          .map((variant) => variant.id);
+        const rowsAffected = removeRows(
+          commentVariants,
+          (variant) => variant.comment_thread_id === threadId,
+        );
+        removeRows(commentAudits, (audit) =>
+          removedVariantIds.includes(audit.comment_variant_id),
+        );
+        return { lastInsertId: 0, rowsAffected };
+      }
+
+      if (query.includes("DELETE FROM comment_threads")) {
+        const id = Number(values[0] ?? 0);
+        const removedVariantIds = commentVariants
+          .filter((variant) => variant.comment_thread_id === id)
+          .map((variant) => variant.id);
+        const rowsAffected = removeRows(commentThreads, (row) => row.id === id);
+        removeRows(commentVariants, (variant) => variant.comment_thread_id === id);
+        removeRows(commentAudits, (audit) =>
+          removedVariantIds.includes(audit.comment_variant_id),
+        );
+        removeRows(commentAttempts, (attempt) => attempt.comment_thread_id === id);
+        return { lastInsertId: 0, rowsAffected };
+      }
+
       if (query.includes("DELETE FROM dedupe_keys")) {
         const candidatePostId = Number(values[0] ?? 0);
         const rowsAffected = removeRows(
@@ -2714,6 +3193,22 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         );
         removeRows(publishAttempts, (attempt) =>
           approvalIds.includes(attempt.approval_id),
+        );
+        const removedCommentThreadIds = commentThreads
+          .filter((thread) => thread.candidate_post_id === id)
+          .map((thread) => thread.id);
+        const removedCommentVariantIds = commentVariants
+          .filter((variant) => removedCommentThreadIds.includes(variant.comment_thread_id))
+          .map((variant) => variant.id);
+        removeRows(commentThreads, (thread) => thread.candidate_post_id === id);
+        removeRows(commentVariants, (variant) =>
+          removedCommentThreadIds.includes(variant.comment_thread_id),
+        );
+        removeRows(commentAudits, (audit) =>
+          removedCommentVariantIds.includes(audit.comment_variant_id),
+        );
+        removeRows(commentAttempts, (attempt) =>
+          removedCommentThreadIds.includes(attempt.comment_thread_id),
         );
         const removedMetricIds = postMetrics
           .filter((metric) => approvalIds.includes(metric.approval_id))
@@ -2782,6 +3277,22 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         removeRows(publishAttempts, (attempt) =>
           removedApprovalIds.includes(attempt.approval_id),
         );
+        const removedCommentThreadIds = commentThreads
+          .filter((thread) => thread.campaign_id === id)
+          .map((thread) => thread.id);
+        const removedCommentVariantIds = commentVariants
+          .filter((variant) => removedCommentThreadIds.includes(variant.comment_thread_id))
+          .map((variant) => variant.id);
+        removeRows(commentThreads, (thread) => thread.campaign_id === id);
+        removeRows(commentVariants, (variant) =>
+          removedCommentThreadIds.includes(variant.comment_thread_id),
+        );
+        removeRows(commentAudits, (audit) =>
+          removedCommentVariantIds.includes(audit.comment_variant_id),
+        );
+        removeRows(commentAttempts, (attempt) =>
+          removedCommentThreadIds.includes(attempt.comment_thread_id),
+        );
         removeRows(postMetrics, (metric) => metric.campaign_id === id);
         removeRows(campaignMemory, (memory) => memory.campaign_id === id);
         removeRows(learningEvents, (event) => event.campaign_id === id);
@@ -2809,6 +3320,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     }
 
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
+    w.__LINKGO_SQL_COMMENT_THREADS__ = () => cloneRows(commentThreads);
+    w.__LINKGO_SQL_COMMENT_VARIANTS__ = () => cloneRows(commentVariants);
+    w.__LINKGO_SQL_COMMENT_AUDITS__ = () => cloneRows(commentAudits);
+    w.__LINKGO_SQL_COMMENT_ATTEMPTS__ = () => cloneRows(commentAttempts);
     w.__LINKGO_SQL_SAFETY_SETTINGS__ = () => ({ ...safetySettings });
     w.__LINKGO_SQL_SAFETY_AUDIT_EVENTS__ = () => cloneRows(safetyAuditEvents);
     w.__LINKGO_SQL_RATE_LIMIT_EVENTS__ = () => cloneRows(rateLimitEvents);
@@ -2826,6 +3341,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       approvals: approvals.length,
       scheduleJobs: scheduleJobs.length,
       publishAttempts: publishAttempts.length,
+      commentThreads: commentThreads.length,
+      commentVariants: commentVariants.length,
+      commentAudits: commentAudits.length,
+      commentAttempts: commentAttempts.length,
       postMetrics: postMetrics.length,
       campaignMemory: campaignMemory.length,
       learningEvents: learningEvents.length,

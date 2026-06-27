@@ -7,11 +7,12 @@ Implemented as the local-first Safety tab and cross-feature safety data layer.
 ## What it does
 
 - Provides a global kill switch for local automation-like actions.
-- Blocks local schedule starts and agent dry-run starts while the kill switch is enabled.
+- Blocks local schedule starts, agent dry-run starts, and approved comment posting records while the kill switch is enabled.
 - Enforces each campaign's `daily_post_limit` for same-day post scheduling.
+- Enforces each campaign's `daily_comment_limit` for same-day successful comment posting records.
 - Records append-only safety audit events.
-- Records append-only rate-limit decisions for allowed and blocked schedule attempts.
-- Creates operator-fixable error queue items for failed publish attempts, rejected approvals, and failed agent runs.
+- Records append-only rate-limit decisions for allowed and blocked schedule/comment attempts.
+- Creates operator-fixable error queue items for failed publish attempts, failed manual comment attempts, rejected approvals, and failed agent runs.
 - Lets operators move error queue items through `open -> in_progress -> awaiting_review -> resolved`, plus failed/reopen paths.
 
 ## UI
@@ -60,13 +61,20 @@ Allowed/success events are written inside the transaction that performed the act
 - Claimed runs record `agent_run_started`.
 - Failed dry-runs record `agent_run_failed` and create/update an error item.
 
+### Comments
+
+- `recordCommentAttempt` checks the kill switch before successful manual posted records.
+- Successful manual posted records enforce `daily_comment_limit` with `rate_limit_events.action = 'comment'`.
+- Failed manual comment attempts create an open error queue item with `source_type = 'manual'`.
+- Linkgo records manual history only; it does not post comments to LinkedIn.
+
 ## Explicit exclusions
 
 This slice does not implement:
 
 - Real LinkedIn publishing.
 - LinkedIn OAuth or LinkedIn API integration.
-- Comment automation or reply posting.
+- Real LinkedIn comment posting.
 - Background scheduler execution.
 - Background agent workers.
 - External telemetry or hosted observability services.

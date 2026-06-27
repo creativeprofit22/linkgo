@@ -123,3 +123,16 @@ export const assertSchedulePostLimitSchema = z.object({
   approvalId: positiveIdSchema.optional(),
   limitValue: z.number().int().min(0).optional(),
 });
+
+export const assertCommentLimitSchema = z.object({
+  campaignId: positiveIdSchema,
+  commentedAt: z
+    .string()
+    .trim()
+    .refine((value) => !Number.isNaN(Date.parse(value)), {
+      message: "Comment date must be valid",
+    })
+    .optional(),
+  commentThreadId: positiveIdSchema.optional(),
+  limitValue: z.number().int().min(0).optional(),
+});

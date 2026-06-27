@@ -112,7 +112,8 @@ export function SafetyView(): React.ReactNode {
                 <div>
                   <p className="text-sm font-semibold">Global kill switch</p>
                   <p className="text-muted-foreground text-xs">
-                    Blocks local schedule starts and agent dry-run starts.
+                    Blocks local schedule starts, agent dry-run starts, and
+                    approved comment posting records.
                   </p>
                 </div>
                 <div className="text-sm font-medium">

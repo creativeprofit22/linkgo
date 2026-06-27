@@ -4,6 +4,7 @@ import type {
   RecordPublishAttemptInput,
   ScheduleApprovalInput,
 } from "@/features/approvals/types";
+import type { RecordCommentAttemptInput } from "@/features/comments/types";
 import { IS_TAURI } from "@/lib/env";
 import { HomePage } from "@/pages/home";
 import { SettingsPage } from "@/pages/settings";
@@ -22,6 +23,10 @@ type ApprovalTestApi = {
   scheduleApproval: (input: ScheduleApprovalInput) => Promise<number>;
 };
 
+type CommentTestApi = {
+  recordCommentAttempt: (input: RecordCommentAttemptInput) => Promise<number>;
+};
+
 if (import.meta.env.VITE_PLAYWRIGHT) {
   void import("@/features/approvals/data").then(
     ({ recordPublishAttempt, scheduleApproval }) => {
@@ -33,6 +38,13 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
       };
     },
   );
+  void import("@/features/comments/data").then(({ recordCommentAttempt }) => {
+    (
+      window as unknown as { __LINKGO_COMMENT_TEST_API__?: CommentTestApi }
+    ).__LINKGO_COMMENT_TEST_API__ = {
+      recordCommentAttempt,
+    };
+  });
 }
 
 function RootShell(): React.ReactNode {

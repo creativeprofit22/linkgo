@@ -1,5 +1,6 @@
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import {
+  assertCommentLimitSchema,
   assertSafetyKillSwitchOffSchema,
   assertSchedulePostLimitSchema,
   recordRateLimitEventSchema,
@@ -9,7 +10,9 @@ import {
   upsertErrorQueueItemSchema,
 } from "@/features/safety/schemas";
 import type {
+  AssertCommentLimitInput,
   AssertSchedulePostLimitInput,
+  CommentLimitDecision,
   ErrorQueueItem,
   ErrorQueueStatus,
   RateLimitEvent,
@@ -32,6 +35,7 @@ interface CountRow {
 interface CampaignLimitRow {
   id: number;
   daily_post_limit: number;
+  daily_comment_limit: number;
 }
 
 interface ErrorQueueItemWithCampaignRow extends ErrorQueueItem {
@@ -72,6 +76,23 @@ export async function countScheduledPostsForLimit(
       AND date(sj.scheduled_for) = date($2)
       AND sj.status IN ('scheduled', 'completed')`,
     [campaignId, scheduledFor],
+  );
+  return countRows[0]?.count ?? 0;
+}
+
+export async function countCommentsForLimit(
+  db: LinkgoDatabase,
+  campaignId: number,
+  windowDate: string,
+): Promise<number> {
+  const countRows = await db.select<CountRow[]>(
+    `SELECT COUNT(*) AS count
+    FROM comment_attempts ca
+    INNER JOIN comment_threads ct ON ct.id = ca.comment_thread_id
+    WHERE ct.campaign_id = $1
+      AND date(ca.created_at) = date($2)
+      AND ca.status = 'succeeded'`,
+    [campaignId, windowDate],
   );
   return countRows[0]?.count ?? 0;
 }
@@ -512,6 +533,68 @@ export async function assertSchedulePostLimit(
         limitValue: decision.limitValue,
         currentCount: decision.currentCount,
       },
+    });
+    throw new Error(decision.summary);
+  }
+
+  return decision;
+}
+
+export async function getCommentLimitDecision(
+  db: LinkgoDatabase,
+  input: AssertCommentLimitInput,
+): Promise<CommentLimitDecision> {
+  const parsed = assertCommentLimitSchema.parse(input);
+  const campaignRows =
+    parsed.limitValue === undefined
+      ? await db.select<CampaignLimitRow[]>(
+          `SELECT id, daily_comment_limit FROM campaigns WHERE id = $1 LIMIT 1`,
+          [parsed.campaignId],
+        )
+      : [];
+  const campaign = campaignRows[0];
+  if (parsed.limitValue === undefined && campaign === undefined) {
+    throw new Error("Campaign was not found");
+  }
+
+  const commentedAt = parsed.commentedAt ?? new Date().toISOString();
+  const windowKey = getWindowKey(commentedAt);
+  const currentCount = await countCommentsForLimit(
+    db,
+    parsed.campaignId,
+    commentedAt,
+  );
+  const limitValue = parsed.limitValue ?? campaign?.daily_comment_limit ?? 0;
+  const allowed = currentCount < limitValue;
+  const summary = allowed
+    ? `Comment allowed for ${windowKey}: ${currentCount}/${limitValue} used`
+    : `Daily comment limit reached for ${windowKey}: ${currentCount}/${limitValue} used`;
+
+  return {
+    campaignId: parsed.campaignId,
+    windowKey,
+    limitValue,
+    currentCount,
+    allowed,
+    summary,
+  };
+}
+
+export async function assertCommentLimit(
+  db: LinkgoDatabase,
+  input: AssertCommentLimitInput,
+): Promise<CommentLimitDecision> {
+  const decision = await getCommentLimitDecision(db, input);
+
+  if (!decision.allowed) {
+    await recordRateLimitEvent(db, {
+      campaignId: decision.campaignId,
+      action: "comment",
+      windowKey: decision.windowKey,
+      limitValue: decision.limitValue,
+      currentCount: decision.currentCount,
+      decision: "blocked",
+      summary: decision.summary,
     });
     throw new Error(decision.summary);
   }

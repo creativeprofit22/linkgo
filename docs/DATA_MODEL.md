@@ -213,6 +213,82 @@ Constraints: checked platform and checked status values.
 
 Indexes: `idx_publish_attempts_approval_id`, `idx_publish_attempts_schedule_job_id`, `idx_publish_attempts_status`.
 
+### `comment_threads`
+
+Stores one local, approval-gated comment workflow for one candidate target post.
+
+| Column              | Type    | Notes                                                                                             |
+| ------------------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `id`                | INTEGER | Primary key                                                                                       |
+| `campaign_id`       | INTEGER | References `campaigns(id)` cascade delete                                                         |
+| `candidate_post_id` | INTEGER | References `candidate_posts(id)` cascade delete; unique so one candidate has one thread now       |
+| `status`            | TEXT    | `drafting`, `needs_review`, `changes_requested`, `approved`, `rejected`, `posted`, or `cancelled` |
+| `operator_notes`    | TEXT    | Optional operator context, default empty string                                                   |
+| `reviewer_notes`    | TEXT    | Optional reviewer notes, default empty string                                                     |
+| `approved_at`       | TEXT    | Nullable approval timestamp                                                                       |
+| `rejected_at`       | TEXT    | Nullable rejection timestamp                                                                      |
+| `posted_at`         | TEXT    | Nullable manual posted timestamp                                                                  |
+| `created_at`        | TEXT    | SQLite datetime                                                                                   |
+| `updated_at`        | TEXT    | SQLite datetime                                                                                   |
+
+Constraints: unique `candidate_post_id` and checked status values.
+
+Indexes: `idx_comment_threads_campaign_id`, `idx_comment_threads_candidate_post_id`, `idx_comment_threads_status`, `idx_comment_threads_updated_at`.
+
+### `comment_variants`
+
+Stores one to three operator-written reply options for a comment thread.
+
+| Column              | Type    | Notes                                           |
+| ------------------- | ------- | ----------------------------------------------- |
+| `id`                | INTEGER | Primary key                                     |
+| `comment_thread_id` | INTEGER | References `comment_threads(id)` cascade delete |
+| `variant_number`    | INTEGER | `1` through `3`, unique per comment thread      |
+| `body`              | TEXT    | Required local comment draft                    |
+| `status`            | TEXT    | `draft`, `selected`, or `rejected`              |
+| `created_at`        | TEXT    | SQLite datetime                                 |
+| `updated_at`        | TEXT    | SQLite datetime                                 |
+
+Constraints: unique `(comment_thread_id, variant_number)`, checked variant number range, and checked status values.
+
+Indexes: `idx_comment_variants_thread_id`, `idx_comment_variants_status`.
+
+### `comment_audits`
+
+Stores deterministic local audit findings for comment variants.
+
+| Column               | Type    | Notes                                            |
+| -------------------- | ------- | ------------------------------------------------ |
+| `id`                 | INTEGER | Primary key                                      |
+| `comment_variant_id` | INTEGER | References `comment_variants(id)` cascade delete |
+| `rule_key`           | TEXT    | Deterministic audit rule identifier              |
+| `severity`           | TEXT    | `pass`, `warning`, or `block`                    |
+| `message`            | TEXT    | Operator-facing finding message                  |
+| `created_at`         | TEXT    | SQLite datetime                                  |
+
+Constraints: checked severity values.
+
+Indexes: `idx_comment_audits_variant_id`, `idx_comment_audits_severity`.
+
+### `comment_attempts`
+
+Stores manual LinkedIn comment posting outcomes. Successful rows include a comment URL or platform comment ID; failed rows include an error message.
+
+| Column                 | Type    | Notes                                             |
+| ---------------------- | ------- | ------------------------------------------------- |
+| `id`                   | INTEGER | Primary key                                       |
+| `comment_thread_id`    | INTEGER | References `comment_threads(id)` cascade delete   |
+| `platform`             | TEXT    | Defaults to `linkedin`, constrained to `linkedin` |
+| `status`               | TEXT    | `succeeded` or `failed`                           |
+| `external_comment_url` | TEXT    | Optional posted LinkedIn comment URL              |
+| `platform_comment_id`  | TEXT    | Optional LinkedIn/platform comment ID             |
+| `error_message`        | TEXT    | Optional failure reason                           |
+| `created_at`           | TEXT    | SQLite datetime                                   |
+
+Constraints: checked platform and checked status values.
+
+Indexes: `idx_comment_attempts_thread_id`, `idx_comment_attempts_status`, `idx_comment_attempts_created_at`.
+
 ### `post_metrics`
 
 Stores manual LinkedIn metric snapshots for published approvals.
@@ -463,4 +539,4 @@ Indexes: `idx_error_queue_items_campaign_id`, `idx_error_queue_items_source`, `i
 
 ## Reserved future tables
 
-Future slices will add their own migrations for comment/reply automation and any external integrations.
+Future slices will add their own migrations for external integrations and automation tables.

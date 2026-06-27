@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FileText,
   ListChecks,
+  MessageCircle,
   ShieldAlert,
   Target,
   Workflow,
@@ -20,6 +21,7 @@ import { AgentRuntimeView } from "@/features/agent-runtime";
 import { ApprovalsView } from "@/features/approvals";
 import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
 import { CandidateQueueView } from "@/features/candidate-queue";
+import { CommentsView } from "@/features/comments";
 import { DraftsView } from "@/features/drafts";
 import { MetricsView } from "@/features/metrics";
 import { SafetyView } from "@/features/safety";
@@ -30,6 +32,7 @@ type HomeTab =
   | "queue"
   | "drafts"
   | "approvals"
+  | "comments"
   | "metrics"
   | "workflows"
   | "agents"
@@ -76,6 +79,14 @@ const tabs: RoadmapTab[] = [
     icon: CheckCircle2,
     enabled: true,
     docHref: "docs/features/approvals.md",
+  },
+  {
+    id: "comments",
+    label: "Comments",
+    description: "Approval-gated local reply drafting and history.",
+    icon: MessageCircle,
+    enabled: true,
+    docHref: "docs/features/comments.md",
   },
   {
     id: "metrics",
@@ -183,6 +194,8 @@ export function HomePage(): React.ReactNode {
             <DraftsView />
           ) : activeRoadmapTab.id === "approvals" ? (
             <ApprovalsView />
+          ) : activeRoadmapTab.id === "comments" ? (
+            <CommentsView />
           ) : activeRoadmapTab.id === "metrics" ? (
             <MetricsView />
           ) : activeRoadmapTab.id === "workflows" ? (
