@@ -4,6 +4,7 @@ pub mod campaigns;
 pub mod candidate_queue;
 pub mod comments;
 pub mod drafts;
+pub mod integrations;
 pub mod metrics;
 pub mod safety;
 pub mod workflows;
@@ -20,5 +21,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(agent_runtime::migrations());
     migrations.extend(safety::migrations());
     migrations.extend(comments::migrations());
+    migrations.extend(integrations::migrations());
     migrations
 }

@@ -182,6 +182,8 @@ export interface AgentLoopOptions {
   tools: AgentToolRegistry;
   request: AgentModelRequest;
   maxIterations?: number;
+  maxRetries?: number;
+  signal?: AbortSignal;
   onProgress?: (event: AgentProgressEvent) => Promise<void> | void;
 }
 
@@ -195,10 +197,18 @@ export interface AgentLoopToolCallResult {
   errorMessage: string;
 }
 
+export interface AgentLoopUsage {
+  inputTokens: number;
+  outputTokens: number;
+  providerRequestId: string;
+}
+
 export interface AgentLoopResult {
   status: Extract<AgentRunStatus, "completed" | "waiting_approval" | "failed">;
   outputSummary: string;
   iterationCount: number;
   toolCalls: AgentLoopToolCallResult[];
   errorMessage: string;
+  retryCount: number;
+  usage: AgentLoopUsage;
 }

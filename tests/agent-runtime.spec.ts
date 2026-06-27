@@ -7,7 +7,9 @@ test.beforeEach(async ({ page }) => {
 
 test.setTimeout(90_000);
 
-test("renders six typed tool contracts with approval metadata", async ({ page }) => {
+test("renders six typed tool contracts with approval metadata", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
@@ -29,7 +31,9 @@ test("renders six typed tool contracts with approval metadata", async ({ page })
   await expect(page.getByText("No agent runs yet")).toBeVisible();
 });
 
-test("persists a completed dry-run with tool calls and events", async ({ page }) => {
+test("persists a completed dry-run with tool calls and events", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
@@ -50,6 +54,35 @@ test("persists a completed dry-run with tool calls and events", async ({ page })
   expect(counts.agentToolCalls).toBe(1);
   expect(counts.agentRunEvents).toBeGreaterThanOrEqual(5);
   expect(toolCalls[0]?.provider_tool_call_id).toBe("dry-run-1-tool-call-2");
+});
+
+test("keeps provider-backed agent runs queued until native execution lands", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: "Connect" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "OpenAI connection" });
+  await dialog.getByLabel("OpenAI API key").fill("sk-test-openai-key");
+  await dialog.getByLabel("Account label").fill("Runtime OpenAI");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Connected").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "openai");
+
+  await expect(page.getByRole("button", { name: "Start openai" })).toBeHidden();
+  await expect(
+    page.getByText("Provider runs require native execution before starting."),
+  ).toBeVisible();
+
+  const runs = await getAgentRuns(page);
+  expect(runs[0]?.status).toBe("queued");
 });
 
 test("stops schedule dry-run at waiting approval without publishing", async ({
@@ -90,9 +123,11 @@ test("blocks archived campaign agent runtime mutations", async ({ page }) => {
     page.getByText("Archived campaigns keep agent runtime history visible"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create dry-run" }).first(),
+    page.getByRole("button", { name: "Create run" }).first(),
   ).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Start dry-run" })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Start dry-run" }),
+  ).toBeHidden();
 
   await page.waitForFunction(
     () => "__LINKGO_AGENT_RUNTIME_TEST_API__" in window,
@@ -110,7 +145,10 @@ test("blocks archived campaign agent runtime mutations", async ({ page }) => {
     ).__LINKGO_AGENT_RUNTIME_TEST_API__;
 
     if (agentRuntimeTestApi === undefined) {
-      return { ok: false, message: "Agent runtime test API was not initialized" };
+      return {
+        ok: false,
+        message: "Agent runtime test API was not initialized",
+      };
     }
 
     try {
@@ -151,6 +189,25 @@ async function getStateCounts(page: Page): Promise<Record<string, number>> {
     ).__LINKGO_SQL_STATE_COUNTS__;
     if (counter === undefined) throw new Error("SQL state counts unavailable");
     return counter();
+  });
+}
+
+async function getAgentRuns(
+  page: Page,
+): Promise<Array<{ status: string; error_message: string }>> {
+  return page.evaluate(() => {
+    const getRuns = (
+      window as unknown as {
+        __LINKGO_SQL_AGENT_RUNS__?: () => Array<{
+          status: string;
+          error_message: string;
+        }>;
+      }
+    ).__LINKGO_SQL_AGENT_RUNS__;
+    if (getRuns === undefined) {
+      throw new Error("SQL agent runs unavailable");
+    }
+    return getRuns();
   });
 }
 
@@ -198,18 +255,33 @@ async function createCampaign(page: Page): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
+async function createProviderRun(
+  page: Page,
+  providerKey: "openai" | "anthropic" | "google" | "custom",
+): Promise<void> {
+  await page.getByRole("button", { name: "Create run" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Create agent run" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Provider").selectOption(providerKey);
+  await dialog
+    .getByLabel("Input summary")
+    .fill("Validate provider-backed runtime credentials.");
+  await dialog.getByRole("button", { name: "Create run" }).click();
+  await expect(dialog).toBeHidden();
+}
+
 async function createDryRun(
   page: Page,
   role: "researcher" | "scheduler" = "researcher",
 ): Promise<void> {
-  await page.getByRole("button", { name: "Create dry-run" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create dry-run agent run" });
+  await page.getByRole("button", { name: "Create run" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Create agent run" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Agent role").selectOption(role);
   await dialog
     .getByLabel("Input summary")
     .fill("Validate runtime contracts for this campaign.");
-  await dialog.getByRole("button", { name: "Create dry-run" }).click();
+  await dialog.getByRole("button", { name: "Create run" }).click();
   await expect(dialog).toBeHidden();
 }
 

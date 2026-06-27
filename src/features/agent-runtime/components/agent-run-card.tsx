@@ -18,7 +18,8 @@ interface AgentRunCardProps {
   selectedCampaignArchived: boolean;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
-  onStartDryRun: (input: StartAgentRunInput) => Promise<void>;
+  providerConnected: boolean;
+  onStartRun: (input: StartAgentRunInput) => Promise<void>;
   onCancelRun: (input: CancelAgentRunInput) => Promise<void>;
 }
 
@@ -33,15 +34,16 @@ export function AgentRunCard({
   selectedCampaignArchived,
   killSwitchEnabled,
   killSwitchReason,
-  onStartDryRun,
+  providerConnected,
+  onStartRun,
   onCancelRun,
 }: AgentRunCardProps): React.ReactNode {
+  const startableStatus = ["queued", "failed"].includes(run.status);
   const canStart =
-    ["queued", "failed"].includes(run.status) && !killSwitchEnabled;
-  const startBlockedByKillSwitch =
-    ["queued", "failed"].includes(run.status) &&
-    run.provider_key === "dry_run" &&
-    killSwitchEnabled;
+    startableStatus && !killSwitchEnabled && run.provider_key === "dry_run";
+  const startBlockedByKillSwitch = startableStatus && killSwitchEnabled;
+  const nativeProviderPending =
+    startableStatus && !killSwitchEnabled && run.provider_key !== "dry_run";
   const canCancel = !terminalStatuses.includes(run.status);
 
   return (
@@ -86,14 +88,24 @@ export function AgentRunCard({
           </div>
           {!selectedCampaignArchived && (
             <div className="flex shrink-0 flex-wrap gap-2">
-              {canStart && run.provider_key === "dry_run" && (
+              {canStart && (
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => void onStartDryRun({ id: run.id })}
+                  onClick={() => void onStartRun({ id: run.id })}
                 >
-                  Start dry-run
+                  {run.provider_key === "dry_run"
+                    ? "Start dry-run"
+                    : `Start ${run.provider_key}`}
                 </Button>
+              )}
+              {nativeProviderPending && (
+                <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
+                  Provider runs require native execution before starting.
+                  {!providerConnected
+                    ? ` Connect ${run.provider_key} first.`
+                    : ""}
+                </p>
               )}
               {startBlockedByKillSwitch && (
                 <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
@@ -125,7 +137,7 @@ export function AgentRunCard({
           <CardContent>
             {run.toolCalls.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No tool calls yet. Start the dry-run to persist validated calls.
+                No tool calls yet. Start the run to persist validated calls.
               </p>
             ) : (
               <div className="space-y-3">

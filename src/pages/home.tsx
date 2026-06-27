@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   Bot,
+  KeyRound,
   CheckCircle2,
   FileText,
   ListChecks,
@@ -23,6 +24,7 @@ import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
 import { CandidateQueueView } from "@/features/candidate-queue";
 import { CommentsView } from "@/features/comments";
 import { DraftsView } from "@/features/drafts";
+import { IntegrationsView } from "@/features/integrations";
 import { MetricsView } from "@/features/metrics";
 import { SafetyView } from "@/features/safety";
 import { WorkflowsView } from "@/features/workflows";
@@ -36,6 +38,7 @@ type HomeTab =
   | "metrics"
   | "workflows"
   | "agents"
+  | "integrations"
   | "safety";
 
 type RoadmapTab = {
@@ -111,6 +114,14 @@ const tabs: RoadmapTab[] = [
     icon: Bot,
     enabled: true,
     docHref: "docs/features/agent-runtime.md",
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    description: "AI credentials and LinkedIn OAuth foundation.",
+    icon: KeyRound,
+    enabled: true,
+    docHref: "docs/features/integrations.md",
   },
   {
     id: "safety",
@@ -202,6 +213,8 @@ export function HomePage(): React.ReactNode {
             <WorkflowsView />
           ) : activeRoadmapTab.id === "agents" ? (
             <AgentRuntimeView />
+          ) : activeRoadmapTab.id === "integrations" ? (
+            <IntegrationsView />
           ) : (
             <SafetyView />
           )}

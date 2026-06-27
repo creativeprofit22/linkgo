@@ -78,7 +78,9 @@ mod tests {
 
         assert_eq!(migration.version, 5);
         assert_eq!(migration.description, "create_metrics_learning");
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS post_metrics"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS post_metrics"));
         assert!(migration
             .sql
             .contains("CREATE TABLE IF NOT EXISTS campaign_memory"));
@@ -95,9 +97,9 @@ mod tests {
         assert!(migration
             .sql
             .contains("CHECK(ctr IS NULL OR (ctr >= 0 AND ctr <= 100))"));
-        assert!(migration.sql.contains(
-            "CHECK(signal IN ('winner', 'underperformer', 'insight', 'avoid'))"
-        ));
+        assert!(migration
+            .sql
+            .contains("CHECK(signal IN ('winner', 'underperformer', 'insight', 'avoid'))"));
         assert!(migration
             .sql
             .contains("CHECK(status IN ('active', 'archived'))"));
@@ -109,9 +111,7 @@ mod tests {
             .contains("idx_post_metrics_publish_attempt_id"));
         assert!(migration.sql.contains("idx_post_metrics_measured_at"));
         assert!(migration.sql.contains("idx_campaign_memory_campaign_id"));
-        assert!(migration
-            .sql
-            .contains("idx_campaign_memory_post_metric_id"));
+        assert!(migration.sql.contains("idx_campaign_memory_post_metric_id"));
         assert!(migration.sql.contains("idx_campaign_memory_signal"));
         assert!(migration.sql.contains("idx_campaign_memory_status"));
         assert!(migration.sql.contains("idx_learning_events_campaign_id"));

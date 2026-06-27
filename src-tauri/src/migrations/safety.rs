@@ -79,23 +79,49 @@ mod tests {
 
         assert_eq!(migration.version, 8);
         assert_eq!(migration.description, "create_safety_observability");
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS safety_settings"));
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS safety_audit_events"));
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS rate_limit_events"));
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS error_queue_items"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS safety_settings"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS safety_audit_events"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS rate_limit_events"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS error_queue_items"));
         assert!(migration.sql.contains("CHECK(id = 1)"));
-        assert!(migration.sql.contains("CHECK(global_kill_switch IN (0, 1))"));
-        assert!(migration.sql.contains("INSERT OR IGNORE INTO safety_settings (id) VALUES (1)"));
+        assert!(migration
+            .sql
+            .contains("CHECK(global_kill_switch IN (0, 1))"));
+        assert!(migration
+            .sql
+            .contains("INSERT OR IGNORE INTO safety_settings (id) VALUES (1)"));
         assert!(migration.sql.contains("CHECK(subject_type IN ('campaign', 'approval', 'schedule_job', 'publish_attempt', 'agent_run', 'workflow_run', 'error_queue_item', 'safety_settings'))"));
         assert!(migration.sql.contains("CHECK(event_type IN ('kill_switch_enabled', 'kill_switch_disabled', 'schedule_allowed', 'schedule_blocked', 'schedule_cancelled', 'publish_succeeded', 'publish_failed', 'approval_rejected', 'agent_run_started', 'agent_run_failed', 'error_item_created', 'error_item_updated'))"));
-        assert!(migration.sql.contains("CHECK(severity IN ('info', 'warning', 'block'))"));
-        assert!(migration.sql.contains("CHECK(action IN ('schedule_post', 'publish_post', 'comment', 'agent_run'))"));
-        assert!(migration.sql.contains("CHECK(decision IN ('allowed', 'blocked'))"));
+        assert!(migration
+            .sql
+            .contains("CHECK(severity IN ('info', 'warning', 'block'))"));
+        assert!(migration.sql.contains(
+            "CHECK(action IN ('schedule_post', 'publish_post', 'comment', 'agent_run'))"
+        ));
+        assert!(migration
+            .sql
+            .contains("CHECK(decision IN ('allowed', 'blocked'))"));
         assert!(migration.sql.contains("CHECK(source_type IN ('approval', 'publish_attempt', 'schedule_job', 'agent_run', 'workflow_run', 'manual'))"));
-        assert!(migration.sql.contains("CHECK(status IN ('open', 'in_progress', 'awaiting_review', 'resolved', 'failed'))"));
-        assert!(migration.sql.contains("REFERENCES campaigns(id) ON DELETE SET NULL"));
-        assert!(migration.sql.contains("REFERENCES campaigns(id) ON DELETE CASCADE"));
-        assert!(migration.sql.contains("idx_safety_audit_events_campaign_id"));
+        assert!(migration.sql.contains(
+            "CHECK(status IN ('open', 'in_progress', 'awaiting_review', 'resolved', 'failed'))"
+        ));
+        assert!(migration
+            .sql
+            .contains("REFERENCES campaigns(id) ON DELETE SET NULL"));
+        assert!(migration
+            .sql
+            .contains("REFERENCES campaigns(id) ON DELETE CASCADE"));
+        assert!(migration
+            .sql
+            .contains("idx_safety_audit_events_campaign_id"));
         assert!(migration.sql.contains("idx_safety_audit_events_subject"));
         assert!(migration.sql.contains("idx_safety_audit_events_event_type"));
         assert!(migration.sql.contains("idx_safety_audit_events_severity"));

@@ -1,7 +1,8 @@
 import {
   AGENT_TOOL_METADATA,
   agentToolRegistry,
-  createDryRunProvider,
+  buildAgentMessages,
+  createConfiguredAgentProvider,
   runAgentLoop,
   type AgentProgressEvent,
   type AgentToolMetadata,
@@ -396,9 +397,7 @@ export async function createAgentRun(
   }
 }
 
-export async function startDryRunAgentRun(
-  input: StartAgentRunInput,
-): Promise<void> {
+export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
   const parsed = startAgentRunSchema.parse(input);
   const db = await getDb();
 
@@ -406,7 +405,9 @@ export async function startDryRunAgentRun(
   if (run.campaign_status === "archived")
     throw new Error("Campaign is archived");
   if (run.provider_key !== "dry_run") {
-    throw new Error("Only dry-run agent runs can be started");
+    throw new Error(
+      "Provider-backed agent runs require native execution before starting",
+    );
   }
   if (["completed", "cancelled"].includes(run.status)) {
     throw new Error("Terminal agent runs cannot be restarted");
@@ -419,7 +420,7 @@ export async function startDryRunAgentRun(
     campaignId: run.campaign_id,
     subjectType: "agent_run",
     subjectId: run.id,
-    summary: "Agent dry run start",
+    summary: "Agent run start",
   });
 
   await db.execute("BEGIN TRANSACTION");
@@ -444,11 +445,14 @@ export async function startDryRunAgentRun(
       subjectId: run.id,
       eventType: "agent_run_started",
       severity: "info",
-      summary: "Agent dry run started",
+      summary: "Agent run started",
       metadata: { agentRole: run.agent_role },
     });
 
-    const provider = createDryRunProvider(run.model_name || "dry-run-local");
+    const provider = createConfiguredAgentProvider(
+      run.provider_key,
+      run.model_name || undefined,
+    );
     const result = await runAgentLoop({
       provider,
       tools: agentToolRegistry,
@@ -459,14 +463,13 @@ export async function startDryRunAgentRun(
         workflowStepId: run.workflow_step_id,
         agentRole: run.agent_role,
         inputSummary: run.input_summary,
-        messages: [
-          {
-            role: "user",
-            content: run.input_summary || "Validate runtime contracts locally.",
-          },
-        ],
+        messages: buildAgentMessages(run.agent_role, {
+          inputSummary:
+            run.input_summary || "Validate runtime contracts locally.",
+        }),
       },
       maxIterations: 8,
+      maxRetries: run.provider_key === "dry_run" ? 0 : 1,
       onProgress: (event) => recordProgressEvent(db, run.id, event),
     });
 
@@ -508,7 +511,7 @@ export async function startDryRunAgentRun(
         subjectId: run.id,
         eventType: "agent_run_failed",
         severity: "warning",
-        summary: result.errorMessage || "Agent dry run failed",
+        summary: result.errorMessage || "Agent run failed",
         metadata: { iterationCount: result.iterationCount },
       });
       await upsertErrorQueueItem(db, {
@@ -516,7 +519,7 @@ export async function startDryRunAgentRun(
         sourceType: "agent_run",
         sourceId: run.id,
         title: "Agent run failed",
-        detail: result.errorMessage || "Agent dry run failed",
+        detail: result.errorMessage || "Agent run failed",
         severity: "error",
       });
     }
@@ -526,6 +529,12 @@ export async function startDryRunAgentRun(
     await rollbackAgentRuntimeTransaction(db);
     throw error;
   }
+}
+
+export async function startDryRunAgentRun(
+  input: StartAgentRunInput,
+): Promise<void> {
+  return startAgentRun(input);
 }
 
 export async function cancelAgentRun(
@@ -592,12 +601,14 @@ if (IS_TEST && typeof window !== "undefined") {
     window as unknown as {
       __LINKGO_AGENT_RUNTIME_TEST_API__?: {
         createAgentRun: typeof createAgentRun;
+        startAgentRun: typeof startAgentRun;
         startDryRunAgentRun: typeof startDryRunAgentRun;
         cancelAgentRun: typeof cancelAgentRun;
       };
     }
   ).__LINKGO_AGENT_RUNTIME_TEST_API__ = {
     createAgentRun,
+    startAgentRun,
     startDryRunAgentRun,
     cancelAgentRun,
   };

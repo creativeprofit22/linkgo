@@ -17,6 +17,8 @@ interface WorkflowRunCardProps {
   run: WorkflowRunWithDetails;
   selectedCampaignArchived: boolean;
   onStartRun: (input: StartWorkflowRunInput) => Promise<void>;
+  onExecuteRun: (input: StartWorkflowRunInput) => Promise<void>;
+  onResumeRun: (input: StartWorkflowRunInput) => Promise<void>;
   onCancelRun: (input: CancelWorkflowRunInput) => Promise<void>;
   onSetStepStatus: (input: SetWorkflowStepStatusInput) => Promise<void>;
   onAddNote: (input: AddWorkflowNoteInput) => Promise<void>;
@@ -28,6 +30,8 @@ export function WorkflowRunCard({
   run,
   selectedCampaignArchived,
   onStartRun,
+  onExecuteRun,
+  onResumeRun,
   onCancelRun,
   onSetStepStatus,
   onAddNote,
@@ -35,6 +39,8 @@ export function WorkflowRunCard({
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const canStart = ["queued", "blocked", "failed"].includes(run.status);
+  const canExecute = ["queued", "running"].includes(run.status);
+  const canResume = ["blocked", "failed"].includes(run.status);
   const canCancel = !terminalStatuses.includes(run.status);
 
   async function handleAddNote(): Promise<void> {
@@ -83,6 +89,26 @@ export function WorkflowRunCard({
                   onClick={() => void onStartRun({ id: run.id })}
                 >
                   Start run
+                </Button>
+              )}
+              {canExecute && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void onExecuteRun({ id: run.id })}
+                >
+                  Run executor
+                </Button>
+              )}
+              {canResume && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void onResumeRun({ id: run.id })}
+                >
+                  Resume executor
                 </Button>
               )}
               {canCancel && (

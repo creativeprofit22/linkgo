@@ -763,8 +763,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(agentRuns, snapshot.agentRuns);
       restoreRows(agentToolCalls, snapshot.agentToolCalls);
       restoreRows(agentRunEvents, snapshot.agentRunEvents);
-      safetySettings.global_kill_switch = snapshot.safetySettings.global_kill_switch;
-      safetySettings.kill_switch_reason = snapshot.safetySettings.kill_switch_reason;
+      safetySettings.global_kill_switch =
+        snapshot.safetySettings.global_kill_switch;
+      safetySettings.kill_switch_reason =
+        snapshot.safetySettings.kill_switch_reason;
       safetySettings.updated_at = snapshot.safetySettings.updated_at;
       restoreRows(safetyAuditEvents, snapshot.safetyAuditEvents);
       restoreRows(rateLimitEvents, snapshot.rateLimitEvents);
@@ -1180,7 +1182,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return publishAttempts
         .filter(
           (attempt) =>
-            attempt.approval_id === approvalId && attempt.status === "succeeded",
+            attempt.approval_id === approvalId &&
+            attempt.status === "succeeded",
         )
         .sort((left, right) => {
           const createdDelta = right.created_at.localeCompare(left.created_at);
@@ -1237,9 +1240,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         )
         .map((approval) => {
           const base = getMetricJoinBase(approval);
-          const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+          const campaign = campaigns.find(
+            (row) => row.id === approval.campaign_id,
+          );
           const publishAttempt = getLatestSuccessfulPublishAttempt(approval.id);
-          if (!base || !campaign || campaign.status === "archived" || !publishAttempt) {
+          if (
+            !base ||
+            !campaign ||
+            campaign.status === "archived" ||
+            !publishAttempt
+          ) {
             return null;
           }
           return {
@@ -1267,10 +1277,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           (metric) => campaignId === null || metric.campaign_id === campaignId,
         )
         .map((metric) => {
-          const approval = approvals.find((row) => row.id === metric.approval_id);
+          const approval = approvals.find(
+            (row) => row.id === metric.approval_id,
+          );
           const base = approval ? getMetricJoinBase(approval) : null;
           const publishAttempt = metric.publish_attempt_id
-            ? publishAttempts.find((row) => row.id === metric.publish_attempt_id)
+            ? publishAttempts.find(
+                (row) => row.id === metric.publish_attempt_id,
+              )
             : undefined;
           if (!approval || !base) return null;
           return {
@@ -1278,7 +1292,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             ...base,
             id: metric.id,
             approval_status: approval.status,
-            publish_external_post_url: publishAttempt?.external_post_url ?? null,
+            publish_external_post_url:
+              publishAttempt?.external_post_url ?? null,
             publish_platform_post_id: publishAttempt?.platform_post_id ?? null,
             publish_created_at: publishAttempt?.created_at ?? null,
           };
@@ -1356,7 +1371,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             cancelled: 7,
           };
           const statusDelta =
-            (order[String(left.status)] ?? 8) - (order[String(right.status)] ?? 8);
+            (order[String(left.status)] ?? 8) -
+            (order[String(right.status)] ?? 8);
           if (statusDelta !== 0) return statusDelta;
           const updatedDelta = String(right.updated_at).localeCompare(
             String(left.updated_at),
@@ -1450,7 +1466,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             cancelled: 6,
           };
           const statusDelta =
-            (order[String(left.status)] ?? 7) - (order[String(right.status)] ?? 7);
+            (order[String(left.status)] ?? 7) -
+            (order[String(right.status)] ?? 7);
           if (statusDelta !== 0) return statusDelta;
           const updatedDelta = String(right.updated_at).localeCompare(
             String(left.updated_at),
@@ -1500,9 +1517,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
     }
 
-    function selectCommentCandidateRow(candidate: CandidatePost): Record<string, unknown> | null {
-      const campaign = campaigns.find((row) => row.id === candidate.campaign_id);
-      const target = targetPosts.find((row) => row.id === candidate.target_post_id);
+    function selectCommentCandidateRow(
+      candidate: CandidatePost,
+    ): Record<string, unknown> | null {
+      const campaign = campaigns.find(
+        (row) => row.id === candidate.campaign_id,
+      );
+      const target = targetPosts.find(
+        (row) => row.id === candidate.target_post_id,
+      );
       if (!campaign || !target) return null;
       return {
         candidate_id: candidate.id,
@@ -1524,9 +1547,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function selectCommentThreads(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return commentThreads
-        .filter((thread) => campaignId === null || thread.campaign_id === campaignId)
+        .filter(
+          (thread) => campaignId === null || thread.campaign_id === campaignId,
+        )
         .map((thread) => {
-          const campaign = campaigns.find((row) => row.id === thread.campaign_id);
+          const campaign = campaigns.find(
+            (row) => row.id === thread.campaign_id,
+          );
           const candidate = candidatePosts.find(
             (row) => row.id === thread.candidate_post_id,
           );
@@ -1574,7 +1601,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return candidatePosts
         .filter((candidate) => {
-          const campaign = campaigns.find((row) => row.id === candidate.campaign_id);
+          const campaign = campaigns.find(
+            (row) => row.id === candidate.campaign_id,
+          );
           const existingThread = commentThreads.find(
             (thread) => thread.candidate_post_id === candidate.id,
           );
@@ -1587,7 +1616,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         })
         .map(selectCommentCandidateRow)
         .filter((row): row is Record<string, unknown> => row !== null)
-        .sort((left, right) => Number(right.candidate_id) - Number(left.candidate_id));
+        .sort(
+          (left, right) =>
+            Number(right.candidate_id) - Number(left.candidate_id),
+        );
     }
 
     function selectCommentThreadValidation(values: unknown[]): unknown[] {
@@ -1614,13 +1646,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return commentVariants
         .filter(
           (variant) =>
-            variant.comment_thread_id === threadId && variant.status === "selected",
+            variant.comment_thread_id === threadId &&
+            variant.status === "selected",
         )
         .map((variant) => ({
           ...variant,
           blocked_count: commentAudits.filter(
             (audit) =>
-              audit.comment_variant_id === variant.id && audit.severity === "block",
+              audit.comment_variant_id === variant.id &&
+              audit.severity === "block",
           ).length,
         }));
     }
@@ -1628,7 +1662,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function selectSafetyErrorQueue(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return errorQueueItems
-        .filter((item) => campaignId === null || item.campaign_id === campaignId)
+        .filter(
+          (item) => campaignId === null || item.campaign_id === campaignId,
+        )
         .map((item) => {
           const campaign = item.campaign_id
             ? campaigns.find((row) => row.id === item.campaign_id)
@@ -1642,7 +1678,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         .sort((left, right) => {
           const leftResolved = left.status === "resolved" ? 1 : 0;
           const rightResolved = right.status === "resolved" ? 1 : 0;
-          if (leftResolved !== rightResolved) return leftResolved - rightResolved;
+          if (leftResolved !== rightResolved)
+            return leftResolved - rightResolved;
           const updatedDelta = right.updated_at.localeCompare(left.updated_at);
           if (updatedDelta !== 0) return updatedDelta;
           return right.id - left.id;
@@ -1653,7 +1690,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function selectRateLimitEvents(values: unknown[]): RateLimitEvent[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return rateLimitEvents
-        .filter((event) => campaignId === null || event.campaign_id === campaignId)
+        .filter(
+          (event) => campaignId === null || event.campaign_id === campaignId,
+        )
         .sort((left, right) => {
           const createdDelta = right.created_at.localeCompare(left.created_at);
           if (createdDelta !== 0) return createdDelta;
@@ -1665,7 +1704,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function selectSafetyAuditEvents(values: unknown[]): SafetyAuditEvent[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return safetyAuditEvents
-        .filter((event) => campaignId === null || event.campaign_id === campaignId)
+        .filter(
+          (event) => campaignId === null || event.campaign_id === campaignId,
+        )
         .sort((left, right) => {
           const createdDelta = right.created_at.localeCompare(left.created_at);
           if (createdDelta !== 0) return createdDelta;
@@ -1735,7 +1776,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               (item) =>
                 ["open", "in_progress", "awaiting_review"].includes(
                   item.status,
-                ) && (campaignId === null || item.campaign_id === campaignId),
+                ) &&
+                (campaignId === null || item.campaign_id === campaignId),
             ).length,
           },
         ];
@@ -1763,7 +1805,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         query.includes("FROM comment_attempts ca")
       ) {
         const campaignId = Number(values[0] ?? 0);
-        const day = String(values[1] ?? "").trim().slice(0, 10);
+        const day = String(values[1] ?? "")
+          .trim()
+          .slice(0, 10);
         return [
           {
             count: commentAttempts.filter((attempt) => {
@@ -1800,7 +1844,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return [
           {
             count: safetyAuditEvents.filter(
-              (event) => campaignId === null || event.campaign_id === campaignId,
+              (event) =>
+                campaignId === null || event.campaign_id === campaignId,
             ).length,
           },
         ];
@@ -1826,7 +1871,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return selectRateLimitEvents(values);
       }
       if (query.includes("FROM comment_threads ct")) {
-        if (query.includes("WHERE ct.id = $1")) return selectCommentThreadValidation(values);
+        if (query.includes("WHERE ct.id = $1"))
+          return selectCommentThreadValidation(values);
         return selectCommentThreads(values);
       }
       if (
@@ -1842,7 +1888,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       ) {
         const candidateId = Number(values[0] ?? 0);
         const candidate = candidatePosts.find((row) => row.id === candidateId);
-        return candidate ? [selectCommentCandidateRow(candidate)].filter(Boolean) : [];
+        return candidate
+          ? [selectCommentCandidateRow(candidate)].filter(Boolean)
+          : [];
       }
       if (query.includes("FROM comment_variants")) {
         if (query.includes("cv.status = 'selected'")) {
@@ -1863,7 +1911,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const ids = new Set(
           values.filter((value): value is number => typeof value === "number"),
         );
-        return commentAudits.filter((audit) => ids.has(audit.comment_variant_id));
+        return commentAudits.filter((audit) =>
+          ids.has(audit.comment_variant_id),
+        );
       }
       if (query.includes("FROM comment_attempts")) {
         const ids = new Set(
@@ -1872,7 +1922,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return commentAttempts
           .filter((attempt) => ids.has(attempt.comment_thread_id))
           .sort((left, right) => {
-            const createdDelta = right.created_at.localeCompare(left.created_at);
+            const createdDelta = right.created_at.localeCompare(
+              left.created_at,
+            );
             if (createdDelta !== 0) return createdDelta;
             return right.id - left.id;
           });
@@ -1910,7 +1962,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       ) {
         if (query.includes("INNER JOIN approvals a")) {
           const campaignId = Number(values[0] ?? 0);
-          const scheduledDay = String(values[1] ?? "").trim().slice(0, 10);
+          const scheduledDay = String(values[1] ?? "")
+            .trim()
+            .slice(0, 10);
           const statusMatches = query.match(/sj\.status IN \(([^)]*)\)/);
           const statuses = statusMatches
             ? statusMatches[1]
@@ -2008,14 +2062,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const campaignId = typeof values[0] === "number" ? values[0] : null;
         return campaignMemory
           .filter(
-            (memory) => campaignId === null || memory.campaign_id === campaignId,
+            (memory) =>
+              campaignId === null || memory.campaign_id === campaignId,
           )
           .sort((left, right) => {
             const leftArchived = left.status === "archived" ? 1 : 0;
             const rightArchived = right.status === "archived" ? 1 : 0;
             if (leftArchived !== rightArchived)
               return leftArchived - rightArchived;
-            const updatedDelta = right.updated_at.localeCompare(left.updated_at);
+            const updatedDelta = right.updated_at.localeCompare(
+              left.updated_at,
+            );
             if (updatedDelta !== 0) return updatedDelta;
             return right.id - left.id;
           });
@@ -2027,7 +2084,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             (event) => campaignId === null || event.campaign_id === campaignId,
           )
           .sort((left, right) => {
-            const createdDelta = right.created_at.localeCompare(left.created_at);
+            const createdDelta = right.created_at.localeCompare(
+              left.created_at,
+            );
             if (createdDelta !== 0) return createdDelta;
             return right.id - left.id;
           });
@@ -2036,7 +2095,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const id = Number(values[0] ?? 0);
         return postMetrics
           .filter((metric) => metric.id === id)
-          .map((metric) => ({ id: metric.id, campaign_id: metric.campaign_id }));
+          .map((metric) => ({
+            id: metric.id,
+            campaign_id: metric.campaign_id,
+          }));
       }
       if (
         query.includes("FROM approvals a") &&
@@ -2549,7 +2611,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           id: nextPostMetricId,
           campaign_id: Number(values[0] ?? 0),
           approval_id: Number(values[1] ?? 0),
-          publish_attempt_id: values[2] === null ? null : Number(values[2] ?? 0),
+          publish_attempt_id:
+            values[2] === null ? null : Number(values[2] ?? 0),
           platform: "linkedin",
           measured_at: String(values[3] ?? ""),
           impressions: Number(values[4] ?? 0),
@@ -2719,9 +2782,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("UPDATE agent_runs")) {
         const literalRunning = query.includes("status = 'running'");
         const literalCancelled = query.includes("status = 'cancelled'");
-        const id = literalRunning || literalCancelled
-          ? Number(values[0] ?? 0)
-          : Number(values[4] ?? 0);
+        const id =
+          literalRunning || literalCancelled
+            ? Number(values[0] ?? 0)
+            : Number(values[4] ?? 0);
         const run = agentRuns.find((row) => row.id === id);
         if (run) {
           if (literalRunning) {
@@ -2782,10 +2846,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       if (query.includes("UPDATE workflow_steps")) {
         const literalRunning = query.includes("status = 'running'");
-        const id = literalRunning ? Number(values[0] ?? 0) : Number(values[3] ?? 0);
+        const id = literalRunning
+          ? Number(values[0] ?? 0)
+          : Number(values[3] ?? 0);
         const step = workflowSteps.find((row) => row.id === id);
         if (step) {
-          const status = literalRunning ? "running" : (values[0] as WorkflowStepStatus);
+          const status = literalRunning
+            ? "running"
+            : (values[0] as WorkflowStepStatus);
           step.status = status;
           if (!literalRunning) {
             step.output_summary = String(values[1] ?? "");
@@ -2839,9 +2907,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             const columns = parseUpdateColumns(query, "comment_threads");
             columns.forEach((column, index) => {
               const value = values[index];
-              if (column === "operator_notes") thread.operator_notes = String(value ?? "");
-              if (column === "reviewer_notes") thread.reviewer_notes = String(value ?? "");
-              if (column === "status") thread.status = value as CommentThreadStatus;
+              if (column === "operator_notes")
+                thread.operator_notes = String(value ?? "");
+              if (column === "reviewer_notes")
+                thread.reviewer_notes = String(value ?? "");
+              if (column === "status")
+                thread.status = value as CommentThreadStatus;
             });
           }
           thread.updated_at = now;
@@ -2855,7 +2926,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           const excludedId = Number(values[1] ?? 0);
           let rowsAffected = 0;
           for (const variant of commentVariants) {
-            if (variant.comment_thread_id === threadId && variant.id !== excludedId) {
+            if (
+              variant.comment_thread_id === threadId &&
+              variant.id !== excludedId
+            ) {
               variant.status = "draft";
               variant.updated_at = now;
               rowsAffected += 1;
@@ -2873,7 +2947,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             columns.forEach((column, index) => {
               const value = values[index];
               if (column === "body") variant.body = String(value ?? "");
-              if (column === "status") variant.status = value as CommentVariantStatus;
+              if (column === "status")
+                variant.status = value as CommentVariantStatus;
             });
           }
           variant.updated_at = now;
@@ -2930,7 +3005,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             item.status = values[0] as ErrorQueueStatus;
             item.resolution_notes = String(values[1] ?? "");
           } else {
-            item.campaign_id = values[0] === null ? null : Number(values[0] ?? 0);
+            item.campaign_id =
+              values[0] === null ? null : Number(values[0] ?? 0);
             item.title = String(values[1] ?? item.title);
             item.detail = String(values[2] ?? item.detail);
             item.severity = values[3] as ErrorQueueSeverity;
@@ -3155,11 +3231,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           .filter((variant) => variant.comment_thread_id === id)
           .map((variant) => variant.id);
         const rowsAffected = removeRows(commentThreads, (row) => row.id === id);
-        removeRows(commentVariants, (variant) => variant.comment_thread_id === id);
+        removeRows(
+          commentVariants,
+          (variant) => variant.comment_thread_id === id,
+        );
         removeRows(commentAudits, (audit) =>
           removedVariantIds.includes(audit.comment_variant_id),
         );
-        removeRows(commentAttempts, (attempt) => attempt.comment_thread_id === id);
+        removeRows(
+          commentAttempts,
+          (attempt) => attempt.comment_thread_id === id,
+        );
         return { lastInsertId: 0, rowsAffected };
       }
 
@@ -3198,7 +3280,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           .filter((thread) => thread.candidate_post_id === id)
           .map((thread) => thread.id);
         const removedCommentVariantIds = commentVariants
-          .filter((variant) => removedCommentThreadIds.includes(variant.comment_thread_id))
+          .filter((variant) =>
+            removedCommentThreadIds.includes(variant.comment_thread_id),
+          )
           .map((variant) => variant.id);
         removeRows(commentThreads, (thread) => thread.candidate_post_id === id);
         removeRows(commentVariants, (variant) =>
@@ -3281,7 +3365,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           .filter((thread) => thread.campaign_id === id)
           .map((thread) => thread.id);
         const removedCommentVariantIds = commentVariants
-          .filter((variant) => removedCommentThreadIds.includes(variant.comment_thread_id))
+          .filter((variant) =>
+            removedCommentThreadIds.includes(variant.comment_thread_id),
+          )
           .map((variant) => variant.id);
         removeRows(commentThreads, (thread) => thread.campaign_id === id);
         removeRows(commentVariants, (variant) =>
@@ -3320,6 +3406,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     }
 
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
+    w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
     w.__LINKGO_SQL_COMMENT_THREADS__ = () => cloneRows(commentThreads);
     w.__LINKGO_SQL_COMMENT_VARIANTS__ = () => cloneRows(commentVariants);
     w.__LINKGO_SQL_COMMENT_AUDITS__ = () => cloneRows(commentAudits);
@@ -3360,6 +3447,77 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       errorQueueItems: errorQueueItems.length,
     });
 
+    const authProviders = [
+      {
+        key: "openai",
+        label: "OpenAI",
+        description:
+          "Provider-backed agent runs for research, drafting, scoring, and audits.",
+        methods: ["api_key"],
+        defaultMethod: "api_key",
+        scopes: [],
+        models: ["gpt-4.1-mini", "gpt-4.1"],
+        secretLabel: "OpenAI API key",
+        docsUrl: "https://platform.openai.com/docs",
+      },
+      {
+        key: "anthropic",
+        label: "Anthropic",
+        description:
+          "Claude-backed agent runs through a native credential boundary.",
+        methods: ["api_key"],
+        defaultMethod: "api_key",
+        scopes: [],
+        models: ["claude-3-5-sonnet-latest"],
+        secretLabel: "Anthropic API key",
+        docsUrl: "https://docs.anthropic.com/",
+      },
+      {
+        key: "google",
+        label: "Gemini",
+        description:
+          "Google Gemini agent runs for non-coding Linkgo workflows.",
+        methods: ["api_key"],
+        defaultMethod: "api_key",
+        scopes: [],
+        models: ["gemini-1.5-flash"],
+        secretLabel: "Gemini API key",
+        docsUrl: "https://ai.google.dev/gemini-api/docs",
+      },
+      {
+        key: "custom",
+        label: "Custom API",
+        description: "OpenAI-compatible provider endpoint for model calls.",
+        methods: ["api_key"],
+        defaultMethod: "api_key",
+        scopes: [],
+        models: ["custom-model"],
+        secretLabel: "Provider API key",
+        docsUrl: "https://platform.openai.com/docs/api-reference",
+      },
+      {
+        key: "linkedin",
+        label: "LinkedIn",
+        description:
+          "3-legged OAuth foundation for future approval-gated posting and comments.",
+        methods: ["oauth"],
+        defaultMethod: "oauth",
+        scopes: ["openid", "profile", "email", "w_member_social"],
+        models: [],
+        secretLabel: "LinkedIn OAuth",
+        docsUrl:
+          "https://learn.microsoft.com/linkedin/shared/authentication/authorization-code-flow",
+      },
+    ];
+    const connectedAccounts: Record<string, unknown>[] = [];
+    function getAuthStatusMock(): Record<string, unknown> {
+      return {
+        providers: authProviders,
+        accounts: cloneRows(connectedAccounts),
+        events: [],
+      };
+    }
+
     const mockWindow = {
       show: () => Promise.resolve(),
       hide: () => Promise.resolve(),
@@ -3394,6 +3552,102 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         if (cmd === "plugin:sql|close") return Promise.resolve(true);
         if (cmd === "plugin:sql|load") return Promise.resolve("");
         if (cmd === "update_tray_menu") return Promise.resolve(null);
+        if (cmd === "linkgo_auth_status")
+          return Promise.resolve(getAuthStatusMock());
+        if (cmd === "linkgo_auth_api_key") {
+          const input =
+            (
+              args as
+                | {
+                    input?: {
+                      providerKey?: string;
+                      provider_key?: string;
+                      apiKey?: string;
+                      api_key?: string;
+                      baseUrl?: string;
+                      base_url?: string;
+                      accountLabel?: string;
+                    };
+                  }
+                | undefined
+            )?.input ?? {};
+          const providerKey =
+            input.providerKey ?? input.provider_key ?? "openai";
+          const provider =
+            authProviders.find((candidate) => candidate.key === providerKey) ??
+            authProviders[0];
+          const existingIndex = connectedAccounts.findIndex(
+            (account) => account.provider_key === providerKey,
+          );
+          const account = {
+            id:
+              existingIndex >= 0
+                ? existingIndex + 1
+                : connectedAccounts.length + 1,
+            provider_key: providerKey,
+            provider_label: provider?.label ?? providerKey,
+            auth_method: "api_key",
+            status: "connected",
+            scopes: "",
+            account_label:
+              input.accountLabel ?? `${provider?.label ?? providerKey} account`,
+            account_id: "",
+            expires_at: null,
+            refresh_expires_at: null,
+            last_checked_at: getNow(),
+            last_error: "",
+            created_at: getNow(),
+            updated_at: getNow(),
+          };
+          if (existingIndex >= 0) connectedAccounts[existingIndex] = account;
+          else connectedAccounts.push(account);
+          return Promise.resolve(getAuthStatusMock());
+        }
+        if (cmd === "linkgo_auth_oauth_start") {
+          return Promise.resolve({
+            providerKey: "linkedin",
+            authUrl:
+              "https://www.linkedin.com/oauth/v2/authorization?response_type=code&state=test-oauth-state&code_challenge=test-pkce-challenge&code_challenge_method=S256",
+            state: "test-oauth-state",
+            needsCode: true,
+          });
+        }
+        if (cmd === "linkgo_auth_oauth_code") {
+          connectedAccounts.push({
+            id: connectedAccounts.length + 1,
+            provider_key: "linkedin",
+            provider_label: "LinkedIn",
+            auth_method: "oauth",
+            status: "connected",
+            scopes: "openid profile email w_member_social",
+            account_label: "LinkedIn member",
+            account_id: "member-1",
+            expires_at: null,
+            refresh_expires_at: null,
+            last_checked_at: getNow(),
+            last_error: "",
+            created_at: getNow(),
+            updated_at: getNow(),
+          });
+          return Promise.resolve(getAuthStatusMock());
+        }
+        if (cmd === "linkgo_auth_logout") {
+          const input =
+            (
+              args as
+                | { input?: { providerKey?: string; provider_key?: string } }
+                | undefined
+            )?.input ?? {};
+          const providerKey =
+            input.providerKey ?? input.provider_key ?? "openai";
+          removeRows(
+            connectedAccounts,
+            (account) => account.provider_key === providerKey,
+          );
+          return Promise.resolve(getAuthStatusMock());
+        }
+        if (cmd === "linkgo_auth_check")
+          return Promise.resolve(getAuthStatusMock());
         return Promise.resolve(null);
       },
       metadata: {

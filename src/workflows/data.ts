@@ -1,5 +1,6 @@
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import { IS_TEST } from "@/lib/env";
+import type { AgentRole } from "@/agent/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import {
   addWorkflowNoteSchema,
@@ -478,6 +479,82 @@ export async function startWorkflowRun(
   }
 }
 
+export async function createWorkflowStepExecution(input: {
+  workflowStepId: number;
+  agentRunId?: number;
+  executorRole: AgentRole;
+}): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute(
+    `INSERT INTO workflow_step_executions (
+      workflow_step_id,
+      agent_run_id,
+      executor_role,
+      attempt_count,
+      status,
+      updated_at
+    ) VALUES (
+      $1,
+      $2,
+      $3,
+      COALESCE((
+        SELECT MAX(attempt_count) + 1
+        FROM workflow_step_executions
+        WHERE workflow_step_id = $1
+      ), 1),
+      'claimed',
+      datetime('now')
+    )`,
+    [input.workflowStepId, input.agentRunId ?? null, input.executorRole],
+  );
+  return result.lastInsertId;
+}
+
+export async function updateWorkflowStepExecution(input: {
+  id: number;
+  agentRunId?: number;
+  status:
+    | "claimed"
+    | "running"
+    | "completed"
+    | "waiting_approval"
+    | "failed"
+    | "blocked"
+    | "cancelled";
+  errorSummary?: string;
+}): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE workflow_step_executions
+    SET agent_run_id = COALESCE($1, agent_run_id),
+      status = $2,
+      error_summary = $3,
+      completed_at = CASE WHEN $2 IN ('completed', 'waiting_approval', 'failed', 'blocked', 'cancelled') THEN datetime('now') ELSE completed_at END,
+      updated_at = datetime('now')
+    WHERE id = $4`,
+    [
+      input.agentRunId ?? null,
+      input.status,
+      input.errorSummary ?? "",
+      input.id,
+    ],
+  );
+}
+
+export async function executeWorkflowRun(
+  input: StartWorkflowRunInput,
+): Promise<void> {
+  const parsed = startWorkflowRunSchema.parse(input);
+  const { runContentPipelineExecutor } = await import("@/workflows/executor");
+  await runContentPipelineExecutor(parsed.id);
+}
+
+export async function resumeWorkflowRun(
+  input: StartWorkflowRunInput,
+): Promise<void> {
+  await executeWorkflowRun(input);
+}
+
 export async function setWorkflowStepStatus(
   input: SetWorkflowStepStatusInput,
 ): Promise<void> {
@@ -656,6 +733,8 @@ if (IS_TEST && typeof window !== "undefined") {
       __LINKGO_WORKFLOWS_TEST_API__?: {
         createWorkflowRun: typeof createWorkflowRun;
         startWorkflowRun: typeof startWorkflowRun;
+        executeWorkflowRun: typeof executeWorkflowRun;
+        resumeWorkflowRun: typeof resumeWorkflowRun;
         setWorkflowStepStatus: typeof setWorkflowStepStatus;
         cancelWorkflowRun: typeof cancelWorkflowRun;
         addWorkflowNote: typeof addWorkflowNote;
@@ -664,6 +743,8 @@ if (IS_TEST && typeof window !== "undefined") {
   ).__LINKGO_WORKFLOWS_TEST_API__ = {
     createWorkflowRun,
     startWorkflowRun,
+    executeWorkflowRun,
+    resumeWorkflowRun,
     setWorkflowStepStatus,
     cancelWorkflowRun,
     addWorkflowNote,

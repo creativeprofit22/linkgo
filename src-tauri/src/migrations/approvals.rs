@@ -72,7 +72,9 @@ mod tests {
 
         assert_eq!(migration.version, 4);
         assert_eq!(migration.description, "create_approvals_scheduler");
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS approvals"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS approvals"));
         assert!(migration
             .sql
             .contains("CREATE TABLE IF NOT EXISTS schedule_jobs"));

@@ -99,12 +99,13 @@ Roadmap coverage:
 
 Implemented now:
 
-- Workflow run, step, and event tables.
+- Workflow run, step, event, and step-execution tables.
 - Manual content pipeline state machine: `research -> score -> draft -> audit -> approve -> schedule -> measure`.
+- Foreground executor controls that launch linked role-specific agent runs and stop at approvals.
 - Workflows tab with campaign filtering, summary cards, step controls, and event history.
 - Archived-campaign mutation blocking.
 
-Background jobs, AI execution, automatic scheduler execution, LinkedIn publishing, and generic workflow building are not implemented in this slice.
+Background jobs, automatic scheduler execution, LinkedIn publishing, and generic workflow building are not implemented in this slice.
 
 ### Agent runtime + tool schemas slice
 
@@ -119,12 +120,12 @@ Implemented now:
 
 - Agent run, tool call, and runtime event tables.
 - Six Zod tool contracts: `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, and `collect_metrics`.
-- Provider-independent runtime interfaces and deterministic `dry_run` provider.
-- Agent Runtime tab with contract visibility and local run history.
+- Provider-independent runtime interfaces, GG AI adapter, and deterministic `dry_run` provider.
+- Provider-aware Agent Runtime tab with contract visibility and local run history.
 - Approval-gated `schedule_post` dry-run behavior.
 - Archived-campaign mutation blocking.
 
-Real AI provider calls, LinkedIn scraping, publishing, comments, and background workers are not implemented in this slice.
+LinkedIn scraping, publishing, comments, and background workers are not implemented in this slice.
 
 ### Safety + observability slice
 
@@ -141,7 +142,7 @@ Implemented now:
 - Error queue items for failed publish attempts, rejected approvals, and failed agent runs.
 - Safety tab with summaries, campaign filtering, kill switch controls, event history, and status transitions.
 
-LinkedIn OAuth, real publishing, background execution, and external telemetry are not implemented in this slice.
+Real publishing, background execution, and external telemetry are not implemented in this slice.
 
 ### Comment/reply agent slice
 
@@ -160,7 +161,26 @@ Implemented now:
 - Global kill switch and daily comment caps block successful posting records.
 - Comments tab with campaign filtering, summaries, variant preview, audit display, review actions, and attempt dialogs.
 
-LinkedIn OAuth, LinkedIn API commenting, scraping, background workers, real AI provider calls, and automated comment posting are not implemented in this slice.
+LinkedIn API commenting, scraping, background workers, and automated comment posting are not implemented in this slice.
+
+### Integrations + provider auth foundation
+
+Roadmap coverage:
+
+- Section 1: provider connection foundation.
+- Section 2: streaming provider layer connection status.
+- Section 10: OAuth foundation for approval-gated external actions.
+- Section 16: credential-health visibility before external actions.
+- Sections 17 and 18: provider-ready role agents and typed tools.
+
+Implemented now:
+
+- OpenAI, Anthropic, Gemini, custom API, and LinkedIn provider catalog.
+- Native Tauri credential storage boundary for API keys and OAuth credentials.
+- LinkedIn OAuth start, manual code submission, state validation, token exchange path, refresh path, logout, and status checks.
+- Integrations tab with provider cards and no secret rendering.
+
+Autonomous LinkedIn posting/commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
 
 ## Future slices
 

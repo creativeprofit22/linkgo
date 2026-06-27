@@ -8,8 +8,10 @@ import {
   createAgentRun,
   listAgentRuns,
   listAgentToolContracts,
-  startDryRunAgentRun,
+  startAgentRun,
 } from "@/features/agent-runtime/data";
+import { getAuthStatus } from "@/features/integrations/data";
+import type { ConnectedAccount } from "@/features/integrations/types";
 import type {
   AgentRunWithDetails,
   CancelAgentRunInput,
@@ -31,10 +33,11 @@ interface UseAgentRuntimeState {
   error: string | null;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
+  connectedAccounts: ConnectedAccount[];
   loadAgentRuntime: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
   createRun: (input: CreateAgentRunInput) => Promise<number>;
-  startDryRun: (input: StartAgentRunInput) => Promise<void>;
+  startRun: (input: StartAgentRunInput) => Promise<void>;
   cancelRun: (input: CancelAgentRunInput) => Promise<void>;
 }
 
@@ -71,6 +74,9 @@ export function useAgentRuntime(): UseAgentRuntimeState {
   const [safetySettings, setSafetySettings] = useState<SafetySettings | null>(
     null,
   );
+  const [connectedAccounts, setConnectedAccounts] = useState<
+    ConnectedAccount[]
+  >([]);
 
   const loadForCampaign = useCallback(async (campaignId: number | null) => {
     if (campaignId === null) {
@@ -90,12 +96,15 @@ export function useAgentRuntime(): UseAgentRuntimeState {
     setLoading(true);
     setError(null);
     try {
-      const [loadedCampaigns, loadedSafetySettings] = await Promise.all([
-        listCampaigns(),
-        getSafetySettings(),
-      ]);
+      const [loadedCampaigns, loadedSafetySettings, authStatus] =
+        await Promise.all([
+          listCampaigns(),
+          getSafetySettings(),
+          getAuthStatus(),
+        ]);
       setCampaigns(loadedCampaigns);
       setSafetySettings(loadedSafetySettings);
+      setConnectedAccounts(authStatus.accounts);
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === selectedCampaignId,
       );
@@ -140,10 +149,10 @@ export function useAgentRuntime(): UseAgentRuntimeState {
     [loadForCampaign],
   );
 
-  const startDryRun = useCallback(
+  const startRun = useCallback(
     async (input: StartAgentRunInput) => {
       try {
-        await startDryRunAgentRun(input);
+        await startAgentRun(input);
         await loadForCampaign(selectedCampaignId);
       } catch (caught) {
         void getSafetySettings()
@@ -184,10 +193,11 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       error,
       killSwitchEnabled: safetySettings?.global_kill_switch === 1,
       killSwitchReason: safetySettings?.kill_switch_reason ?? "",
+      connectedAccounts,
       loadAgentRuntime,
       selectCampaign,
       createRun,
-      startDryRun,
+      startRun,
       cancelRun,
     }),
     [
@@ -199,10 +209,11 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       loading,
       error,
       safetySettings,
+      connectedAccounts,
       loadAgentRuntime,
       selectCampaign,
       createRun,
-      startDryRun,
+      startRun,
       cancelRun,
     ],
   );

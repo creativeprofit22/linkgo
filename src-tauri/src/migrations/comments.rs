@@ -71,21 +71,43 @@ mod tests {
 
         assert_eq!(migration.version, 9);
         assert_eq!(migration.description, "create_comments");
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS comment_threads"));
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS comment_variants"));
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS comment_audits"));
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS comment_attempts"));
-        assert!(migration.sql.contains("REFERENCES campaigns(id) ON DELETE CASCADE"));
-        assert!(migration.sql.contains("REFERENCES candidate_posts(id) ON DELETE CASCADE"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS comment_threads"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS comment_variants"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS comment_audits"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS comment_attempts"));
+        assert!(migration
+            .sql
+            .contains("REFERENCES campaigns(id) ON DELETE CASCADE"));
+        assert!(migration
+            .sql
+            .contains("REFERENCES candidate_posts(id) ON DELETE CASCADE"));
         assert!(migration.sql.contains("CHECK(status IN ('drafting', 'needs_review', 'changes_requested', 'approved', 'rejected', 'posted', 'cancelled'))"));
-        assert!(migration.sql.contains("CHECK(variant_number >= 1 AND variant_number <= 3)"));
-        assert!(migration.sql.contains("CHECK(severity IN ('pass', 'warning', 'block'))"));
+        assert!(migration
+            .sql
+            .contains("CHECK(variant_number >= 1 AND variant_number <= 3)"));
+        assert!(migration
+            .sql
+            .contains("CHECK(severity IN ('pass', 'warning', 'block'))"));
         assert!(migration.sql.contains("CHECK(platform IN ('linkedin'))"));
-        assert!(migration.sql.contains("CHECK(status IN ('succeeded', 'failed'))"));
+        assert!(migration
+            .sql
+            .contains("CHECK(status IN ('succeeded', 'failed'))"));
         assert!(migration.sql.contains("UNIQUE(candidate_post_id)"));
-        assert!(migration.sql.contains("UNIQUE(comment_thread_id, variant_number)"));
+        assert!(migration
+            .sql
+            .contains("UNIQUE(comment_thread_id, variant_number)"));
         assert!(migration.sql.contains("idx_comment_threads_campaign_id"));
-        assert!(migration.sql.contains("idx_comment_threads_candidate_post_id"));
+        assert!(migration
+            .sql
+            .contains("idx_comment_threads_candidate_post_id"));
         assert!(migration.sql.contains("idx_comment_threads_status"));
         assert!(migration.sql.contains("idx_comment_threads_updated_at"));
         assert!(migration.sql.contains("idx_comment_variants_thread_id"));

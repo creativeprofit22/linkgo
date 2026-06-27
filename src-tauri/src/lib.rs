@@ -1,3 +1,4 @@
+mod auth;
 mod migrations;
 mod plugins;
 
@@ -23,7 +24,15 @@ pub fn run() {
                 .build(),
         )
         .plugin(plugins::system_tray::init())
-        .invoke_handler(tauri::generate_handler![update_tray_menu]);
+        .invoke_handler(tauri::generate_handler![
+            update_tray_menu,
+            auth::commands::linkgo_auth_status,
+            auth::commands::linkgo_auth_api_key,
+            auth::commands::linkgo_auth_oauth_start,
+            auth::commands::linkgo_auth_oauth_code,
+            auth::commands::linkgo_auth_logout,
+            auth::commands::linkgo_auth_check
+        ]);
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

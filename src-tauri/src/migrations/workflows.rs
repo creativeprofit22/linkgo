@@ -80,14 +80,18 @@ mod tests {
         assert!(migration
             .sql
             .contains("CREATE TABLE IF NOT EXISTS workflow_events"));
-        assert!(migration.sql.contains("CHECK(workflow_type IN ('content_pipeline'))"));
+        assert!(migration
+            .sql
+            .contains("CHECK(workflow_type IN ('content_pipeline'))"));
         assert!(migration.sql.contains("CHECK(status IN ('queued', 'running', 'waiting_approval', 'blocked', 'completed', 'failed', 'cancelled'))"));
         assert!(migration.sql.contains("CHECK(status IN ('pending', 'running', 'waiting_approval', 'blocked', 'completed', 'failed', 'skipped'))"));
         assert!(migration.sql.contains("CHECK(current_step_key IN ('research', 'score', 'draft', 'audit', 'approve', 'schedule', 'measure'))"));
         assert!(migration.sql.contains("CHECK(step_key IN ('research', 'score', 'draft', 'audit', 'approve', 'schedule', 'measure'))"));
         assert!(migration.sql.contains("CHECK(event_type IN ('run_created', 'run_started', 'step_started', 'step_waiting_approval', 'step_blocked', 'step_completed', 'step_failed', 'step_skipped', 'step_resumed', 'run_completed', 'run_cancelled', 'note_added'))"));
         assert!(migration.sql.contains("UNIQUE(workflow_run_id, step_key)"));
-        assert!(migration.sql.contains("UNIQUE(workflow_run_id, sort_order)"));
+        assert!(migration
+            .sql
+            .contains("UNIQUE(workflow_run_id, sort_order)"));
         assert!(migration.sql.contains("idx_workflow_runs_campaign_id"));
         assert!(migration.sql.contains("idx_workflow_runs_status"));
         assert!(migration.sql.contains("idx_workflow_runs_current_step_key"));

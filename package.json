@@ -25,6 +25,7 @@
     "check": "bun run format:check && bun run lint && bun run build && bun run test && bun run test:rust"
   },
   "dependencies": {
+    "@kenkaiiii/gg-ai": "^4.14.2",
     "@tailwindcss/vite": "4.2.4",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",

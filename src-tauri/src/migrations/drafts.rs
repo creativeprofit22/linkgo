@@ -78,9 +78,7 @@ mod tests {
             .sql
             .contains("CHECK(severity IN ('pass', 'warning', 'block'))"));
         assert!(migration.sql.contains("UNIQUE(candidate_post_id)"));
-        assert!(migration
-            .sql
-            .contains("UNIQUE(draft_id, variant_number)"));
+        assert!(migration.sql.contains("UNIQUE(draft_id, variant_number)"));
         assert!(migration.sql.contains("idx_draft_variants_draft_id"));
         assert!(migration.sql.contains("idx_draft_variants_status"));
         assert!(migration.sql.contains("idx_draft_audits_variant_id"));

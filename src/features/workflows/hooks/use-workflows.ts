@@ -6,7 +6,9 @@ import {
   addWorkflowNote,
   cancelWorkflowRun,
   createWorkflowRun,
+  executeWorkflowRun,
   listWorkflowRuns,
+  resumeWorkflowRun,
   setWorkflowStepStatus,
   startWorkflowRun,
 } from "@/workflows/data";
@@ -29,6 +31,8 @@ interface UseWorkflowsState {
   selectCampaign: (id: number | null) => void;
   createRun: (input: CreateWorkflowRunInput) => Promise<number>;
   startRun: (input: StartWorkflowRunInput) => Promise<void>;
+  executeRun: (input: StartWorkflowRunInput) => Promise<void>;
+  resumeRun: (input: StartWorkflowRunInput) => Promise<void>;
   setStepStatus: (input: SetWorkflowStepStatusInput) => Promise<void>;
   cancelRun: (input: CancelWorkflowRunInput) => Promise<void>;
   addNote: (input: AddWorkflowNoteInput) => Promise<void>;
@@ -130,6 +134,36 @@ export function useWorkflows(): UseWorkflowsState {
     [loadRunsForCampaign, selectedCampaignId],
   );
 
+  const executeRun = useCallback(
+    async (input: StartWorkflowRunInput) => {
+      try {
+        await executeWorkflowRun(input);
+        await loadRunsForCampaign(selectedCampaignId);
+      } catch (caught) {
+        toast.error("Workflow executor failed", {
+          description: getErrorMessage(caught),
+        });
+        throw caught;
+      }
+    },
+    [loadRunsForCampaign, selectedCampaignId],
+  );
+
+  const resumeRun = useCallback(
+    async (input: StartWorkflowRunInput) => {
+      try {
+        await resumeWorkflowRun(input);
+        await loadRunsForCampaign(selectedCampaignId);
+      } catch (caught) {
+        toast.error("Workflow executor was not resumed", {
+          description: getErrorMessage(caught),
+        });
+        throw caught;
+      }
+    },
+    [loadRunsForCampaign, selectedCampaignId],
+  );
+
   const setStepStatus = useCallback(
     async (input: SetWorkflowStepStatusInput) => {
       try {
@@ -186,6 +220,8 @@ export function useWorkflows(): UseWorkflowsState {
       selectCampaign,
       createRun,
       startRun,
+      executeRun,
+      resumeRun,
       setStepStatus,
       cancelRun,
       addNote,
@@ -200,6 +236,8 @@ export function useWorkflows(): UseWorkflowsState {
       selectCampaign,
       createRun,
       startRun,
+      executeRun,
+      resumeRun,
       setStepStatus,
       cancelRun,
       addNote,

@@ -13,6 +13,7 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Workflow runs attached to campaigns.
 - Seven canonical content pipeline steps for every run.
 - Manual start/resume controls.
+- Foreground executor controls for run/resume.
 - Manual step transitions for complete, wait approval, block, fail, resume, reopen, and skip.
 - Automatic next-step start after a step completes.
 - Append-only workflow events for run and step progress.
@@ -22,9 +23,8 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 
 ## Intentionally not implemented
 
-- AI/model execution.
-- Provider abstraction.
-- Tool execution.
+- Background autonomous execution.
+- Autonomous LinkedIn posting/commenting.
 - Scraping or LinkedIn API calls.
 - Background workers, cron, or automatic scheduler execution.
 - Automatic links to candidates, drafts, approvals, schedules, or metrics.
@@ -44,6 +44,18 @@ Stores ordered step state for each run. Each run has one row per canonical step 
 ### `workflow_events`
 
 Stores append-only lifecycle events for run creation, start/resume, step changes, completion, cancellation, and notes.
+
+### `workflow_step_executions`
+
+Links workflow steps to agent runs so executor work can be resumed and audited without duplicating active step claims.
+
+## Executor lifecycle
+
+1. Run executor starts or resumes the workflow run.
+2. The executor creates a role-specific agent run for the active step.
+3. Agent output completes, fails, blocks, or pauses the step.
+4. The executor stops at `approve` and approval-gated `schedule_post` calls.
+5. Resume executor continues from failed or blocked steps.
 
 ## Manual lifecycle
 

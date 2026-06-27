@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The Agent Runtime slice adds a local-first foundation for model/tool loops without calling external AI APIs.
+The Agent Runtime slice adds a provider-capable foundation for model/tool loops while keeping dry-run available without credentials.
 
-It makes the next automation layer visible and testable: typed tool contracts, provider-independent loop types, a deterministic dry-run provider, durable run history, tool-call history, and runtime events.
+It makes the automation layer visible and testable: typed tool contracts, provider-independent loop types, a deterministic dry-run provider, GG AI stream mapping, durable run history, tool-call history, approval interrupts, retries, and runtime events.
 
 ## Implemented
 
@@ -17,7 +17,8 @@ It makes the next automation layer visible and testable: typed tool contracts, p
   - `schedule_post`
   - `collect_metrics`
 - Dry-run provider that emits deterministic model chunks and provider-style tool-call correlation IDs.
-- Runtime loop that validates tool inputs and outputs with Zod.
+- GG AI adapter for OpenAI, Anthropic, Gemini, and custom OpenAI-compatible providers.
+- Runtime loop that validates tool inputs and outputs with Zod, supports cancellation checks, retry classification, and iteration caps.
 - Approval interrupt for `schedule_post`.
 - Agent run, tool call, and runtime event tables.
 - Agent Runtime tab with campaign filtering, summary cards, tool contracts, run cards, tool payloads, and event history.
@@ -25,8 +26,9 @@ It makes the next automation layer visible and testable: typed tool contracts, p
 
 ## Intentionally not implemented
 
-- Real OpenAI, Anthropic, Google, or custom provider calls.
-- Secret storage or API key setup.
+- Autonomous LinkedIn publishing/commenting.
+- LinkedIn scraping.
+- Frontend secret access.
 - LinkedIn scraping.
 - LinkedIn publishing.
 - Comment automation.
@@ -62,7 +64,9 @@ Stores append-only runtime progress events such as model start, streamed text, t
 
 The runtime is local-first and deterministic in this slice.
 
-`dry_run` is the only executable provider.
+Disconnected non-dry providers are blocked before start.
+
+`dry_run` remains executable with no credentials.
 
 `schedule_post` is approval-gated and does not create schedule jobs, publish content, or call LinkedIn.
 

@@ -18,10 +18,11 @@ export function AgentRuntimeView(): React.ReactNode {
     error,
     killSwitchEnabled,
     killSwitchReason,
+    connectedAccounts,
     loadAgentRuntime,
     selectCampaign,
     createRun,
-    startDryRun,
+    startRun,
     cancelRun,
   } = useAgentRuntime();
 
@@ -54,6 +55,7 @@ export function AgentRuntimeView(): React.ReactNode {
           workflowRuns={workflowRuns}
           selectedCampaignId={selectedCampaignId}
           selectedCampaignArchived={selectedCampaignArchived}
+          connectedAccounts={connectedAccounts}
           onCreate={createRun}
         />
       </div>
@@ -147,7 +149,15 @@ export function AgentRuntimeView(): React.ReactNode {
                   selectedCampaignArchived={selectedCampaignArchived}
                   killSwitchEnabled={killSwitchEnabled}
                   killSwitchReason={killSwitchReason}
-                  onStartDryRun={startDryRun}
+                  providerConnected={
+                    run.provider_key === "dry_run" ||
+                    connectedAccounts.some(
+                      (account) =>
+                        account.provider_key === run.provider_key &&
+                        account.status === "connected",
+                    )
+                  }
+                  onStartRun={startRun}
                   onCancelRun={cancelRun}
                 />
               ))}

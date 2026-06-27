@@ -472,13 +472,13 @@ async function scheduleApprovalViaDataApi(
 }
 
 async function createDryRun(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create dry-run" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create dry-run agent run" });
+  await page.getByRole("button", { name: "Create run" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Create agent run" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Agent role").selectOption("researcher");
   await dialog
     .getByLabel("Input summary")
     .fill("Validate runtime contracts for this campaign.");
-  await dialog.getByRole("button", { name: "Create dry-run" }).click();
+  await dialog.getByRole("button", { name: "Create run" }).click();
   await expect(dialog).toBeHidden();
 }

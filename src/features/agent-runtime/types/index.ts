@@ -22,6 +22,9 @@ export interface AgentRun {
   output_summary: string;
   error_message: string;
   iteration_count: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  provider_request_id?: string;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;

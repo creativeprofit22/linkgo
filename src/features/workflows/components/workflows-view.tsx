@@ -17,6 +17,8 @@ export function WorkflowsView(): React.ReactNode {
     selectCampaign,
     createRun,
     startRun,
+    executeRun,
+    resumeRun,
     setStepStatus,
     cancelRun,
     addNote,
@@ -142,6 +144,8 @@ export function WorkflowsView(): React.ReactNode {
                   run={run}
                   selectedCampaignArchived={selectedCampaignArchived}
                   onStartRun={startRun}
+                  onExecuteRun={executeRun}
+                  onResumeRun={resumeRun}
                   onCancelRun={cancelRun}
                   onSetStepStatus={setStepStatus}
                   onAddNote={addNote}

@@ -13,9 +13,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { AGENT_ROLES, type AgentRole } from "@/agent";
+import {
+  AGENT_PROVIDER_KEYS,
+  AGENT_ROLES,
+  DEFAULT_AGENT_MODELS,
+  type AgentProviderKey,
+  type AgentRole,
+} from "@/agent";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import type { CreateAgentRunInput } from "@/features/agent-runtime/types";
+import type { ConnectedAccount } from "@/features/integrations/types";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
 
 interface CreateAgentRunDialogProps {
@@ -23,6 +30,7 @@ interface CreateAgentRunDialogProps {
   workflowRuns: WorkflowRunWithDetails[];
   selectedCampaignId: number | null;
   selectedCampaignArchived: boolean;
+  connectedAccounts: ConnectedAccount[];
   onCreate: (input: CreateAgentRunInput) => Promise<number>;
 }
 
@@ -40,6 +48,7 @@ export function CreateAgentRunDialog({
   workflowRuns,
   selectedCampaignId,
   selectedCampaignArchived,
+  connectedAccounts,
   onCreate,
 }: CreateAgentRunDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
@@ -48,6 +57,7 @@ export function CreateAgentRunDialog({
   );
   const [workflowRunId, setWorkflowRunId] = useState<number | null>(null);
   const [agentRole, setAgentRole] = useState<AgentRole>("researcher");
+  const [providerKey, setProviderKey] = useState<AgentProviderKey>("dry_run");
   const [modelName, setModelName] = useState("dry-run-local");
   const [inputSummary, setInputSummary] = useState(
     "Validate runtime contracts for this campaign.",
@@ -64,11 +74,18 @@ export function CreateAgentRunDialog({
   const dialogWorkflowRuns = workflowRuns.filter(
     (run) => run.campaign_id === campaignId,
   );
+  const providerConnected =
+    providerKey === "dry_run" ||
+    connectedAccounts.some(
+      (account) =>
+        account.provider_key === providerKey && account.status === "connected",
+    );
   const disabled =
     campaigns.length === 0 ||
     selectedCampaignArchived ||
     selectedDialogCampaign?.status === "archived";
-  const submitDisabled = disabled || saving || inputSummary.trim() === "";
+  const submitDisabled =
+    disabled || saving || inputSummary.trim() === "" || !providerConnected;
 
   async function handleSubmit(
     event: React.SyntheticEvent<HTMLFormElement>,
@@ -80,7 +97,7 @@ export function CreateAgentRunDialog({
       const createInput: CreateAgentRunInput = {
         campaignId,
         agentRole,
-        providerKey: "dry_run",
+        providerKey,
         modelName,
         inputSummary: inputSummary.trim(),
       };
@@ -88,6 +105,7 @@ export function CreateAgentRunDialog({
       await onCreate(createInput);
       setOpen(false);
       setAgentRole("researcher");
+      setProviderKey("dry_run");
       setModelName("dry-run-local");
       setInputSummary("Validate runtime contracts for this campaign.");
       setWorkflowRunId(null);
@@ -100,17 +118,17 @@ export function CreateAgentRunDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" disabled={disabled}>
-          <Plus className="size-4" /> Create dry-run
+          <Plus className="size-4" /> Create run
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Bot className="size-5" /> Create dry-run agent run
+            <Bot className="size-5" /> Create agent run
           </DialogTitle>
           <DialogDescription>
-            Queue a local agent runtime pass. It validates contracts without AI
-            API calls or LinkedIn actions.
+            Queue a dry-run or provider-backed runtime pass. Disconnected
+            providers stay blocked.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -178,6 +196,31 @@ export function CreateAgentRunDialog({
           )}
 
           <div className="space-y-2">
+            <Label htmlFor="agent-provider">Provider</Label>
+            <select
+              id="agent-provider"
+              value={providerKey}
+              onChange={(event) => {
+                const nextProvider = event.target.value as AgentProviderKey;
+                setProviderKey(nextProvider);
+                setModelName(DEFAULT_AGENT_MODELS[nextProvider]);
+              }}
+              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            >
+              {AGENT_PROVIDER_KEYS.map((provider) => (
+                <option key={provider} value={provider}>
+                  {provider}
+                </option>
+              ))}
+            </select>
+            {!providerConnected && (
+              <p className="text-destructive text-xs">
+                Connect {providerKey} in Integrations before creating this run.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="agent-model-name">Model name</Label>
             <Input
               id="agent-model-name"
@@ -199,7 +242,7 @@ export function CreateAgentRunDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={submitDisabled}>
-              {saving ? "Creating…" : "Create dry-run"}
+              {saving ? "Creating…" : "Create run"}
             </Button>
           </DialogFooter>
         </form>
