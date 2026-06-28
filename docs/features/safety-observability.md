@@ -7,7 +7,7 @@ Implemented as the local-first Safety tab and cross-feature safety data layer.
 ## What it does
 
 - Provides a global kill switch for local automation-like actions.
-- Blocks local schedule starts, agent dry-run starts, and approved comment posting records while the kill switch is enabled.
+- Blocks local schedule starts, agent run starts, and approved comment posting records while the kill switch is enabled.
 - Enforces each campaign's `daily_post_limit` for same-day post scheduling.
 - Enforces each campaign's `daily_comment_limit` for same-day successful comment posting records.
 - Records append-only safety audit events.
@@ -57,9 +57,9 @@ Allowed/success events are written inside the transaction that performed the act
 
 ### Agent runtime
 
-- `startDryRunAgentRun` checks the kill switch before claiming a run.
+- `startAgentRun` checks the kill switch before claiming a dry-run or provider-backed run.
 - Claimed runs record `agent_run_started`.
-- Failed dry-runs record `agent_run_failed` and create/update an error item.
+- Failed agent runs record `agent_run_failed` and create/update an error item.
 
 ### Comments
 

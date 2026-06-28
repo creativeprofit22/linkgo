@@ -1,5 +1,6 @@
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import {
+  assertApprovalCanPublishViaLinkedInSchema,
   cancelScheduleSchema,
   createApprovalSchema,
   recordPublishAttemptSchema,
@@ -13,6 +14,7 @@ import type {
   ApprovalStatus,
   ApprovalVariantSnapshot,
   ApprovalWithDetails,
+  AssertApprovalCanPublishViaLinkedInInput,
   CancelScheduleInput,
   CreateApprovalInput,
   PublishAttempt,
@@ -25,6 +27,7 @@ import type { CampaignStatus } from "@/features/campaigns/types";
 import { getAuditSeverity, mapDraftAudit } from "@/features/drafts/data";
 import {
   assertSafetyKillSwitchOff,
+  getSafetySettings,
   getSchedulePostLimitDecision,
   recordRateLimitEvent,
   recordSafetyAuditEvent,
@@ -92,6 +95,10 @@ interface ApprovalCampaignRow {
   daily_post_limit: number;
   status: ApprovalStatus;
   draft_id: number;
+}
+
+interface PublishPreflightApprovalRow extends ApprovalCampaignRow {
+  successful_publish_attempt_count: number;
 }
 
 interface ScheduleValidationRow {
@@ -821,6 +828,86 @@ export async function cancelSchedule(
   } catch (error) {
     await rollbackApprovalTransaction(db);
     throw error;
+  }
+}
+
+export async function assertApprovalCanPublishViaLinkedIn(
+  input: AssertApprovalCanPublishViaLinkedInInput,
+): Promise<void> {
+  const parsed = assertApprovalCanPublishViaLinkedInSchema.parse(input);
+  const db = await getDb();
+  const settings = await getSafetySettings();
+
+  if (settings.global_kill_switch === 1) {
+    throw new Error(
+      settings.kill_switch_reason
+        ? `Global kill switch is enabled: ${settings.kill_switch_reason}`
+        : "Global kill switch is enabled",
+    );
+  }
+
+  const approvalRows = await db.select<PublishPreflightApprovalRow[]>(
+    `SELECT
+      a.id,
+      a.campaign_id,
+      c.status AS campaign_status,
+      c.daily_post_limit,
+      a.status,
+      a.draft_id,
+      (
+        SELECT COUNT(*) FROM publish_attempts pa
+        WHERE pa.approval_id = a.id AND pa.status = 'succeeded'
+      ) AS successful_publish_attempt_count
+    FROM approvals a
+    INNER JOIN campaigns c ON c.id = a.campaign_id
+    WHERE a.id = $1
+    LIMIT 1`,
+    [parsed.approvalId],
+  );
+  const approval = approvalRows[0];
+  if (approval === undefined) throw new Error("Approval was not found");
+  if (approval.campaign_status === "archived") {
+    throw new Error("Campaign is archived");
+  }
+  if (!["approved", "scheduled"].includes(approval.status)) {
+    throw new Error(
+      "Only approved or scheduled approvals can publish via LinkedIn",
+    );
+  }
+  if (approval.successful_publish_attempt_count > 0) {
+    throw new Error("Approval already has a successful publish attempt");
+  }
+
+  const scheduleRows = await db.select<ScheduleJob[]>(
+    `SELECT * FROM schedule_jobs
+    WHERE approval_id = $1
+    ORDER BY datetime(updated_at) DESC, id DESC
+    LIMIT 1`,
+    [parsed.approvalId],
+  );
+  const currentSchedule = scheduleRows[0];
+
+  if (approval.status === "scheduled") {
+    if (parsed.scheduleJobId === undefined) {
+      throw new Error("Scheduled approvals require the current schedule job");
+    }
+    if (
+      currentSchedule === undefined ||
+      currentSchedule.id !== parsed.scheduleJobId ||
+      currentSchedule.status !== "scheduled"
+    ) {
+      throw new Error("Schedule job is not the current scheduled job");
+    }
+    return;
+  }
+
+  if (parsed.scheduleJobId === undefined) return;
+  if (
+    currentSchedule === undefined ||
+    currentSchedule.id !== parsed.scheduleJobId ||
+    currentSchedule.status !== "scheduled"
+  ) {
+    throw new Error("Schedule job is not the current scheduled job");
   }
 }
 

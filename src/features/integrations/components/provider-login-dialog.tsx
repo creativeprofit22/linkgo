@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { ExternalLink, KeyRound, LogOut, ShieldCheck } from "lucide-react";
+import {
+  Copy,
+  ExternalLink,
+  KeyRound,
+  LogOut,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,6 +43,17 @@ interface ProviderLoginDialogProps {
   onCheck: (input: { providerKey: AuthProviderKey }) => Promise<void>;
 }
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText === undefined) return false;
+
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ProviderLoginDialog({
   provider,
   account,
@@ -52,11 +69,18 @@ export function ProviderLoginDialog({
   const [accountLabel, setAccountLabel] = useState("");
   const [oauthStart, setOauthStart] = useState<OAuthStartResult | null>(null);
   const [oauthCode, setOauthCode] = useState("");
+  const [copiedAuthUrl, setCopiedAuthUrl] = useState(false);
+  const [copyAuthUrlError, setCopyAuthUrlError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const connected = account?.status === "connected";
   const supportsApiKey = provider.methods.includes("api_key");
   const supportsOAuth = provider.methods.includes("oauth");
+  const requiresBaseUrl = provider.key === "custom";
+  const canSaveApiKey =
+    !busy &&
+    apiKey.trim().length >= 8 &&
+    (!requiresBaseUrl || baseUrl.trim() !== "");
   const safeAccountLabel = account?.account_label || account?.provider_label;
   const maskedSecret = useMemo(
     () => (connected ? "Connected; secret is stored outside the UI." : ""),
@@ -84,9 +108,28 @@ export function ProviderLoginDialog({
     setBusy(true);
     try {
       setOauthStart(await onStartOAuth({ providerKey: provider.key }));
+      setCopiedAuthUrl(false);
+      setCopyAuthUrlError(null);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleCopyAuthUrl(): Promise<void> {
+    if (oauthStart === null) return;
+
+    setCopiedAuthUrl(false);
+    setCopyAuthUrlError(null);
+
+    const copied = await copyText(oauthStart.authUrl);
+    if (copied) {
+      setCopiedAuthUrl(true);
+      return;
+    }
+
+    setCopyAuthUrlError(
+      "Could not copy automatically. Open the authorization URL and copy it from your browser address bar.",
+    );
   }
 
   async function handleSubmitCode(): Promise<void> {
@@ -158,17 +201,27 @@ export function ProviderLoginDialog({
                   onChange={(event) => setApiKey(event.target.value)}
                 />
               </div>
-              {provider.key === "custom" && (
-                <div className="space-y-2">
-                  <Label htmlFor={`${provider.key}-base-url`}>Base URL</Label>
-                  <Input
-                    id={`${provider.key}-base-url`}
-                    value={baseUrl}
-                    placeholder="https://api.example.com/v1"
-                    onChange={(event) => setBaseUrl(event.target.value)}
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor={`${provider.key}-base-url`}>
+                  Base URL override{requiresBaseUrl ? " (required)" : ""}
+                </Label>
+                <Input
+                  id={`${provider.key}-base-url`}
+                  value={baseUrl}
+                  required={requiresBaseUrl}
+                  placeholder={
+                    requiresBaseUrl
+                      ? "Required, e.g. https://api.example.com/v1"
+                      : "Optional advanced override"
+                  }
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                />
+                <p className="text-muted-foreground text-xs">
+                  {requiresBaseUrl
+                    ? "Custom API providers need an OpenAI-compatible endpoint."
+                    : "GG AI uses provider defaults unless you set this."}
+                </p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor={`${provider.key}-label`}>Account label</Label>
                 <Input
@@ -181,7 +234,7 @@ export function ProviderLoginDialog({
               </div>
               <Button
                 type="button"
-                disabled={busy || apiKey.trim().length < 8}
+                disabled={!canSaveApiKey}
                 onClick={() => void handleSaveKey()}
               >
                 Save API key
@@ -200,14 +253,31 @@ export function ProviderLoginDialog({
               </Button>
               {oauthStart !== null && (
                 <div className="space-y-3 rounded-lg border p-3">
-                  <a
-                    href={oauthStart.authUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-linkgo-blue inline-flex items-center gap-2 text-sm font-medium"
-                  >
-                    Open authorization URL <ExternalLink className="size-3" />
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={oauthStart.authUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-linkgo-blue inline-flex items-center gap-2 text-sm font-medium"
+                    >
+                      Open authorization URL <ExternalLink className="size-3" />
+                    </a>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void handleCopyAuthUrl()}
+                    >
+                      <Copy className="size-3" />
+                      {copiedAuthUrl ? "Copied" : "Copy authorization URL"}
+                    </Button>
+                  </div>
+                  {copyAuthUrlError !== null && (
+                    <p className="text-destructive text-sm" role="alert">
+                      {copyAuthUrlError}
+                    </p>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor={`${provider.key}-oauth-code`}>
                       Authorization code

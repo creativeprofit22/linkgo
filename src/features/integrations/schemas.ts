@@ -34,6 +34,7 @@ export const connectedAccountSchema = z.object({
   account_id: z.string(),
   expires_at: z.string().nullable(),
   refresh_expires_at: z.string().nullable(),
+  has_base_url_override: z.boolean().default(false),
   last_checked_at: z.string().nullable(),
   last_error: z.string(),
   created_at: z.string(),
@@ -55,12 +56,23 @@ export const authStatusSchema = z.object({
   events: z.array(credentialEventSchema),
 });
 
-export const saveApiKeySchema = z.object({
-  providerKey: authProviderKeySchema.exclude(["linkedin"]),
-  apiKey: z.string().trim().min(8).max(4000),
-  baseUrl: z.string().trim().optional().or(z.literal("")),
-  accountLabel: z.string().trim().max(120).optional(),
-});
+export const saveApiKeySchema = z
+  .object({
+    providerKey: authProviderKeySchema.exclude(["linkedin"]),
+    apiKey: z.string().trim().min(8).max(4000),
+    baseUrl: z.string().trim().optional().or(z.literal("")),
+    accountLabel: z.string().trim().max(120).optional(),
+  })
+  .superRefine((input, context) => {
+    if (input.providerKey !== "custom") return;
+    if (input.baseUrl !== undefined && input.baseUrl.trim() !== "") return;
+
+    context.addIssue({
+      code: "custom",
+      path: ["baseUrl"],
+      message: "Custom provider requires a Base URL override",
+    });
+  });
 
 export const oauthStartSchema = z.object({
   providerKey: authProviderKeySchema,
@@ -82,6 +94,16 @@ export const oauthCodeSchema = z.object({
 
 export const logoutSchema = z.object({
   providerKey: authProviderKeySchema,
+});
+
+export const providerSecretInputSchema = z.object({
+  providerKey: authProviderKeySchema.exclude(["linkedin"]),
+});
+
+export const providerSecretSchema = z.object({
+  providerKey: authProviderKeySchema.exclude(["linkedin"]),
+  apiKey: z.string().min(1),
+  baseUrl: z.string().optional(),
 });
 
 export const authProgressEventSchema = z.object({

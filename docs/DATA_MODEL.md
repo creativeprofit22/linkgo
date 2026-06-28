@@ -412,24 +412,24 @@ Indexes: `idx_workflow_events_run_id`, `idx_workflow_events_step_id`, `idx_workf
 
 Stores one local agent execution attempt for one campaign, optionally tied to a workflow run or step.
 
-| Column             | Type    | Notes                                                                                    |
-| ------------------ | ------- | ---------------------------------------------------------------------------------------- |
-| `id`               | INTEGER | Primary key                                                                              |
-| `campaign_id`      | INTEGER | References `campaigns(id)` cascade delete                                                |
-| `workflow_run_id`  | INTEGER | Nullable, references `workflow_runs(id)` with `ON DELETE SET NULL`                       |
-| `workflow_step_id` | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL`                      |
-| `agent_role`       | TEXT    | `researcher`, `scorer`, `drafter`, `auditor`, `scheduler`, or `analyst`                  |
-| `provider_key`     | TEXT    | `dry_run`, `openai`, `anthropic`, `google`, or `custom`; only `dry_run` runs locally now |
-| `model_name`       | TEXT    | Provider model label                                                                     |
-| `status`           | TEXT    | `queued`, `running`, `waiting_approval`, `completed`, `failed`, or `cancelled`           |
-| `input_summary`    | TEXT    | Compact operator/runtime input                                                           |
-| `output_summary`   | TEXT    | Compact runtime result                                                                   |
-| `error_message`    | TEXT    | Failure reason, default empty string                                                     |
-| `iteration_count`  | INTEGER | Bounded `0` through `20`                                                                 |
-| `started_at`       | TEXT    | Nullable start timestamp                                                                 |
-| `completed_at`     | TEXT    | Nullable terminal timestamp                                                              |
-| `created_at`       | TEXT    | SQLite datetime                                                                          |
-| `updated_at`       | TEXT    | SQLite datetime                                                                          |
+| Column             | Type    | Notes                                                                                                                                                                                                           |
+| ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                                                                                                                                                                     |
+| `campaign_id`      | INTEGER | References `campaigns(id)` cascade delete                                                                                                                                                                       |
+| `workflow_run_id`  | INTEGER | Nullable, references `workflow_runs(id)` with `ON DELETE SET NULL`                                                                                                                                              |
+| `workflow_step_id` | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL`                                                                                                                                             |
+| `agent_role`       | TEXT    | `researcher`, `scorer`, `drafter`, `auditor`, `scheduler`, or `analyst`                                                                                                                                         |
+| `provider_key`     | TEXT    | `dry_run`, GG AI provider keys (`anthropic`, `xiaomi`, `openai`, `gemini`, `glm`, `moonshot`, `deepseek`, `openrouter`, `sakana`, `minimax`), or Linkgo-only `custom`; legacy `google` rows migrate to `gemini` |
+| `model_name`       | TEXT    | Provider model label                                                                                                                                                                                            |
+| `status`           | TEXT    | `queued`, `running`, `waiting_approval`, `completed`, `failed`, or `cancelled`                                                                                                                                  |
+| `input_summary`    | TEXT    | Compact operator/runtime input                                                                                                                                                                                  |
+| `output_summary`   | TEXT    | Compact runtime result                                                                                                                                                                                          |
+| `error_message`    | TEXT    | Failure reason, default empty string                                                                                                                                                                            |
+| `iteration_count`  | INTEGER | Bounded `0` through `20`                                                                                                                                                                                        |
+| `started_at`       | TEXT    | Nullable start timestamp                                                                                                                                                                                        |
+| `completed_at`     | TEXT    | Nullable terminal timestamp                                                                                                                                                                                     |
+| `created_at`       | TEXT    | SQLite datetime                                                                                                                                                                                                 |
+| `updated_at`       | TEXT    | SQLite datetime                                                                                                                                                                                                 |
 
 Indexes: `idx_agent_runs_campaign_id`, `idx_agent_runs_workflow_run_id`, `idx_agent_runs_workflow_step_id`, `idx_agent_runs_status`, `idx_agent_runs_agent_role`, `idx_agent_runs_updated_at`.
 
@@ -537,6 +537,18 @@ Stores fixable operational failures for operator follow-up.
 
 Indexes: `idx_error_queue_items_campaign_id`, `idx_error_queue_items_source`, `idx_error_queue_items_status`, `idx_error_queue_items_severity`, `idx_error_queue_items_updated_at`, and partial unique `idx_error_queue_items_active_source` on active `(source_type, source_id)` rows.
 
+### `connected_accounts`
+
+Stores non-secret provider connection status for GG AI providers, Linkgo-only `custom`, and `linkedin`.
+
+`provider_key` accepts `anthropic`, `xiaomi`, `openai`, `gemini`, `glm`, `moonshot`, `deepseek`, `openrouter`, `sakana`, `minimax`, `custom`, or `linkedin`. Legacy `google` rows migrate to `gemini`.
+
+Secrets are not stored in this table.
+
+### `credential_events`
+
+Stores append-only non-secret auth event summaries for the same provider key catalog as `connected_accounts`.
+
 ## Reserved future tables
 
-Future slices will add their own migrations for external integrations and automation tables.
+Future slices will add their own migrations for additional external automation tables.

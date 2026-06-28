@@ -15,6 +15,7 @@ import {
   recordSafetyAuditEvent,
   upsertErrorQueueItem,
 } from "@/features/safety/data";
+import { getProviderSecret } from "@/features/integrations/data";
 import {
   cancelAgentRunSchema,
   createAgentRunSchema,
@@ -404,11 +405,6 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
   const run = await getAgentRunValidation(db, parsed.id);
   if (run.campaign_status === "archived")
     throw new Error("Campaign is archived");
-  if (run.provider_key !== "dry_run") {
-    throw new Error(
-      "Provider-backed agent runs require native execution before starting",
-    );
-  }
   if (["completed", "cancelled"].includes(run.status)) {
     throw new Error("Terminal agent runs cannot be restarted");
   }
@@ -422,6 +418,16 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     subjectId: run.id,
     summary: "Agent run start",
   });
+
+  const providerOptions =
+    run.provider_key === "dry_run"
+      ? {}
+      : await getProviderSecret({ providerKey: run.provider_key });
+  const provider = createConfiguredAgentProvider(
+    run.provider_key,
+    run.model_name || undefined,
+    providerOptions,
+  );
 
   await db.execute("BEGIN TRANSACTION");
   try {
@@ -446,33 +452,36 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
       eventType: "agent_run_started",
       severity: "info",
       summary: "Agent run started",
-      metadata: { agentRole: run.agent_role },
+      metadata: { agentRole: run.agent_role, providerKey: run.provider_key },
     });
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackAgentRuntimeTransaction(db);
+    throw error;
+  }
 
-    const provider = createConfiguredAgentProvider(
-      run.provider_key,
-      run.model_name || undefined,
-    );
-    const result = await runAgentLoop({
-      provider,
-      tools: agentToolRegistry,
-      request: {
-        runId: run.id,
-        campaignId: run.campaign_id,
-        workflowRunId: run.workflow_run_id,
-        workflowStepId: run.workflow_step_id,
-        agentRole: run.agent_role,
-        inputSummary: run.input_summary,
-        messages: buildAgentMessages(run.agent_role, {
-          inputSummary:
-            run.input_summary || "Validate runtime contracts locally.",
-        }),
-      },
-      maxIterations: 8,
-      maxRetries: run.provider_key === "dry_run" ? 0 : 1,
-      onProgress: (event) => recordProgressEvent(db, run.id, event),
-    });
+  const result = await runAgentLoop({
+    provider,
+    tools: agentToolRegistry,
+    request: {
+      runId: run.id,
+      campaignId: run.campaign_id,
+      workflowRunId: run.workflow_run_id,
+      workflowStepId: run.workflow_step_id,
+      agentRole: run.agent_role,
+      inputSummary: run.input_summary,
+      messages: buildAgentMessages(run.agent_role, {
+        inputSummary:
+          run.input_summary || "Validate runtime contracts locally.",
+      }),
+    },
+    maxIterations: 8,
+    maxRetries: run.provider_key === "dry_run" ? 0 : 1,
+    onProgress: (event) => recordProgressEvent(db, run.id, event),
+  });
 
+  await db.execute("BEGIN TRANSACTION");
+  try {
     for (const toolCall of result.toolCalls) {
       await insertAgentToolCall(db, {
         agentRunId: run.id,

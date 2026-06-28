@@ -10,7 +10,7 @@ The Comments slice lets operators draft, audit, review, and record manual Linked
 
 It is deliberately local and approval-gated.
 
-Linkgo does not post comments through the LinkedIn API.
+LinkedIn OAuth exists for explicit approved post publishing, but Linkgo does not post comments through the LinkedIn API.
 
 ## Schema
 
@@ -108,8 +108,7 @@ Failed manual attempts create an open `error_queue_items` row with:
 
 This slice does not implement:
 
-- LinkedIn OAuth.
-- LinkedIn API comment posting.
+- LinkedIn API comment posting pending exact endpoint and product access confirmation.
 - LinkedIn scraping.
 - Background workers.
 - Real AI provider calls.

@@ -114,6 +114,11 @@ export interface CancelScheduleInput {
   id: number;
 }
 
+export interface AssertApprovalCanPublishViaLinkedInInput {
+  approvalId: number;
+  scheduleJobId?: number;
+}
+
 export interface RecordPublishAttemptInput {
   approvalId: number;
   scheduleJobId?: number;

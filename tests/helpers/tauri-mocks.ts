@@ -354,9 +354,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     type AgentProviderKey =
       | "dry_run"
-      | "openai"
       | "anthropic"
-      | "google"
+      | "xiaomi"
+      | "openai"
+      | "gemini"
+      | "glm"
+      | "moonshot"
+      | "deepseek"
+      | "openrouter"
+      | "sakana"
+      | "minimax"
       | "custom";
 
     type AgentRunStatus =
@@ -1151,6 +1158,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           daily_post_limit: campaign.daily_post_limit,
           status: approval.status,
           draft_id: approval.draft_id,
+          successful_publish_attempt_count: publishAttempts.filter(
+            (attempt) =>
+              attempt.approval_id === approval.id &&
+              attempt.status === "succeeded",
+          ).length,
         },
       ];
     }
@@ -3448,68 +3460,46 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     });
 
     const authProviders = [
-      {
-        key: "openai",
-        label: "OpenAI",
-        description:
-          "API-key storage for future native OpenAI-backed agent execution.",
-        methods: ["api_key"],
-        defaultMethod: "api_key",
-        scopes: [],
-        models: ["gpt-4.1-mini", "gpt-4.1"],
-        secretLabel: "OpenAI API key",
-        docsUrl: "https://platform.openai.com/docs",
-      },
-      {
-        key: "anthropic",
-        label: "Anthropic",
-        description:
-          "API-key storage for future native Claude-backed agent execution.",
-        methods: ["api_key"],
-        defaultMethod: "api_key",
-        scopes: [],
-        models: ["claude-3-5-sonnet-latest"],
-        secretLabel: "Anthropic API key",
-        docsUrl: "https://docs.anthropic.com/",
-      },
-      {
-        key: "google",
-        label: "Gemini",
-        description: "API-key storage for future native Gemini agent execution.",
-        methods: ["api_key"],
-        defaultMethod: "api_key",
-        scopes: [],
-        models: ["gemini-1.5-flash"],
-        secretLabel: "Gemini API key",
-        docsUrl: "https://ai.google.dev/gemini-api/docs",
-      },
-      {
-        key: "custom",
-        label: "Custom API",
-        description:
-          "OpenAI-compatible endpoint storage for future native model calls.",
-        methods: ["api_key"],
-        defaultMethod: "api_key",
-        scopes: [],
-        models: ["custom-model"],
-        secretLabel: "Provider API key",
-        docsUrl: "https://platform.openai.com/docs/api-reference",
-      },
-      {
-        key: "linkedin",
-        label: "LinkedIn",
-        description:
-          "3-legged OAuth foundation for future approval-gated posting and comments.",
-        methods: ["oauth"],
-        defaultMethod: "oauth",
-        scopes: ["openid", "profile", "email", "w_member_social"],
-        models: [],
-        secretLabel: "LinkedIn OAuth",
-        docsUrl:
-          "https://learn.microsoft.com/linkedin/shared/authentication/authorization-code-flow",
-      },
-    ];
+      ["anthropic", "Anthropic", "claude-sonnet-4-6", "Anthropic API key or OAuth token"],
+      ["xiaomi", "Xiaomi (MiMo)", "MiMo-VL-7B-RL", "Xiaomi MiMo API key"],
+      ["openai", "OpenAI", "gpt-4.1-mini", "OpenAI API key"],
+      ["gemini", "Gemini", "gemini-2.5-flash", "Gemini Code Assist access token"],
+      ["glm", "Z.AI (GLM)", "glm-4.7", "Z.AI / GLM API key"],
+      ["moonshot", "Moonshot", "kimi-k2-0711-preview", "Moonshot API key"],
+      ["deepseek", "DeepSeek", "deepseek-chat", "DeepSeek API key"],
+      ["openrouter", "OpenRouter", "openrouter/auto", "OpenRouter API key"],
+      ["sakana", "Sakana", "fugu-mt-001", "Sakana API key"],
+      ["minimax", "MiniMax", "MiniMax-M2", "MiniMax API key"],
+      ["custom", "Custom API", "custom-model", "Provider API key"],
+    ].map(([key, label, model, secretLabel]) => ({
+      key,
+      label,
+      description:
+        key === "custom"
+          ? "Linkgo-only OpenAI-compatible endpoint for custom GG AI execution."
+          : `${label} credentials for GG AI-backed agent execution.`,
+      methods: ["api_key"],
+      defaultMethod: "api_key",
+      scopes: [],
+      models: [model],
+      secretLabel,
+      docsUrl: "https://example.com/docs",
+    }));
+    authProviders.push({
+      key: "linkedin",
+      label: "LinkedIn",
+      description:
+        "3-legged OAuth foundation for future approval-gated posting and comments.",
+      methods: ["oauth"],
+      defaultMethod: "oauth",
+      scopes: ["openid", "profile", "email", "w_member_social"],
+      models: [],
+      secretLabel: "LinkedIn OAuth",
+      docsUrl:
+        "https://learn.microsoft.com/linkedin/shared/authentication/authorization-code-flow",
+    });
     const connectedAccounts: Record<string, unknown>[] = [];
+    const providerSecrets: Record<string, { apiKey: string; baseUrl?: string }> = {};
     function getAuthStatusMock(): Record<string, unknown> {
       return {
         providers: authProviders,
@@ -3573,6 +3563,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             )?.input ?? {};
           const providerKey =
             input.providerKey ?? input.provider_key ?? "openai";
+          const apiKey = input.apiKey ?? input.api_key ?? "sk-test-secret";
+          const baseUrl = input.baseUrl ?? input.base_url;
+          if (providerKey === "custom" && !baseUrl?.trim()) {
+            throw new Error("Custom provider requires a Base URL override");
+          }
+          providerSecrets[providerKey] = {
+            apiKey,
+            ...(baseUrl ? { baseUrl } : {}),
+          };
           const provider =
             authProviders.find((candidate) => candidate.key === providerKey) ??
             authProviders[0];
@@ -3594,6 +3593,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             account_id: "",
             expires_at: null,
             refresh_expires_at: null,
+            has_base_url_override: Boolean(baseUrl?.trim()),
             last_checked_at: getNow(),
             last_error: "",
             created_at: getNow(),
@@ -3602,6 +3602,22 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (existingIndex >= 0) connectedAccounts[existingIndex] = account;
           else connectedAccounts.push(account);
           return Promise.resolve(getAuthStatusMock());
+        }
+        if (cmd === "linkgo_auth_provider_secret") {
+          const input =
+            (
+              args as
+                | { input?: { providerKey?: string; provider_key?: string } }
+                | undefined
+            )?.input ?? {};
+          const providerKey = input.providerKey ?? input.provider_key ?? "openai";
+          const secret = providerSecrets[providerKey];
+          if (secret === undefined) throw new Error("Provider is not connected");
+          return Promise.resolve({
+            providerKey,
+            apiKey: secret.apiKey,
+            ...(secret.baseUrl ? { baseUrl: secret.baseUrl } : {}),
+          });
         }
         if (cmd === "linkgo_auth_oauth_start") {
           return Promise.resolve({
@@ -3624,6 +3640,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             account_id: "member-1",
             expires_at: null,
             refresh_expires_at: null,
+            has_base_url_override: false,
             last_checked_at: getNow(),
             last_error: "",
             created_at: getNow(),
@@ -3648,6 +3665,33 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
         if (cmd === "linkgo_auth_check")
           return Promise.resolve(getAuthStatusMock());
+        if (cmd === "linkgo_linkedin_publish_post") {
+          const input =
+            (
+              args as
+                | {
+                    input?: {
+                      approvalId?: number;
+                      approval_id?: number;
+                    };
+                  }
+                | undefined
+            )?.input ?? {};
+          const error = w.__LINKGO_LINKEDIN_PUBLISH_ERROR__;
+          if (typeof error === "string" && error.trim() !== "") {
+            throw new Error(error);
+          }
+          const result = w.__LINKGO_LINKEDIN_PUBLISH_RESULT__;
+          if (result !== undefined) {
+            return Promise.resolve(result);
+          }
+          const approvalId = input.approvalId ?? input.approval_id ?? 1;
+          const platformPostId = `urn:li:ugcPost:test-${approvalId}`;
+          return Promise.resolve({
+            platformPostId,
+            externalPostUrl: `https://www.linkedin.com/feed/update/${platformPostId}/`,
+          });
+        }
         return Promise.resolve(null);
       },
       metadata: {

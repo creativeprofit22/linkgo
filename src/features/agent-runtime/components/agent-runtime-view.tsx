@@ -5,7 +5,9 @@ import { AgentRunCard } from "@/features/agent-runtime/components/agent-run-card
 import { AgentToolContractList } from "@/features/agent-runtime/components/agent-tool-contract-list";
 import { CreateAgentRunDialog } from "@/features/agent-runtime/components/create-agent-run-dialog";
 import { useAgentRuntime } from "@/features/agent-runtime/hooks/use-agent-runtime";
+import type { AgentProviderKey } from "@/agent/types";
 import type { AgentRunWithDetails } from "@/features/agent-runtime/types";
+import type { ConnectedAccount } from "@/features/integrations/types";
 
 export function AgentRuntimeView(): React.ReactNode {
   const {
@@ -149,14 +151,10 @@ export function AgentRuntimeView(): React.ReactNode {
                   selectedCampaignArchived={selectedCampaignArchived}
                   killSwitchEnabled={killSwitchEnabled}
                   killSwitchReason={killSwitchReason}
-                  providerConnected={
-                    run.provider_key === "dry_run" ||
-                    connectedAccounts.some(
-                      (account) =>
-                        account.provider_key === run.provider_key &&
-                        account.status === "connected",
-                    )
-                  }
+                  providerConnected={isProviderReady(
+                    run.provider_key,
+                    connectedAccounts,
+                  )}
                   onStartRun={startRun}
                   onCancelRun={cancelRun}
                 />
@@ -166,6 +164,19 @@ export function AgentRuntimeView(): React.ReactNode {
         </>
       )}
     </div>
+  );
+}
+
+function isProviderReady(
+  providerKey: AgentProviderKey,
+  connectedAccounts: ConnectedAccount[],
+): boolean {
+  if (providerKey === "dry_run") return true;
+  return connectedAccounts.some(
+    (account) =>
+      account.provider_key === providerKey &&
+      account.status === "connected" &&
+      (providerKey !== "custom" || account.has_base_url_override),
   );
 }
 

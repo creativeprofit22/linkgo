@@ -7,6 +7,7 @@ import {
   PublishAttemptStatusBadge,
   ScheduleJobStatusBadge,
 } from "@/features/approvals/components/approval-status-badge";
+import { PublishLinkedInDialog } from "@/features/approvals/components/publish-linkedin-dialog";
 import { RecordPublishAttemptDialog } from "@/features/approvals/components/record-publish-attempt-dialog";
 import { ScheduleApprovalDialog } from "@/features/approvals/components/schedule-approval-dialog";
 import {
@@ -63,8 +64,13 @@ export function ApprovalCard({
     !isArchivedCampaign &&
     approval.scheduleJob?.status === "scheduled" &&
     approval.status === "scheduled";
+  const hasSuccessfulPublishAttempt = approval.publishAttempts.some(
+    (attempt) => attempt.status === "succeeded",
+  );
   const canRecordPublish =
     !isArchivedCampaign && ["approved", "scheduled"].includes(approval.status);
+  const canPublishViaLinkedIn =
+    canRecordPublish && !killSwitchEnabled && !hasSuccessfulPublishAttempt;
   const scheduleBlockedByKillSwitch =
     !isArchivedCampaign &&
     killSwitchEnabled &&
@@ -194,6 +200,13 @@ export function ApprovalCard({
                   triggerLabel="Mark published"
                   onRecord={onRecordPublishAttempt}
                 />
+                {canPublishViaLinkedIn && (
+                  <PublishLinkedInDialog
+                    approval={approval}
+                    commentary={escapedCommentary}
+                    onPublishResult={onRecordPublishAttempt}
+                  />
+                )}
                 <RecordPublishAttemptDialog
                   approvalId={approval.id}
                   scheduleJobId={approval.scheduleJob?.id}

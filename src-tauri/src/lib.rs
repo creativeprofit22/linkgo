@@ -28,10 +28,12 @@ pub fn run() {
             update_tray_menu,
             auth::commands::linkgo_auth_status,
             auth::commands::linkgo_auth_api_key,
+            auth::commands::linkgo_auth_provider_secret,
             auth::commands::linkgo_auth_oauth_start,
             auth::commands::linkgo_auth_oauth_code,
             auth::commands::linkgo_auth_logout,
-            auth::commands::linkgo_auth_check
+            auth::commands::linkgo_auth_check,
+            auth::commands::linkgo_linkedin_publish_post
         ]);
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

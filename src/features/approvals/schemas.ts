@@ -51,6 +51,11 @@ export const cancelScheduleSchema = z.object({
   id: z.number().int().positive(),
 });
 
+export const assertApprovalCanPublishViaLinkedInSchema = z.object({
+  approvalId: z.number().int().positive(),
+  scheduleJobId: optionalPositiveIdSchema,
+});
+
 export const recordPublishAttemptSchema = z
   .object({
     approvalId: z.number().int().positive(),

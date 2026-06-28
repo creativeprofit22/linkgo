@@ -2,6 +2,7 @@ import { Bot, ShieldCheck, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AGENT_PROVIDER_LABELS } from "@/agent";
 import { AgentEventList } from "@/features/agent-runtime/components/agent-event-list";
 import {
   AgentRunStatusBadge,
@@ -39,11 +40,11 @@ export function AgentRunCard({
   onCancelRun,
 }: AgentRunCardProps): React.ReactNode {
   const startableStatus = ["queued", "failed"].includes(run.status);
-  const canStart =
-    startableStatus && !killSwitchEnabled && run.provider_key === "dry_run";
+  const providerLabel = AGENT_PROVIDER_LABELS[run.provider_key];
+  const canStart = startableStatus && !killSwitchEnabled && providerConnected;
   const startBlockedByKillSwitch = startableStatus && killSwitchEnabled;
-  const nativeProviderPending =
-    startableStatus && !killSwitchEnabled && run.provider_key !== "dry_run";
+  const startBlockedByMissingProvider =
+    startableStatus && !killSwitchEnabled && !providerConnected;
   const canCancel = !terminalStatuses.includes(run.status);
 
   return (
@@ -56,7 +57,7 @@ export function AgentRunCard({
                 <Bot className="text-linkgo-blue size-5" /> {run.agent_role}
               </CardTitle>
               <AgentRunStatusBadge status={run.status} />
-              <Badge variant="outline">{run.provider_key}</Badge>
+              <Badge variant="outline">{providerLabel}</Badge>
               {run.workflowRun && (
                 <Badge variant="outline">
                   Workflow: {run.workflowRun.title}
@@ -94,17 +95,12 @@ export function AgentRunCard({
                   size="sm"
                   onClick={() => void onStartRun({ id: run.id })}
                 >
-                  {run.provider_key === "dry_run"
-                    ? "Start dry-run"
-                    : `Start ${run.provider_key}`}
+                  Start {providerLabel}
                 </Button>
               )}
-              {nativeProviderPending && (
+              {startBlockedByMissingProvider && (
                 <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                  Provider runs require native execution before starting.
-                  {!providerConnected
-                    ? ` Connect ${run.provider_key} first.`
-                    : ""}
+                  Connect {providerLabel} in Integrations first.
                 </p>
               )}
               {startBlockedByKillSwitch && (

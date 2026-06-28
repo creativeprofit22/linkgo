@@ -1,5 +1,9 @@
 import type { z } from "zod";
+import type { AgentProviderKey } from "@/agent/provider-catalog";
 import type { WorkflowStepKey } from "@/workflows/types";
+
+export { AGENT_PROVIDER_KEYS } from "@/agent/provider-catalog";
+export type { AgentProviderKey } from "@/agent/provider-catalog";
 
 export const AGENT_TOOL_NAMES = [
   "research_posts",
@@ -17,14 +21,6 @@ export const AGENT_ROLES = [
   "auditor",
   "scheduler",
   "analyst",
-] as const;
-
-export const AGENT_PROVIDER_KEYS = [
-  "dry_run",
-  "openai",
-  "anthropic",
-  "google",
-  "custom",
 ] as const;
 
 export const AGENT_RUN_STATUSES = [
@@ -60,7 +56,6 @@ export const AGENT_RUN_EVENT_TYPES = [
 
 export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
 export type AgentRole = (typeof AGENT_ROLES)[number];
-export type AgentProviderKey = (typeof AGENT_PROVIDER_KEYS)[number];
 export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 export type AgentToolCallStatus = (typeof AGENT_TOOL_CALL_STATUSES)[number];
 export type AgentRunEventType = (typeof AGENT_RUN_EVENT_TYPES)[number];

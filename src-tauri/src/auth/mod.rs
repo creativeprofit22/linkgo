@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod linkedin;
+pub mod linkedin_api;
 pub mod oauth;
 pub mod providers;
 pub mod storage;
@@ -66,6 +67,7 @@ pub struct SafeCredentialStatus {
     pub account_id: String,
     pub expires_at: Option<i64>,
     pub refresh_expires_at: Option<i64>,
+    pub has_base_url_override: bool,
     pub last_error: String,
 }
 
@@ -96,6 +98,7 @@ impl StoredCredential {
                     account_id: credentials.account_id.clone().unwrap_or_default(),
                     expires_at: credentials.expires_at,
                     refresh_expires_at: credentials.refresh_expires_at,
+                    has_base_url_override: false,
                     last_error: String::new(),
                 }
             }
@@ -108,6 +111,10 @@ impl StoredCredential {
                 account_id: String::new(),
                 expires_at: None,
                 refresh_expires_at: None,
+                has_base_url_override: credentials
+                    .base_url
+                    .as_ref()
+                    .is_some_and(|base_url| !base_url.trim().is_empty()),
                 last_error: String::new(),
             },
         }

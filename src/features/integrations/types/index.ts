@@ -1,12 +1,9 @@
-export const AUTH_METHODS = ["oauth", "api_key"] as const;
+import type { AuthProviderKey } from "@/agent/provider-catalog";
 
-export const AUTH_PROVIDER_KEYS = [
-  "openai",
-  "anthropic",
-  "google",
-  "custom",
-  "linkedin",
-] as const;
+export { AUTH_PROVIDER_KEYS } from "@/agent/provider-catalog";
+export type { AuthProviderKey } from "@/agent/provider-catalog";
+
+export const AUTH_METHODS = ["oauth", "api_key"] as const;
 
 export const CONNECTED_ACCOUNT_STATUSES = [
   "disconnected",
@@ -26,7 +23,6 @@ export const CREDENTIAL_EVENT_TYPES = [
 ] as const;
 
 export type AuthMethod = (typeof AUTH_METHODS)[number];
-export type AuthProviderKey = (typeof AUTH_PROVIDER_KEYS)[number];
 export type ConnectedAccountStatus =
   (typeof CONNECTED_ACCOUNT_STATUSES)[number];
 export type CredentialEventType = (typeof CREDENTIAL_EVENT_TYPES)[number];
@@ -54,6 +50,7 @@ export interface ConnectedAccount {
   account_id: string;
   expires_at: string | null;
   refresh_expires_at: string | null;
+  has_base_url_override: boolean;
   last_checked_at: string | null;
   last_error: string;
   created_at: string;
@@ -102,6 +99,16 @@ export interface OAuthCodeInput {
 
 export interface LogoutInput {
   providerKey: AuthProviderKey;
+}
+
+export interface ProviderSecretInput {
+  providerKey: AuthProviderKey;
+}
+
+export interface ProviderSecret {
+  providerKey: AuthProviderKey;
+  apiKey: string;
+  baseUrl?: string | undefined;
 }
 
 export interface AuthProgressEvent {

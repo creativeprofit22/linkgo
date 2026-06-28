@@ -2,6 +2,7 @@ export * from "@/agent/dry-run";
 export * from "@/agent/gg-ai-provider";
 export * from "@/agent/loop";
 export * from "@/agent/messages";
+export * from "@/agent/provider-catalog";
 export * from "@/agent/providers";
 export * from "@/agent/schemas";
 export * from "@/agent/tools";

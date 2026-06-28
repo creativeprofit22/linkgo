@@ -72,8 +72,9 @@ Implemented now:
 - Local schedule job records behind approval status.
 - Manual publish-attempt history.
 - LinkedIn LittleText escaped preview for API-safe commentary review.
+- Explicit operator-triggered LinkedIn API publishing for approved or scheduled posts when LinkedIn OAuth is connected.
 
-LinkedIn API publishing, OAuth/provider integration, and background scheduler execution are not implemented in this slice.
+Autonomous LinkedIn API publishing, LinkedIn API commenting, and background scheduler execution are not implemented in this slice.
 
 ### Metrics + learning slice
 
@@ -121,8 +122,9 @@ Implemented now:
 - Agent run, tool call, and runtime event tables.
 - Six Zod tool contracts: `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, and `collect_metrics`.
 - Provider-independent runtime interfaces, GG AI adapter, and deterministic `dry_run` provider.
+- Provider-backed GG AI execution after explicit credential connection.
 - Provider-aware Agent Runtime tab with contract visibility and local run history.
-- Approval-gated `schedule_post` dry-run behavior.
+- Approval-gated `schedule_post` behavior.
 - Archived-campaign mutation blocking.
 
 LinkedIn scraping, publishing, comments, and background workers are not implemented in this slice.
@@ -175,13 +177,16 @@ Roadmap coverage:
 
 Implemented now:
 
-- OpenAI, Anthropic, Gemini, custom API, and LinkedIn provider catalog.
+- Full installed GG AI provider catalog: Anthropic, Xiaomi, OpenAI, Gemini, Z.AI/GLM, Moonshot, DeepSeek, OpenRouter, Sakana, and MiniMax.
+- Linkgo-only custom API and LinkedIn provider catalog entries.
 - Native Tauri credential storage boundary for API keys and OAuth credentials.
 - LinkedIn OAuth start, manual code submission, state validation, token exchange path, refresh path, logout, and status checks.
+- Connected LinkedIn member metadata backfill through OIDC userinfo.
 - Integrations tab with provider cards and no secret rendering.
+- OAuth-backed LinkedIn post publishing command used only by explicit approved/scheduled post actions.
 
-Autonomous LinkedIn posting/commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
+Autonomous LinkedIn posting/commenting, LinkedIn API commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
 
 ## Future slices
 
-Future slices will add external integrations and automation only behind explicit approval gates.
+Future slices will add external integrations and automation only behind explicit approval gates. LinkedIn comment posting remains blocked until the exact endpoint and product access requirements are verified.

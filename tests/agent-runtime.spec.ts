@@ -39,7 +39,7 @@ test("persists a completed dry-run with tool calls and events", async ({
   await openAgentRuntime(page);
   await createDryRun(page);
 
-  await page.getByRole("button", { name: "Start dry-run" }).click();
+  await page.getByRole("button", { name: "Start Dry run" }).click();
 
   await expect(getBadge(page, "Completed").first()).toBeVisible();
   await expect(
@@ -56,16 +56,50 @@ test("persists a completed dry-run with tool calls and events", async ({
   expect(toolCalls[0]?.provider_tool_call_id).toBe("dry-run-1-tool-call-2");
 });
 
-test("keeps provider-backed agent runs queued until native execution lands", async ({
+test("starts a provider-backed run through a mocked GG AI stream", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_GG_AI_PROVIDER_TEST_API__?: {
+          stream: (options: unknown) => AsyncIterable<unknown>;
+        };
+        __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown;
+      }
+    ).__LINKGO_GG_AI_PROVIDER_TEST_API__ = {
+      async *stream(options: unknown): AsyncIterable<unknown> {
+        (
+          window as unknown as { __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown }
+        ).__LINKGO_PROVIDER_STREAM_OPTIONS__ = options;
+        yield { type: "text", text: "Provider stream started." };
+        yield {
+          type: "tool_call",
+          providerToolCallId: "mock-provider-tool-call-1",
+          toolName: "research_posts",
+          input: {
+            campaignId: 1,
+            keywords: ["founder content"],
+            maxPosts: 1,
+          },
+        };
+        yield { type: "done", outputSummary: "Provider run completed." };
+      },
+    };
+  });
 
   await page.getByRole("button", { name: /Integrations/ }).click();
-  await page.getByRole("button", { name: "Connect" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "OpenAI connection" });
-  await dialog.getByLabel("OpenAI API key").fill("sk-test-openai-key");
-  await dialog.getByLabel("Account label").fill("Runtime OpenAI");
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://custom.example.com/v1");
+  await dialog.getByLabel("Account label").fill("Runtime Custom API");
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Connected").first()).toBeVisible();
   await page.keyboard.press("Escape");
@@ -74,15 +108,28 @@ test("keeps provider-backed agent runs queued until native execution lands", asy
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await createCampaign(page);
   await openAgentRuntime(page);
-  await createProviderRun(page, "openai");
+  await createProviderRun(page, "custom");
 
-  await expect(page.getByRole("button", { name: "Start openai" })).toBeHidden();
-  await expect(
-    page.getByText("Provider runs require native execution before starting."),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(page.getByText("Provider run completed.").first()).toBeVisible();
 
   const runs = await getAgentRuns(page);
-  expect(runs[0]?.status).toBe("queued");
+  const toolCalls = await getAgentToolCalls(page);
+  expect(runs[0]?.status).toBe("completed");
+  expect(toolCalls[0]?.provider_tool_call_id).toBe("mock-provider-tool-call-1");
+  const streamOptions = await page.evaluate(
+    () =>
+      (
+        window as unknown as { __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown }
+      ).__LINKGO_PROVIDER_STREAM_OPTIONS__,
+  );
+  expect(streamOptions).toMatchObject({
+    provider: "openai",
+    model: "custom-model",
+    apiKey: "sk-test-custom-key",
+    baseUrl: "https://custom.example.com/v1",
+  });
 });
 
 test("stops schedule dry-run at waiting approval without publishing", async ({
@@ -93,7 +140,7 @@ test("stops schedule dry-run at waiting approval without publishing", async ({
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
 
-  await page.getByRole("button", { name: "Start dry-run" }).click();
+  await page.getByRole("button", { name: "Start Dry run" }).click();
 
   await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
   await expect(
@@ -126,7 +173,7 @@ test("blocks archived campaign agent runtime mutations", async ({ page }) => {
     page.getByRole("button", { name: "Create run" }).first(),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Start dry-run" }),
+    page.getByRole("button", { name: "Start Dry run" }),
   ).toBeHidden();
 
   await page.waitForFunction(
@@ -257,7 +304,7 @@ async function createCampaign(page: Page): Promise<void> {
 
 async function createProviderRun(
   page: Page,
-  providerKey: "openai" | "anthropic" | "google" | "custom",
+  providerKey: "openai" | "anthropic" | "gemini" | "custom",
 ): Promise<void> {
   await page.getByRole("button", { name: "Create run" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create agent run" });

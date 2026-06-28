@@ -101,6 +101,19 @@ fn delete_keyring(provider_key: &str) -> Result<bool, String> {
     }
 }
 
+fn normalize_legacy_google_credential(mut credential: StoredCredential) -> StoredCredential {
+    match &mut credential {
+        StoredCredential::OAuth(credentials) if credentials.provider_key == "google" => {
+            credentials.provider_key = "gemini".to_string();
+        }
+        StoredCredential::ApiKey(credentials) if credentials.provider_key == "google" => {
+            credentials.provider_key = "gemini".to_string();
+        }
+        _ => {}
+    }
+    credential
+}
+
 #[derive(Debug, Clone)]
 pub struct AuthStorage {
     fallback_path: PathBuf,
@@ -124,6 +137,7 @@ impl AuthStorage {
         if file_fallback_enabled() {
             let fallback = load_file(&self.fallback_path)?;
             for credential in fallback.credentials.values() {
+                let credential = normalize_legacy_google_credential(credential.clone());
                 if !statuses
                     .iter()
                     .any(|status| status.provider_key == credential.provider_key())
@@ -138,18 +152,39 @@ impl AuthStorage {
 
     pub fn load(&self, provider_key: &str) -> Result<Option<StoredCredential>, String> {
         match read_keyring(provider_key) {
-            Ok(Some(credential)) => Ok(Some(credential)),
-            Ok(None) if file_fallback_enabled() => {
-                let file = load_file(&self.fallback_path)?;
-                Ok(file.credentials.get(provider_key).cloned())
+            Ok(Some(credential)) => {
+                return Ok(Some(normalize_legacy_google_credential(credential)))
             }
-            Ok(None) => Ok(None),
-            Err(_error) if file_fallback_enabled() => {
-                let file = load_file(&self.fallback_path)?;
-                Ok(file.credentials.get(provider_key).cloned())
+            Ok(None) => {}
+            Err(_error) if file_fallback_enabled() => {}
+            Err(error) => return Err(error),
+        };
+
+        if provider_key == "gemini" {
+            match read_keyring("google") {
+                Ok(Some(credential)) => {
+                    return Ok(Some(normalize_legacy_google_credential(credential)))
+                }
+                Ok(None) => {}
+                Err(_error) if file_fallback_enabled() => {}
+                Err(error) => return Err(error),
             }
-            Err(error) => Err(error),
         }
+
+        if file_fallback_enabled() {
+            let file = load_file(&self.fallback_path)?;
+            if let Some(credential) = file.credentials.get(provider_key).cloned() {
+                return Ok(Some(normalize_legacy_google_credential(credential)));
+            }
+            if provider_key == "gemini" {
+                return Ok(file
+                    .credentials
+                    .get("google")
+                    .cloned()
+                    .map(normalize_legacy_google_credential));
+            }
+        }
+        Ok(None)
     }
 
     pub fn save(&self, credential: StoredCredential) -> Result<(), String> {
@@ -171,13 +206,21 @@ impl AuthStorage {
             Err(_error) if file_fallback_enabled() => false,
             Err(error) => return Err(error),
         };
+        let legacy_keyring_removed = if provider_key == "gemini" {
+            delete_keyring("google").unwrap_or(false)
+        } else {
+            false
+        };
         if file_fallback_enabled() {
             let mut file = load_file(&self.fallback_path)?;
-            let file_removed = file.credentials.remove(provider_key).is_some();
+            let mut file_removed = file.credentials.remove(provider_key).is_some();
+            if provider_key == "gemini" {
+                file_removed = file.credentials.remove("google").is_some() || file_removed;
+            }
             save_file(&self.fallback_path, &file)?;
-            return Ok(keyring_removed || file_removed);
+            return Ok(keyring_removed || legacy_keyring_removed || file_removed);
         }
-        Ok(keyring_removed)
+        Ok(keyring_removed || legacy_keyring_removed)
     }
 }
 

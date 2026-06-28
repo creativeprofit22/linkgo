@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AGENT_PROVIDER_KEYS,
+  AGENT_PROVIDER_LABELS,
   AGENT_ROLES,
   DEFAULT_AGENT_MODELS,
   type AgentProviderKey,
@@ -42,6 +43,19 @@ const roleLabels: Record<AgentRole, string> = {
   scheduler: "Scheduler",
   analyst: "Analyst",
 };
+
+function isProviderReady(
+  providerKey: AgentProviderKey,
+  connectedAccounts: ConnectedAccount[],
+): boolean {
+  if (providerKey === "dry_run") return true;
+  return connectedAccounts.some(
+    (account) =>
+      account.provider_key === providerKey &&
+      account.status === "connected" &&
+      (providerKey !== "custom" || account.has_base_url_override),
+  );
+}
 
 export function CreateAgentRunDialog({
   campaigns,
@@ -74,12 +88,7 @@ export function CreateAgentRunDialog({
   const dialogWorkflowRuns = workflowRuns.filter(
     (run) => run.campaign_id === campaignId,
   );
-  const providerConnected =
-    providerKey === "dry_run" ||
-    connectedAccounts.some(
-      (account) =>
-        account.provider_key === providerKey && account.status === "connected",
-    );
+  const providerConnected = isProviderReady(providerKey, connectedAccounts);
   const disabled =
     campaigns.length === 0 ||
     selectedCampaignArchived ||
@@ -127,8 +136,7 @@ export function CreateAgentRunDialog({
             <Bot className="size-5" /> Create agent run
           </DialogTitle>
           <DialogDescription>
-            Queue a dry-run or provider-backed runtime pass. Provider runs stay
-            queued until native execution lands.
+            Queue a dry-run or connected provider-backed runtime pass.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -209,13 +217,14 @@ export function CreateAgentRunDialog({
             >
               {AGENT_PROVIDER_KEYS.map((provider) => (
                 <option key={provider} value={provider}>
-                  {provider}
+                  {AGENT_PROVIDER_LABELS[provider]}
                 </option>
               ))}
             </select>
             {!providerConnected && (
               <p className="text-destructive text-xs">
-                Connect {providerKey} in Integrations before creating this run.
+                Connect {AGENT_PROVIDER_LABELS[providerKey]} in Integrations
+                before creating this run.
               </p>
             )}
           </div>

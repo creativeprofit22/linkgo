@@ -5,6 +5,7 @@ import {
   type StreamOptions,
   type Tool,
 } from "@kenkaiiii/gg-ai";
+import { GG_AI_PROVIDER_KEYS } from "@/agent/provider-catalog";
 import { agentToolRegistry } from "@/agent/tools";
 import { IS_TEST } from "@/lib/env";
 import type {
@@ -16,12 +17,21 @@ import type {
   AgentToolName,
 } from "@/agent/types";
 
-const GG_AI_PROVIDER_MAP: Partial<Record<AgentProviderKey, Provider>> = {
-  openai: "openai",
-  anthropic: "anthropic",
-  google: "gemini",
-  custom: "openai",
-};
+const GG_AI_PROVIDER_SET = new Set<string>(GG_AI_PROVIDER_KEYS);
+
+function toGgAiProvider(
+  key: Exclude<AgentProviderKey, "dry_run">,
+  options: GgAiProviderOptions,
+): Provider {
+  if (key === "custom") {
+    if (options.baseUrl === undefined || options.baseUrl.trim() === "") {
+      throw new Error("Custom provider requires a Base URL override");
+    }
+    return "openai";
+  }
+  if (GG_AI_PROVIDER_SET.has(key)) return key;
+  throw new Error("Unsupported AI provider");
+}
 
 function toGgAiMessages(messages: AgentMessage[]): Message[] {
   return messages.map((message) => {
@@ -90,10 +100,7 @@ export function createGgAiProvider(
   modelName: string,
   options: GgAiProviderOptions = {},
 ): AgentProvider {
-  const provider = GG_AI_PROVIDER_MAP[key];
-  if (provider === undefined) {
-    throw new Error("Unsupported AI provider");
-  }
+  const provider = toGgAiProvider(key, options);
 
   return {
     key,

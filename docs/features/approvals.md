@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The Approvals tab turns selected clean draft variants into local human review records, local schedule records, and manual publish-attempt history.
+The Approvals tab turns selected clean draft variants into local human review records, local schedule records, manual publish-attempt history, and explicit OAuth-backed LinkedIn post publishing.
 
-This feature is approval-gated and local-first. It does not call LinkedIn, publish posts, scrape content, or run background scheduler jobs.
+This feature is approval-gated and local-first for review state. It calls LinkedIn only when an operator confirms `Publish via LinkedIn` on an approved or scheduled post; it does not scrape content or run background scheduler jobs.
 
 ## Schema
 
@@ -12,7 +12,7 @@ Migration version `4` creates:
 
 - `approvals`: one review record per draft and selected draft variant.
 - `schedule_jobs`: one local LinkedIn schedule record per approval.
-- `publish_attempts`: manual success/failure history for approved or scheduled posts, plus failed follow-up attempts after publication.
+- `publish_attempts`: manual or OAuth-backed success/failure history for approved or scheduled posts, plus failed follow-up attempts after publication.
 
 Approval statuses:
 
@@ -71,8 +71,8 @@ Operator actions:
 
 - `needs_review` can be approved, sent to changes, rejected, or cancelled.
 - `changes_requested` can return to review, be approved, rejected, or cancelled.
-- `approved` can be sent back to review, sent to changes, cancelled, scheduled, or manually marked published/failed.
-- `scheduled` can be cancelled or manually marked published/failed.
+- `approved` can be sent back to review, sent to changes, cancelled, scheduled, manually marked published/failed, or explicitly published through LinkedIn OAuth.
+- `scheduled` can be cancelled, manually marked published/failed, or explicitly published through LinkedIn OAuth.
 - `published`, `rejected`, and `cancelled` are terminal for normal UI actions, except cancelled records can be returned to review by the data API.
 
 Side effects:
@@ -94,7 +94,7 @@ Side effects:
 | { } @ [ ] ( ) < > # \ * _ ~
 ```
 
-The escaped preview is for API-safe review only. The app still performs no LinkedIn API publishing in this slice.
+The escaped preview is the exact text sent by the OAuth-backed `Publish via LinkedIn` action.
 
 ## UI behavior
 
@@ -104,21 +104,21 @@ The Approvals tab includes:
 - Summary cards for needs review, approved, scheduled, and published records.
 - Create review dialog for eligible drafts.
 - Review cards with source context, selected variant, escaped preview, notes, schedule details, and publish history.
-- Buttons for approve, request changes, reject, schedule, cancel schedule, mark published, and record failure.
+- Buttons for approve, request changes, reject, schedule, cancel schedule, mark published, publish via LinkedIn, and record failure.
 
-Confirmation prompts guard rejection, schedule cancellation, and manual published recording.
+Confirmation prompts guard rejection, schedule cancellation, manual published recording, and OAuth-backed LinkedIn publishing. `Publish via LinkedIn` is hidden for archived campaigns, non-approved/non-scheduled approvals, kill-switch-enabled state, and approvals with an existing successful publish attempt.
 
 ## Explicit exclusions
 
 This feature intentionally excludes:
 
-- LinkedIn OAuth/API calls.
 - Auto-publishing.
 - Background scheduler execution.
 - LinkedIn scraping.
 - AI generation, AI audit, and AI rewrite loops.
 - Metrics/learning tables.
 - Comment/reply automation.
+- LinkedIn API commenting.
 
 ## Verification commands
 

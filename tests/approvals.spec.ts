@@ -15,6 +15,9 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   await openApprovals(page);
   await createReview(page);
 
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeHidden();
   await expect(getBadge(page, "Needs review")).toBeVisible();
   await expect(
     page.getByText(reservedCharacterVariant().hook).first(),
@@ -50,6 +53,270 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   ).toBeVisible();
 });
 
+test("publishes an approved approval through mocked LinkedIn OAuth action", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createReadyDraft(page, reservedCharacterVariant());
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
+  await expect(
+    dialog.getByText(
+      "This will publish to LinkedIn using the connected account.",
+    ),
+  ).toBeVisible();
+  await expect(dialog.getByText("\\@founder")).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeDisabled();
+
+  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
+  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+
+  await expect(getBadge(page, "Published")).toBeVisible();
+  await expect(getBadge(page, "Succeeded")).toBeVisible();
+  await expect(
+    page.getByText("Platform ID: urn:li:ugcPost:test-1"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeHidden();
+});
+
+test("records a failed LinkedIn OAuth publish attempt and error queue item", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_LINKEDIN_PUBLISH_ERROR__ = "LinkedIn API rejected the post.";
+  });
+  await createReadyDraft(page, cleanVariant());
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
+  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
+  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+
+  await expect(getBadge(page, "Approved")).toBeVisible();
+  await expect(getBadge(page, "Failed")).toBeVisible();
+  await expect(page.getByText("LinkedIn API rejected the post.")).toBeVisible();
+  const counts = await getStateCounts(page);
+  expect(counts.publishAttempts).toBe(1);
+  expect(counts.errorQueueItems).toBe(1);
+});
+
+test("records invalid empty LinkedIn OAuth publish result as a failed attempt", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_LINKEDIN_PUBLISH_RESULT__ = {
+      platformPostId: "",
+      externalPostUrl: "",
+    };
+  });
+  await createReadyDraft(page, cleanVariant());
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
+  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
+  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+
+  await expect(getBadge(page, "Approved")).toBeVisible();
+  await expect(getBadge(page, "Failed")).toBeVisible();
+  const counts = await getStateCounts(page);
+  expect(counts.publishAttempts).toBe(1);
+  expect(counts.errorQueueItems).toBe(1);
+});
+
+test("global kill switch hides LinkedIn OAuth publish action", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createReadyDraft(page, cleanVariant());
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeVisible();
+
+  await openSafety(page);
+  await page
+    .getByLabel("Kill switch reason")
+    .fill("Pause LinkedIn publishing during review.");
+  await page.getByRole("button", { name: "Enable kill switch" }).click();
+  await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+
+  await openApprovals(page);
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeHidden();
+});
+
+test("LinkedIn OAuth publish rechecks approval state before submitting", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await countLinkedInPublishInvokes(page);
+  await createReadyDraft(page, cleanVariant());
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
+  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
+
+  await setApprovalStatusThroughMockSql(page, 1, "changes_requested");
+  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+
+  await expect(page.getByText("LinkedIn publish blocked")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Only approved or scheduled approvals can publish via LinkedIn",
+    ),
+  ).toBeVisible();
+  expect(await getPublishAttemptCount(page)).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+});
+
+test("LinkedIn OAuth publish preflight blocks duplicate successes and stale schedules", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await countLinkedInPublishInvokes(page);
+  await createReadyDraft(page, cleanVariant());
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await scheduleApproval(page, "2026-06-25T14:30", "local");
+
+  const staleScheduleResult = await publishViaTestApi(page, {
+    approvalId: 1,
+    scheduleJobId: 999,
+    commentary: "Stale schedule should be blocked.",
+    idempotencyKey: "approval:1:linkedin:stale-schedule",
+  });
+  expect(staleScheduleResult).toEqual({
+    ok: false,
+    message: "Schedule job is not the current scheduled job",
+  });
+  expect(await getPublishAttemptCount(page)).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+
+  await page.getByRole("button", { name: "Mark published" }).click();
+  await page
+    .getByLabel("LinkedIn post URL")
+    .fill("https://www.linkedin.com/posts/first-success/");
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "Record attempt" }).click();
+  await expect(getBadge(page, "Published")).toBeVisible();
+
+  await setApprovalStatusThroughMockSql(page, 1, "approved");
+  const duplicateResult = await publishViaTestApi(page, {
+    approvalId: 1,
+    commentary: "Duplicate success should be blocked.",
+    idempotencyKey: "approval:1:linkedin:duplicate-success",
+  });
+  expect(duplicateResult).toEqual({
+    ok: false,
+    message: "Approval already has a successful publish attempt",
+  });
+  expect(await getPublishAttemptCount(page)).toBe(1);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+});
+
+test("LinkedIn OAuth publish rechecks kill switch before submitting", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await countLinkedInPublishInvokes(page);
+  await createReadyDraft(page, cleanVariant());
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
+  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
+
+  await enableKillSwitchThroughMockSql(
+    page,
+    "Emergency stop before LinkedIn submission.",
+  );
+  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+
+  await expect(page.getByText("LinkedIn publish blocked")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Global kill switch is enabled: Emergency stop before LinkedIn submission.",
+    ),
+  ).toBeVisible();
+  await expect(getBadge(page, "Approved")).toBeVisible();
+  await expect(getBadge(page, "Succeeded")).toBeHidden();
+  expect(await getPublishAttemptCount(page)).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+
+  const directResult = await page.evaluate(async () => {
+    const publishLinkedInPost = (
+      window as unknown as {
+        __LINKGO_LINKEDIN_ACTIONS_TEST_API__?: {
+          publishLinkedInPost: (input: {
+            approvalId: number;
+            commentary: string;
+            idempotencyKey: string;
+          }) => Promise<unknown>;
+        };
+      }
+    ).__LINKGO_LINKEDIN_ACTIONS_TEST_API__?.publishLinkedInPost;
+
+    if (publishLinkedInPost === undefined) {
+      return { ok: false, message: "LinkedIn test API was not initialized" };
+    }
+
+    try {
+      await publishLinkedInPost({
+        approvalId: 1,
+        commentary: "Direct bridge should be blocked.",
+        idempotencyKey: "approval:1:linkedin:direct-blocked",
+      });
+      return { ok: true, message: "" };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  expect(directResult).toEqual({
+    ok: false,
+    message:
+      "Global kill switch is enabled: Emergency stop before LinkedIn submission.",
+  });
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+});
+
 test("successful publish attempts require a LinkedIn URL or platform ID", async ({
   page,
 }) => {
@@ -65,7 +332,9 @@ test("successful publish attempts require a LinkedIn URL or platform ID", async 
   const recordButton = dialog.getByRole("button", { name: "Record attempt" });
   await expect(recordButton).toBeDisabled();
   await expect(
-    dialog.getByText("LinkedIn URL or platform post ID is required for success"),
+    dialog.getByText(
+      "LinkedIn URL or platform post ID is required for success",
+    ),
   ).toBeVisible();
 
   await dialog.getByLabel("Platform post ID").fill("manual-success-id");
@@ -306,6 +575,9 @@ test("archived campaign approvals hide mutation controls with restore guidance",
   await expect(
     page.getByRole("button", { name: "Record failure" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeVisible();
 
   await archiveSelectedCampaign(page);
   await openApprovals(page);
@@ -326,6 +598,9 @@ test("archived campaign approvals hide mutation controls with restore guidance",
   await expect(
     page.getByRole("button", { name: "Record failure" }),
   ).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeHidden();
 });
 
 interface VariantFormInput {
@@ -341,6 +616,130 @@ function getBadge(page: Page, label: string): Locator {
     .filter({ hasText: new RegExp(`^${label}$`, "u") });
 }
 
+async function countLinkedInPublishInvokes(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __TAURI_INTERNALS__?: {
+        invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+      };
+      __LINKGO_LINKEDIN_PUBLISH_INVOKES__?: number;
+    };
+    const internals = target.__TAURI_INTERNALS__;
+    if (internals === undefined) return;
+
+    const originalInvoke = internals.invoke.bind(internals);
+    target.__LINKGO_LINKEDIN_PUBLISH_INVOKES__ = 0;
+    internals.invoke = (cmd: string, args?: unknown) => {
+      if (cmd === "linkgo_linkedin_publish_post") {
+        target.__LINKGO_LINKEDIN_PUBLISH_INVOKES__ =
+          (target.__LINKGO_LINKEDIN_PUBLISH_INVOKES__ ?? 0) + 1;
+      }
+      return originalInvoke(cmd, args);
+    };
+  });
+}
+
+async function getLinkedInPublishInvokeCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    return (
+      (window as unknown as { __LINKGO_LINKEDIN_PUBLISH_INVOKES__?: number })
+        .__LINKGO_LINKEDIN_PUBLISH_INVOKES__ ?? 0
+    );
+  });
+}
+
+async function setApprovalStatusThroughMockSql(
+  page: Page,
+  approvalId: number,
+  status: "approved" | "changes_requested",
+): Promise<void> {
+  await page.evaluate(
+    async ({ id, nextStatus }) => {
+      const invoke = (
+        window as unknown as {
+          __TAURI_INTERNALS__?: {
+            invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+          };
+        }
+      ).__TAURI_INTERNALS__?.invoke;
+
+      if (invoke === undefined) {
+        throw new Error("Tauri invoke mock was not initialized");
+      }
+
+      await invoke("plugin:sql|execute", {
+        query: `UPDATE approvals
+        SET status = $1, updated_at = datetime('now')
+        WHERE id = $2`,
+        values: [nextStatus, id],
+      });
+    },
+    { id: approvalId, nextStatus: status },
+  );
+}
+
+async function publishViaTestApi(
+  page: Page,
+  input: {
+    approvalId: number;
+    scheduleJobId?: number;
+    commentary: string;
+    idempotencyKey: string;
+  },
+): Promise<{ ok: boolean; message: string }> {
+  return page.evaluate(async (publishInput) => {
+    const publishLinkedInPost = (
+      window as unknown as {
+        __LINKGO_LINKEDIN_ACTIONS_TEST_API__?: {
+          publishLinkedInPost: (input: typeof publishInput) => Promise<unknown>;
+        };
+      }
+    ).__LINKGO_LINKEDIN_ACTIONS_TEST_API__?.publishLinkedInPost;
+
+    if (publishLinkedInPost === undefined) {
+      return { ok: false, message: "LinkedIn test API was not initialized" };
+    }
+
+    try {
+      await publishLinkedInPost(publishInput);
+      return { ok: true, message: "" };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }, input);
+}
+
+async function enableKillSwitchThroughMockSql(
+  page: Page,
+  reason: string,
+): Promise<void> {
+  await page.evaluate(async (killSwitchReason) => {
+    const invoke = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: {
+          invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__?.invoke;
+
+    if (invoke === undefined) {
+      throw new Error("Tauri invoke mock was not initialized");
+    }
+
+    await invoke("plugin:sql|execute", {
+      query: `UPDATE safety_settings
+      SET global_kill_switch = $1,
+        kill_switch_reason = $2,
+        updated_at = datetime('now')
+      WHERE id = 1`,
+      values: [1, killSwitchReason],
+    });
+  }, reason);
+}
+
 async function getPublishAttemptCount(page: Page): Promise<number> {
   return page.evaluate(() => {
     const stateCounts = (
@@ -350,6 +749,23 @@ async function getPublishAttemptCount(page: Page): Promise<number> {
     ).__LINKGO_SQL_STATE_COUNTS__;
 
     return stateCounts?.().publishAttempts ?? 0;
+  });
+}
+
+async function getStateCounts(
+  page: Page,
+): Promise<{ publishAttempts: number; errorQueueItems: number }> {
+  return page.evaluate(() => {
+    const stateCounts = (
+      window as unknown as {
+        __LINKGO_SQL_STATE_COUNTS__?: () => {
+          publishAttempts: number;
+          errorQueueItems: number;
+        };
+      }
+    ).__LINKGO_SQL_STATE_COUNTS__;
+
+    return stateCounts?.() ?? { publishAttempts: 0, errorQueueItems: 0 };
   });
 }
 
@@ -411,6 +827,13 @@ async function openApprovals(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Approvals/ }).click();
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
+  ).toBeVisible();
+}
+
+async function openSafety(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Safety/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Safety", exact: true }),
   ).toBeVisible();
 }
 
