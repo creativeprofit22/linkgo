@@ -58,23 +58,23 @@ Implemented now:
 
 AI draft generation and AI audit/rewrite loops are not implemented in this slice.
 
-### Approvals + scheduler slice
+### Approvals slice
 
 Roadmap coverage:
 
 - Section 10: human approval records for selected clean draft variants.
-- Section 12: local schedule job records behind approval status.
+- Section 12 foundation: local schedule job records behind approval status.
 - Section 14 foundation: manual publish-attempt history.
 
 Implemented now:
 
 - Approval records for selected clean draft variants.
-- Local schedule job records behind approval status.
+- Local schedule job records behind approval status for operator scheduling.
 - Manual publish-attempt history.
 - LinkedIn LittleText escaped preview for API-safe commentary review.
 - Explicit operator-triggered LinkedIn API publishing for approved or scheduled posts when LinkedIn OAuth is connected.
 
-Autonomous LinkedIn API publishing, LinkedIn API commenting, and background scheduler execution are not implemented in this slice.
+Autonomous LinkedIn API publishing, LinkedIn API commenting, and scheduler worker execution are handled outside this approvals slice.
 
 ### Metrics + learning slice
 
@@ -106,7 +106,7 @@ Implemented now:
 - Workflows tab with campaign filtering, summary cards, step controls, and event history.
 - Archived-campaign mutation blocking.
 
-Background jobs, automatic scheduler execution, LinkedIn publishing, and generic workflow building are not implemented in this slice.
+Workflow-owned background jobs, LinkedIn API commenting, and generic workflow building are not implemented in this slice.
 
 ### Agent runtime + tool schemas slice
 
@@ -127,7 +127,7 @@ Implemented now:
 - Approval-gated `schedule_post` behavior.
 - Archived-campaign mutation blocking.
 
-LinkedIn scraping, publishing, comments, and background workers are not implemented in this slice.
+LinkedIn scraping, comments, and autonomous content generation are not implemented in this slice.
 
 ### Safety + observability slice
 
@@ -144,7 +144,7 @@ Implemented now:
 - Error queue items for failed publish attempts, rejected approvals, and failed agent runs.
 - Safety tab with summaries, campaign filtering, kill switch controls, event history, and status transitions.
 
-Real publishing, background execution, and external telemetry are not implemented in this slice.
+External telemetry and non-approved autonomous actions are not implemented in this slice.
 
 ### Comment/reply agent slice
 
@@ -164,6 +164,26 @@ Implemented now:
 - Comments tab with campaign filtering, summaries, variant preview, audit display, review actions, and attempt dialogs.
 
 LinkedIn API commenting, scraping, background workers, and automated comment posting are not implemented in this slice.
+
+### Background scheduler slice
+
+Roadmap coverage:
+
+- Section 12: due-job execution, retry metadata, idempotency, duplicate prevention, and platform IDs through publish attempts.
+- Section 14: scheduled LinkedIn publishing using the same OAuth command path as explicit operator publishing.
+- Section 16: global kill switch enforcement and safety audit history for scheduled publishing.
+- Section 20: scheduler events and error queue items for terminal failures.
+
+Implemented now:
+
+- Migration version `12` adds scheduler settings, retry/lock fields on `schedule_jobs`, scheduler events, and due-job indexes.
+- Native Tauri scheduler commands: status, start, stop, and bounded tick.
+- Opt-in worker loop that runs while Linkgo is open or hidden to tray.
+- Due approved scheduled LinkedIn posts publish through the shared native OAuth helper.
+- Retryable failures keep schedules active with backoff; terminal failures return approvals to `approved` and create error queue items.
+- Scheduler tab with status, start/stop, manual tick, pending due jobs, recent events, and scheduler-linked attempts.
+
+OS launch-on-login, running after the Linkgo process quits, LinkedIn API commenting, scraping, and autonomous content generation are not implemented.
 
 ### Integrations + provider auth foundation
 
@@ -185,8 +205,8 @@ Implemented now:
 - Integrations tab with provider cards and no secret rendering.
 - OAuth-backed LinkedIn post publishing command used only by explicit approved/scheduled post actions.
 
-Autonomous LinkedIn posting/commenting, LinkedIn API commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
+Autonomous content generation, LinkedIn API commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
 
 ## Future slices
 
-Future slices will add external integrations and automation only behind explicit approval gates. LinkedIn comment posting remains blocked until the exact endpoint and product access requirements are verified.
+Future slices will add external integrations and automation only behind explicit approval gates. LinkedIn comment posting remains blocked until the exact endpoint and product access requirements are verified. OS-level launch-on-login and after-quit schedulers remain future work.

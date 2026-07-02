@@ -39,6 +39,13 @@ export interface ScheduleJob {
   timezone: string;
   status: ScheduleJobStatus;
   idempotency_key: string;
+  attempt_count?: number;
+  max_attempts?: number;
+  next_attempt_at?: string | null;
+  last_attempted_at?: string | null;
+  last_error?: string;
+  locked_at?: string | null;
+  locked_by?: string | null;
   created_at: string;
   updated_at: string;
 }

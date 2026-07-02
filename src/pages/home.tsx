@@ -4,6 +4,7 @@ import {
   Bot,
   KeyRound,
   CheckCircle2,
+  Clock3,
   FileText,
   ListChecks,
   MessageCircle,
@@ -27,6 +28,7 @@ import { DraftsView } from "@/features/drafts";
 import { IntegrationsView } from "@/features/integrations";
 import { MetricsView } from "@/features/metrics";
 import { SafetyView } from "@/features/safety";
+import { SchedulerView } from "@/features/scheduler";
 import { WorkflowsView } from "@/features/workflows";
 
 type HomeTab =
@@ -34,6 +36,7 @@ type HomeTab =
   | "queue"
   | "drafts"
   | "approvals"
+  | "scheduler"
   | "comments"
   | "metrics"
   | "workflows"
@@ -82,6 +85,14 @@ const tabs: RoadmapTab[] = [
     icon: CheckCircle2,
     enabled: true,
     docHref: "docs/features/approvals.md",
+  },
+  {
+    id: "scheduler",
+    label: "Scheduler",
+    description: "Opt-in due post publishing while Linkgo is running.",
+    icon: Clock3,
+    enabled: true,
+    docHref: "docs/features/scheduler.md",
   },
   {
     id: "comments",
@@ -205,6 +216,8 @@ export function HomePage(): React.ReactNode {
             <DraftsView />
           ) : activeRoadmapTab.id === "approvals" ? (
             <ApprovalsView />
+          ) : activeRoadmapTab.id === "scheduler" ? (
+            <SchedulerView />
           ) : activeRoadmapTab.id === "comments" ? (
             <CommentsView />
           ) : activeRoadmapTab.id === "metrics" ? (

@@ -31,7 +31,7 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
 
-  await page.getByRole("button", { name: "Schedule" }).click();
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
   await page.getByLabel("Scheduled for").fill("2026-06-25T14:30");
   await page.getByLabel("Timezone label").fill("local");
   await page.getByRole("button", { name: "Schedule approval" }).click();
@@ -486,7 +486,7 @@ test("cancelled schedules can be rescheduled with new details", async ({
   await page.getByRole("button", { name: "Cancel schedule" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(getBadge(page, "Cancelled").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Schedule" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeVisible();
 
   await scheduleApproval(page, "2026-06-26T09:15", "America/New_York");
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
@@ -514,7 +514,7 @@ test("failed scheduled publish attempts can be rescheduled with new details", as
   await page.getByRole("button", { name: "Record attempt" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(getBadge(page, "Failed").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Schedule" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeVisible();
 
   await scheduleApproval(page, "2026-06-27T10:45", "Europe/London");
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
@@ -568,7 +568,7 @@ test("archived campaign approvals hide mutation controls with restore guidance",
 
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Schedule" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Mark published" }),
   ).toBeVisible();
@@ -591,7 +591,7 @@ test("archived campaign approvals hide mutation controls with restore guidance",
   await expect(
     page.getByRole("button", { name: "Request changes" }),
   ).toBeHidden();
-  await expect(page.getByRole("button", { name: "Schedule" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Mark published" }),
   ).toBeHidden();
@@ -936,7 +936,7 @@ async function scheduleApproval(
   scheduledFor: string,
   timezone: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Schedule" }).click();
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
   await page.getByLabel("Scheduled for").fill(scheduledFor);
   await page.getByLabel("Timezone label").fill(timezone);
   const dialog = page.getByRole("dialog", { name: "Schedule approval" });

@@ -39,7 +39,7 @@ GG AI providers exposed in Linkgo:
 
 ## Explicit exclusions
 
-- No autonomous LinkedIn posting or commenting.
+- No autonomous content generation or ungated LinkedIn posting/commenting.
 - No LinkedIn API comment posting until endpoint and product access requirements are verified.
 - No scraping or browser automation.
 - No coding tools, shell access, repo scanning, file editing, or MCP code tools.
@@ -49,6 +49,6 @@ GG AI providers exposed in Linkgo:
 
 Connected AI provider credentials can execute agent runs only after the operator presses start.
 
-LinkedIn publishing is human-triggered from approval cards only; no scheduler or background worker calls the publish command.
+LinkedIn publishing is approval-gated. Operators can publish from approval cards, and the native scheduler can publish only already-approved scheduled posts while Linkgo is running or hidden to tray.
 
 Dry-run agent runs remain available without credentials.

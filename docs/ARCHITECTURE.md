@@ -13,9 +13,11 @@ Linkgo is a Tauri v2 desktop app with a React frontend and local SQLite database
 
 ## Tauri boundary
 
-Rust code should only handle work that needs OS integration, app lifecycle, plugins, or durable migrations.
+Rust code should only handle work that needs OS integration, app lifecycle, plugins, native credential access, local background workers, or durable migrations.
 
-Frontend feature code talks to SQLite through `src/lib/db.ts`, which wraps `@tauri-apps/plugin-sql` and provides browser/test fallbacks.
+The scheduler lives in `src-tauri/src/scheduler` because due-job execution must continue while the webview is hidden to tray and must reuse native LinkedIn OAuth credentials without exposing tokens to React.
+
+Frontend feature code talks to SQLite through `src/lib/db.ts`, which wraps `@tauri-apps/plugin-sql` and provides browser/test fallbacks. Frontend scheduler controls call native `linkgo_scheduler_*` commands for start, stop, status, and bounded manual ticks.
 
 ## Feature slice contract
 
@@ -36,3 +38,4 @@ Each new feature must add:
 - Keep timestamps as text with `datetime('now')` until a cross-feature time abstraction lands.
 - Prefer one migration per feature slice.
 - Avoid dead schema for roadmap items that do not have data access and UI yet.
+- Native background workers must not hold SQLite transactions during external network calls.

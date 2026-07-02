@@ -8,6 +8,7 @@ pub mod integrations;
 pub mod metrics;
 pub mod provider_parity;
 pub mod safety;
+pub mod scheduler;
 pub mod workflows;
 
 use tauri_plugin_sql::Migration;
@@ -24,5 +25,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(comments::migrations());
     migrations.extend(integrations::migrations());
     migrations.extend(provider_parity::migrations());
+    migrations.extend(scheduler::migrations());
     migrations
 }

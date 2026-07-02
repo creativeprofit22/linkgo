@@ -1,6 +1,7 @@
 mod auth;
 mod migrations;
 mod plugins;
+mod scheduler;
 
 use tauri::Manager;
 
@@ -33,7 +34,11 @@ pub fn run() {
             auth::commands::linkgo_auth_oauth_code,
             auth::commands::linkgo_auth_logout,
             auth::commands::linkgo_auth_check,
-            auth::commands::linkgo_linkedin_publish_post
+            auth::commands::linkgo_linkedin_publish_post,
+            scheduler::linkgo_scheduler_status,
+            scheduler::linkgo_scheduler_start,
+            scheduler::linkgo_scheduler_stop,
+            scheduler::linkgo_scheduler_tick
         ]);
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

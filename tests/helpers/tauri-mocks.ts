@@ -140,6 +140,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       timezone: string;
       status: ScheduleJobStatus;
       idempotency_key: string;
+      attempt_count: number;
+      max_attempts: number;
+      next_attempt_at: string | null;
+      last_attempted_at: string | null;
+      last_error: string;
+      locked_at: string | null;
+      locked_by: string | null;
       created_at: string;
       updated_at: string;
     };
@@ -490,6 +497,39 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       | "resolved"
       | "failed";
 
+    type SchedulerEventType =
+      | "scheduler_started"
+      | "scheduler_stopped"
+      | "tick_started"
+      | "tick_completed"
+      | "job_claimed"
+      | "job_blocked"
+      | "job_published"
+      | "job_retry_scheduled"
+      | "job_failed";
+    type SchedulerEventSeverity = "info" | "warning" | "error";
+
+    type SchedulerSettings = {
+      id: 1;
+      enabled: number;
+      poll_interval_seconds: number;
+      max_jobs_per_tick: number;
+      retry_backoff_minutes: number;
+      updated_at: string;
+    };
+
+    type SchedulerEvent = {
+      id: number;
+      campaign_id: number | null;
+      approval_id: number | null;
+      schedule_job_id: number | null;
+      event_type: SchedulerEventType;
+      severity: SchedulerEventSeverity;
+      summary: string;
+      metadata_json: string;
+      created_at: string;
+    };
+
     type SafetySettings = {
       id: 1;
       global_kill_switch: number;
@@ -564,6 +604,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       safetyAuditEvents: SafetyAuditEvent[];
       rateLimitEvents: RateLimitEvent[];
       errorQueueItems: ErrorQueueItem[];
+      schedulerSettings: SchedulerSettings;
+      schedulerEvents: SchedulerEvent[];
       nextCampaignId: number;
       nextKeywordId: number;
       nextTargetPostId: number;
@@ -591,6 +633,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextSafetyAuditEventId: number;
       nextRateLimitEventId: number;
       nextErrorQueueItemId: number;
+      nextSchedulerEventId: number;
     };
 
     const w = window as unknown as Record<string, unknown>;
@@ -627,6 +670,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const safetyAuditEvents: SafetyAuditEvent[] = [];
     const rateLimitEvents: RateLimitEvent[] = [];
     const errorQueueItems: ErrorQueueItem[] = [];
+    const schedulerSettings: SchedulerSettings = {
+      id: 1,
+      enabled: 0,
+      poll_interval_seconds: 60,
+      max_jobs_per_tick: 1,
+      retry_backoff_minutes: 15,
+      updated_at: new Date().toISOString(),
+    };
+    const schedulerEvents: SchedulerEvent[] = [];
+    let schedulerRunning = false;
     let nextCampaignId = 1;
     let nextKeywordId = 1;
     let nextTargetPostId = 1;
@@ -654,6 +707,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextSafetyAuditEventId = 1;
     let nextRateLimitEventId = 1;
     let nextErrorQueueItemId = 1;
+    let nextSchedulerEventId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
@@ -711,6 +765,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         safetyAuditEvents: cloneRows(safetyAuditEvents),
         rateLimitEvents: cloneRows(rateLimitEvents),
         errorQueueItems: cloneRows(errorQueueItems),
+        schedulerSettings: { ...schedulerSettings },
+        schedulerEvents: cloneRows(schedulerEvents),
         nextCampaignId,
         nextKeywordId,
         nextTargetPostId,
@@ -738,6 +794,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextSafetyAuditEventId,
         nextRateLimitEventId,
         nextErrorQueueItemId,
+        nextSchedulerEventId,
       };
     }
 
@@ -778,6 +835,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(safetyAuditEvents, snapshot.safetyAuditEvents);
       restoreRows(rateLimitEvents, snapshot.rateLimitEvents);
       restoreRows(errorQueueItems, snapshot.errorQueueItems);
+      schedulerSettings.enabled = snapshot.schedulerSettings.enabled;
+      schedulerSettings.poll_interval_seconds =
+        snapshot.schedulerSettings.poll_interval_seconds;
+      schedulerSettings.max_jobs_per_tick = snapshot.schedulerSettings.max_jobs_per_tick;
+      schedulerSettings.retry_backoff_minutes =
+        snapshot.schedulerSettings.retry_backoff_minutes;
+      schedulerSettings.updated_at = snapshot.schedulerSettings.updated_at;
+      restoreRows(schedulerEvents, snapshot.schedulerEvents);
       nextCampaignId = snapshot.nextCampaignId;
       nextKeywordId = snapshot.nextKeywordId;
       nextTargetPostId = snapshot.nextTargetPostId;
@@ -805,6 +870,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextSafetyAuditEventId = snapshot.nextSafetyAuditEventId;
       nextRateLimitEventId = snapshot.nextRateLimitEventId;
       nextErrorQueueItemId = snapshot.nextErrorQueueItemId;
+      nextSchedulerEventId = snapshot.nextSchedulerEventId;
     }
 
     function getCandidateJoinRow(
@@ -1727,6 +1793,118 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         .slice(0, 50);
     }
 
+    function scheduleCampaign(job: ScheduleJob): Campaign | undefined {
+      const approval = approvals.find((row) => row.id === job.approval_id);
+      return approval
+        ? campaigns.find((campaign) => campaign.id === approval.campaign_id)
+        : undefined;
+    }
+
+    function scheduleApproval(job: ScheduleJob): Approval | undefined {
+      return approvals.find((row) => row.id === job.approval_id);
+    }
+
+    function dateMs(value: string | null | undefined): number {
+      if (!value) return Number.NaN;
+      return new Date(value).getTime();
+    }
+
+    function isDueSchedulerJob(job: ScheduleJob): boolean {
+      const approval = scheduleApproval(job);
+      const campaign = scheduleCampaign(job);
+      const nowMs = Date.now();
+      return (
+        job.status === "scheduled" &&
+        approval?.status === "scheduled" &&
+        campaign?.status !== "archived" &&
+        dateMs(job.scheduled_for) <= nowMs &&
+        (job.next_attempt_at === null || dateMs(job.next_attempt_at) <= nowMs)
+      );
+    }
+
+    function selectSchedulerDueJobs(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return scheduleJobs
+        .filter((job) => {
+          const approval = scheduleApproval(job);
+          const campaign = scheduleCampaign(job);
+          const variant = approval
+            ? draftVariants.find((row) => row.id === approval.draft_variant_id)
+            : undefined;
+          if (!approval || !campaign || !variant) return false;
+          const includeSoon = dateMs(job.scheduled_for) <= Date.now() + 86_400_000;
+          const includeError = job.last_error.trim() !== "";
+          return (
+            job.status === "scheduled" &&
+            (includeSoon || includeError) &&
+            (campaignId === null || approval.campaign_id === campaignId)
+          );
+        })
+        .map((job) => {
+          const approval = scheduleApproval(job)!;
+          const campaign = scheduleCampaign(job)!;
+          const variant = draftVariants.find(
+            (row) => row.id === approval.draft_variant_id,
+          )!;
+          return {
+            ...job,
+            campaign_id: approval.campaign_id,
+            approval_status: approval.status,
+            campaign_name: campaign.name,
+            campaign_status: campaign.status,
+            variant_hook: variant.hook,
+          };
+        })
+        .sort((left, right) => {
+          const scheduledDelta = left.scheduled_for.localeCompare(right.scheduled_for);
+          if (scheduledDelta !== 0) return scheduledDelta;
+          return left.id - right.id;
+        })
+        .slice(0, 20);
+    }
+
+    function selectSchedulerEvents(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return schedulerEvents
+        .filter((event) => campaignId === null || event.campaign_id === campaignId)
+        .map((event) => ({
+          ...event,
+          campaign_name: event.campaign_id
+            ? campaigns.find((campaign) => campaign.id === event.campaign_id)?.name ?? null
+            : null,
+        }))
+        .sort((left, right) => {
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          if (createdDelta !== 0) return createdDelta;
+          return right.id - left.id;
+        })
+        .slice(0, 50);
+    }
+
+    function selectSchedulerPublishAttempts(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return publishAttempts
+        .filter((attempt) => attempt.schedule_job_id !== null)
+        .map((attempt) => {
+          const approval = approvals.find((row) => row.id === attempt.approval_id);
+          const campaign = approval
+            ? campaigns.find((row) => row.id === approval.campaign_id)
+            : undefined;
+          return {
+            ...attempt,
+            campaign_id: approval?.campaign_id ?? null,
+            campaign_name: campaign?.name ?? null,
+          };
+        })
+        .filter((attempt) => campaignId === null || attempt.campaign_id === campaignId)
+        .sort((left, right) => {
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          if (createdDelta !== 0) return createdDelta;
+          return right.id - left.id;
+        })
+        .slice(0, 25);
+    }
+
     function selectWorkflowRunById(values: unknown[]): unknown[] {
       const runId = Number(values[0] ?? 0);
       const run = workflowRuns.find((row) => row.id === runId);
@@ -1773,6 +1951,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             ).length,
           },
         ];
+      }
+      if (query.includes("FROM scheduler_settings")) {
+        return [{ ...schedulerSettings }];
       }
       if (query.includes("FROM safety_settings")) {
         return [{ ...safetySettings }];
@@ -1941,6 +2122,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             return right.id - left.id;
           });
       }
+      if (query.includes("FROM scheduler_events se")) {
+        return selectSchedulerEvents(values);
+      }
+      if (
+        query.includes("FROM publish_attempts pa") &&
+        query.includes("pa.schedule_job_id IS NOT NULL")
+      ) {
+        return selectSchedulerPublishAttempts(values);
+      }
+      if (
+        query.includes("FROM schedule_jobs sj") &&
+        query.includes("dv.hook AS variant_hook")
+      ) {
+        return selectSchedulerDueJobs(values);
+      }
       if (query.includes("FROM safety_audit_events")) {
         return selectSafetyAuditEvents(values);
       }
@@ -1966,6 +2162,47 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const draftId = Number(values[0] ?? 0);
         return [
           { count: approvals.filter((row) => row.draft_id === draftId).length },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM schedule_jobs sj") &&
+        query.includes("sj.status = 'scheduled'") &&
+        !query.includes("sj.status IN")
+      ) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        const dueOnly = query.includes("datetime(sj.scheduled_for) <= datetime('now')");
+        return [
+          {
+            count: scheduleJobs.filter((job) => {
+              const approval = scheduleApproval(job);
+              const campaign = scheduleCampaign(job);
+              if (!approval || !campaign) return false;
+              return (
+                job.status === "scheduled" &&
+                (campaignId === null || approval.campaign_id === campaignId) &&
+                (!dueOnly || isDueSchedulerJob(job))
+              );
+            }).length,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM schedule_jobs sj") &&
+        query.includes("sj.status = 'failed'")
+      ) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        return [
+          {
+            count: scheduleJobs.filter((job) => {
+              const approval = scheduleApproval(job);
+              return (
+                job.status === "failed" &&
+                (campaignId === null || approval?.campaign_id === campaignId)
+              );
+            }).length,
+          },
         ];
       }
       if (
@@ -2263,6 +2500,35 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: 0, rowsAffected: 0 };
       }
 
+      if (query.includes("INSERT OR IGNORE INTO scheduler_settings")) {
+        return { lastInsertId: 1, rowsAffected: 0 };
+      }
+
+      if (query.includes("UPDATE scheduler_settings")) {
+        if (query.includes("enabled")) {
+          schedulerSettings.enabled = Number(values[0] ?? schedulerSettings.enabled);
+        }
+        schedulerSettings.updated_at = now;
+        return { lastInsertId: 1, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO scheduler_events")) {
+        const event: SchedulerEvent = {
+          id: nextSchedulerEventId,
+          campaign_id: values[0] === null ? null : Number(values[0] ?? 0),
+          approval_id: values[1] === null ? null : Number(values[1] ?? 0),
+          schedule_job_id: values[2] === null ? null : Number(values[2] ?? 0),
+          event_type: values[3] as SchedulerEventType,
+          severity: values[4] as SchedulerEventSeverity,
+          summary: String(values[5] ?? ""),
+          metadata_json: String(values[6] ?? "{}"),
+          created_at: now,
+        };
+        schedulerEvents.push(event);
+        nextSchedulerEventId += 1;
+        return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT OR IGNORE INTO safety_settings")) {
         return { lastInsertId: 1, rowsAffected: 0 };
       }
@@ -2529,6 +2795,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           timezone: String(values[2] ?? "local"),
           status: "scheduled",
           idempotency_key: idempotencyKey,
+          attempt_count: 0,
+          max_attempts: 3,
+          next_attempt_at: null,
+          last_attempted_at: null,
+          last_error: "",
+          locked_at: null,
+          locked_by: null,
           created_at: now,
           updated_at: now,
         };
@@ -3417,6 +3690,216 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return { lastInsertId: 0, rowsAffected: 1 };
     }
 
+    function recordSchedulerEvent(
+      event_type: SchedulerEventType,
+      summary: string,
+      options: {
+        campaignId?: number | null;
+        approvalId?: number | null;
+        scheduleJobId?: number | null;
+        severity?: SchedulerEventSeverity;
+        metadata?: unknown;
+      } = {},
+    ): void {
+      schedulerEvents.push({
+        id: nextSchedulerEventId,
+        campaign_id: options.campaignId ?? null,
+        approval_id: options.approvalId ?? null,
+        schedule_job_id: options.scheduleJobId ?? null,
+        event_type,
+        severity: options.severity ?? "info",
+        summary,
+        metadata_json: JSON.stringify(options.metadata ?? {}),
+        created_at: getNow(),
+      });
+      nextSchedulerEventId += 1;
+    }
+
+    function schedulerStatusPayload(): Record<string, unknown> {
+      return {
+        enabled: schedulerSettings.enabled === 1,
+        running: schedulerRunning,
+        runnerId: schedulerRunning ? "mock-runner" : null,
+        settings: {
+          enabled: schedulerSettings.enabled === 1,
+          pollIntervalSeconds: schedulerSettings.poll_interval_seconds,
+          maxJobsPerTick: schedulerSettings.max_jobs_per_tick,
+          retryBackoffMinutes: schedulerSettings.retry_backoff_minutes,
+          updatedAt: schedulerSettings.updated_at,
+        },
+      };
+    }
+
+    function publishSchedulerJob(job: ScheduleJob): "published" | "retry" | "failed" | "blocked" {
+      const approval = scheduleApproval(job);
+      const campaign = scheduleCampaign(job);
+      if (!approval || !campaign) return "failed";
+      if (safetySettings.global_kill_switch === 1) {
+        recordSchedulerEvent("job_blocked", "Scheduler skipped a due job because the global kill switch is enabled.", {
+          campaignId: approval.campaign_id,
+          approvalId: approval.id,
+          scheduleJobId: job.id,
+          severity: "warning",
+        });
+        return "blocked";
+      }
+
+      job.attempt_count += 1;
+      job.last_attempted_at = getNow();
+      job.locked_at = getNow();
+      job.locked_by = "mock-runner";
+      recordSchedulerEvent("job_claimed", "Scheduler claimed a due LinkedIn post.", {
+        campaignId: approval.campaign_id,
+        approvalId: approval.id,
+        scheduleJobId: job.id,
+      });
+
+      const publishInvokes = Number(w.__LINKGO_LINKEDIN_PUBLISH_INVOKES__ ?? 0);
+      w.__LINKGO_LINKEDIN_PUBLISH_INVOKES__ = publishInvokes + 1;
+      const error = w.__LINKGO_LINKEDIN_PUBLISH_ERROR__;
+      if (typeof error === "string" && error.trim() !== "") {
+        const redacted = error;
+        publishAttempts.push({
+          id: nextPublishAttemptId,
+          approval_id: approval.id,
+          schedule_job_id: job.id,
+          platform: "linkedin",
+          status: "failed",
+          external_post_url: "",
+          platform_post_id: "",
+          error_message: redacted,
+          created_at: getNow(),
+        });
+        nextPublishAttemptId += 1;
+        safetyAuditEvents.push({
+          id: nextSafetyAuditEventId,
+          campaign_id: approval.campaign_id,
+          subject_type: "schedule_job",
+          subject_id: job.id,
+          event_type: "publish_failed",
+          severity: "warning",
+          summary:
+            job.attempt_count >= job.max_attempts
+              ? "Scheduled LinkedIn publish failed permanently."
+              : "Scheduled LinkedIn publish failed and will retry.",
+          metadata_json: JSON.stringify({ attemptCount: job.attempt_count }),
+          created_at: getNow(),
+        });
+        nextSafetyAuditEventId += 1;
+        job.last_error = redacted;
+        job.locked_at = null;
+        job.locked_by = null;
+        job.updated_at = getNow();
+        if (
+          job.attempt_count >= job.max_attempts ||
+          w.__LINKGO_SCHEDULER_FORCE_TERMINAL_FAILURE__ === true
+        ) {
+          job.status = "failed";
+          approval.status = "approved";
+          approval.updated_at = getNow();
+          errorQueueItems.push({
+            id: nextErrorQueueItemId,
+            campaign_id: approval.campaign_id,
+            source_type: "schedule_job",
+            source_id: job.id,
+            title: "Scheduled publish failed",
+            detail: redacted,
+            severity: "error",
+            status: "open",
+            resolution_notes: "",
+            created_at: getNow(),
+            updated_at: getNow(),
+          });
+          nextErrorQueueItemId += 1;
+          recordSchedulerEvent("job_failed", "Scheduled LinkedIn publish failed permanently.", {
+            campaignId: approval.campaign_id,
+            approvalId: approval.id,
+            scheduleJobId: job.id,
+            severity: "error",
+            metadata: { attemptCount: job.attempt_count },
+          });
+          return "failed";
+        }
+        job.next_attempt_at = new Date(
+          Date.now() + schedulerSettings.retry_backoff_minutes * job.attempt_count * 60_000,
+        ).toISOString();
+        recordSchedulerEvent("job_retry_scheduled", "Scheduled LinkedIn publish failed and will retry.", {
+          campaignId: approval.campaign_id,
+          approvalId: approval.id,
+          scheduleJobId: job.id,
+          severity: "warning",
+          metadata: { attemptCount: job.attempt_count },
+        });
+        return "retry";
+      }
+
+      const platformPostId = `urn:li:ugcPost:test-${approval.id}`;
+      publishAttempts.push({
+        id: nextPublishAttemptId,
+        approval_id: approval.id,
+        schedule_job_id: job.id,
+        platform: "linkedin",
+        status: "succeeded",
+        external_post_url: `https://www.linkedin.com/feed/update/${platformPostId}/`,
+        platform_post_id: platformPostId,
+        error_message: "",
+        created_at: getNow(),
+      });
+      nextPublishAttemptId += 1;
+      approval.status = "published";
+      approval.updated_at = getNow();
+      job.status = "completed";
+      job.last_error = "";
+      job.locked_at = null;
+      job.locked_by = null;
+      job.updated_at = getNow();
+      safetyAuditEvents.push({
+        id: nextSafetyAuditEventId,
+        campaign_id: approval.campaign_id,
+        subject_type: "schedule_job",
+        subject_id: job.id,
+        event_type: "publish_succeeded",
+        severity: "info",
+        summary: "Scheduled LinkedIn post was published.",
+        metadata_json: JSON.stringify({ platformPostId }),
+        created_at: getNow(),
+      });
+      nextSafetyAuditEventId += 1;
+      recordSchedulerEvent("job_published", "Scheduled LinkedIn post was published.", {
+        campaignId: approval.campaign_id,
+        approvalId: approval.id,
+        scheduleJobId: job.id,
+        metadata: { platformPostId },
+      });
+      return "published";
+    }
+
+    function runSchedulerTickMock(): Record<string, number> {
+      const result = {
+        claimed: 0,
+        published: 0,
+        retryScheduled: 0,
+        failed: 0,
+        blocked: 0,
+      };
+      recordSchedulerEvent("tick_started", "Scheduler tick started.");
+      const dueJobs = scheduleJobs
+        .filter(isDueSchedulerJob)
+        .slice(0, schedulerSettings.max_jobs_per_tick);
+      for (const job of dueJobs) {
+        const outcome = publishSchedulerJob(job);
+        if (outcome !== "blocked") result.claimed += 1;
+        if (outcome === "published") result.published += 1;
+        if (outcome === "retry") result.retryScheduled += 1;
+        if (outcome === "failed") result.failed += 1;
+        if (outcome === "blocked") result.blocked += 1;
+      }
+      recordSchedulerEvent("tick_completed", "Scheduler tick completed.", {
+        metadata: result,
+      });
+      return result;
+    }
+
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
     w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
     w.__LINKGO_SQL_COMMENT_THREADS__ = () => cloneRows(commentThreads);
@@ -3427,6 +3910,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_SAFETY_AUDIT_EVENTS__ = () => cloneRows(safetyAuditEvents);
     w.__LINKGO_SQL_RATE_LIMIT_EVENTS__ = () => cloneRows(rateLimitEvents);
     w.__LINKGO_SQL_ERROR_QUEUE_ITEMS__ = () => cloneRows(errorQueueItems);
+    w.__LINKGO_SQL_SCHEDULE_JOBS__ = () => cloneRows(scheduleJobs);
+    w.__LINKGO_SQL_PUBLISH_ATTEMPTS__ = () => cloneRows(publishAttempts);
+    w.__LINKGO_SQL_SCHEDULER_SETTINGS__ = () => ({ ...schedulerSettings });
+    w.__LINKGO_SQL_SCHEDULER_EVENTS__ = () => cloneRows(schedulerEvents);
 
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
       campaigns: campaigns.length,
@@ -3457,6 +3944,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       safetyAuditEvents: safetyAuditEvents.length,
       rateLimitEvents: rateLimitEvents.length,
       errorQueueItems: errorQueueItems.length,
+      schedulerEvents: schedulerEvents.length,
     });
 
     const authProviders = [
@@ -3665,6 +4153,37 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
         if (cmd === "linkgo_auth_check")
           return Promise.resolve(getAuthStatusMock());
+        if (cmd === "linkgo_scheduler_status") {
+          return Promise.resolve(schedulerStatusPayload());
+        }
+        if (cmd === "linkgo_scheduler_start") {
+          if (safetySettings.global_kill_switch === 1) {
+            throw new Error(
+              safetySettings.kill_switch_reason.trim()
+                ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
+                : "Global kill switch is enabled",
+            );
+          }
+          schedulerSettings.enabled = 1;
+          schedulerSettings.updated_at = getNow();
+          schedulerRunning = true;
+          recordSchedulerEvent("scheduler_started", "Background scheduler started.", {
+            metadata: { runnerId: "mock-runner" },
+          });
+          return Promise.resolve(schedulerStatusPayload());
+        }
+        if (cmd === "linkgo_scheduler_stop") {
+          schedulerSettings.enabled = 0;
+          schedulerSettings.updated_at = getNow();
+          schedulerRunning = false;
+          recordSchedulerEvent("scheduler_stopped", "Background scheduler stopped.", {
+            metadata: { runnerId: "mock-runner" },
+          });
+          return Promise.resolve(schedulerStatusPayload());
+        }
+        if (cmd === "linkgo_scheduler_tick") {
+          return Promise.resolve(runSchedulerTickMock());
+        }
         if (cmd === "linkgo_linkedin_publish_post") {
           const input =
             (

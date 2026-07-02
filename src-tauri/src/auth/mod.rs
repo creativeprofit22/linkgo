@@ -3,6 +3,7 @@ pub mod linkedin;
 pub mod linkedin_api;
 pub mod oauth;
 pub mod providers;
+pub mod publish;
 pub mod storage;
 
 use serde::{Deserialize, Serialize};

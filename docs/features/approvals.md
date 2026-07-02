@@ -4,7 +4,7 @@
 
 The Approvals tab turns selected clean draft variants into local human review records, local schedule records, manual publish-attempt history, and explicit OAuth-backed LinkedIn post publishing.
 
-This feature is approval-gated and local-first for review state. It calls LinkedIn only when an operator confirms `Publish via LinkedIn` on an approved or scheduled post; it does not scrape content or run background scheduler jobs.
+This feature is approval-gated and local-first for review state. It calls LinkedIn when an operator confirms `Publish via LinkedIn` on an approved or scheduled post. Background due-job execution is documented separately in `docs/features/scheduler.md` and uses the same approved scheduled records.
 
 ## Schema
 
@@ -81,7 +81,7 @@ Side effects:
 - Returning to review moves the linked draft to `ready_for_review`.
 - Scheduling creates a deterministic idempotency key and moves the approval to `scheduled`.
 - Successful publish attempts move the approval to `published` and complete the linked schedule when present.
-- Failed publish attempts keep approved/scheduled approvals actionable and mark the linked schedule failed when present.
+- Manual failed publish attempts keep approved/scheduled approvals actionable and mark the linked schedule failed when present.
 - Failed follow-up attempts on already published approvals add history only; they do not reopen the approval or mutate completed schedule state.
 
 ## LinkedIn LittleText escaping
@@ -112,8 +112,8 @@ Confirmation prompts guard rejection, schedule cancellation, manual published re
 
 This feature intentionally excludes:
 
-- Auto-publishing.
-- Background scheduler execution.
+- Auto-generated content publishing.
+- Scheduler execution details, which live in `docs/features/scheduler.md`.
 - LinkedIn scraping.
 - AI generation, AI audit, and AI rewrite loops.
 - Metrics/learning tables.
