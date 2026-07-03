@@ -56,6 +56,7 @@ export interface CommentAttempt {
   status: CommentAttemptStatus;
   external_comment_url: string;
   platform_comment_id: string;
+  idempotency_key: string;
   error_message: string;
   created_at: string;
 }
@@ -72,6 +73,7 @@ export interface CommentTargetSnapshot {
   relevance_score: number | null;
   target_post_id: number;
   target_url: string;
+  target_platform_resource_urn: string;
   target_author_name: string;
   target_author_profile_url: string;
   target_content: string;
@@ -131,5 +133,6 @@ export interface RecordCommentAttemptInput {
   status: CommentAttemptStatus;
   externalCommentUrl?: string;
   platformCommentId?: string;
+  idempotencyKey?: string;
   errorMessage?: string;
 }

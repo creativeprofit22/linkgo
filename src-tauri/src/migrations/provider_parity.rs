@@ -154,7 +154,9 @@ mod tests {
         assert!(migration
             .sql
             .contains("idx_connected_accounts_provider_key"));
-        assert!(migration.sql.contains("has_base_url_override INTEGER NOT NULL DEFAULT 0"));
+        assert!(migration
+            .sql
+            .contains("has_base_url_override INTEGER NOT NULL DEFAULT 0"));
         assert!(migration.sql.contains("idx_credential_events_provider_key"));
     }
 }

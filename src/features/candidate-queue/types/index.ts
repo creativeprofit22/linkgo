@@ -9,6 +9,7 @@ export interface TargetPost {
   platform: CandidatePlatform;
   url: string;
   normalized_url: string;
+  platform_resource_urn: string;
   author_name: string;
   author_profile_url: string;
   posted_at: string | null;
@@ -52,6 +53,7 @@ export interface CreateCandidateInput {
   authorName?: string;
   authorProfileUrl?: string;
   postedAt?: string | null;
+  platformResourceUrn?: string;
   sourceKeyword?: string;
   relevanceScore?: number | null;
   scoreReason?: string;

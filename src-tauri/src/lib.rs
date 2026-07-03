@@ -35,6 +35,7 @@ pub fn run() {
             auth::commands::linkgo_auth_logout,
             auth::commands::linkgo_auth_check,
             auth::commands::linkgo_linkedin_publish_post,
+            auth::commands::linkgo_linkedin_publish_comment,
             scheduler::linkgo_scheduler_status,
             scheduler::linkgo_scheduler_start,
             scheduler::linkgo_scheduler_stop,

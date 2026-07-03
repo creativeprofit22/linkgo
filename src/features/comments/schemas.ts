@@ -69,6 +69,7 @@ export const recordCommentAttemptSchema = z
     status: commentAttemptStatusSchema,
     externalCommentUrl: optionalUrlOrEmptySchema,
     platformCommentId: z.string().trim().max(500).default(""),
+    idempotencyKey: z.string().trim().max(200).default(""),
     errorMessage: z.string().trim().max(2000).default(""),
   })
   .superRefine((value, context) => {

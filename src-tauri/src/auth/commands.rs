@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use super::publish::{self, LinkedInPublishPostInput, LinkedInPublishPostResult};
+use super::publish::{
+    self, LinkedInPublishCommentInput, LinkedInPublishCommentResult, LinkedInPublishPostInput,
+    LinkedInPublishPostResult,
+};
 use super::storage::AuthStorage;
 use super::{
     linkedin::{exchange_linkedin_code, refresh_linkedin_credential, start_linkedin_oauth},
@@ -359,6 +362,14 @@ pub fn linkgo_linkedin_publish_post(
     input: LinkedInPublishPostInput,
 ) -> Result<LinkedInPublishPostResult, String> {
     publish::publish_approved_linkedin_post(&app, input)
+}
+
+#[tauri::command]
+pub fn linkgo_linkedin_publish_comment(
+    app: AppHandle,
+    input: LinkedInPublishCommentInput,
+) -> Result<LinkedInPublishCommentResult, String> {
+    publish::publish_approved_linkedin_comment(&app, input)
 }
 
 #[cfg(test)]

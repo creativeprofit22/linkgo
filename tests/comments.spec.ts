@@ -111,6 +111,61 @@ test("A rejected comment thread moves to History with Cancel disabled", async ({
   await expect(history.getByRole("button", { name: "Cancel" })).toBeDisabled();
 });
 
+test("Approved comment posts through mocked LinkedIn API and records success", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createApprovedComment(page, "api-success");
+
+  await page.getByRole("button", { name: "Post via LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Post comment" });
+  await expect(dialog.getByText("Exact escaped comment preview")).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Post via LinkedIn" }),
+  ).toBeDisabled();
+  await dialog.getByLabel(/Type “Post comment”/).fill("Post comment");
+  await dialog.getByRole("button", { name: "Post via LinkedIn" }).click();
+
+  await expect(getBadge(page, "Posted")).toBeVisible();
+  await expect(page.getByText("Comment attempt history")).toBeVisible();
+  const attempts = await getCommentAttempts(page);
+  expect(attempts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        status: "succeeded",
+        idempotency_key: "comment-thread:1:linkedin:manual",
+      }),
+    ]),
+  );
+  await expect.poll(() => getCommentPublishInvokeCount(page)).toBe(1);
+});
+
+test("LinkedIn API comment failure records failed attempt and Safety error", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createApprovedComment(page, "api-failure");
+  await page.evaluate(() => {
+    (window as unknown as { __LINKGO_LINKEDIN_COMMENT_ERROR__?: string }).__LINKGO_LINKEDIN_COMMENT_ERROR__ =
+      "LinkedIn Community Management access or w_member_social_feed scope required";
+  });
+
+  await page.getByRole("button", { name: "Post via LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Post comment" });
+  await dialog.getByLabel(/Type “Post comment”/).fill("Post comment");
+  await dialog.getByRole("button", { name: "Post via LinkedIn" }).click();
+
+  await expect(page.getByText("LinkedIn comment failed")).toBeVisible();
+  const attempts = await getCommentAttempts(page);
+  expect(attempts).toEqual(
+    expect.arrayContaining([expect.objectContaining({ status: "failed" })]),
+  );
+  await openSafety(page);
+  await expect(
+    page.getByRole("heading", { name: "Comment attempt failed" }),
+  ).toBeVisible();
+});
+
 test("A clean variant can be reviewed approved and manually recorded posted", async ({
   page,
 }) => {
@@ -139,7 +194,7 @@ test("A clean variant can be reviewed approved and manually recorded posted", as
   await dialog.getByRole("button", { name: "Record attempt" }).click();
 
   await expect(getBadge(page, "Posted")).toBeVisible();
-  await expect(page.getByText("Manual attempt history")).toBeVisible();
+  await expect(page.getByText("Comment attempt history")).toBeVisible();
   await expect(page.getByText("comment-success")).toBeVisible();
 
   const attempts = await getCommentAttempts(page);
@@ -189,7 +244,7 @@ test("Daily comment cap blocks a second same-day successful posted attempt", asy
   ).toHaveLength(1);
 });
 
-test("Global kill switch hides posted action and data API blocks successful attempts", async ({
+test("Global kill switch hides API posting and direct publish blocks before native", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -202,18 +257,20 @@ test("Global kill switch hides posted action and data API blocks successful atte
 
   await openComments(page);
   await expect(
-    page.getByRole("button", { name: "Record posted" }),
+    page.getByRole("button", { name: "Post via LinkedIn" }),
   ).toBeHidden();
   await expect(
-    page.getByText("Record posted is hidden by the global kill switch"),
+    page.getByText("Post via LinkedIn is hidden by the global kill switch"),
   ).toBeVisible();
 
-  const message = await recordCommentAttemptViaDataApi(page, {
+  const message = await publishCommentViaLinkedInDataApi(page, {
     commentThreadId: 1,
-    status: "succeeded",
-    externalCommentUrl: "https://www.linkedin.com/feed/update/blocked-comment/",
+    commentary: cleanComment(),
+    targetUrn: "urn:li:activity:1001",
+    idempotencyKey: "comment-thread:1:linkedin:manual",
   });
   expect(message).toContain("Global kill switch is enabled");
+  expect(await getCommentPublishInvokeCount(page)).toBe(0);
 
   const rateLimitEvents = await getRateLimitEvents(page);
   expect(
@@ -221,6 +278,74 @@ test("Global kill switch hides posted action and data API blocks successful atte
       (event) => event.action === "comment" && event.decision === "blocked",
     ),
   ).toBe(true);
+});
+
+test("Daily comment cap blocks API posting before native invoke", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createApprovedComment(page, "api-cap-one");
+  await page.getByRole("button", { name: "Record posted" }).click();
+  await page
+    .getByLabel("Comment URL")
+    .fill("https://www.linkedin.com/feed/update/comment-one/");
+  await page.getByRole("button", { name: "Record attempt" }).click();
+
+  await createShortlistedCandidate(page, "api-cap-two", { campaignExists: true });
+  await openComments(page);
+  await createCommentThread(page, secondCleanComment());
+  await page.getByRole("button", { name: "Select", exact: true }).first().click();
+  await page.getByRole("button", { name: "Submit for review" }).first().click();
+  await page.getByRole("button", { name: "Approve" }).first().click();
+  await resetCommentPublishInvokeCount(page);
+
+  const message = await publishCommentViaLinkedInDataApi(page, {
+    commentThreadId: 2,
+    commentary: secondCleanComment(),
+    targetUrn: "urn:li:activity:1002",
+    idempotencyKey: "comment-thread:2:linkedin:manual",
+  });
+  expect(message).toContain("Daily comment limit reached");
+  expect(await getCommentPublishInvokeCount(page)).toBe(0);
+});
+
+test("Unresolvable target hides API posting and keeps manual fallback", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createShortlistedCandidate(page, "unresolved", { unresolvableUrl: true });
+  await openComments(page);
+  await createCommentThread(page, cleanComment());
+  await page.getByRole("button", { name: "Select", exact: true }).click();
+  await page.getByRole("button", { name: "Submit for review" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
+
+  await expect(
+    page.getByRole("button", { name: "Post via LinkedIn" }),
+  ).toBeHidden();
+  await expect(
+    page.getByText("LinkedIn target URN could not be resolved"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Record posted manually" }),
+  ).toBeVisible();
+});
+
+test("Stale status preflight prevents direct API comment posting", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createApprovedComment(page, "stale");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  const message = await publishCommentViaLinkedInDataApi(page, {
+    commentThreadId: 1,
+    commentary: cleanComment(),
+    targetUrn: "urn:li:activity:1001",
+    idempotencyKey: "comment-thread:1:linkedin:manual",
+  });
+  expect(message).toContain("Only approved comments can publish via LinkedIn");
+  expect(await getCommentPublishInvokeCount(page)).toBe(0);
 });
 
 test("Failed comment attempt creates an open error queue item visible in Safety", async ({
@@ -299,6 +424,7 @@ interface StateCounts {
 
 interface CommentAttemptRow {
   status: "succeeded" | "failed";
+  idempotency_key: string;
 }
 
 interface RateLimitEventRow {
@@ -372,7 +498,7 @@ async function createCampaign(page: Page): Promise<void> {
 async function createShortlistedCandidate(
   page: Page,
   suffix: string,
-  options: { campaignExists?: boolean } = {},
+  options: { campaignExists?: boolean; unresolvableUrl?: boolean } = {},
 ): Promise<void> {
   if (!options.campaignExists) await createCampaign(page);
   await openQueue(page);
@@ -381,7 +507,11 @@ async function createShortlistedCandidate(
   await expect(dialog).toBeVisible();
   await page
     .getByLabel("LinkedIn post URL")
-    .fill(`https://www.linkedin.com/posts/example-${suffix}/`);
+    .fill(
+      options.unresolvableUrl
+        ? `https://www.linkedin.com/posts/example-${suffix}/`
+        : `https://www.linkedin.com/posts/example-${suffix}-activity-${1000 + (options.campaignExists ? 2 : 1)}-share/`,
+    );
   await page
     .getByLabel("Post text")
     .fill(`This founder post has a sharp ICP signal for ${suffix}.`);
@@ -501,6 +631,54 @@ async function getErrorQueueItems(page: Page): Promise<ErrorQueueItemRow[]> {
     ).__LINKGO_SQL_ERROR_QUEUE_ITEMS__;
     return getItems?.() ?? [];
   });
+}
+
+async function getCommentPublishInvokeCount(page: Page): Promise<number> {
+  return page.evaluate(() =>
+    Number(
+      (
+        window as unknown as { __LINKGO_LINKEDIN_COMMENT_INVOKES__?: number }
+      ).__LINKGO_LINKEDIN_COMMENT_INVOKES__ ?? 0,
+    ),
+  );
+}
+
+async function resetCommentPublishInvokeCount(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (
+      window as unknown as { __LINKGO_LINKEDIN_COMMENT_INVOKES__?: number }
+    ).__LINKGO_LINKEDIN_COMMENT_INVOKES__ = 0;
+  });
+}
+
+async function publishCommentViaLinkedInDataApi(
+  page: Page,
+  input: {
+    commentThreadId: number;
+    commentary: string;
+    targetUrn: string;
+    idempotencyKey: string;
+  },
+): Promise<string> {
+  await page.waitForFunction(
+    () => "__LINKGO_LINKEDIN_ACTIONS_TEST_API__" in window,
+  );
+  return page.evaluate(async (publishInput) => {
+    const api = (
+      window as unknown as {
+        __LINKGO_LINKEDIN_ACTIONS_TEST_API__?: {
+          publishLinkedInComment: (input: typeof publishInput) => Promise<unknown>;
+        };
+      }
+    ).__LINKGO_LINKEDIN_ACTIONS_TEST_API__;
+    if (api === undefined) return "LinkedIn actions test API was not initialized";
+    try {
+      await api.publishLinkedInComment(publishInput);
+      return "";
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }, input);
 }
 
 async function recordCommentAttemptViaDataApi(

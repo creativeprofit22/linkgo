@@ -23,6 +23,7 @@ interface RecordCommentAttemptDialogProps {
   status: CommentAttemptStatus;
   onRecord: (input: RecordCommentAttemptInput) => Promise<void>;
   disabled?: boolean;
+  triggerLabel?: string;
 }
 
 interface AttemptFormState {
@@ -42,6 +43,7 @@ export function RecordCommentAttemptDialog({
   status,
   onRecord,
   disabled = false,
+  triggerLabel,
 }: RecordCommentAttemptDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -76,7 +78,7 @@ export function RecordCommentAttemptDialog({
           variant={isSuccess ? "default" : "outline"}
           disabled={disabled}
         >
-          {isSuccess ? "Record posted" : "Record failure"}
+          {triggerLabel ?? (isSuccess ? "Record posted" : "Record failure")}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -89,8 +91,7 @@ export function RecordCommentAttemptDialog({
               {isSuccess ? "Record posted comment" : "Record failed comment"}
             </DialogTitle>
             <DialogDescription>
-              Store manual LinkedIn comment history locally. Linkgo does not
-              post through the LinkedIn API.
+              Store manual LinkedIn comment history locally as a fallback.
             </DialogDescription>
           </DialogHeader>
 

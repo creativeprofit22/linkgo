@@ -18,6 +18,7 @@ export const createCandidateSchema = z.object({
   authorName: z.string().trim().max(160).default(""),
   authorProfileUrl: z.string().trim().max(1000).default(""),
   postedAt: z.string().trim().max(80).nullable().optional().default(null),
+  platformResourceUrn: z.string().trim().max(500).optional().default(""),
   sourceKeyword: z.string().trim().max(80).default(""),
   relevanceScore: z
     .number()

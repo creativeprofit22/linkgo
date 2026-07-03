@@ -36,11 +36,12 @@ GG AI providers exposed in Linkgo:
 - LinkedIn token refresh runs through the native boundary when refresh credentials are available.
 - LinkedIn OIDC userinfo backfills connected member id and display label without exposing tokens to React.
 - Approved or scheduled posts can be explicitly published through a native LinkedIn API command after an operator confirmation.
+- Approved comments can be explicitly posted through LinkedIn's Community Management API after an operator types `Post comment`.
 
 ## Explicit exclusions
 
 - No autonomous content generation or ungated LinkedIn posting/commenting.
-- No LinkedIn API comment posting until endpoint and product access requirements are verified.
+- No background LinkedIn comment workers, scraping, comment reads, mentions, images, or nested comments.
 - No scraping or browser automation.
 - No coding tools, shell access, repo scanning, file editing, or MCP code tools.
 - No external telemetry.
@@ -50,5 +51,7 @@ GG AI providers exposed in Linkgo:
 Connected AI provider credentials can execute agent runs only after the operator presses start.
 
 LinkedIn publishing is approval-gated. Operators can publish from approval cards, and the native scheduler can publish only already-approved scheduled posts while Linkgo is running or hidden to tray.
+
+LinkedIn comment posting is approval-gated and requires Community Management API product access plus `w_member_social_feed`; existing OAuth connections may need reconnecting after the scope is approved.
 
 Dry-run agent runs remain available without credentials.

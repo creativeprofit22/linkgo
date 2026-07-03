@@ -46,7 +46,8 @@ export function CommentsView(): React.ReactNode {
               </h2>
               <p className="text-muted-foreground text-sm">
                 Local, approval-gated LinkedIn replies. Linkgo drafts, audits,
-                and records history; it never posts through the LinkedIn API.
+                and posts only after explicit confirmation when Community
+                Management access is available.
               </p>
             </div>
           </div>

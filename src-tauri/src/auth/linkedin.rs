@@ -38,6 +38,7 @@ pub fn start_linkedin_oauth(scopes: Vec<String>) -> Result<LinkedInOAuthStart, S
             "profile".to_string(),
             "email".to_string(),
             "w_member_social".to_string(),
+            "w_member_social_feed".to_string(),
         ]
     } else {
         scopes
@@ -205,6 +206,22 @@ mod tests {
         assert!(!start.state.starts_with("linkgo-linkedin-"));
         assert!(!start.pkce_verifier.is_empty());
         assert!(start.needs_code);
+    }
+
+    #[test]
+    fn linkedin_oauth_url_uses_default_scopes_when_empty_scopes_are_requested() {
+        let _guard = env_lock().lock().unwrap();
+        let previous_client_id = std::env::var("LINKGO_LINKEDIN_CLIENT_ID").ok();
+        let previous_client_secret = std::env::var("LINKGO_LINKEDIN_CLIENT_SECRET").ok();
+        std::env::set_var("LINKGO_LINKEDIN_CLIENT_ID", "test-linkedin-client");
+        std::env::set_var("LINKGO_LINKEDIN_CLIENT_SECRET", "test-linkedin-secret");
+        let start = start_linkedin_oauth(Vec::new()).unwrap();
+        restore_env("LINKGO_LINKEDIN_CLIENT_ID", previous_client_id);
+        restore_env("LINKGO_LINKEDIN_CLIENT_SECRET", previous_client_secret);
+
+        assert!(start.auth_url.contains(
+            "scope=openid%20profile%20email%20w_member_social%20w_member_social_feed"
+        ));
     }
 
     #[test]

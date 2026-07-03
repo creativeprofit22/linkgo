@@ -139,7 +139,13 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
       "3-legged OAuth foundation for approval-gated posting and comments.",
     methods: ["oauth"],
     defaultMethod: "oauth",
-    scopes: ["openid", "profile", "email", "w_member_social"],
+    scopes: [
+      "openid",
+      "profile",
+      "email",
+      "w_member_social",
+      "w_member_social_feed",
+    ],
     models: [],
     secretLabel: "LinkedIn OAuth",
     docsUrl:

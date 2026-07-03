@@ -4,6 +4,7 @@ import {
   updateCandidateSchema,
 } from "@/features/candidate-queue/schemas";
 import type { CampaignStatus } from "@/features/campaigns/types";
+import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
 import type {
   CandidateStatus,
   CandidateWithTarget,
@@ -17,6 +18,7 @@ interface TargetPostRow {
   platform: "linkedin";
   url: string;
   normalized_url: string;
+  platform_resource_urn: string;
   author_name: string;
   author_profile_url: string;
   posted_at: string | null;
@@ -42,6 +44,7 @@ interface CandidateWithTargetRow {
   target_platform: "linkedin";
   target_url: string;
   target_normalized_url: string;
+  target_platform_resource_urn: string;
   target_author_name: string;
   target_author_profile_url: string;
   target_posted_at: string | null;
@@ -98,6 +101,7 @@ export function mapTargetPost(row: TargetPostRow): TargetPost {
     platform: row.platform,
     url: row.url,
     normalized_url: row.normalized_url,
+    platform_resource_urn: row.platform_resource_urn,
     author_name: row.author_name,
     author_profile_url: row.author_profile_url,
     posted_at: row.posted_at,
@@ -128,6 +132,7 @@ export function mapCandidateWithTarget(
       platform: row.target_platform,
       url: row.target_url,
       normalized_url: row.target_normalized_url,
+      platform_resource_urn: row.target_platform_resource_urn,
       author_name: row.target_author_name,
       author_profile_url: row.target_author_profile_url,
       posted_at: row.target_posted_at,
@@ -153,6 +158,8 @@ export async function createCandidate(
   const parsed = createCandidateSchema.parse(input);
   const normalizedUrl = normalizeCandidateUrl(parsed.url);
   const contentHash = createContentHash(parsed.content);
+  const platformResourceUrn =
+    parsed.platformResourceUrn?.trim() || resolveLinkedInTargetUrn(parsed.url);
   const db = await getDb();
 
   await db.execute("BEGIN TRANSACTION");
@@ -199,16 +206,18 @@ export async function createCandidate(
         normalized_url,
         author_name,
         author_profile_url,
+        platform_resource_urn,
         posted_at,
         content,
         content_hash,
         updated_at
-      ) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, datetime('now'))`,
+      ) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, $8, datetime('now'))`,
         [
           parsed.url,
           normalizedUrl,
           parsed.authorName,
           parsed.authorProfileUrl,
+          platformResourceUrn,
           parsed.postedAt,
           parsed.content,
           contentHash,
@@ -283,6 +292,7 @@ export async function listCandidates(
       tp.platform AS target_platform,
       tp.url AS target_url,
       tp.normalized_url AS target_normalized_url,
+      tp.platform_resource_urn AS target_platform_resource_urn,
       tp.author_name AS target_author_name,
       tp.author_profile_url AS target_author_profile_url,
       tp.posted_at AS target_posted_at,

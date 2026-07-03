@@ -41,21 +41,22 @@ Indexes: `idx_campaign_keywords_campaign_id`, `idx_campaign_keywords_keyword`.
 
 Stores the observed external LinkedIn post source for manual queue intake.
 
-| Column               | Type    | Notes                                       |
-| -------------------- | ------- | ------------------------------------------- |
-| `id`                 | INTEGER | Primary key                                 |
-| `platform`           | TEXT    | Defaults to `linkedin`, constrained for now |
-| `url`                | TEXT    | Original URL or source locator              |
-| `normalized_url`     | TEXT    | Lowercased/trimmed dedupe URL               |
-| `author_name`        | TEXT    | Optional, default empty string              |
-| `author_profile_url` | TEXT    | Optional, default empty string              |
-| `posted_at`          | TEXT    | Optional external post timestamp            |
-| `content`            | TEXT    | Required post text or excerpt               |
-| `content_hash`       | TEXT    | Deterministic hash for duplicate checks     |
-| `created_at`         | TEXT    | SQLite datetime                             |
-| `updated_at`         | TEXT    | SQLite datetime                             |
+| Column                  | Type    | Notes                                                       |
+| ----------------------- | ------- | ----------------------------------------------------------- |
+| `id`                    | INTEGER | Primary key                                                 |
+| `platform`              | TEXT    | Defaults to `linkedin`, constrained for now                 |
+| `url`                   | TEXT    | Original URL or source locator                              |
+| `normalized_url`        | TEXT    | Lowercased/trimmed dedupe URL                               |
+| `platform_resource_urn` | TEXT    | Optional LinkedIn share/UGC/activity URN for API commenting |
+| `author_name`           | TEXT    | Optional, default empty string                              |
+| `author_profile_url`    | TEXT    | Optional, default empty string                              |
+| `posted_at`             | TEXT    | Optional external post timestamp                            |
+| `content`               | TEXT    | Required post text or excerpt                               |
+| `content_hash`          | TEXT    | Deterministic hash for duplicate checks                     |
+| `created_at`            | TEXT    | SQLite datetime                                             |
+| `updated_at`            | TEXT    | SQLite datetime                                             |
 
-Indexes: `idx_target_posts_platform`, `idx_target_posts_normalized_url`, `idx_target_posts_content_hash`.
+Indexes: `idx_target_posts_platform`, `idx_target_posts_normalized_url`, `idx_target_posts_content_hash`, `idx_target_posts_platform_resource_urn`.
 
 ### `candidate_posts`
 
@@ -282,12 +283,13 @@ Stores manual LinkedIn comment posting outcomes. Successful rows include a comme
 | `status`               | TEXT    | `succeeded` or `failed`                           |
 | `external_comment_url` | TEXT    | Optional posted LinkedIn comment URL              |
 | `platform_comment_id`  | TEXT    | Optional LinkedIn/platform comment ID             |
+| `idempotency_key`      | TEXT    | Deterministic key for API comment posting         |
 | `error_message`        | TEXT    | Optional failure reason                           |
 | `created_at`           | TEXT    | SQLite datetime                                   |
 
 Constraints: checked platform and checked status values.
 
-Indexes: `idx_comment_attempts_thread_id`, `idx_comment_attempts_status`, `idx_comment_attempts_created_at`.
+Indexes: `idx_comment_attempts_thread_id`, `idx_comment_attempts_status`, `idx_comment_attempts_created_at`, `idx_comment_attempts_idempotency_key`, and partial unique `idx_comment_attempts_unique_idempotency_key` for non-empty keys.
 
 ### `post_metrics`
 

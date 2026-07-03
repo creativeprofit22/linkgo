@@ -157,13 +157,14 @@ Implemented now:
 
 - Local comment threads for eligible shortlisted or drafted candidate posts.
 - One-to-three manual reply variants with deterministic audit findings.
-- Human review statuses before a comment can be manually marked posted.
-- Manual posted/failed attempt history.
-- Failed manual attempts create error queue items with `source_type = 'manual'`.
-- Global kill switch and daily comment caps block successful posting records.
-- Comments tab with campaign filtering, summaries, variant preview, audit display, review actions, and attempt dialogs.
+- Human review statuses before a comment can be posted or manually marked posted.
+- Explicit operator-confirmed LinkedIn API comment posting for approved threads with resolvable target URNs.
+- Manual posted/failed attempt history as fallback.
+- Failed API/manual attempts create error queue items with `source_type = 'manual'`.
+- Global kill switch and daily comment caps block successful posting records before native API submission.
+- Comments tab with campaign filtering, summaries, variant preview, audit display, review actions, API posting, and attempt dialogs.
 
-LinkedIn API commenting, scraping, background workers, and automated comment posting are not implemented in this slice.
+LinkedIn scraping, background comment workers, API comment reads, rich comment media, and automated comment posting are not implemented in this slice.
 
 ### Background scheduler slice
 
@@ -205,8 +206,8 @@ Implemented now:
 - Integrations tab with provider cards and no secret rendering.
 - OAuth-backed LinkedIn post publishing command used only by explicit approved/scheduled post actions.
 
-Autonomous content generation, LinkedIn API commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
+Autonomous content generation, autonomous LinkedIn commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
 
 ## Future slices
 
-Future slices will add external integrations and automation only behind explicit approval gates. LinkedIn comment posting remains blocked until the exact endpoint and product access requirements are verified. OS-level launch-on-login and after-quit schedulers remain future work.
+Future slices will add external integrations and automation only behind explicit approval gates. Remaining comment work is limited to richer LinkedIn surfaces after product access is available; OS-level launch-on-login and after-quit schedulers remain future work.

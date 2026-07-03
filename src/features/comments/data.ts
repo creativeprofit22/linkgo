@@ -9,6 +9,8 @@ import {
 } from "@/features/comments/schemas";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import type { CandidateStatus } from "@/features/candidate-queue/types";
+import { escapeLinkedInLittleText } from "@/features/approvals/linkedin-format";
+import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
 import {
   getCommentLimitDecision,
   recordRateLimitEvent,
@@ -53,6 +55,7 @@ interface CommentThreadRow {
   candidate_relevance_score: number | null;
   target_post_id: number;
   target_url: string;
+  target_platform_resource_urn: string;
   target_author_name: string;
   target_author_profile_url: string;
   target_content: string;
@@ -88,6 +91,7 @@ interface CommentCandidateRow {
   relevance_score: number | null;
   target_post_id: number;
   target_url: string;
+  target_platform_resource_urn: string;
   target_author_name: string;
   target_author_profile_url: string;
   target_content: string;
@@ -101,6 +105,18 @@ interface CommentThreadValidationRow {
   status: CommentThreadStatus;
   campaign_status: CampaignStatus;
   daily_comment_limit: number;
+}
+
+interface CommentPublishValidationRow extends CommentThreadValidationRow {
+  target_url: string;
+  target_platform_resource_urn: string;
+}
+
+interface CommentPublishPreflightInput {
+  commentThreadId: number;
+  commentary: string;
+  targetUrn: string;
+  idempotencyKey: string;
 }
 
 interface SelectedVariantRow extends CommentVariantRow {
@@ -220,6 +236,7 @@ function mapEligibleCandidate(
     relevance_score: row.relevance_score,
     target_post_id: row.target_post_id,
     target_url: row.target_url,
+    target_platform_resource_urn: row.target_platform_resource_urn,
     target_author_name: row.target_author_name,
     target_author_profile_url: row.target_author_profile_url,
     target_content: row.target_content,
@@ -487,6 +504,7 @@ export async function listCommentThreads(
       cp.relevance_score AS candidate_relevance_score,
       tp.id AS target_post_id,
       tp.url AS target_url,
+      tp.platform_resource_urn AS target_platform_resource_urn,
       tp.author_name AS target_author_name,
       tp.author_profile_url AS target_author_profile_url,
       tp.content AS target_content,
@@ -572,6 +590,7 @@ export async function listCommentThreads(
         relevance_score: row.candidate_relevance_score,
         target_post_id: row.target_post_id,
         target_url: row.target_url,
+        target_platform_resource_urn: row.target_platform_resource_urn,
         target_author_name: row.target_author_name,
         target_author_profile_url: row.target_author_profile_url,
         target_content: row.target_content,
@@ -607,6 +626,7 @@ export async function listCommentEligibleCandidates(
       cp.relevance_score,
       tp.id AS target_post_id,
       tp.url AS target_url,
+      tp.platform_resource_urn AS target_platform_resource_urn,
       tp.author_name AS target_author_name,
       tp.author_profile_url AS target_author_profile_url,
       tp.content AS target_content,
@@ -881,6 +901,110 @@ export async function setCommentThreadStatus(
   }
 }
 
+export async function assertCommentCanPublishViaLinkedIn(
+  input: CommentPublishPreflightInput,
+): Promise<void> {
+  const db = await getDb();
+  await db.execute("BEGIN IMMEDIATE");
+  let committed = false;
+  try {
+    const rows = await db.select<CommentPublishValidationRow[]>(
+      `SELECT
+        ct.id,
+        ct.campaign_id,
+        ct.candidate_post_id,
+        ct.status,
+        c.status AS campaign_status,
+        c.daily_comment_limit,
+        tp.url AS target_url,
+        tp.platform_resource_urn AS target_platform_resource_urn
+      FROM comment_threads ct
+      INNER JOIN campaigns c ON c.id = ct.campaign_id
+      INNER JOIN candidate_posts cp ON cp.id = ct.candidate_post_id
+      INNER JOIN target_posts tp ON tp.id = cp.target_post_id
+      WHERE ct.id = $1
+      LIMIT 1`,
+      [input.commentThreadId],
+    );
+    const thread = rows[0];
+    if (thread === undefined) throw new Error("Comment thread was not found");
+    if (thread.campaign_status === "archived")
+      throw new Error("Campaign is archived");
+    if (thread.status !== "approved") {
+      throw new Error("Only approved comments can publish via LinkedIn");
+    }
+
+    const selected = await assertSelectedVariantReady(
+      db,
+      input.commentThreadId,
+    );
+    const commentary = escapeLinkedInLittleText(selected.body);
+    if (commentary !== input.commentary) {
+      throw new Error("Commentary does not match the approved comment variant");
+    }
+
+    const expectedTargetUrn = resolveLinkedInTargetUrn(
+      thread.target_platform_resource_urn || thread.target_url,
+    );
+    if (!expectedTargetUrn) {
+      throw new Error(
+        "LinkedIn target URN could not be resolved from the candidate URL",
+      );
+    }
+    if (expectedTargetUrn !== input.targetUrn) {
+      throw new Error("LinkedIn target URN does not match the comment target");
+    }
+
+    const expectedIdempotencyKey = `comment-thread:${input.commentThreadId}:linkedin:manual`;
+    if (input.idempotencyKey !== expectedIdempotencyKey) {
+      throw new Error("Comment idempotency key does not match thread state");
+    }
+
+    const successfulAttempts = await db.select<CountRow[]>(
+      `SELECT COUNT(*) AS count FROM comment_attempts
+      WHERE comment_thread_id = $1 AND status = 'succeeded'`,
+      [input.commentThreadId],
+    );
+    if ((successfulAttempts[0]?.count ?? 0) > 0) {
+      throw new Error(
+        "Comment thread already has a successful posting attempt",
+      );
+    }
+
+    try {
+      await assertKillSwitchAllowsComment(db, thread);
+    } catch (error) {
+      await db.execute("COMMIT");
+      committed = true;
+      throw error;
+    }
+
+    const decision = await getCommentLimitDecision(db, {
+      campaignId: thread.campaign_id,
+      limitValue: thread.daily_comment_limit,
+    });
+    if (!decision.allowed) {
+      await recordRateLimitEvent(db, {
+        campaignId: decision.campaignId,
+        action: "comment",
+        windowKey: decision.windowKey,
+        limitValue: decision.limitValue,
+        currentCount: decision.currentCount,
+        decision: "blocked",
+        summary: decision.summary,
+      });
+      await db.execute("COMMIT");
+      committed = true;
+      throw new Error(decision.summary);
+    }
+
+    await db.execute("COMMIT");
+  } catch (error) {
+    if (!committed) await rollbackCommentTransaction(db);
+    throw error;
+  }
+}
+
 export async function recordCommentAttempt(
   input: RecordCommentAttemptInput,
 ): Promise<number> {
@@ -941,13 +1065,15 @@ export async function recordCommentAttempt(
         status,
         external_comment_url,
         platform_comment_id,
+        idempotency_key,
         error_message
-      ) VALUES ($1, 'linkedin', $2, $3, $4, $5)`,
+      ) VALUES ($1, 'linkedin', $2, $3, $4, $5, $6)`,
       [
         parsed.commentThreadId,
         parsed.status,
         parsed.externalCommentUrl,
         parsed.platformCommentId,
+        parsed.idempotencyKey,
         parsed.errorMessage,
       ],
     );

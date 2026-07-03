@@ -47,6 +47,7 @@ interface DraftRow {
   target_platform: "linkedin";
   target_url: string;
   target_normalized_url: string;
+  target_platform_resource_urn: string;
   target_author_name: string;
   target_author_profile_url: string;
   target_posted_at: string | null;
@@ -144,6 +145,7 @@ function mapCandidate(row: DraftRow): CandidateWithTarget {
       platform: row.target_platform,
       url: row.target_url,
       normalized_url: row.target_normalized_url,
+      platform_resource_urn: row.target_platform_resource_urn,
       author_name: row.target_author_name,
       author_profile_url: row.target_author_profile_url,
       posted_at: row.target_posted_at,
@@ -463,6 +465,7 @@ export async function listDrafts(
       tp.platform AS target_platform,
       tp.url AS target_url,
       tp.normalized_url AS target_normalized_url,
+      tp.platform_resource_urn AS target_platform_resource_urn,
       tp.author_name AS target_author_name,
       tp.author_profile_url AS target_author_profile_url,
       tp.posted_at AS target_posted_at,

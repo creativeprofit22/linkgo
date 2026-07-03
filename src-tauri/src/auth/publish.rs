@@ -6,7 +6,10 @@ use tauri::{AppHandle, Manager};
 use super::storage::AuthStorage;
 use super::{
     linkedin::refresh_linkedin_credential,
-    linkedin_api::{get_linkedin_userinfo, linked_in_account_label, publish_linkedin_member_post},
+    linkedin_api::{
+        get_linkedin_userinfo, linked_in_account_label, publish_linkedin_member_comment,
+        publish_linkedin_member_post, resolve_linkedin_target_urn,
+    },
     OAuthCredentials, StoredCredential,
 };
 
@@ -26,8 +29,30 @@ pub struct LinkedInPublishPostResult {
     pub external_post_url: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedInPublishCommentInput {
+    pub comment_thread_id: i64,
+    pub commentary: String,
+    pub target_urn: String,
+    pub idempotency_key: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedInPublishCommentResult {
+    pub platform_comment_id: String,
+    pub platform_comment_urn: String,
+    pub external_comment_url: String,
+}
+
 pub(crate) struct PublishApprovalPreflight {
     pub commentary: String,
+}
+
+pub(crate) struct PublishCommentPreflight {
+    pub commentary: String,
+    pub target_urn: String,
 }
 
 pub(crate) fn has_linkedin_publish_scope(credentials: &OAuthCredentials) -> bool {
@@ -36,6 +61,13 @@ pub(crate) fn has_linkedin_publish_scope(credentials: &OAuthCredentials) -> bool
             .scopes
             .iter()
             .any(|scope| scope == "w_member_social")
+}
+
+pub(crate) fn has_linkedin_comment_scope(credentials: &OAuthCredentials) -> bool {
+    credentials
+        .scopes
+        .iter()
+        .any(|scope| scope == "w_member_social_feed" || scope == "w_member_social")
 }
 
 pub(crate) fn linkedin_oauth_credentials(
@@ -87,6 +119,22 @@ pub(crate) fn ensure_publish_input(input: &LinkedInPublishPostInput) -> Result<(
     }
     if input.idempotency_key.trim().is_empty() {
         return Err("Publish idempotency key is required".to_string());
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_comment_input(input: &LinkedInPublishCommentInput) -> Result<(), String> {
+    if input.comment_thread_id <= 0 {
+        return Err("Comment thread id is required".to_string());
+    }
+    if input.commentary.trim().is_empty() {
+        return Err("Comment text is required".to_string());
+    }
+    if input.target_urn.trim().is_empty() {
+        return Err("LinkedIn target URN is required".to_string());
+    }
+    if input.idempotency_key.trim().is_empty() {
+        return Err("Comment idempotency key is required".to_string());
     }
     Ok(())
 }
@@ -263,6 +311,142 @@ pub(crate) async fn load_publish_preflight(
     Ok(PublishApprovalPreflight { commentary })
 }
 
+pub(crate) async fn load_comment_preflight(
+    app: &AppHandle,
+    input: &LinkedInPublishCommentInput,
+) -> Result<PublishCommentPreflight, String> {
+    let pool = sqlite_pool(app).await?;
+
+    let safety = sqlx::query(
+        "SELECT global_kill_switch, kill_switch_reason FROM safety_settings WHERE id = 1",
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|_| "Could not read safety settings".to_string())?;
+    if let Some(row) = safety {
+        let global_kill_switch: i64 = row.try_get("global_kill_switch").unwrap_or(0);
+        if global_kill_switch == 1 {
+            let reason: String = row.try_get("kill_switch_reason").unwrap_or_default();
+            return Err(if reason.trim().is_empty() {
+                "Global kill switch is enabled".to_string()
+            } else {
+                format!("Global kill switch is enabled: {reason}")
+            });
+        }
+    }
+
+    let thread = sqlx::query(
+        "SELECT
+            comment_threads.status AS thread_status,
+            campaigns.status AS campaign_status,
+            campaigns.daily_comment_limit AS daily_comment_limit,
+            comment_threads.campaign_id AS campaign_id,
+            target_posts.url AS target_url,
+            target_posts.platform_resource_urn AS target_platform_resource_urn,
+            (
+                SELECT COUNT(*) FROM comment_attempts
+                WHERE comment_attempts.comment_thread_id = comment_threads.id
+                    AND comment_attempts.status = 'succeeded'
+            ) AS successful_attempt_count,
+            (
+                SELECT COUNT(*) FROM comment_attempts
+                INNER JOIN comment_threads counted_threads
+                    ON counted_threads.id = comment_attempts.comment_thread_id
+                WHERE counted_threads.campaign_id = comment_threads.campaign_id
+                    AND date(comment_attempts.created_at) = date('now')
+                    AND comment_attempts.status = 'succeeded'
+            ) AS daily_success_count
+        FROM comment_threads
+        INNER JOIN campaigns ON campaigns.id = comment_threads.campaign_id
+        INNER JOIN candidate_posts ON candidate_posts.id = comment_threads.candidate_post_id
+        INNER JOIN target_posts ON target_posts.id = candidate_posts.target_post_id
+        WHERE comment_threads.id = ?",
+    )
+    .bind(input.comment_thread_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|_| "Could not read comment thread".to_string())?
+    .ok_or_else(|| "Comment thread was not found".to_string())?;
+
+    let campaign_status: String = thread.try_get("campaign_status").unwrap_or_default();
+    let thread_status: String = thread.try_get("thread_status").unwrap_or_default();
+    if campaign_status == "archived" {
+        return Err("Campaign is archived".to_string());
+    }
+    if thread_status != "approved" {
+        return Err("Only approved comments can publish via LinkedIn".to_string());
+    }
+    let successful_attempt_count: i64 = thread.try_get("successful_attempt_count").unwrap_or(0);
+    if successful_attempt_count > 0 {
+        return Err("Comment thread already has a successful posting attempt".to_string());
+    }
+
+    let variants = sqlx::query(
+        "SELECT
+            comment_variants.body AS body,
+            (
+                SELECT COUNT(*) FROM comment_audits
+                WHERE comment_audits.comment_variant_id = comment_variants.id
+                    AND comment_audits.severity = 'block'
+            ) AS blocked_count
+        FROM comment_variants
+        WHERE comment_variants.comment_thread_id = ?
+            AND comment_variants.status = 'selected'",
+    )
+    .bind(input.comment_thread_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|_| "Could not read selected comment variant".to_string())?;
+    if variants.len() != 1 {
+        return Err("Choose exactly one selected comment variant".to_string());
+    }
+    let variant = &variants[0];
+    let blocked_count: i64 = variant.try_get("blocked_count").unwrap_or(0);
+    if blocked_count > 0 {
+        return Err("Blocked comment variants cannot be reviewed".to_string());
+    }
+    let raw_body: String = variant.try_get("body").unwrap_or_default();
+    let commentary = escape_linkedin_little_text(&raw_body);
+    if commentary != input.commentary {
+        return Err("Commentary does not match the approved comment variant".to_string());
+    }
+
+    let target_resource: String = thread
+        .try_get("target_platform_resource_urn")
+        .unwrap_or_default();
+    let target_url: String = thread.try_get("target_url").unwrap_or_default();
+    let target_urn = resolve_linkedin_target_urn(if target_resource.trim().is_empty() {
+        &target_url
+    } else {
+        &target_resource
+    })
+    .ok_or_else(|| {
+        "LinkedIn target URN could not be resolved from the candidate URL".to_string()
+    })?;
+    if target_urn != input.target_urn {
+        return Err("LinkedIn target URN does not match the comment target".to_string());
+    }
+
+    let expected_idempotency_key =
+        format!("comment-thread:{}:linkedin:manual", input.comment_thread_id);
+    if input.idempotency_key != expected_idempotency_key {
+        return Err("Comment idempotency key does not match thread state".to_string());
+    }
+
+    let daily_comment_limit: i64 = thread.try_get("daily_comment_limit").unwrap_or(0);
+    let daily_success_count: i64 = thread.try_get("daily_success_count").unwrap_or(0);
+    if daily_success_count >= daily_comment_limit {
+        return Err(format!(
+            "Daily comment limit reached for today: {daily_success_count}/{daily_comment_limit} used"
+        ));
+    }
+
+    Ok(PublishCommentPreflight {
+        commentary,
+        target_urn,
+    })
+}
+
 pub(crate) fn ensure_linkedin_account_identity(
     credentials: &mut OAuthCredentials,
 ) -> Result<bool, String> {
@@ -315,11 +499,51 @@ pub fn publish_approved_linkedin_post(
     })
 }
 
+pub fn publish_approved_linkedin_comment(
+    app: &AppHandle,
+    input: LinkedInPublishCommentInput,
+) -> Result<LinkedInPublishCommentResult, String> {
+    ensure_comment_input(&input)?;
+    let preflight = tauri::async_runtime::block_on(load_comment_preflight(app, &input))?;
+    let storage = AuthStorage::new(app)?;
+    let mut credentials = linkedin_oauth_credentials(storage.load("linkedin")?)?;
+
+    if credentials_need_refresh(&credentials) {
+        let refreshed = refresh_linkedin_credential(credentials.clone())?;
+        credentials = merge_refreshed_linkedin_credential(credentials, refreshed)?;
+        storage.save(StoredCredential::OAuth(credentials.clone()))?;
+    }
+
+    if !has_linkedin_comment_scope(&credentials) {
+        return Err(
+            "LinkedIn Community Management access with w_member_social_feed scope is required; reconnect LinkedIn after access is approved"
+                .to_string(),
+        );
+    }
+
+    if ensure_linkedin_account_identity(&mut credentials)? {
+        storage.save(StoredCredential::OAuth(credentials.clone()))?;
+    }
+    let account_id = credentials.account_id.clone().unwrap_or_default();
+
+    let result = publish_linkedin_member_comment(
+        &credentials.access_token,
+        &account_id,
+        preflight.target_urn.as_str(),
+        preflight.commentary.as_str(),
+    )?;
+    Ok(LinkedInPublishCommentResult {
+        platform_comment_id: result.platform_comment_id,
+        platform_comment_urn: result.platform_comment_urn,
+        external_comment_url: result.external_comment_url,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        credentials_need_refresh, has_linkedin_publish_scope, linkedin_oauth_credentials,
-        merge_refreshed_linkedin_credential,
+        credentials_need_refresh, has_linkedin_comment_scope, has_linkedin_publish_scope,
+        linkedin_oauth_credentials, merge_refreshed_linkedin_credential,
     };
     use crate::auth::{ApiKeyCredentials, OAuthCredentials, StoredCredential};
 
@@ -374,6 +598,19 @@ mod tests {
 
         credentials.scopes = vec!["r_liteprofile".to_string(), "w_member_social".to_string()];
         assert!(has_linkedin_publish_scope(&credentials));
+    }
+
+    #[test]
+    fn comment_scope_requires_feed_or_legacy_member_social_scope() {
+        let mut credentials = linkedin_credentials(None);
+        credentials.scopes = vec!["r_liteprofile".to_string()];
+        assert!(!has_linkedin_comment_scope(&credentials));
+
+        credentials.scopes = vec!["w_member_social_feed".to_string()];
+        assert!(has_linkedin_comment_scope(&credentials));
+
+        credentials.scopes = vec!["w_member_social".to_string()];
+        assert!(has_linkedin_comment_scope(&credentials));
     }
 
     #[test]

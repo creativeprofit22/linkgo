@@ -30,6 +30,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       platform: "linkedin";
       url: string;
       normalized_url: string;
+      platform_resource_urn: string;
       author_name: string;
       author_profile_url: string;
       posted_at: string | null;
@@ -215,6 +216,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       status: CommentAttemptStatus;
       external_comment_url: string;
       platform_comment_id: string;
+      idempotency_key: string;
       error_message: string;
       created_at: string;
     };
@@ -899,6 +901,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         target_platform: target.platform,
         target_url: target.url,
         target_normalized_url: target.normalized_url,
+        target_platform_resource_urn: target.platform_resource_urn,
         target_author_name: target.author_name,
         target_author_profile_url: target.author_profile_url,
         target_posted_at: target.posted_at,
@@ -1068,6 +1071,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         campaign_status: campaign.status,
         candidate_source_keyword: candidate.source_keyword,
         target_url: target.url,
+        target_platform_resource_urn: target.platform_resource_urn,
         target_author_name: target.author_name,
         target_author_profile_url: target.author_profile_url,
         target_content: target.content,
@@ -1127,6 +1131,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         campaign_status: campaign.status,
         candidate_source_keyword: candidate.source_keyword,
         target_url: target.url,
+        target_platform_resource_urn: target.platform_resource_urn,
         target_author_name: target.author_name,
         target_author_profile_url: target.author_profile_url,
         target_content: target.content,
@@ -1615,6 +1620,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         relevance_score: candidate.relevance_score,
         target_post_id: target.id,
         target_url: target.url,
+        target_platform_resource_urn: target.platform_resource_urn,
         target_author_name: target.author_name,
         target_author_profile_url: target.author_profile_url,
         target_content: target.content,
@@ -1648,6 +1654,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             candidate_relevance_score: candidate.relevance_score,
             target_post_id: target.id,
             target_url: target.url,
+            target_platform_resource_urn: target.platform_resource_urn,
             target_author_name: target.author_name,
             target_author_profile_url: target.author_profile_url,
             target_content: target.content,
@@ -1715,6 +1722,20 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           status: thread.status,
           campaign_status: campaign.status,
           daily_comment_limit: campaign.daily_comment_limit,
+          target_url: targetPosts.find(
+            (target) =>
+              target.id ===
+              candidatePosts.find(
+                (candidate) => candidate.id === thread.candidate_post_id,
+              )?.target_post_id,
+          )?.url ?? "",
+          target_platform_resource_urn: targetPosts.find(
+            (target) =>
+              target.id ===
+              candidatePosts.find(
+                (candidate) => candidate.id === thread.candidate_post_id,
+              )?.target_post_id,
+          )?.platform_resource_urn ?? "",
         },
       ];
     }
@@ -2107,6 +2128,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return commentAudits.filter((audit) =>
           ids.has(audit.comment_variant_id),
         );
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM comment_attempts") &&
+        query.includes("comment_thread_id = $1")
+      ) {
+        const threadId = Number(values[0] ?? 0);
+        return [
+          {
+            count: commentAttempts.filter(
+              (attempt) =>
+                attempt.comment_thread_id === threadId &&
+                (!query.includes("status = 'succeeded'") ||
+                  attempt.status === "succeeded"),
+            ).length,
+          },
+        ];
       }
       if (query.includes("FROM comment_attempts")) {
         const ids = new Set(
@@ -2641,9 +2679,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           normalized_url: String(values[1] ?? ""),
           author_name: String(values[2] ?? ""),
           author_profile_url: String(values[3] ?? ""),
-          posted_at: values[4] === null ? null : String(values[4] ?? ""),
-          content: String(values[5] ?? ""),
-          content_hash: String(values[6] ?? ""),
+          platform_resource_urn: String(values[4] ?? ""),
+          posted_at: values[5] === null ? null : String(values[5] ?? ""),
+          content: String(values[6] ?? ""),
+          content_hash: String(values[7] ?? ""),
           created_at: now,
           updated_at: now,
         };
@@ -2883,7 +2922,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           status: values[1] as CommentAttemptStatus,
           external_comment_url: String(values[2] ?? ""),
           platform_comment_id: String(values[3] ?? ""),
-          error_message: String(values[4] ?? ""),
+          idempotency_key: String(values[4] ?? ""),
+          error_message: String(values[5] ?? ""),
           created_at: now,
         };
         commentAttempts.push(attempt);
@@ -3980,7 +4020,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         "3-legged OAuth foundation for future approval-gated posting and comments.",
       methods: ["oauth"],
       defaultMethod: "oauth",
-      scopes: ["openid", "profile", "email", "w_member_social"],
+      scopes: [
+        "openid",
+        "profile",
+        "email",
+        "w_member_social",
+        "w_member_social_feed",
+      ],
       models: [],
       secretLabel: "LinkedIn OAuth",
       docsUrl:
@@ -4123,7 +4169,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             provider_label: "LinkedIn",
             auth_method: "oauth",
             status: "connected",
-            scopes: "openid profile email w_member_social",
+            scopes: "openid profile email w_member_social w_member_social_feed",
             account_label: "LinkedIn member",
             account_id: "member-1",
             expires_at: null,
@@ -4183,6 +4229,42 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
         if (cmd === "linkgo_scheduler_tick") {
           return Promise.resolve(runSchedulerTickMock());
+        }
+        if (cmd === "linkgo_linkedin_publish_comment") {
+          const input =
+            (
+              args as
+                | {
+                    input?: {
+                      commentThreadId?: number;
+                      comment_thread_id?: number;
+                      targetUrn?: string;
+                      target_urn?: string;
+                    };
+                  }
+                | undefined
+            )?.input ?? {};
+          const commentInvokes = Number(
+            w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ ?? 0,
+          );
+          w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ = commentInvokes + 1;
+          const error = w.__LINKGO_LINKEDIN_COMMENT_ERROR__;
+          if (typeof error === "string" && error.trim() !== "") {
+            throw new Error(error);
+          }
+          const result = w.__LINKGO_LINKEDIN_COMMENT_RESULT__;
+          if (result !== undefined) {
+            return Promise.resolve(result);
+          }
+          const commentThreadId =
+            input.commentThreadId ?? input.comment_thread_id ?? 1;
+          const targetUrn = input.targetUrn ?? input.target_urn ?? "urn:li:ugcPost:test";
+          const platformCommentId = `test-comment-${commentThreadId}`;
+          return Promise.resolve({
+            platformCommentId,
+            platformCommentUrn: `urn:li:comment:(${targetUrn},${platformCommentId})`,
+            externalCommentUrl: `https://www.linkedin.com/feed/update/${targetUrn}/`,
+          });
         }
         if (cmd === "linkgo_linkedin_publish_post") {
           const input =

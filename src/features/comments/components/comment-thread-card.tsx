@@ -15,7 +15,9 @@ import {
   CommentAuditSeverityBadge,
   CommentThreadStatusBadge,
 } from "@/features/comments/components/comment-status-badge";
+import { PublishLinkedInCommentDialog } from "@/features/comments/components/publish-linkedin-comment-dialog";
 import { RecordCommentAttemptDialog } from "@/features/comments/components/record-comment-attempt-dialog";
+import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
 import type {
   CommentThreadWithDetails,
   RecordCommentAttemptInput,
@@ -67,6 +69,14 @@ export function CommentThreadCard({
     selectedVariantReady;
   const canReview = editable && thread.status === "needs_review";
   const canRecordAttempt = editable && thread.status === "approved";
+  const targetUrn = resolveLinkedInTargetUrn(
+    thread.target.target_platform_resource_urn || thread.target.target_url,
+  );
+  const canPostViaLinkedIn =
+    canRecordAttempt &&
+    !killSwitchEnabled &&
+    selectedVariantReady &&
+    targetUrn !== "";
   const [operatorNotes, setOperatorNotes] = useState(thread.operator_notes);
   const [reviewerNotes, setReviewerNotes] = useState(thread.reviewer_notes);
   const [savingNotes, setSavingNotes] = useState(false);
@@ -209,7 +219,7 @@ export function CommentThreadCard({
         {thread.attempts.length > 0 && (
           <div className="space-y-3">
             <Separator />
-            <p className="text-sm font-semibold">Manual attempt history</p>
+            <p className="text-sm font-semibold">Comment attempt history</p>
             {thread.attempts.map((attempt) => (
               <div key={attempt.id} className="rounded-lg border p-3 text-sm">
                 <p className="font-medium">
@@ -291,19 +301,31 @@ export function CommentThreadCard({
             >
               Cancel
             </Button>
-            {killSwitchEnabled ? (
+            {canRecordAttempt && killSwitchEnabled ? (
               <p className="text-muted-foreground text-sm">
-                Record posted is hidden by the global kill switch
+                Post via LinkedIn is hidden by the global kill switch
                 {killSwitchReason ? `: ${killSwitchReason}` : "."}
               </p>
-            ) : (
-              <RecordCommentAttemptDialog
+            ) : canRecordAttempt && targetUrn ? (
+              <PublishLinkedInCommentDialog
                 thread={thread}
-                status="succeeded"
-                onRecord={onRecordAttempt}
-                disabled={!canRecordAttempt}
+                targetUrn={targetUrn}
+                onPublishResult={onRecordAttempt}
+                disabled={!canPostViaLinkedIn}
               />
-            )}
+            ) : canRecordAttempt ? (
+              <p className="text-muted-foreground text-sm">
+                LinkedIn target URN could not be resolved from the candidate
+                URL; use manual recording.
+              </p>
+            ) : null}
+            <RecordCommentAttemptDialog
+              thread={thread}
+              status="succeeded"
+              onRecord={onRecordAttempt}
+              disabled={!canRecordAttempt}
+              triggerLabel="Record posted manually"
+            />
             <RecordCommentAttemptDialog
               thread={thread}
               status="failed"

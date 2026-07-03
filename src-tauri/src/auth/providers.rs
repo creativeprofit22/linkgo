@@ -175,7 +175,13 @@ pub fn auth_providers() -> Vec<AuthProvider> {
             description: "3-legged OAuth foundation for approval-gated posting and comments.",
             methods: vec![AuthMethod::OAuth],
             default_method: AuthMethod::OAuth,
-            scopes: vec!["openid", "profile", "email", "w_member_social"],
+            scopes: vec![
+                "openid",
+                "profile",
+                "email",
+                "w_member_social",
+                "w_member_social_feed",
+            ],
             models: vec![],
             secret_label: "LinkedIn OAuth",
             docs_url:

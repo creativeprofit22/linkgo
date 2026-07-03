@@ -6,11 +6,11 @@ Implemented as a local-first Comments tab for approval-gated LinkedIn reply work
 
 ## Purpose
 
-The Comments slice lets operators draft, audit, review, and record manual LinkedIn comment outcomes against candidate target posts.
+The Comments slice lets operators draft, audit, review, post, and record LinkedIn comment outcomes against candidate target posts.
 
-It is deliberately local and approval-gated.
+It is deliberately human approval-gated.
 
-LinkedIn OAuth exists for explicit approved post publishing, but Linkgo does not post comments through the LinkedIn API.
+Linkgo posts comments only after explicit approval and confirmation when LinkedIn Community Management access is available.
 
 ## Schema
 
@@ -27,7 +27,9 @@ Migration version `9` creates:
 
 `comment_audits` stores deterministic local findings for each variant.
 
-`comment_attempts` stores manual posted/failed history for approved comments.
+`comment_attempts` stores posted/failed history for approved comments.
+
+Migration version `13` adds API-posting metadata: `target_posts.platform_resource_urn`, `comment_attempts.idempotency_key`, and supporting indexes.
 
 The first slice keeps one comment thread per candidate target through `UNIQUE(candidate_post_id)`.
 
@@ -44,6 +46,7 @@ Public functions live in `src/features/comments/data.ts`:
 - `updateCommentVariant(input)`
 - `setCommentVariantStatus(input)`
 - `setCommentThreadStatus(input)`
+- `assertCommentCanPublishViaLinkedIn(input)`
 - `recordCommentAttempt(input)`
 
 Inputs are validated in `src/features/comments/schemas.ts`.
@@ -57,9 +60,10 @@ The local comment body cap is 1,250 characters. This is a Linkgo conservative ca
 3. Linkgo runs deterministic audits locally.
 4. A clean selected variant can move to `needs_review`.
 5. Reviewer approves, requests changes, rejects, cancels, or leaves it pending.
-6. Only `approved` comments can record manual posting attempts.
-7. Successful attempts move the thread to `posted`.
-8. Failed attempts keep the thread approved/actionable and create an error queue item.
+6. Only `approved` comments can post via LinkedIn API or record manual posting attempts.
+7. API posting requires a resolvable LinkedIn target URN and exact `Post comment` confirmation.
+8. Successful attempts move the thread to `posted`.
+9. Failed attempts keep the thread approved/actionable and create an error queue item.
 
 ## Audit rules
 
@@ -85,20 +89,21 @@ The Comments tab includes:
 - Thread cards grouped by actionable status first.
 - Variant cards with raw body, escaped LinkedIn LittleText preview, audit status, edit, select, reject, and reset actions.
 - Review actions for submit, approve, request changes, reject, and cancel.
-- Manual posted/failed attempt dialogs.
+- `Post via LinkedIn` confirmation dialog for approved comments with resolvable target URNs.
+- Manual posted/failed attempt dialogs as fallback.
 - Archived-campaign history with mutation actions blocked.
 
 ## Safety integration
 
-Successful manual posted records enforce `campaigns.daily_comment_limit`.
+Successful API and manual posted records enforce `campaigns.daily_comment_limit`.
 
 Allowed and blocked decisions are stored in `rate_limit_events` with `action = 'comment'`.
 
-The global kill switch hides the UI `Record posted` action and the data API blocks successful attempts.
+The global kill switch hides the UI `Post via LinkedIn` action and the data API blocks successful API/manual successes.
 
 Kill-switch comment blocks are recorded as blocked comment rate-limit events because the existing safety audit enum has no comment-specific event type.
 
-Failed manual attempts create an open `error_queue_items` row with:
+Failed API and manual attempts create an open `error_queue_items` row with:
 
 - `source_type = 'manual'`
 - `source_id = comment_thread_id`
@@ -108,11 +113,11 @@ Failed manual attempts create an open `error_queue_items` row with:
 
 This slice does not implement:
 
-- LinkedIn API comment posting pending exact endpoint and product access confirmation.
+- Autonomous LinkedIn commenting.
 - LinkedIn scraping.
-- Background workers.
-- Real AI provider calls.
-- Automated comment generation or posting.
+- Background comment workers.
+- Mentions, images, nested comments, or API comment reads.
+- Real AI provider calls for automated comment generation.
 
 ## Verification
 
