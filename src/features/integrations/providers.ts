@@ -145,6 +145,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
       "email",
       "w_member_social",
       "w_member_social_feed",
+      "r_member_social_feed",
     ],
     models: [],
     secretLabel: "LinkedIn OAuth",

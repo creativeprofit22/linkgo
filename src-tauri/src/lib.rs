@@ -1,4 +1,5 @@
 mod auth;
+mod metric_refresh;
 mod migrations;
 mod plugins;
 mod scheduler;
@@ -39,7 +40,11 @@ pub fn run() {
             scheduler::linkgo_scheduler_status,
             scheduler::linkgo_scheduler_start,
             scheduler::linkgo_scheduler_stop,
-            scheduler::linkgo_scheduler_tick
+            scheduler::linkgo_scheduler_tick,
+            metric_refresh::linkgo_metric_refresh_status,
+            metric_refresh::linkgo_metric_refresh_start,
+            metric_refresh::linkgo_metric_refresh_stop,
+            metric_refresh::linkgo_metric_refresh_tick
         ]);
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

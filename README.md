@@ -2,7 +2,7 @@
 
 Linkgo is a local-first Tauri desktop app for LinkedIn growth operations.
 
-Current status: the app shell, Campaigns slice, Candidate Queue slice, Drafting + Audit slice, Approvals slice, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, GG AI provider-backed execution behind explicit connected credentials, and Safety + Observability slice are implemented. LinkedIn scraping, automated metrics collection, external telemetry, autonomous content generation, autonomous commenting, and running scheduler jobs after Linkgo quits remain intentionally not implemented.
+Current status: the app shell, Campaigns slice, Candidate Queue slice, Drafting + Audit slice, Approvals slice, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice with opt-in LinkedIn reactions/comments refresh, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, GG AI provider-backed execution behind explicit connected credentials, and Safety + Observability slice are implemented. LinkedIn scraping, member-post impression/click analytics, external telemetry, autonomous content generation, autonomous commenting, and running scheduler or metric refresh jobs after Linkgo quits remain intentionally not implemented.
 
 ## Stack
 
@@ -51,7 +51,7 @@ src/features/approvals Human review, schedule records, and publish attempts
 src/features/scheduler Opt-in native due-job controls and scheduler dashboard
 src/features/linkedin-actions Approval-gated LinkedIn API action wrappers
 src/features/comments  Approval-gated reply drafts, API posting, and attempts
-src/features/metrics   Manual metrics, campaign memory, and learning events
+src/features/metrics   Manual metrics, opt-in social metadata refresh, memory, events
 src/workflows/          Durable workflow contracts and SQLite state machine
 src/features/workflows Workflow cockpit hook and UI components
 src/agent/              Tool contracts, provider interfaces, dry-run loop
@@ -72,4 +72,4 @@ Every new roadmap feature lands one slice at a time:
 5. UI components.
 6. Docs and Playwright coverage.
 
-LinkedIn publishing and commenting are OAuth-backed and approval-gated; the scheduler only publishes already-approved scheduled posts while Linkgo is running or hidden to tray. API commenting requires LinkedIn Community Management access and `w_member_social_feed`.
+LinkedIn publishing and commenting are OAuth-backed and approval-gated; the scheduler only publishes already-approved scheduled posts while Linkgo is running or hidden to tray. API commenting requires LinkedIn Community Management access and `w_member_social_feed`. Metric refresh is opt-in, runs only while Linkgo is open or hidden to tray, requires approved `r_member_social_feed` read access, and collects LinkedIn reactions/comments only.

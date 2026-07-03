@@ -72,27 +72,25 @@ export function PublishLinkedInCommentDialog({
       await assertCommentCanPublishViaLinkedIn(publishInput);
       const result = await publishLinkedInComment(publishInput, {
         skipPreflight: true,
-      }).catch(
-        async (caught: unknown) => {
-          const message = getErrorMessage(caught);
-          try {
-            await onPublishResult({
-              commentThreadId: thread.id,
-              status: "failed",
-              externalCommentUrl: "",
-              platformCommentId: "",
-              idempotencyKey: "",
-              errorMessage: message,
-            });
-            toast.error("LinkedIn comment failed", { description: message });
-          } catch (recordError) {
-            toast.error("LinkedIn comment failed, and local recording failed", {
-              description: `${message} Record error: ${getErrorMessage(recordError)}`,
-            });
-          }
-          return null;
-        },
-      );
+      }).catch(async (caught: unknown) => {
+        const message = getErrorMessage(caught);
+        try {
+          await onPublishResult({
+            commentThreadId: thread.id,
+            status: "failed",
+            externalCommentUrl: "",
+            platformCommentId: "",
+            idempotencyKey: "",
+            errorMessage: message,
+          });
+          toast.error("LinkedIn comment failed", { description: message });
+        } catch (recordError) {
+          toast.error("LinkedIn comment failed, and local recording failed", {
+            description: `${message} Record error: ${getErrorMessage(recordError)}`,
+          });
+        }
+        return null;
+      });
 
       if (result !== null) {
         try {

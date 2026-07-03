@@ -181,6 +181,7 @@ pub fn auth_providers() -> Vec<AuthProvider> {
                 "email",
                 "w_member_social",
                 "w_member_social_feed",
+                "r_member_social_feed",
             ],
             models: vec![],
             secret_label: "LinkedIn OAuth",

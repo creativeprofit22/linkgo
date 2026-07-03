@@ -293,7 +293,7 @@ Indexes: `idx_comment_attempts_thread_id`, `idx_comment_attempts_status`, `idx_c
 
 ### `post_metrics`
 
-Stores manual LinkedIn metric snapshots for published approvals.
+Stores manual LinkedIn metric snapshots and opt-in LinkedIn social metadata snapshots for published approvals.
 
 | Column               | Type    | Notes                                                                 |
 | -------------------- | ------- | --------------------------------------------------------------------- |
@@ -311,10 +311,72 @@ Stores manual LinkedIn metric snapshots for published approvals.
 | `link_clicks`        | INTEGER | Non-negative count, default `0`                                       |
 | `ctr`                | REAL    | Nullable percentage constrained to `0` through `100`                  |
 | `notes`              | TEXT    | Optional operator notes, default empty string                         |
+| `collection_source`  | TEXT    | `manual` or `linkedin_social_metadata`, default `manual`              |
+| `raw_payload_json`   | TEXT    | Raw LinkedIn social metadata payload for API snapshots                |
 | `created_at`         | TEXT    | SQLite datetime                                                       |
 | `updated_at`         | TEXT    | SQLite datetime                                                       |
 
-Indexes: `idx_post_metrics_campaign_id`, `idx_post_metrics_approval_id`, `idx_post_metrics_publish_attempt_id`, `idx_post_metrics_measured_at`.
+Indexes: `idx_post_metrics_campaign_id`, `idx_post_metrics_approval_id`, `idx_post_metrics_publish_attempt_id`, `idx_post_metrics_measured_at`, `idx_post_metrics_collection_source`.
+
+### `metric_refresh_settings`
+
+Stores one local settings row for opt-in LinkedIn metric refresh.
+
+| Column                   | Type    | Notes                                     |
+| ------------------------ | ------- | ----------------------------------------- |
+| `id`                     | INTEGER | Primary key constrained to `1`            |
+| `enabled`                | INTEGER | Boolean-like flag, default `0`            |
+| `poll_interval_minutes`  | INTEGER | Worker poll interval, `15` through `1440` |
+| `max_jobs_per_tick`      | INTEGER | Bounded work per tick, `1` through `20`   |
+| `refresh_interval_hours` | INTEGER | Successful refresh cadence, `1` to `168`  |
+| `retry_backoff_minutes`  | INTEGER | Retry backoff, `5` through `1440`         |
+| `updated_at`             | TEXT    | SQLite datetime                           |
+
+### `metric_refresh_jobs`
+
+Stores durable per-approval LinkedIn social metadata refresh jobs.
+
+| Column               | Type    | Notes                                                |
+| -------------------- | ------- | ---------------------------------------------------- |
+| `id`                 | INTEGER | Primary key                                          |
+| `campaign_id`        | INTEGER | References `campaigns(id)` cascade delete            |
+| `approval_id`        | INTEGER | References `approvals(id)` cascade delete; unique    |
+| `publish_attempt_id` | INTEGER | Nullable, references `publish_attempts(id)` set null |
+| `platform`           | TEXT    | Defaults to `linkedin`, constrained to `linkedin`    |
+| `target_urn`         | TEXT    | LinkedIn share/UGC/activity URN for social metadata  |
+| `status`             | TEXT    | `active`, `paused`, `unavailable`, or `failed`       |
+| `next_refresh_at`    | TEXT    | Next due timestamp                                   |
+| `last_refreshed_at`  | TEXT    | Nullable successful refresh timestamp                |
+| `last_attempted_at`  | TEXT    | Nullable latest attempt timestamp                    |
+| `attempt_count`      | INTEGER | Total attempts                                       |
+| `max_attempts`       | INTEGER | Terminal failure threshold                           |
+| `failure_count`      | INTEGER | Failure counter                                      |
+| `last_error`         | TEXT    | Last safe operator-facing error                      |
+| `locked_at`          | TEXT    | Nullable worker lock timestamp                       |
+| `locked_by`          | TEXT    | Nullable worker runner id                            |
+| `created_at`         | TEXT    | SQLite datetime                                      |
+| `updated_at`         | TEXT    | SQLite datetime                                      |
+
+Indexes: `idx_metric_refresh_jobs_campaign_id`, `idx_metric_refresh_jobs_status_next_refresh`, `idx_metric_refresh_jobs_lock`, `idx_metric_refresh_jobs_approval_id`.
+
+### `metric_refresh_events`
+
+Stores local metric refresh worker/job history.
+
+| Column                  | Type    | Notes                                                                                                                                                                                                  |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                    | INTEGER | Primary key                                                                                                                                                                                            |
+| `campaign_id`           | INTEGER | Nullable, references `campaigns(id)` set null                                                                                                                                                          |
+| `approval_id`           | INTEGER | Nullable, references `approvals(id)` set null                                                                                                                                                          |
+| `metric_refresh_job_id` | INTEGER | Nullable, references `metric_refresh_jobs(id)` set null                                                                                                                                                |
+| `post_metric_id`        | INTEGER | Nullable, references `post_metrics(id)` set null                                                                                                                                                       |
+| `event_type`            | TEXT    | `refresh_started`, `refresh_completed`, `refresh_retry_scheduled`, `refresh_unavailable`, `refresh_failed`, `refresh_blocked`, `worker_started`, `worker_stopped`, `tick_started`, or `tick_completed` |
+| `severity`              | TEXT    | `info`, `warning`, or `error`                                                                                                                                                                          |
+| `summary`               | TEXT    | Required event summary                                                                                                                                                                                 |
+| `metadata_json`         | TEXT    | JSON metadata string                                                                                                                                                                                   |
+| `created_at`            | TEXT    | SQLite datetime                                                                                                                                                                                        |
+
+Indexes: `idx_metric_refresh_events_campaign_id`, `idx_metric_refresh_events_job_id`, `idx_metric_refresh_events_created_at`.
 
 ### `campaign_memory`
 

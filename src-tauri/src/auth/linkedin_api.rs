@@ -4,6 +4,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::time::Duration;
 
 use super::redact_error;
 
@@ -14,6 +15,16 @@ pub const LINKEDIN_SOCIAL_ACTIONS_ENDPOINT_BASE: &str =
 pub const LINKEDIN_DEFAULT_MARKETING_VERSION: &str = "202606";
 const LINKEDIN_MAX_COMMENTARY_CHARS: usize = 3000;
 const LINKEDIN_MAX_COMMENT_TEXT_CHARS: usize = 1250;
+const LINKEDIN_CONNECT_TIMEOUT_SECONDS: u64 = 10;
+const LINKEDIN_REQUEST_TIMEOUT_SECONDS: u64 = 30;
+
+pub(super) fn linkedin_http_client() -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(LINKEDIN_CONNECT_TIMEOUT_SECONDS))
+        .timeout(Duration::from_secs(LINKEDIN_REQUEST_TIMEOUT_SECONDS))
+        .build()
+        .map_err(redact_error)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +47,14 @@ pub struct LinkedInPublishCommentResult {
     pub platform_comment_id: String,
     pub platform_comment_urn: String,
     pub external_comment_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedInSocialMetadataResult {
+    pub reactions: i64,
+    pub comments: i64,
+    pub raw_payload_json: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -231,7 +250,7 @@ pub fn resolve_linkedin_target_urn(candidate: &str) -> Option<String> {
     find_urn_candidate(trimmed)
 }
 
-fn encode_path_urn(target_urn: &str) -> String {
+pub(crate) fn encode_path_urn(target_urn: &str) -> String {
     target_urn.replace(':', "%3A")
 }
 
@@ -312,6 +331,50 @@ pub fn extract_publish_result(
     })
 }
 
+pub fn extract_social_metadata_result(body: &str) -> Result<LinkedInSocialMetadataResult, String> {
+    let trimmed = body.trim();
+    let value = if trimmed.is_empty() {
+        Value::Object(serde_json::Map::new())
+    } else {
+        serde_json::from_str::<Value>(trimmed).map_err(redact_error)?
+    };
+
+    let reactions = value
+        .get("likesSummary")
+        .and_then(|summary| {
+            summary
+                .get("totalLikes")
+                .and_then(Value::as_i64)
+                .or_else(|| summary.get("aggregatedTotalLikes").and_then(Value::as_i64))
+        })
+        .unwrap_or(0)
+        .max(0);
+    let comments = value
+        .get("commentsSummary")
+        .and_then(|summary| {
+            summary
+                .get("totalFirstLevelComments")
+                .and_then(Value::as_i64)
+                .or_else(|| {
+                    summary
+                        .get("aggregatedTotalComments")
+                        .and_then(Value::as_i64)
+                })
+        })
+        .unwrap_or(0)
+        .max(0);
+
+    Ok(LinkedInSocialMetadataResult {
+        reactions,
+        comments,
+        raw_payload_json: if trimmed.is_empty() {
+            "{}".to_string()
+        } else {
+            trimmed.to_string()
+        },
+    })
+}
+
 pub fn extract_comment_publish_result(
     headers: &HeaderMap,
     body: &str,
@@ -364,7 +427,7 @@ pub fn extract_comment_publish_result(
 }
 
 pub fn get_linkedin_userinfo(access_token: &str) -> Result<LinkedInUserInfo, String> {
-    let response = reqwest::blocking::Client::new()
+    let response = linkedin_http_client()?
         .get(LINKEDIN_USERINFO_ENDPOINT)
         .bearer_auth(access_token)
         .send()
@@ -387,7 +450,7 @@ pub fn publish_linkedin_member_post(
     commentary: &str,
 ) -> Result<LinkedInPublishResult, String> {
     let payload = build_member_post_payload(account_id, commentary)?;
-    let response = reqwest::blocking::Client::new()
+    let response = linkedin_http_client()?
         .post(LINKEDIN_UGC_POSTS_ENDPOINT)
         .bearer_auth(access_token)
         .header("X-Restli-Protocol-Version", "2.0.0")
@@ -407,6 +470,35 @@ pub fn publish_linkedin_member_post(
     extract_publish_result(&headers, &body)
 }
 
+pub fn get_linkedin_social_metadata(
+    access_token: &str,
+    target_urn: &str,
+) -> Result<LinkedInSocialMetadataResult, String> {
+    let target_urn = resolve_linkedin_target_urn(target_urn)
+        .ok_or_else(|| "LinkedIn target URN could not be resolved".to_string())?;
+    let endpoint = format!(
+        "{}/{}",
+        LINKEDIN_SOCIAL_ACTIONS_ENDPOINT_BASE,
+        encode_path_urn(&target_urn)
+    );
+    let response = linkedin_http_client()?
+        .get(endpoint)
+        .bearer_auth(access_token)
+        .header("Linkedin-Version", linkedin_marketing_version())
+        .header("X-Restli-Protocol-Version", "2.0.0")
+        .send()
+        .map_err(redact_error)?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response.text().unwrap_or_default();
+        return Err(linked_in_api_error(status, &error_text));
+    }
+
+    let body = response.text().map_err(redact_error)?;
+    extract_social_metadata_result(&body)
+}
+
 pub fn publish_linkedin_member_comment(
     access_token: &str,
     account_id: &str,
@@ -419,7 +511,7 @@ pub fn publish_linkedin_member_comment(
         LINKEDIN_SOCIAL_ACTIONS_ENDPOINT_BASE,
         encode_path_urn(target_urn)
     );
-    let response = reqwest::blocking::Client::new()
+    let response = linkedin_http_client()?
         .post(endpoint)
         .bearer_auth(access_token)
         .header("Linkedin-Version", linkedin_marketing_version())
@@ -447,10 +539,16 @@ mod tests {
 
     use super::{
         build_member_comment_payload, build_member_post_payload, extract_comment_publish_result,
-        extract_publish_result, linked_in_account_label, linked_in_api_error,
-        linkedin_marketing_version, resolve_linkedin_target_urn, userinfo_response_to_userinfo,
-        validate_linkedin_comment_text, validate_linkedin_commentary,
+        extract_publish_result, extract_social_metadata_result, linked_in_account_label,
+        linked_in_api_error, linkedin_http_client, linkedin_marketing_version,
+        resolve_linkedin_target_urn, userinfo_response_to_userinfo, validate_linkedin_comment_text,
+        validate_linkedin_commentary,
     };
+
+    #[test]
+    fn linkedin_http_client_builds_with_conservative_timeouts() {
+        assert!(linkedin_http_client().is_ok());
+    }
 
     #[test]
     fn userinfo_response_maps_sub_and_name() {
@@ -553,6 +651,54 @@ mod tests {
             resolve_linkedin_target_urn("urn%3Ali%3Aactivity%3A1001").as_deref(),
             Some("urn:li:activity:1001")
         );
+    }
+
+    #[test]
+    fn social_metadata_parses_primary_count_fields() {
+        let result = extract_social_metadata_result(
+            r#"{"likesSummary":{"totalLikes":12},"commentsSummary":{"totalFirstLevelComments":4}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(result.reactions, 12);
+        assert_eq!(result.comments, 4);
+        assert!(result.raw_payload_json.contains("likesSummary"));
+    }
+
+    #[test]
+    fn social_metadata_treats_empty_payload_as_zero_counts() {
+        let result = extract_social_metadata_result("").unwrap();
+
+        assert_eq!(result.reactions, 0);
+        assert_eq!(result.comments, 0);
+        assert_eq!(result.raw_payload_json, "{}");
+    }
+
+    #[test]
+    fn social_metadata_uses_aggregate_fallback_fields() {
+        let result = extract_social_metadata_result(
+            r#"{"likesSummary":{"aggregatedTotalLikes":9},"commentsSummary":{"aggregatedTotalComments":3}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(result.reactions, 9);
+        assert_eq!(result.comments, 3);
+    }
+
+    #[test]
+    fn social_metadata_missing_summaries_default_to_zero() {
+        let result = extract_social_metadata_result(r#"{"entity":"urn:li:ugcPost:1"}"#).unwrap();
+
+        assert_eq!(result.reactions, 0);
+        assert_eq!(result.comments, 0);
+    }
+
+    #[test]
+    fn social_metadata_parse_error_is_safe() {
+        let error = extract_social_metadata_result("access token abc").unwrap_err();
+
+        assert!(error.contains("expected value"));
+        assert!(!error.contains("access token abc"));
     }
 
     #[test]

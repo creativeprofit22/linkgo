@@ -36,10 +36,17 @@ export function MetricCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-2">
             <CardTitle className="truncate">{authorName}</CardTitle>
-            <p className="text-muted-foreground text-sm">
-              {metric.campaign.name} · Variant {metric.variant.variant_number} ·
-              measured {metric.measured_at}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-muted-foreground text-sm">
+                {metric.campaign.name} · Variant {metric.variant.variant_number}{" "}
+                · measured {metric.measured_at}
+              </p>
+              <span className="bg-muted text-muted-foreground rounded-full border px-2 py-0.5 text-xs font-medium">
+                {metric.collection_source === "linkedin_social_metadata"
+                  ? "LinkedIn social metadata"
+                  : "Manual"}
+              </span>
+            </div>
             <a
               href={metric.source.url}
               target="_blank"
@@ -107,6 +114,14 @@ export function MetricCard({
           />
           <MetricValue label="CTR" value={formatPercent(metric.displayCtr)} />
         </div>
+
+        {metric.collection_source === "linkedin_social_metadata" && (
+          <div className="border-linkgo-blue/30 bg-linkgo-blue/5 text-muted-foreground rounded-xl border p-4 text-sm">
+            LinkedIn API snapshots include reactions and comments only for
+            member posts. Zero impressions, reposts, profile visits, link
+            clicks, and CTR mean unavailable here—not zero reach.
+          </div>
+        )}
 
         {metric.notes && (
           <>

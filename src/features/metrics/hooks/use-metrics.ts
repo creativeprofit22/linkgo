@@ -4,18 +4,25 @@ import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import {
   createCampaignMemory,
+  getMetricRefreshStatus,
   listCampaignMemory,
   listLearningEvents,
   listMetricEligibleApprovals,
+  listMetricRefreshDashboard,
   listPostMetrics,
   recordPostMetric,
+  runMetricRefreshTick,
   setCampaignMemoryStatus,
+  startMetricRefresh,
+  stopMetricRefresh,
 } from "@/features/metrics/data";
 import type {
   CampaignMemory,
   CreateCampaignMemoryInput,
   LearningEvent,
   MetricEligibleApproval,
+  MetricRefreshDashboard,
+  NativeMetricRefreshStatus,
   PostMetricWithDetails,
   RecordPostMetricInput,
   SetCampaignMemoryStatusInput,
@@ -28,6 +35,8 @@ interface UseMetricsState {
   metrics: PostMetricWithDetails[];
   memory: CampaignMemory[];
   events: LearningEvent[];
+  refreshDashboard: MetricRefreshDashboard | null;
+  refreshStatus: NativeMetricRefreshStatus | null;
   loading: boolean;
   error: string | null;
   loadMetrics: () => Promise<void>;
@@ -35,9 +44,14 @@ interface UseMetricsState {
   recordMetric: (input: RecordPostMetricInput) => Promise<void>;
   saveMemory: (input: CreateCampaignMemoryInput) => Promise<void>;
   setMemoryStatus: (input: SetCampaignMemoryStatusInput) => Promise<void>;
+  startRefresh: () => Promise<void>;
+  stopRefresh: () => Promise<void>;
+  refreshNow: () => Promise<void>;
 }
 
 function getErrorMessage(error: unknown): string {
+  if (typeof error === "string" && error.trim() !== "") return error;
+
   return error instanceof Error ? error.message : "Unexpected metrics error";
 }
 
@@ -62,6 +76,10 @@ export function useMetrics(): UseMetricsState {
   const [metrics, setMetrics] = useState<PostMetricWithDetails[]>([]);
   const [memory, setMemory] = useState<CampaignMemory[]>([]);
   const [events, setEvents] = useState<LearningEvent[]>([]);
+  const [refreshDashboard, setRefreshDashboard] =
+    useState<MetricRefreshDashboard | null>(null);
+  const [refreshStatus, setRefreshStatus] =
+    useState<NativeMetricRefreshStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,20 +90,31 @@ export function useMetrics(): UseMetricsState {
         setMetrics([]);
         setMemory([]);
         setEvents([]);
+        setRefreshDashboard(null);
         return;
       }
 
-      const [loadedEligible, loadedMetrics, loadedMemory, loadedEvents] =
-        await Promise.all([
-          listMetricEligibleApprovals(campaignId),
-          listPostMetrics(campaignId),
-          listCampaignMemory(campaignId),
-          listLearningEvents(campaignId),
-        ]);
+      const [
+        loadedEligible,
+        loadedMetrics,
+        loadedMemory,
+        loadedEvents,
+        loadedRefreshDashboard,
+        loadedRefreshStatus,
+      ] = await Promise.all([
+        listMetricEligibleApprovals(campaignId),
+        listPostMetrics(campaignId),
+        listCampaignMemory(campaignId),
+        listLearningEvents(campaignId),
+        listMetricRefreshDashboard(campaignId),
+        getMetricRefreshStatus(),
+      ]);
       setEligibleApprovals(loadedEligible);
       setMetrics(loadedMetrics);
       setMemory(loadedMemory);
       setEvents(loadedEvents);
+      setRefreshDashboard(loadedRefreshDashboard);
+      setRefreshStatus(loadedRefreshStatus);
     },
     [],
   );
@@ -154,6 +183,49 @@ export function useMetrics(): UseMetricsState {
     [loadMetricsForCampaign, selectedCampaignId],
   );
 
+  const startRefresh = useCallback(async () => {
+    try {
+      const status = await startMetricRefresh();
+      setRefreshStatus(status);
+      await loadMetricsForCampaign(selectedCampaignId);
+      toast.success("Metric refresh started");
+    } catch (caught) {
+      const message = getErrorMessage(caught);
+      toast.error("Metric refresh was not started", { description: message });
+      throw caught;
+    }
+  }, [loadMetricsForCampaign, selectedCampaignId]);
+
+  const stopRefresh = useCallback(async () => {
+    try {
+      const status = await stopMetricRefresh();
+      setRefreshStatus(status);
+      await loadMetricsForCampaign(selectedCampaignId);
+      toast.success("Metric refresh stopped");
+    } catch (caught) {
+      const message = getErrorMessage(caught);
+      toast.error("Metric refresh was not stopped", { description: message });
+      throw caught;
+    }
+  }, [loadMetricsForCampaign, selectedCampaignId]);
+
+  const refreshNow = useCallback(async () => {
+    try {
+      const result = await runMetricRefreshTick();
+      await loadMetricsForCampaign(selectedCampaignId);
+      toast.success(
+        `${result.refreshed} refreshed, ${result.unavailable} unavailable, ${result.failed} failed`,
+        {
+          description: `${result.retryScheduled} retry scheduled, ${result.blocked} blocked`,
+        },
+      );
+    } catch (caught) {
+      const message = getErrorMessage(caught);
+      toast.error("Metric refresh tick failed", { description: message });
+      throw caught;
+    }
+  }, [loadMetricsForCampaign, selectedCampaignId]);
+
   const setMemoryStatus = useCallback(
     async (input: SetCampaignMemoryStatusInput) => {
       try {
@@ -178,6 +250,8 @@ export function useMetrics(): UseMetricsState {
       metrics,
       memory,
       events,
+      refreshDashboard,
+      refreshStatus,
       loading,
       error,
       loadMetrics,
@@ -185,6 +259,9 @@ export function useMetrics(): UseMetricsState {
       recordMetric,
       saveMemory,
       setMemoryStatus,
+      startRefresh,
+      stopRefresh,
+      refreshNow,
     }),
     [
       campaigns,
@@ -193,6 +270,8 @@ export function useMetrics(): UseMetricsState {
       metrics,
       memory,
       events,
+      refreshDashboard,
+      refreshStatus,
       loading,
       error,
       loadMetrics,
@@ -200,6 +279,9 @@ export function useMetrics(): UseMetricsState {
       recordMetric,
       saveMemory,
       setMemoryStatus,
+      startRefresh,
+      stopRefresh,
+      refreshNow,
     ],
   );
 }

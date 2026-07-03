@@ -1,7 +1,10 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import { IS_TEST } from "@/lib/env";
 import {
   createCampaignMemorySchema,
+  nativeMetricRefreshStatusSchema,
+  nativeMetricRefreshTickResultSchema,
   recordPostMetricSchema,
   setCampaignMemoryStatusSchema,
 } from "@/features/metrics/schemas";
@@ -16,8 +19,14 @@ import type {
   MetricDraftSnapshot,
   MetricEligibleApproval,
   MetricPublishSnapshot,
+  MetricRefreshDashboard,
+  MetricRefreshEvent,
+  MetricRefreshJob,
+  MetricRefreshSettings,
   MetricSourceSnapshot,
   MetricVariantSnapshot,
+  NativeMetricRefreshStatus,
+  NativeMetricRefreshTickResult,
   PostMetric,
   PostMetricWithDetails,
   RecordPostMetricInput,
@@ -104,6 +113,15 @@ interface CampaignMemoryValidationRow {
   campaign_id: number;
   status: CampaignMemoryStatus;
   campaign_status: CampaignStatus;
+}
+
+interface MetricRefreshSummaryRow {
+  total_jobs: number;
+  active_jobs: number;
+  due_jobs: number;
+  unavailable_jobs: number;
+  failed_jobs: number;
+  api_snapshots: number;
 }
 
 function getCampaignFilter(
@@ -243,6 +261,8 @@ function mapPostMetric(row: MetricDetailRow): PostMetric {
     link_clicks: row.link_clicks,
     ctr: row.ctr,
     notes: row.notes,
+    collection_source: row.collection_source ?? "manual",
+    raw_payload_json: row.raw_payload_json ?? "",
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -490,8 +510,10 @@ export async function recordPostMetric(
         link_clicks,
         ctr,
         notes,
+        collection_source,
+        raw_payload_json,
         updated_at
-      ) VALUES ($1, $2, $3, 'linkedin', $4, $5, $6, $7, $8, $9, $10, $11, $12, datetime('now'))`,
+      ) VALUES ($1, $2, $3, 'linkedin', $4, $5, $6, $7, $8, $9, $10, $11, $12, 'manual', '', datetime('now'))`,
       [
         parsed.campaignId,
         parsed.approvalId,
@@ -666,6 +688,100 @@ export async function setCampaignMemoryStatus(
   }
 }
 
+export async function getMetricRefreshStatus(): Promise<NativeMetricRefreshStatus> {
+  const payload = await invoke<unknown>("linkgo_metric_refresh_status");
+  return nativeMetricRefreshStatusSchema.parse(
+    payload,
+  ) as NativeMetricRefreshStatus;
+}
+
+export async function startMetricRefresh(): Promise<NativeMetricRefreshStatus> {
+  const payload = await invoke<unknown>("linkgo_metric_refresh_start");
+  return nativeMetricRefreshStatusSchema.parse(
+    payload,
+  ) as NativeMetricRefreshStatus;
+}
+
+export async function stopMetricRefresh(): Promise<NativeMetricRefreshStatus> {
+  const payload = await invoke<unknown>("linkgo_metric_refresh_stop");
+  return nativeMetricRefreshStatusSchema.parse(
+    payload,
+  ) as NativeMetricRefreshStatus;
+}
+
+export async function runMetricRefreshTick(): Promise<NativeMetricRefreshTickResult> {
+  const payload = await invoke<unknown>("linkgo_metric_refresh_tick");
+  return nativeMetricRefreshTickResultSchema.parse(payload);
+}
+
+export async function listMetricRefreshDashboard(
+  campaignId?: number,
+): Promise<MetricRefreshDashboard> {
+  const db = await getDb();
+  const settingsRows = await db.select<MetricRefreshSettings[]>(
+    "SELECT * FROM metric_refresh_settings WHERE id = 1 LIMIT 1",
+  );
+  const { clause: jobClause, values: jobValues } = getCampaignFilter(
+    "mrj",
+    campaignId,
+    "WHERE",
+  );
+  const jobs = await db.select<MetricRefreshJob[]>(
+    `SELECT * FROM metric_refresh_jobs mrj
+    ${jobClause}
+    ORDER BY status = 'active' DESC, datetime(next_refresh_at) ASC, id ASC`,
+    jobValues,
+  );
+
+  const { clause: eventClause, values: eventValues } = getCampaignFilter(
+    "mre",
+    campaignId,
+    "WHERE",
+  );
+  const events = await db.select<MetricRefreshEvent[]>(
+    `SELECT * FROM metric_refresh_events mre
+    ${eventClause}
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT 20`,
+    eventValues,
+  );
+
+  const campaignPredicate =
+    campaignId === undefined ? "" : "WHERE campaign_id = $1";
+  const summaryRows = await db.select<MetricRefreshSummaryRow[]>(
+    `SELECT
+      (SELECT COUNT(*) FROM metric_refresh_jobs ${campaignPredicate}) AS total_jobs,
+      (SELECT COUNT(*) FROM metric_refresh_jobs ${campaignPredicate} ${campaignId === undefined ? "WHERE" : "AND"} status = 'active') AS active_jobs,
+      (SELECT COUNT(*) FROM metric_refresh_jobs ${campaignPredicate} ${campaignId === undefined ? "WHERE" : "AND"} status = 'active' AND datetime(next_refresh_at) <= datetime('now')) AS due_jobs,
+      (SELECT COUNT(*) FROM metric_refresh_jobs ${campaignPredicate} ${campaignId === undefined ? "WHERE" : "AND"} status = 'unavailable') AS unavailable_jobs,
+      (SELECT COUNT(*) FROM metric_refresh_jobs ${campaignPredicate} ${campaignId === undefined ? "WHERE" : "AND"} status = 'failed') AS failed_jobs,
+      (SELECT COUNT(*) FROM post_metrics ${campaignPredicate} ${campaignId === undefined ? "WHERE" : "AND"} collection_source = 'linkedin_social_metadata') AS api_snapshots`,
+    campaignId === undefined ? [] : [campaignId],
+  );
+  const summary = summaryRows[0] ?? {
+    total_jobs: 0,
+    active_jobs: 0,
+    due_jobs: 0,
+    unavailable_jobs: 0,
+    failed_jobs: 0,
+    api_snapshots: 0,
+  };
+
+  return {
+    settings: settingsRows[0] ?? null,
+    jobs,
+    events,
+    summary: {
+      totalJobs: summary.total_jobs,
+      activeJobs: summary.active_jobs,
+      dueJobs: summary.due_jobs,
+      unavailableJobs: summary.unavailable_jobs,
+      failedJobs: summary.failed_jobs,
+      apiSnapshots: summary.api_snapshots,
+    },
+  };
+}
+
 export async function rollbackMetricsTransaction(
   db: LinkgoDatabase,
 ): Promise<void> {
@@ -683,11 +799,21 @@ if (IS_TEST && typeof window !== "undefined") {
         recordPostMetric: typeof recordPostMetric;
         createCampaignMemory: typeof createCampaignMemory;
         setCampaignMemoryStatus: typeof setCampaignMemoryStatus;
+        getMetricRefreshStatus: typeof getMetricRefreshStatus;
+        startMetricRefresh: typeof startMetricRefresh;
+        stopMetricRefresh: typeof stopMetricRefresh;
+        runMetricRefreshTick: typeof runMetricRefreshTick;
+        listMetricRefreshDashboard: typeof listMetricRefreshDashboard;
       };
     }
   ).__LINKGO_METRICS_TEST_API__ = {
     recordPostMetric,
     createCampaignMemory,
     setCampaignMemoryStatus,
+    getMetricRefreshStatus,
+    startMetricRefresh,
+    stopMetricRefresh,
+    runMetricRefreshTick,
+    listMetricRefreshDashboard,
   };
 }

@@ -19,10 +19,135 @@ test("records manual metrics for a published approval", async ({ page }) => {
   await expectSummaryValue(page, "Avg engagement", "7.5%");
   await expect(page.getByText("Jane Operator").first()).toBeVisible();
   await expect(page.getByText("Engagement rate")).toBeVisible();
-  await expect(page.getByText("CTR")).toBeVisible();
+  await expect(page.getByText("CTR", { exact: true })).toBeVisible();
   await expect(page.getByText("4.2%")).toBeVisible();
   await expect(
     page.getByText("Metric snapshot recorded for approval #1"),
+  ).toBeVisible();
+});
+
+test("starts and stops metric refresh from Metrics tab", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await openMetrics(page);
+
+  await page.getByRole("button", { name: /Start metric refresh/ }).click();
+  await expectSummaryValue(page, "API refresh", "Running");
+
+  await page.getByRole("button", { name: /Stop metric refresh/ }).click();
+  await expectSummaryValue(page, "API refresh", "Stopped");
+});
+
+test("shows enabled metric refresh when worker is not running", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await setMetricRefreshEnabled(page, true);
+  await openMetrics(page);
+
+  await expectSummaryValue(page, "API refresh", "Enabled (not running)");
+  await expect(
+    page.getByRole("button", { name: /Disable metric refresh/ }),
+  ).toBeVisible();
+});
+
+test("runs LinkedIn metric refresh and records API-sourced reactions and comments", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await openMetrics(page);
+
+  await page
+    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
+    .click();
+
+  await expectSummaryValue(page, "Measured posts", "1");
+  await expectSummaryValue(page, "Last API snapshots", "1");
+  await expect(
+    page.getByText("LinkedIn social metadata", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Zero impressions, reposts")).toBeVisible();
+  await expect(
+    page.getByText("LinkedIn social metadata refresh completed."),
+  ).toBeVisible();
+});
+
+test("shows backend string error when metric refresh tick rejects", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_METRIC_REFRESH_TICK_ERROR__ = "LinkedIn credentials are missing.";
+  });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await openMetrics(page);
+
+  await page
+    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
+    .click();
+
+  await expect(page.getByText("LinkedIn credentials are missing.")).toBeVisible();
+});
+
+test("marks metric refresh unavailable when LinkedIn target URN is missing", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/posts/manual-success/",
+  );
+  await openMetrics(page);
+
+  await page
+    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
+    .click();
+
+  await expectSummaryValue(page, "Unavailable", "1");
+  await expect(
+    page.getByText("LinkedIn target URN could not be resolved"),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Metric refresh is unavailable because no LinkedIn target URN could be resolved.",
+    ),
+  ).toBeVisible();
+});
+
+test("global kill switch blocks metric refresh without inserting API snapshot", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await setGlobalKillSwitch(page, true);
+  await openMetrics(page);
+
+  await page
+    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
+    .click();
+
+  await expectSummaryValue(page, "Last API snapshots", "0");
+  await expect(
+    page.getByText("Metric refresh skipped: Global kill switch is enabled"),
   ).toBeVisible();
 });
 
@@ -69,7 +194,7 @@ test("archives and restores campaign memory", async ({ page }) => {
   await expect(page.getByText("Campaign memory archived")).toBeVisible();
 
   await page.getByRole("button", { name: "Restore" }).click();
-  await expect(getBadge(page, "Active" ).first()).toBeVisible();
+  await expect(getBadge(page, "Active").first()).toBeVisible();
   await expectSummaryValue(page, "Active memories", "1");
   await expect(page.getByText("Campaign memory restored")).toBeVisible();
 });
@@ -84,7 +209,9 @@ test("shows empty published-post state before anything is published", async ({
   await expect(
     page.getByText("No published posts are ready for metrics"),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "No published posts" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "No published posts" }),
+  ).toBeDisabled();
   await expect(page.getByText("No metrics yet")).toBeVisible();
 });
 
@@ -155,8 +282,14 @@ async function expectSummaryValue(
   label: string,
   value: string,
 ): Promise<void> {
-  const card = page.locator("div").filter({ hasText: new RegExp(`^${label}${value}$`, "u") });
+  const card = page.locator("div").filter({
+    hasText: new RegExp(`^${escapeRegExp(label)}${escapeRegExp(value)}$`, "u"),
+  });
   await expect(card.first()).toBeVisible();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 async function openCampaigns(page: Page): Promise<void> {
@@ -194,16 +327,17 @@ async function openMetrics(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-async function createPublishedApproval(page: Page): Promise<void> {
+async function createPublishedApproval(
+  page: Page,
+  linkedInPostUrl = "https://www.linkedin.com/posts/manual-success/",
+): Promise<void> {
   await createReadyDraft(page);
   await openApprovals(page);
   await createReview(page);
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await page.getByRole("button", { name: "Mark published" }).click();
-  await page
-    .getByLabel("LinkedIn post URL")
-    .fill("https://www.linkedin.com/posts/manual-success/");
+  await page.getByLabel("LinkedIn post URL").fill(linkedInPostUrl);
   page.once("dialog", async (dialog) => {
     await dialog.accept();
   });
@@ -278,11 +412,15 @@ async function createDraft(page: Page): Promise<void> {
     .fill("We turned 12 customer interviews into one simple sales motion");
   await dialog
     .locator("#draft-variant-0-body")
-    .fill("The useful part was not the script. It was the pattern behind the replies.");
+    .fill(
+      "The useful part was not the script. It was the pattern behind the replies.",
+    );
   await dialog
     .locator("#draft-variant-0-cta")
     .fill("Save this before your next outbound sprint.");
-  await dialog.locator("#draft-variant-0-hashtags").fill("#LinkedInGrowth #Sales");
+  await dialog
+    .locator("#draft-variant-0-hashtags")
+    .fill("#LinkedInGrowth #Sales");
   await dialog.getByRole("button", { name: "Create draft" }).click();
   await expect(dialog).toBeHidden();
 }
@@ -313,10 +451,55 @@ async function recordMetrics(page: Page): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
+async function setMetricRefreshEnabled(
+  page: Page,
+  enabled: boolean,
+): Promise<void> {
+  await page.evaluate(async (nextEnabled) => {
+    const invoke = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: {
+          invoke?: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__?.invoke;
+    if (!invoke) throw new Error("Tauri mock invoke was not initialized");
+    await invoke("plugin:sql|execute", {
+      db: "sqlite:linkgo.db",
+      query: "UPDATE metric_refresh_settings SET enabled = $1",
+      values: [nextEnabled ? 1 : 0],
+    });
+  }, enabled);
+}
+
+async function setGlobalKillSwitch(
+  page: Page,
+  enabled: boolean,
+): Promise<void> {
+  await page.evaluate(async (nextEnabled) => {
+    const invoke = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: {
+          invoke?: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__?.invoke;
+    if (!invoke) throw new Error("Tauri mock invoke was not initialized");
+    await invoke("plugin:sql|execute", {
+      db: "sqlite:linkgo.db",
+      query:
+        "UPDATE safety_settings SET global_kill_switch = $1, kill_switch_reason = $2",
+      values: [nextEnabled ? 1 : 0, "Test kill switch"],
+    });
+  }, enabled);
+}
+
 async function saveDefaultMemory(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Save memory" }).click();
   const dialog = page.getByRole("dialog", { name: "Save campaign memory" });
-  await dialog.getByLabel("Summary").fill("Reuse concrete customer interview posts.");
+  await dialog
+    .getByLabel("Summary")
+    .fill("Reuse concrete customer interview posts.");
   await dialog.getByLabel("Confidence").fill("75");
   await dialog.getByRole("button", { name: "Save memory" }).click();
   await expect(dialog).toBeHidden();

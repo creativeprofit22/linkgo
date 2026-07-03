@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
+    linkedin_api::linkedin_http_client,
     oauth::{build_authorization_url, create_oauth_security_material},
     redact_error, unix_timestamp, OAuthCredentials, StoredCredential,
 };
@@ -39,6 +40,7 @@ pub fn start_linkedin_oauth(scopes: Vec<String>) -> Result<LinkedInOAuthStart, S
             "email".to_string(),
             "w_member_social".to_string(),
             "w_member_social_feed".to_string(),
+            "r_member_social_feed".to_string(),
         ]
     } else {
         scopes
@@ -115,7 +117,7 @@ pub fn exchange_linkedin_code(
         ));
     }
 
-    let response = reqwest::blocking::Client::new()
+    let response = linkedin_http_client()?
         .post(LINKEDIN_TOKEN_ENDPOINT)
         .form(&[
             ("grant_type", "authorization_code"),
@@ -152,7 +154,7 @@ pub fn refresh_linkedin_credential(
         ));
     }
 
-    let response = reqwest::blocking::Client::new()
+    let response = linkedin_http_client()?
         .post(LINKEDIN_TOKEN_ENDPOINT)
         .form(&[
             ("grant_type", "refresh_token"),
@@ -220,7 +222,7 @@ mod tests {
         restore_env("LINKGO_LINKEDIN_CLIENT_SECRET", previous_client_secret);
 
         assert!(start.auth_url.contains(
-            "scope=openid%20profile%20email%20w_member_social%20w_member_social_feed"
+            "scope=openid%20profile%20email%20w_member_social%20w_member_social_feed%20r_member_social_feed"
         ));
     }
 

@@ -80,16 +80,19 @@ Autonomous LinkedIn API publishing, LinkedIn API commenting, and scheduler worke
 
 Roadmap coverage:
 
-- Section 15: manual post metrics and campaign memory foundation.
+- Section 15: post metrics, campaign memory foundation, and conservative LinkedIn social metadata refresh.
 
 Implemented now:
 
 - Manual metric snapshots for published approvals.
+- Opt-in LinkedIn social metadata refresh for published approvals with resolvable LinkedIn URNs.
+- API snapshots collect reactions/comments only and label impressions/click metrics as unavailable.
+- Durable local metric refresh settings, jobs, locks, retry metadata, and refresh events.
 - Campaign memory notes approved by a human operator.
 - Append-only learning events for metric and memory actions.
-- Metrics tab with campaign filtering, summaries, metric cards, memory cards, and event stream.
+- Metrics tab with campaign filtering, summaries, refresh controls, metric cards, source badges, memory cards, and event stream.
 
-LinkedIn API collection, automatic refresh, AI learning loops, and background metric jobs are not implemented in this slice.
+LinkedIn scraping, member-post impression/click analytics, organization analytics, AI learning loops, and after-quit metric jobs are not implemented in this slice.
 
 ### Durable workflow engine slice
 
@@ -210,4 +213,4 @@ Autonomous content generation, autonomous LinkedIn commenting, scraping, arbitra
 
 ## Future slices
 
-Future slices will add external integrations and automation only behind explicit approval gates. Remaining comment work is limited to richer LinkedIn surfaces after product access is available; OS-level launch-on-login and after-quit schedulers remain future work.
+Future slices will add external integrations and automation only behind explicit approval gates. Remaining comment work is limited to richer LinkedIn surfaces after product access is available; organization-page analytics, OS-level launch-on-login, and after-quit schedulers remain future work.

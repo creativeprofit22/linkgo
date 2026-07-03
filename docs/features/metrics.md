@@ -2,75 +2,70 @@
 
 ## Purpose
 
-The Metrics tab records manual LinkedIn post performance snapshots for published approvals.
+The Metrics tab records LinkedIn post performance snapshots for published approvals.
 
-It also stores human-approved campaign memory and an append-only learning event stream.
+Operators can still enter full manual snapshots.
 
-This feature is local-first and manual-only. It does not call LinkedIn, scrape metrics, run AI analysis, or start background jobs.
+Linkgo can also opt in to LinkedIn API refresh for social metadata only: reactions and comments on published LinkedIn posts.
+
+All metric history, refresh jobs, refresh events, campaign memory, and learning events stay local in SQLite.
+
+## Scope and LinkedIn limits
+
+LinkedIn member social metadata refresh uses the native OAuth boundary and requires approved read access with `r_member_social_feed` when scopes are known.
+
+The API refresh collects:
+
+- Reactions/likes.
+- First-level comments.
+
+The API refresh does not collect member-post impressions, profile visits, link clicks, repost counts, or CTR.
+
+API snapshots store those unavailable metrics as safe defaults: `0`, `0`, `0`, `0`, and `null`, with a source badge and note so they are not mistaken for true zero reach.
+
+Manual snapshots remain the source for reach and click metrics.
 
 ## Schema
 
 Migration version `5` creates:
 
-- `post_metrics`: one manual metric snapshot for one published approval.
+- `post_metrics`: metric snapshots for one published approval.
 - `campaign_memory`: human-approved campaign learning notes.
 - `learning_events`: append-only lifecycle events for metric and memory activity.
 
-### `post_metrics`
+Migration version `14` adds:
 
-Important columns:
-
-- `campaign_id`: campaign owning the published approval.
-- `approval_id`: published approval being measured.
-- `publish_attempt_id`: latest successful publish attempt evidence when available.
-- `platform`: constrained to `linkedin`.
-- `measured_at`: operator-entered snapshot time.
-- `impressions`, `reactions`, `comments`, `reposts`, `profile_visits`, `link_clicks`: non-negative counts.
-- `ctr`: optional stored CTR percentage, constrained to `0..100`.
-- `notes`: operator notes.
-
-Derived values are calculated in TypeScript:
-
-- `engagementCount = reactions + comments + reposts`.
-- `engagementRate = impressions > 0 ? engagementCount / impressions * 100 : null`.
-- `displayCtr = ctr ?? link_clicks / impressions * 100` when impressions exist.
-
-### `campaign_memory`
-
-Important columns:
-
-- `campaign_id`: owning campaign.
-- `post_metric_id`: optional metric evidence, set null if the metric is deleted.
-- `signal`: `winner`, `underperformer`, `insight`, or `avoid`.
-- `summary`: required human-approved learning note.
-- `evidence`: optional supporting detail.
-- `confidence`: integer `0..100`, default `50`.
-- `status`: `active` or `archived`.
-
-### `learning_events`
-
-Event types:
-
-- `metric_recorded`
-- `memory_created`
-- `memory_archived`
-- `memory_restored`
-
-Events are append-only. They preserve the local learning timeline even when memory status changes.
+- `post_metrics.collection_source`: `manual` or `linkedin_social_metadata`.
+- `post_metrics.raw_payload_json`: raw LinkedIn social metadata payload for API snapshots.
+- `metric_refresh_settings`: one-row opt-in worker settings.
+- `metric_refresh_jobs`: durable per-approval LinkedIn refresh jobs.
+- `metric_refresh_events`: local worker/job event history.
 
 ## Data API
 
 Feature folder: `src/features/metrics`.
 
-Public data functions:
+Public data functions include:
 
 - `listMetricEligibleApprovals(campaignId?)`
 - `listPostMetrics(campaignId?)`
 - `listCampaignMemory(campaignId?)`
 - `listLearningEvents(campaignId?)`
+- `listMetricRefreshDashboard(campaignId?)`
 - `recordPostMetric(input)`
 - `createCampaignMemory(input)`
 - `setCampaignMemoryStatus(input)`
+- `getMetricRefreshStatus()`
+- `startMetricRefresh()`
+- `stopMetricRefresh()`
+- `runMetricRefreshTick()`
+
+Native commands:
+
+- `linkgo_metric_refresh_status`
+- `linkgo_metric_refresh_start`
+- `linkgo_metric_refresh_stop`
+- `linkgo_metric_refresh_tick`
 
 Validation uses Zod schemas in `src/features/metrics/schemas.ts`.
 
@@ -84,51 +79,45 @@ A post can receive metrics only when:
 - The approval status is `published`.
 - At least one successful publish attempt exists.
 
-Creating memory requires:
+API refresh jobs are seeded from published approvals with a latest successful LinkedIn publish attempt.
 
-- A non-archived campaign.
-- A valid optional metric from the same campaign.
-- A required summary.
+Target URNs resolve from `publish_attempts.platform_post_id` first, then `external_post_url`.
 
-Changing memory status requires:
+Jobs with no resolvable LinkedIn URN become `unavailable`.
 
-- Existing memory.
-- A non-archived campaign.
+Due active jobs refresh only while Linkgo is open or hidden to tray, and the global kill switch blocks network calls.
 
-Each mutation writes a learning event in the same transaction.
+Each successful API refresh inserts a `post_metrics` row, a normal `learning_events.metric_recorded` row, and a `metric_refresh_events.refresh_completed` row.
 
 ## UI behavior
 
 The Metrics tab includes:
 
 - Campaign filter.
-- Summary cards for measured posts, total impressions, average engagement, and active memories.
+- Summary cards for manual metrics, API refresh state, due jobs, unavailable jobs, and API snapshots.
+- Start/stop controls for opt-in metric refresh.
+- Manual `Refresh LinkedIn metrics now` tick control.
 - Record metrics dialog for published posts.
-- Metric cards with source context, selected variant, publish evidence, counters, engagement rate, CTR, and notes.
+- Metric cards with source badge: `Manual` or `LinkedIn social metadata`.
+- Clear API limitation copy for API snapshots.
+- Refresh jobs and recent refresh events.
 - Save memory dialog from metric cards.
 - Campaign memory cards with archive/restore controls.
 - Learning event list.
 
 Archived campaigns keep history visible but hide mutation controls.
 
-## Manual-only/local-only constraints
-
-Operators enter metrics manually from LinkedIn or another trusted source.
-
-Linkgo stores raw counts and optional CTR locally in SQLite.
-
-No LinkedIn OAuth, API calls, scraping, metric polling, or scheduler is included.
-
 ## Explicit exclusions
 
 This feature intentionally excludes:
 
-- LinkedIn OAuth/API metrics collection.
-- Automatic metrics refresh.
-- Background jobs.
+- Scraping LinkedIn pages.
+- LinkedIn member-post impressions/click analytics.
+- Organization-page analytics collection.
 - AI winner/loser analysis.
 - Automatic campaign-memory generation.
 - Comment/reply automation.
+- Running refresh jobs after Linkgo quits.
 
 ## Verification commands
 

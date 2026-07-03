@@ -246,6 +246,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       link_clicks: number;
       ctr: number | null;
       notes: string;
+      collection_source: "manual" | "linkedin_social_metadata";
+      raw_payload_json: string;
       created_at: string;
       updated_at: string;
     };
@@ -271,6 +273,60 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       event_type: LearningEventType;
       summary: string;
       created_at: string;
+    };
+
+    type MetricRefreshJob = {
+      id: number;
+      campaign_id: number;
+      approval_id: number;
+      publish_attempt_id: number | null;
+      platform: "linkedin";
+      target_urn: string;
+      status: "active" | "paused" | "unavailable" | "failed";
+      next_refresh_at: string;
+      last_refreshed_at: string | null;
+      last_attempted_at: string | null;
+      attempt_count: number;
+      max_attempts: number;
+      failure_count: number;
+      last_error: string;
+      locked_at: string | null;
+      locked_by: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type MetricRefreshEvent = {
+      id: number;
+      campaign_id: number | null;
+      approval_id: number | null;
+      metric_refresh_job_id: number | null;
+      post_metric_id: number | null;
+      event_type:
+        | "refresh_started"
+        | "refresh_completed"
+        | "refresh_retry_scheduled"
+        | "refresh_unavailable"
+        | "refresh_failed"
+        | "refresh_blocked"
+        | "worker_started"
+        | "worker_stopped"
+        | "tick_started"
+        | "tick_completed";
+      severity: "info" | "warning" | "error";
+      summary: string;
+      metadata_json: string;
+      created_at: string;
+    };
+
+    type MetricRefreshSettings = {
+      id: 1;
+      enabled: number;
+      poll_interval_minutes: number;
+      max_jobs_per_tick: number;
+      refresh_interval_hours: number;
+      retry_backoff_minutes: number;
+      updated_at: string;
     };
 
     type WorkflowRunStatus =
@@ -596,6 +652,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       postMetrics: PostMetric[];
       campaignMemory: CampaignMemory[];
       learningEvents: LearningEvent[];
+      metricRefreshJobs: MetricRefreshJob[];
+      metricRefreshEvents: MetricRefreshEvent[];
+      metricRefreshSettings: MetricRefreshSettings;
       workflowRuns: WorkflowRun[];
       workflowSteps: WorkflowStep[];
       workflowEvents: WorkflowEvent[];
@@ -626,6 +685,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextPostMetricId: number;
       nextCampaignMemoryId: number;
       nextLearningEventId: number;
+      nextMetricRefreshJobId: number;
+      nextMetricRefreshEventId: number;
       nextWorkflowRunId: number;
       nextWorkflowStepId: number;
       nextWorkflowEventId: number;
@@ -657,6 +718,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const postMetrics: PostMetric[] = [];
     const campaignMemory: CampaignMemory[] = [];
     const learningEvents: LearningEvent[] = [];
+    const metricRefreshJobs: MetricRefreshJob[] = [];
+    const metricRefreshEvents: MetricRefreshEvent[] = [];
+    const metricRefreshSettings: MetricRefreshSettings = {
+      id: 1,
+      enabled: 0,
+      poll_interval_minutes: 360,
+      max_jobs_per_tick: 3,
+      refresh_interval_hours: 6,
+      retry_backoff_minutes: 60,
+      updated_at: new Date().toISOString(),
+    };
     const workflowRuns: WorkflowRun[] = [];
     const workflowSteps: WorkflowStep[] = [];
     const workflowEvents: WorkflowEvent[] = [];
@@ -682,6 +754,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     };
     const schedulerEvents: SchedulerEvent[] = [];
     let schedulerRunning = false;
+    let metricRefreshRunning = false;
     let nextCampaignId = 1;
     let nextKeywordId = 1;
     let nextTargetPostId = 1;
@@ -700,6 +773,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextPostMetricId = 1;
     let nextCampaignMemoryId = 1;
     let nextLearningEventId = 1;
+    let nextMetricRefreshJobId = 1;
+    let nextMetricRefreshEventId = 1;
     let nextWorkflowRunId = 1;
     let nextWorkflowStepId = 1;
     let nextWorkflowEventId = 1;
@@ -757,6 +832,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         postMetrics: cloneRows(postMetrics),
         campaignMemory: cloneRows(campaignMemory),
         learningEvents: cloneRows(learningEvents),
+        metricRefreshJobs: cloneRows(metricRefreshJobs),
+        metricRefreshEvents: cloneRows(metricRefreshEvents),
+        metricRefreshSettings: { ...metricRefreshSettings },
         workflowRuns: cloneRows(workflowRuns),
         workflowSteps: cloneRows(workflowSteps),
         workflowEvents: cloneRows(workflowEvents),
@@ -787,6 +865,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextPostMetricId,
         nextCampaignMemoryId,
         nextLearningEventId,
+        nextMetricRefreshJobId,
+        nextMetricRefreshEventId,
         nextWorkflowRunId,
         nextWorkflowStepId,
         nextWorkflowEventId,
@@ -823,6 +903,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(postMetrics, snapshot.postMetrics);
       restoreRows(campaignMemory, snapshot.campaignMemory);
       restoreRows(learningEvents, snapshot.learningEvents);
+      restoreRows(metricRefreshJobs, snapshot.metricRefreshJobs);
+      restoreRows(metricRefreshEvents, snapshot.metricRefreshEvents);
+      Object.assign(metricRefreshSettings, snapshot.metricRefreshSettings);
       restoreRows(workflowRuns, snapshot.workflowRuns);
       restoreRows(workflowSteps, snapshot.workflowSteps);
       restoreRows(workflowEvents, snapshot.workflowEvents);
@@ -840,7 +923,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       schedulerSettings.enabled = snapshot.schedulerSettings.enabled;
       schedulerSettings.poll_interval_seconds =
         snapshot.schedulerSettings.poll_interval_seconds;
-      schedulerSettings.max_jobs_per_tick = snapshot.schedulerSettings.max_jobs_per_tick;
+      schedulerSettings.max_jobs_per_tick =
+        snapshot.schedulerSettings.max_jobs_per_tick;
       schedulerSettings.retry_backoff_minutes =
         snapshot.schedulerSettings.retry_backoff_minutes;
       schedulerSettings.updated_at = snapshot.schedulerSettings.updated_at;
@@ -863,6 +947,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextPostMetricId = snapshot.nextPostMetricId;
       nextCampaignMemoryId = snapshot.nextCampaignMemoryId;
       nextLearningEventId = snapshot.nextLearningEventId;
+      nextMetricRefreshJobId = snapshot.nextMetricRefreshJobId;
+      nextMetricRefreshEventId = snapshot.nextMetricRefreshEventId;
       nextWorkflowRunId = snapshot.nextWorkflowRunId;
       nextWorkflowStepId = snapshot.nextWorkflowStepId;
       nextWorkflowEventId = snapshot.nextWorkflowEventId;
@@ -1722,20 +1808,22 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           status: thread.status,
           campaign_status: campaign.status,
           daily_comment_limit: campaign.daily_comment_limit,
-          target_url: targetPosts.find(
-            (target) =>
-              target.id ===
-              candidatePosts.find(
-                (candidate) => candidate.id === thread.candidate_post_id,
-              )?.target_post_id,
-          )?.url ?? "",
-          target_platform_resource_urn: targetPosts.find(
-            (target) =>
-              target.id ===
-              candidatePosts.find(
-                (candidate) => candidate.id === thread.candidate_post_id,
-              )?.target_post_id,
-          )?.platform_resource_urn ?? "",
+          target_url:
+            targetPosts.find(
+              (target) =>
+                target.id ===
+                candidatePosts.find(
+                  (candidate) => candidate.id === thread.candidate_post_id,
+                )?.target_post_id,
+            )?.url ?? "",
+          target_platform_resource_urn:
+            targetPosts.find(
+              (target) =>
+                target.id ===
+                candidatePosts.find(
+                  (candidate) => candidate.id === thread.candidate_post_id,
+                )?.target_post_id,
+            )?.platform_resource_urn ?? "",
         },
       ];
     }
@@ -1853,7 +1941,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             ? draftVariants.find((row) => row.id === approval.draft_variant_id)
             : undefined;
           if (!approval || !campaign || !variant) return false;
-          const includeSoon = dateMs(job.scheduled_for) <= Date.now() + 86_400_000;
+          const includeSoon =
+            dateMs(job.scheduled_for) <= Date.now() + 86_400_000;
           const includeError = job.last_error.trim() !== "";
           return (
             job.status === "scheduled" &&
@@ -1877,7 +1966,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           };
         })
         .sort((left, right) => {
-          const scheduledDelta = left.scheduled_for.localeCompare(right.scheduled_for);
+          const scheduledDelta = left.scheduled_for.localeCompare(
+            right.scheduled_for,
+          );
           if (scheduledDelta !== 0) return scheduledDelta;
           return left.id - right.id;
         })
@@ -1887,11 +1978,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function selectSchedulerEvents(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return schedulerEvents
-        .filter((event) => campaignId === null || event.campaign_id === campaignId)
+        .filter(
+          (event) => campaignId === null || event.campaign_id === campaignId,
+        )
         .map((event) => ({
           ...event,
           campaign_name: event.campaign_id
-            ? campaigns.find((campaign) => campaign.id === event.campaign_id)?.name ?? null
+            ? (campaigns.find((campaign) => campaign.id === event.campaign_id)
+                ?.name ?? null)
             : null,
         }))
         .sort((left, right) => {
@@ -1907,7 +2001,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return publishAttempts
         .filter((attempt) => attempt.schedule_job_id !== null)
         .map((attempt) => {
-          const approval = approvals.find((row) => row.id === attempt.approval_id);
+          const approval = approvals.find(
+            (row) => row.id === attempt.approval_id,
+          );
           const campaign = approval
             ? campaigns.find((row) => row.id === approval.campaign_id)
             : undefined;
@@ -1917,7 +2013,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             campaign_name: campaign?.name ?? null,
           };
         })
-        .filter((attempt) => campaignId === null || attempt.campaign_id === campaignId)
+        .filter(
+          (attempt) =>
+            campaignId === null || attempt.campaign_id === campaignId,
+        )
         .sort((left, right) => {
           const createdDelta = right.created_at.localeCompare(left.created_at);
           if (createdDelta !== 0) return createdDelta;
@@ -2209,7 +2308,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         !query.includes("sj.status IN")
       ) {
         const campaignId = typeof values[0] === "number" ? values[0] : null;
-        const dueOnly = query.includes("datetime(sj.scheduled_for) <= datetime('now')");
+        const dueOnly = query.includes(
+          "datetime(sj.scheduled_for) <= datetime('now')",
+        );
         return [
           {
             count: scheduleJobs.filter((job) => {
@@ -2323,6 +2424,53 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (query.includes("FROM workflow_events")) {
         return selectWorkflowEvents(values);
+      }
+      if (query.includes("FROM metric_refresh_settings")) {
+        return [{ ...metricRefreshSettings }];
+      }
+      if (query.includes("FROM metric_refresh_jobs mrj")) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        return metricRefreshJobs
+          .filter(
+            (job) => campaignId === null || job.campaign_id === campaignId,
+          )
+          .sort((left, right) => left.id - right.id);
+      }
+      if (query.includes("FROM metric_refresh_events mre")) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        return metricRefreshEvents
+          .filter(
+            (event) => campaignId === null || event.campaign_id === campaignId,
+          )
+          .sort((left, right) => right.id - left.id)
+          .slice(0, 20);
+      }
+      if (
+        query.includes(
+          "SELECT\n      (SELECT COUNT(*) FROM metric_refresh_jobs",
+        )
+      ) {
+        const campaignId = typeof values[0] === "number" ? values[0] : null;
+        const jobs = metricRefreshJobs.filter(
+          (job) => campaignId === null || job.campaign_id === campaignId,
+        );
+        const metrics = postMetrics.filter(
+          (metric) => campaignId === null || metric.campaign_id === campaignId,
+        );
+        return [
+          {
+            total_jobs: jobs.length,
+            active_jobs: jobs.filter((job) => job.status === "active").length,
+            due_jobs: jobs.filter((job) => job.status === "active").length,
+            unavailable_jobs: jobs.filter((job) => job.status === "unavailable")
+              .length,
+            failed_jobs: jobs.filter((job) => job.status === "failed").length,
+            api_snapshots: metrics.filter(
+              (metric) =>
+                metric.collection_source === "linkedin_social_metadata",
+            ).length,
+          },
+        ];
       }
       if (query.includes("FROM post_metrics pm")) {
         return selectPostMetricJoin(values);
@@ -2544,9 +2692,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       if (query.includes("UPDATE scheduler_settings")) {
         if (query.includes("enabled")) {
-          schedulerSettings.enabled = Number(values[0] ?? schedulerSettings.enabled);
+          schedulerSettings.enabled = Number(
+            values[0] ?? schedulerSettings.enabled,
+          );
         }
         schedulerSettings.updated_at = now;
+        return { lastInsertId: 1, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE metric_refresh_settings")) {
+        if (query.includes("enabled")) {
+          metricRefreshSettings.enabled = Number(
+            values[0] ?? metricRefreshSettings.enabled,
+          );
+        }
+        metricRefreshSettings.updated_at = now;
         return { lastInsertId: 1, rowsAffected: 1 };
       }
 
@@ -2932,25 +3092,50 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
 
       if (query.includes("INSERT INTO post_metrics")) {
-        const metric: PostMetric = {
-          id: nextPostMetricId,
-          campaign_id: Number(values[0] ?? 0),
-          approval_id: Number(values[1] ?? 0),
-          publish_attempt_id:
-            values[2] === null ? null : Number(values[2] ?? 0),
-          platform: "linkedin",
-          measured_at: String(values[3] ?? ""),
-          impressions: Number(values[4] ?? 0),
-          reactions: Number(values[5] ?? 0),
-          comments: Number(values[6] ?? 0),
-          reposts: Number(values[7] ?? 0),
-          profile_visits: Number(values[8] ?? 0),
-          link_clicks: Number(values[9] ?? 0),
-          ctr: values[10] === null ? null : Number(values[10] ?? 0),
-          notes: String(values[11] ?? ""),
-          created_at: now,
-          updated_at: now,
-        };
+        const apiSource = query.includes("linkedin_social_metadata");
+        const metric: PostMetric = apiSource
+          ? {
+              id: nextPostMetricId,
+              campaign_id: Number(values[0] ?? 0),
+              approval_id: Number(values[1] ?? 0),
+              publish_attempt_id:
+                values[2] === null ? null : Number(values[2] ?? 0),
+              platform: "linkedin",
+              measured_at: now,
+              impressions: 0,
+              reactions: Number(values[3] ?? 0),
+              comments: Number(values[4] ?? 0),
+              reposts: 0,
+              profile_visits: 0,
+              link_clicks: 0,
+              ctr: null,
+              notes: String(values[5] ?? ""),
+              collection_source: "linkedin_social_metadata",
+              raw_payload_json: String(values[6] ?? "{}"),
+              created_at: now,
+              updated_at: now,
+            }
+          : {
+              id: nextPostMetricId,
+              campaign_id: Number(values[0] ?? 0),
+              approval_id: Number(values[1] ?? 0),
+              publish_attempt_id:
+                values[2] === null ? null : Number(values[2] ?? 0),
+              platform: "linkedin",
+              measured_at: String(values[3] ?? ""),
+              impressions: Number(values[4] ?? 0),
+              reactions: Number(values[5] ?? 0),
+              comments: Number(values[6] ?? 0),
+              reposts: Number(values[7] ?? 0),
+              profile_visits: Number(values[8] ?? 0),
+              link_clicks: Number(values[9] ?? 0),
+              ctr: values[10] === null ? null : Number(values[10] ?? 0),
+              notes: String(values[11] ?? ""),
+              collection_source: "manual",
+              raw_payload_json: "",
+              created_at: now,
+              updated_at: now,
+            };
         postMetrics.push(metric);
         nextPostMetricId += 1;
         return { lastInsertId: metric.id, rowsAffected: 1 };
@@ -3770,17 +3955,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       };
     }
 
-    function publishSchedulerJob(job: ScheduleJob): "published" | "retry" | "failed" | "blocked" {
+    function publishSchedulerJob(
+      job: ScheduleJob,
+    ): "published" | "retry" | "failed" | "blocked" {
       const approval = scheduleApproval(job);
       const campaign = scheduleCampaign(job);
       if (!approval || !campaign) return "failed";
       if (safetySettings.global_kill_switch === 1) {
-        recordSchedulerEvent("job_blocked", "Scheduler skipped a due job because the global kill switch is enabled.", {
-          campaignId: approval.campaign_id,
-          approvalId: approval.id,
-          scheduleJobId: job.id,
-          severity: "warning",
-        });
+        recordSchedulerEvent(
+          "job_blocked",
+          "Scheduler skipped a due job because the global kill switch is enabled.",
+          {
+            campaignId: approval.campaign_id,
+            approvalId: approval.id,
+            scheduleJobId: job.id,
+            severity: "warning",
+          },
+        );
         return "blocked";
       }
 
@@ -3788,11 +3979,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       job.last_attempted_at = getNow();
       job.locked_at = getNow();
       job.locked_by = "mock-runner";
-      recordSchedulerEvent("job_claimed", "Scheduler claimed a due LinkedIn post.", {
-        campaignId: approval.campaign_id,
-        approvalId: approval.id,
-        scheduleJobId: job.id,
-      });
+      recordSchedulerEvent(
+        "job_claimed",
+        "Scheduler claimed a due LinkedIn post.",
+        {
+          campaignId: approval.campaign_id,
+          approvalId: approval.id,
+          scheduleJobId: job.id,
+        },
+      );
 
       const publishInvokes = Number(w.__LINKGO_LINKEDIN_PUBLISH_INVOKES__ ?? 0);
       w.__LINKGO_LINKEDIN_PUBLISH_INVOKES__ = publishInvokes + 1;
@@ -3851,25 +4046,36 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             updated_at: getNow(),
           });
           nextErrorQueueItemId += 1;
-          recordSchedulerEvent("job_failed", "Scheduled LinkedIn publish failed permanently.", {
-            campaignId: approval.campaign_id,
-            approvalId: approval.id,
-            scheduleJobId: job.id,
-            severity: "error",
-            metadata: { attemptCount: job.attempt_count },
-          });
+          recordSchedulerEvent(
+            "job_failed",
+            "Scheduled LinkedIn publish failed permanently.",
+            {
+              campaignId: approval.campaign_id,
+              approvalId: approval.id,
+              scheduleJobId: job.id,
+              severity: "error",
+              metadata: { attemptCount: job.attempt_count },
+            },
+          );
           return "failed";
         }
         job.next_attempt_at = new Date(
-          Date.now() + schedulerSettings.retry_backoff_minutes * job.attempt_count * 60_000,
+          Date.now() +
+            schedulerSettings.retry_backoff_minutes *
+              job.attempt_count *
+              60_000,
         ).toISOString();
-        recordSchedulerEvent("job_retry_scheduled", "Scheduled LinkedIn publish failed and will retry.", {
-          campaignId: approval.campaign_id,
-          approvalId: approval.id,
-          scheduleJobId: job.id,
-          severity: "warning",
-          metadata: { attemptCount: job.attempt_count },
-        });
+        recordSchedulerEvent(
+          "job_retry_scheduled",
+          "Scheduled LinkedIn publish failed and will retry.",
+          {
+            campaignId: approval.campaign_id,
+            approvalId: approval.id,
+            scheduleJobId: job.id,
+            severity: "warning",
+            metadata: { attemptCount: job.attempt_count },
+          },
+        );
         return "retry";
       }
 
@@ -3905,12 +4111,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         created_at: getNow(),
       });
       nextSafetyAuditEventId += 1;
-      recordSchedulerEvent("job_published", "Scheduled LinkedIn post was published.", {
-        campaignId: approval.campaign_id,
-        approvalId: approval.id,
-        scheduleJobId: job.id,
-        metadata: { platformPostId },
-      });
+      recordSchedulerEvent(
+        "job_published",
+        "Scheduled LinkedIn post was published.",
+        {
+          campaignId: approval.campaign_id,
+          approvalId: approval.id,
+          scheduleJobId: job.id,
+          metadata: { platformPostId },
+        },
+      );
       return "published";
     }
 
@@ -3937,6 +4147,238 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       recordSchedulerEvent("tick_completed", "Scheduler tick completed.", {
         metadata: result,
       });
+      return result;
+    }
+
+    function metricRefreshStatusPayload(): Record<string, unknown> {
+      return {
+        enabled: metricRefreshSettings.enabled === 1,
+        running: metricRefreshRunning,
+        runnerId: metricRefreshRunning ? "mock-metric-refresh" : null,
+        settings: {
+          enabled: metricRefreshSettings.enabled === 1,
+          pollIntervalMinutes: metricRefreshSettings.poll_interval_minutes,
+          maxJobsPerTick: metricRefreshSettings.max_jobs_per_tick,
+          refreshIntervalHours: metricRefreshSettings.refresh_interval_hours,
+          retryBackoffMinutes: metricRefreshSettings.retry_backoff_minutes,
+          updatedAt: metricRefreshSettings.updated_at,
+        },
+      };
+    }
+
+    function resolveMockLinkedInUrn(value: string): string {
+      const decoded = decodeURIComponent(value || "");
+      const direct = decoded.match(
+        /urn:li:(?:ugcPost|share|activity):[A-Za-z0-9_-]+/u,
+      )?.[0];
+      if (direct) return direct;
+      const activity = decoded.match(/activity[-:](\d+)/u)?.[1];
+      return activity ? `urn:li:activity:${activity}` : "";
+    }
+
+    function recordMetricRefreshEvent(
+      event_type: MetricRefreshEvent["event_type"],
+      summary: string,
+      options: {
+        campaignId?: number | null;
+        approvalId?: number | null;
+        jobId?: number | null;
+        postMetricId?: number | null;
+        severity?: MetricRefreshEvent["severity"];
+        metadata?: unknown;
+      } = {},
+    ): void {
+      metricRefreshEvents.push({
+        id: nextMetricRefreshEventId,
+        campaign_id: options.campaignId ?? null,
+        approval_id: options.approvalId ?? null,
+        metric_refresh_job_id: options.jobId ?? null,
+        post_metric_id: options.postMetricId ?? null,
+        event_type,
+        severity: options.severity ?? "info",
+        summary,
+        metadata_json: JSON.stringify(options.metadata ?? {}),
+        created_at: getNow(),
+      });
+      nextMetricRefreshEventId += 1;
+    }
+
+    function seedMetricRefreshJobs(): number {
+      let seeded = 0;
+      for (const approval of approvals.filter(
+        (item) => item.status === "published",
+      )) {
+        const campaign = campaigns.find(
+          (item) => item.id === approval.campaign_id,
+        );
+        const attempt = getLatestSuccessfulPublishAttempt(approval.id);
+        if (!campaign || campaign.status === "archived" || !attempt) continue;
+        if (metricRefreshJobs.some((job) => job.approval_id === approval.id))
+          continue;
+        const targetUrn =
+          resolveMockLinkedInUrn(attempt.platform_post_id) ||
+          resolveMockLinkedInUrn(attempt.external_post_url);
+        const job: MetricRefreshJob = {
+          id: nextMetricRefreshJobId,
+          campaign_id: approval.campaign_id,
+          approval_id: approval.id,
+          publish_attempt_id: attempt.id,
+          platform: "linkedin",
+          target_urn: targetUrn,
+          status: targetUrn ? "active" : "unavailable",
+          next_refresh_at: getNow(),
+          last_refreshed_at: null,
+          last_attempted_at: null,
+          attempt_count: 0,
+          max_attempts: 3,
+          failure_count: 0,
+          last_error: targetUrn
+            ? ""
+            : "LinkedIn target URN could not be resolved",
+          locked_at: null,
+          locked_by: null,
+          created_at: getNow(),
+          updated_at: getNow(),
+        };
+        metricRefreshJobs.push(job);
+        nextMetricRefreshJobId += 1;
+        seeded += 1;
+        if (!targetUrn) {
+          recordMetricRefreshEvent(
+            "refresh_unavailable",
+            "Metric refresh is unavailable because no LinkedIn target URN could be resolved.",
+            {
+              campaignId: job.campaign_id,
+              approvalId: job.approval_id,
+              jobId: job.id,
+              severity: "warning",
+            },
+          );
+        }
+      }
+      return seeded;
+    }
+
+    function runMetricRefreshTickMock(): Record<string, number> {
+      const result = {
+        claimed: 0,
+        refreshed: 0,
+        retryScheduled: 0,
+        unavailable: 0,
+        failed: 0,
+        blocked: 0,
+        seeded: 0,
+      };
+      recordMetricRefreshEvent("tick_started", "Metric refresh tick started.");
+      result.seeded = seedMetricRefreshJobs();
+      const dueJobs = metricRefreshJobs
+        .filter((job) => job.status === "active")
+        .slice(0, metricRefreshSettings.max_jobs_per_tick);
+      if (safetySettings.global_kill_switch === 1) {
+        for (const job of dueJobs) {
+          result.blocked += 1;
+          recordMetricRefreshEvent(
+            "refresh_blocked",
+            "Metric refresh skipped: Global kill switch is enabled",
+            {
+              campaignId: job.campaign_id,
+              approvalId: job.approval_id,
+              jobId: job.id,
+              severity: "warning",
+            },
+          );
+        }
+        return result;
+      }
+      for (const job of dueJobs) {
+        job.attempt_count += 1;
+        job.last_attempted_at = getNow();
+        result.claimed += 1;
+        recordMetricRefreshEvent(
+          "refresh_started",
+          "Metric refresh job started.",
+          {
+            campaignId: job.campaign_id,
+            approvalId: job.approval_id,
+            jobId: job.id,
+          },
+        );
+        const forcedUnavailable =
+          w.__LINKGO_METRIC_REFRESH_UNAVAILABLE__ === true;
+        if (forcedUnavailable || !job.target_urn) {
+          job.status = "unavailable";
+          job.last_error = "LinkedIn target URN could not be resolved";
+          result.unavailable += 1;
+          recordMetricRefreshEvent("refresh_unavailable", job.last_error, {
+            campaignId: job.campaign_id,
+            approvalId: job.approval_id,
+            jobId: job.id,
+            severity: "warning",
+          });
+          continue;
+        }
+        const reactions = Number(w.__LINKGO_METRIC_REFRESH_REACTIONS__ ?? 42);
+        const comments = Number(w.__LINKGO_METRIC_REFRESH_COMMENTS__ ?? 7);
+        const metric: PostMetric = {
+          id: nextPostMetricId,
+          campaign_id: job.campaign_id,
+          approval_id: job.approval_id,
+          publish_attempt_id: job.publish_attempt_id,
+          platform: "linkedin",
+          measured_at: getNow(),
+          impressions: 0,
+          reactions,
+          comments,
+          reposts: 0,
+          profile_visits: 0,
+          link_clicks: 0,
+          ctr: null,
+          notes:
+            "LinkedIn social metadata API snapshot: reactions and comments only. Impressions, reposts, profile visits, link clicks, and CTR remain manual-only for member posts.",
+          collection_source: "linkedin_social_metadata",
+          raw_payload_json: JSON.stringify({
+            likesSummary: { totalLikes: reactions },
+            commentsSummary: { totalFirstLevelComments: comments },
+          }),
+          created_at: getNow(),
+          updated_at: getNow(),
+        };
+        postMetrics.push(metric);
+        nextPostMetricId += 1;
+        learningEvents.push({
+          id: nextLearningEventId,
+          campaign_id: job.campaign_id,
+          post_metric_id: metric.id,
+          campaign_memory_id: null,
+          event_type: "metric_recorded",
+          summary: `LinkedIn social metadata recorded for approval #${job.approval_id}`,
+          created_at: getNow(),
+        });
+        nextLearningEventId += 1;
+        job.last_refreshed_at = getNow();
+        job.next_refresh_at = new Date(
+          Date.now() + metricRefreshSettings.refresh_interval_hours * 3_600_000,
+        ).toISOString();
+        job.last_error = "";
+        job.updated_at = getNow();
+        result.refreshed += 1;
+        recordMetricRefreshEvent(
+          "refresh_completed",
+          "LinkedIn social metadata refresh completed.",
+          {
+            campaignId: job.campaign_id,
+            approvalId: job.approval_id,
+            jobId: job.id,
+            postMetricId: metric.id,
+            metadata: { reactions, comments },
+          },
+        );
+      }
+      recordMetricRefreshEvent(
+        "tick_completed",
+        "Metric refresh tick completed.",
+        { metadata: result },
+      );
       return result;
     }
 
@@ -3988,10 +4430,20 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     });
 
     const authProviders = [
-      ["anthropic", "Anthropic", "claude-sonnet-4-6", "Anthropic API key or OAuth token"],
+      [
+        "anthropic",
+        "Anthropic",
+        "claude-sonnet-4-6",
+        "Anthropic API key or OAuth token",
+      ],
       ["xiaomi", "Xiaomi (MiMo)", "MiMo-VL-7B-RL", "Xiaomi MiMo API key"],
       ["openai", "OpenAI", "gpt-4.1-mini", "OpenAI API key"],
-      ["gemini", "Gemini", "gemini-2.5-flash", "Gemini Code Assist access token"],
+      [
+        "gemini",
+        "Gemini",
+        "gemini-2.5-flash",
+        "Gemini Code Assist access token",
+      ],
       ["glm", "Z.AI (GLM)", "glm-4.7", "Z.AI / GLM API key"],
       ["moonshot", "Moonshot", "kimi-k2-0711-preview", "Moonshot API key"],
       ["deepseek", "DeepSeek", "deepseek-chat", "DeepSeek API key"],
@@ -4026,6 +4478,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         "email",
         "w_member_social",
         "w_member_social_feed",
+        "r_member_social_feed",
       ],
       models: [],
       secretLabel: "LinkedIn OAuth",
@@ -4033,7 +4486,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         "https://learn.microsoft.com/linkedin/shared/authentication/authorization-code-flow",
     });
     const connectedAccounts: Record<string, unknown>[] = [];
-    const providerSecrets: Record<string, { apiKey: string; baseUrl?: string }> = {};
+    const providerSecrets: Record<
+      string,
+      { apiKey: string; baseUrl?: string }
+    > = {};
     function getAuthStatusMock(): Record<string, unknown> {
       return {
         providers: authProviders,
@@ -4144,9 +4600,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                 | { input?: { providerKey?: string; provider_key?: string } }
                 | undefined
             )?.input ?? {};
-          const providerKey = input.providerKey ?? input.provider_key ?? "openai";
+          const providerKey =
+            input.providerKey ?? input.provider_key ?? "openai";
           const secret = providerSecrets[providerKey];
-          if (secret === undefined) throw new Error("Provider is not connected");
+          if (secret === undefined)
+            throw new Error("Provider is not connected");
           return Promise.resolve({
             providerKey,
             apiKey: secret.apiKey,
@@ -4169,7 +4627,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             provider_label: "LinkedIn",
             auth_method: "oauth",
             status: "connected",
-            scopes: "openid profile email w_member_social w_member_social_feed",
+            scopes:
+              "openid profile email w_member_social w_member_social_feed r_member_social_feed",
             account_label: "LinkedIn member",
             account_id: "member-1",
             expires_at: null,
@@ -4213,22 +4672,66 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           schedulerSettings.enabled = 1;
           schedulerSettings.updated_at = getNow();
           schedulerRunning = true;
-          recordSchedulerEvent("scheduler_started", "Background scheduler started.", {
-            metadata: { runnerId: "mock-runner" },
-          });
+          recordSchedulerEvent(
+            "scheduler_started",
+            "Background scheduler started.",
+            {
+              metadata: { runnerId: "mock-runner" },
+            },
+          );
           return Promise.resolve(schedulerStatusPayload());
         }
         if (cmd === "linkgo_scheduler_stop") {
           schedulerSettings.enabled = 0;
           schedulerSettings.updated_at = getNow();
           schedulerRunning = false;
-          recordSchedulerEvent("scheduler_stopped", "Background scheduler stopped.", {
-            metadata: { runnerId: "mock-runner" },
-          });
+          recordSchedulerEvent(
+            "scheduler_stopped",
+            "Background scheduler stopped.",
+            {
+              metadata: { runnerId: "mock-runner" },
+            },
+          );
           return Promise.resolve(schedulerStatusPayload());
         }
         if (cmd === "linkgo_scheduler_tick") {
           return Promise.resolve(runSchedulerTickMock());
+        }
+        if (cmd === "linkgo_metric_refresh_status") {
+          return Promise.resolve(metricRefreshStatusPayload());
+        }
+        if (cmd === "linkgo_metric_refresh_start") {
+          metricRefreshSettings.enabled = 1;
+          metricRefreshSettings.updated_at = getNow();
+          metricRefreshRunning = true;
+          recordMetricRefreshEvent(
+            "worker_started",
+            "Metric refresh worker started.",
+            {
+              metadata: { runnerId: "mock-metric-refresh" },
+            },
+          );
+          return Promise.resolve(metricRefreshStatusPayload());
+        }
+        if (cmd === "linkgo_metric_refresh_stop") {
+          metricRefreshSettings.enabled = 0;
+          metricRefreshSettings.updated_at = getNow();
+          metricRefreshRunning = false;
+          recordMetricRefreshEvent(
+            "worker_stopped",
+            "Metric refresh worker stopped.",
+            {
+              metadata: { runnerId: "mock-metric-refresh" },
+            },
+          );
+          return Promise.resolve(metricRefreshStatusPayload());
+        }
+        if (cmd === "linkgo_metric_refresh_tick") {
+          const error = w.__LINKGO_METRIC_REFRESH_TICK_ERROR__;
+          if (typeof error === "string" && error.trim() !== "") {
+            return Promise.reject(error);
+          }
+          return Promise.resolve(runMetricRefreshTickMock());
         }
         if (cmd === "linkgo_linkedin_publish_comment") {
           const input =
@@ -4258,7 +4761,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           }
           const commentThreadId =
             input.commentThreadId ?? input.comment_thread_id ?? 1;
-          const targetUrn = input.targetUrn ?? input.target_urn ?? "urn:li:ugcPost:test";
+          const targetUrn =
+            input.targetUrn ?? input.target_urn ?? "urn:li:ugcPost:test";
           const platformCommentId = `test-comment-${commentThreadId}`;
           return Promise.resolve({
             platformCommentId,
