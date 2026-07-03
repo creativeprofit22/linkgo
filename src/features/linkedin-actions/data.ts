@@ -17,6 +17,10 @@ import { getSafetySettings } from "@/features/safety/data";
 
 type InvokeFn = (cmd: string, args?: unknown) => Promise<unknown>;
 
+interface PublishLinkedInCommentOptions {
+  skipPreflight?: boolean;
+}
+
 interface TauriWindowLike {
   __TAURI__?: { core?: { invoke?: unknown } };
   __TAURI_INTERNALS__?: { invoke?: unknown };
@@ -97,9 +101,12 @@ export async function publishLinkedInPost(
 
 export async function publishLinkedInComment(
   input: LinkedInPublishCommentInput,
+  options: PublishLinkedInCommentOptions = {},
 ): Promise<LinkedInPublishCommentResult> {
   const parsed = linkedInPublishCommentInputSchema.parse(input);
-  await assertCommentCanPublishViaLinkedIn(parsed);
+  if (options.skipPreflight !== true) {
+    await assertCommentCanPublishViaLinkedIn(parsed);
+  }
   await assertCurrentLinkedInPublishSafety();
   const result = await invokeCommand("linkgo_linkedin_publish_comment", {
     input: parsed,

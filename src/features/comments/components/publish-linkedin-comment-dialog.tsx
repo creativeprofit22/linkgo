@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { escapeLinkedInLittleText } from "@/features/approvals/linkedin-format";
+import { assertCommentCanPublishViaLinkedIn } from "@/features/comments/data";
 import type {
   CommentThreadWithDetails,
   RecordCommentAttemptInput,
@@ -68,7 +69,10 @@ export function PublishLinkedInCommentDialog({
       idempotencyKey,
     };
     try {
-      const result = await publishLinkedInComment(publishInput).catch(
+      await assertCommentCanPublishViaLinkedIn(publishInput);
+      const result = await publishLinkedInComment(publishInput, {
+        skipPreflight: true,
+      }).catch(
         async (caught: unknown) => {
           const message = getErrorMessage(caught);
           try {
