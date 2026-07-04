@@ -16,6 +16,7 @@ export function AgentRuntimeView(): React.ReactNode {
     workflowRuns,
     agentRuns,
     toolContracts,
+    playbooks,
     loading,
     error,
     killSwitchEnabled,
@@ -58,6 +59,7 @@ export function AgentRuntimeView(): React.ReactNode {
           selectedCampaignId={selectedCampaignId}
           selectedCampaignArchived={selectedCampaignArchived}
           connectedAccounts={connectedAccounts}
+          playbooks={playbooks}
           onCreate={createRun}
         />
       </div>

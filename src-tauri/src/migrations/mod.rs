@@ -8,6 +8,7 @@ pub mod drafts;
 pub mod integrations;
 pub mod metric_refresh;
 pub mod metrics;
+pub mod playbooks;
 pub mod provider_parity;
 pub mod safety;
 pub mod scheduler;
@@ -30,5 +31,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(scheduler::migrations());
     migrations.extend(comment_publishing::migrations());
     migrations.extend(metric_refresh::migrations());
+    migrations.extend(playbooks::migrations());
     migrations
 }

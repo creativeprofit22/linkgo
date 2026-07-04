@@ -2,7 +2,7 @@ import { Bot, ShieldCheck, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AGENT_PROVIDER_LABELS } from "@/agent";
+import { AGENT_PROVIDER_LABELS, getAgentPlaybook } from "@/agent";
 import { AgentEventList } from "@/features/agent-runtime/components/agent-event-list";
 import {
   AgentRunStatusBadge,
@@ -41,6 +41,7 @@ export function AgentRunCard({
 }: AgentRunCardProps): React.ReactNode {
   const startableStatus = ["queued", "failed"].includes(run.status);
   const providerLabel = AGENT_PROVIDER_LABELS[run.provider_key];
+  const playbook = getAgentPlaybook(run.playbook_key);
   const canStart = startableStatus && !killSwitchEnabled && providerConnected;
   const startBlockedByKillSwitch = startableStatus && killSwitchEnabled;
   const startBlockedByMissingProvider =
@@ -58,6 +59,11 @@ export function AgentRunCard({
               </CardTitle>
               <AgentRunStatusBadge status={run.status} />
               <Badge variant="outline">{providerLabel}</Badge>
+              {run.playbook_key && (
+                <Badge variant="outline">
+                  Playbook: {playbook?.label ?? run.playbook_key}
+                </Badge>
+              )}
               {run.workflowRun && (
                 <Badge variant="outline">
                   Workflow: {run.workflowRun.title}

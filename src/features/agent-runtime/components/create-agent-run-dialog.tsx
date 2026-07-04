@@ -18,12 +18,15 @@ import {
   AGENT_PROVIDER_LABELS,
   AGENT_ROLES,
   DEFAULT_AGENT_MODELS,
+  getDefaultPlaybookForRole,
+  type AgentPlaybookKey,
   type AgentProviderKey,
   type AgentRole,
 } from "@/agent";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import type { CreateAgentRunInput } from "@/features/agent-runtime/types";
 import type { ConnectedAccount } from "@/features/integrations/types";
+import type { AgentPlaybookView } from "@/features/playbooks/types";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
 
 interface CreateAgentRunDialogProps {
@@ -32,6 +35,7 @@ interface CreateAgentRunDialogProps {
   selectedCampaignId: number | null;
   selectedCampaignArchived: boolean;
   connectedAccounts: ConnectedAccount[];
+  playbooks: AgentPlaybookView[];
   onCreate: (input: CreateAgentRunInput) => Promise<number>;
 }
 
@@ -63,6 +67,7 @@ export function CreateAgentRunDialog({
   selectedCampaignId,
   selectedCampaignArchived,
   connectedAccounts,
+  playbooks,
   onCreate,
 }: CreateAgentRunDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
@@ -71,6 +76,7 @@ export function CreateAgentRunDialog({
   );
   const [workflowRunId, setWorkflowRunId] = useState<number | null>(null);
   const [agentRole, setAgentRole] = useState<AgentRole>("researcher");
+  const [playbookKey, setPlaybookKey] = useState<AgentPlaybookKey | "">("");
   const [providerKey, setProviderKey] = useState<AgentProviderKey>("dry_run");
   const [modelName, setModelName] = useState("dry-run-local");
   const [inputSummary, setInputSummary] = useState(
@@ -88,6 +94,13 @@ export function CreateAgentRunDialog({
   const dialogWorkflowRuns = workflowRuns.filter(
     (run) => run.campaign_id === campaignId,
   );
+  const compatiblePlaybooks = playbooks.filter(
+    (playbook) =>
+      playbook.enabled &&
+      playbook.runtimeEnabled &&
+      !playbook.operatorGuidanceOnly &&
+      playbook.compatibleRoles.includes(agentRole),
+  );
   const providerConnected = isProviderReady(providerKey, connectedAccounts);
   const disabled =
     campaigns.length === 0 ||
@@ -95,6 +108,27 @@ export function CreateAgentRunDialog({
     selectedDialogCampaign?.status === "archived";
   const submitDisabled =
     disabled || saving || inputSummary.trim() === "" || !providerConnected;
+
+  useEffect(() => {
+    const runtimePlaybooks = playbooks.filter(
+      (playbook) =>
+        playbook.enabled &&
+        playbook.runtimeEnabled &&
+        !playbook.operatorGuidanceOnly &&
+        playbook.compatibleRoles.includes(agentRole),
+    );
+    const defaultPlaybook = getDefaultPlaybookForRole(agentRole) ?? "";
+    const nextPlaybook = runtimePlaybooks.some(
+      (playbook) => playbook.key === defaultPlaybook,
+    )
+      ? defaultPlaybook
+      : "";
+    setPlaybookKey((current) =>
+      runtimePlaybooks.some((playbook) => playbook.key === current)
+        ? current
+        : nextPlaybook,
+    );
+  }, [agentRole, playbooks]);
 
   async function handleSubmit(
     event: React.SyntheticEvent<HTMLFormElement>,
@@ -108,12 +142,14 @@ export function CreateAgentRunDialog({
         agentRole,
         providerKey,
         modelName,
+        playbookKey,
         inputSummary: inputSummary.trim(),
       };
       if (workflowRunId !== null) createInput.workflowRunId = workflowRunId;
       await onCreate(createInput);
       setOpen(false);
       setAgentRole("researcher");
+      setPlaybookKey("");
       setProviderKey("dry_run");
       setModelName("dry-run-local");
       setInputSummary("Validate runtime contracts for this campaign.");
@@ -168,9 +204,10 @@ export function CreateAgentRunDialog({
             <select
               id="agent-role"
               value={agentRole}
-              onChange={(event) =>
-                setAgentRole(event.target.value as AgentRole)
-              }
+              onChange={(event) => {
+                setAgentRole(event.target.value as AgentRole);
+                setPlaybookKey("");
+              }}
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
               {AGENT_ROLES.map((role) => (
@@ -179,6 +216,29 @@ export function CreateAgentRunDialog({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="agent-playbook">Playbook</Label>
+            <select
+              id="agent-playbook"
+              value={playbookKey}
+              onChange={(event) =>
+                setPlaybookKey(event.target.value as AgentPlaybookKey | "")
+              }
+              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            >
+              <option value="">No playbook</option>
+              {compatiblePlaybooks.map((playbook) => (
+                <option key={playbook.key} value={playbook.key}>
+                  {playbook.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-muted-foreground text-xs">
+              Only enabled runtime playbooks compatible with{" "}
+              {roleLabels[agentRole]} are shown.
+            </p>
           </div>
 
           {dialogWorkflowRuns.length > 0 && (

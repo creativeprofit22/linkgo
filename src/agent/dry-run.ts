@@ -99,14 +99,17 @@ export function createDryRunProvider(
     stream: async function* dryRunStream(
       request: AgentModelRequest,
     ): AsyncIterable<AgentModelChunk> {
+      const playbookSummary = request.playbookKey
+        ? ` with playbook ${request.playbookLabel ?? request.playbookKey} (${request.playbookKey})`
+        : " with no playbook";
       yield {
         type: "text",
-        text: `Dry-run ${request.agentRole} is validating local runtime contracts.`,
+        text: `Dry-run ${request.agentRole}${playbookSummary} is validating local runtime contracts.`,
       };
       yield { type: "tool_call", ...buildToolCall(request) };
       yield {
         type: "done",
-        outputSummary: `Dry-run ${request.agentRole} completed local contract validation.`,
+        outputSummary: `Dry-run ${request.agentRole}${playbookSummary} completed local contract validation.`,
       };
     },
   };

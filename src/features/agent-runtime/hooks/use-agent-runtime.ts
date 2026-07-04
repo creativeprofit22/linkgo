@@ -12,6 +12,8 @@ import {
 } from "@/features/agent-runtime/data";
 import { getAuthStatus } from "@/features/integrations/data";
 import type { ConnectedAccount } from "@/features/integrations/types";
+import { listPlaybooks } from "@/features/playbooks/data";
+import type { AgentPlaybookView } from "@/features/playbooks/types";
 import type {
   AgentRunWithDetails,
   CancelAgentRunInput,
@@ -29,6 +31,7 @@ interface UseAgentRuntimeState {
   workflowRuns: WorkflowRunWithDetails[];
   agentRuns: AgentRunWithDetails[];
   toolContracts: AgentToolMetadata[];
+  playbooks: AgentPlaybookView[];
   loading: boolean;
   error: string | null;
   killSwitchEnabled: boolean;
@@ -69,6 +72,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
   const [toolContracts] = useState<AgentToolMetadata[]>(() =>
     listAgentToolContracts(),
   );
+  const [playbooks, setPlaybooks] = useState<AgentPlaybookView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [safetySettings, setSafetySettings] = useState<SafetySettings | null>(
@@ -96,15 +100,21 @@ export function useAgentRuntime(): UseAgentRuntimeState {
     setLoading(true);
     setError(null);
     try {
-      const [loadedCampaigns, loadedSafetySettings, authStatus] =
-        await Promise.all([
-          listCampaigns(),
-          getSafetySettings(),
-          getAuthStatus(),
-        ]);
+      const [
+        loadedCampaigns,
+        loadedSafetySettings,
+        authStatus,
+        loadedPlaybooks,
+      ] = await Promise.all([
+        listCampaigns(),
+        getSafetySettings(),
+        getAuthStatus(),
+        listPlaybooks(),
+      ]);
       setCampaigns(loadedCampaigns);
       setSafetySettings(loadedSafetySettings);
       setConnectedAccounts(authStatus.accounts);
+      setPlaybooks(loadedPlaybooks);
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === selectedCampaignId,
       );
@@ -189,6 +199,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       workflowRuns,
       agentRuns,
       toolContracts,
+      playbooks,
       loading,
       error,
       killSwitchEnabled: safetySettings?.global_kill_switch === 1,
@@ -206,6 +217,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       workflowRuns,
       agentRuns,
       toolContracts,
+      playbooks,
       loading,
       error,
       safetySettings,

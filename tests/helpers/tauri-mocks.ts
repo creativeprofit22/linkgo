@@ -417,6 +417,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       | "scheduler"
       | "analyst";
 
+    type AgentPlaybookKey =
+      | "linkedin_writer"
+      | "linkedin_humanizer"
+      | "content_calendar"
+      | "linkedin_commenter"
+      | "campaign_analyst";
+
     type AgentProviderKey =
       | "dry_run"
       | "anthropic"
@@ -475,6 +482,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       agent_role: AgentRole;
       provider_key: AgentProviderKey;
       model_name: string;
+      playbook_key: AgentPlaybookKey | "";
       status: AgentRunStatus;
       input_summary: string;
       output_summary: string;
@@ -507,6 +515,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       event_type: AgentRunEventType;
       summary: string;
       created_at: string;
+    };
+
+    type AgentPlaybookOverride = {
+      playbook_key: AgentPlaybookKey;
+      enabled: number;
+      custom_instructions: string;
+      updated_at: string;
     };
 
     type SafetyAuditSubjectType =
@@ -661,6 +676,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       agentRuns: AgentRun[];
       agentToolCalls: AgentToolCall[];
       agentRunEvents: AgentRunEvent[];
+      agentPlaybookOverrides: AgentPlaybookOverride[];
       safetySettings: SafetySettings;
       safetyAuditEvents: SafetyAuditEvent[];
       rateLimitEvents: RateLimitEvent[];
@@ -735,6 +751,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const agentRuns: AgentRun[] = [];
     const agentToolCalls: AgentToolCall[] = [];
     const agentRunEvents: AgentRunEvent[] = [];
+    const agentPlaybookOverrides: AgentPlaybookOverride[] = [];
     const safetySettings: SafetySettings = {
       id: 1,
       global_kill_switch: 0,
@@ -796,6 +813,37 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return new Date().toISOString();
     }
 
+    const VALID_AGENT_PLAYBOOK_KEYS: AgentPlaybookKey[] = [
+      "linkedin_writer",
+      "linkedin_humanizer",
+      "content_calendar",
+      "linkedin_commenter",
+      "campaign_analyst",
+    ];
+
+    function assertValidAgentPlaybookKey(
+      key: string,
+    ): asserts key is AgentPlaybookKey {
+      if (!VALID_AGENT_PLAYBOOK_KEYS.includes(key as AgentPlaybookKey)) {
+        throw new Error("CHECK constraint failed: playbook_key");
+      }
+    }
+
+    function assertValidAgentRunPlaybookKey(
+      key: string,
+    ): asserts key is AgentPlaybookKey | "" {
+      if (key === "") return;
+      assertValidAgentPlaybookKey(key);
+    }
+
+    function assertValidCustomInstructions(customInstructions: string): void {
+      if (customInstructions.length > 2000) {
+        throw new Error(
+          "CHECK constraint failed: length(custom_instructions) <= 2000",
+        );
+      }
+    }
+
     function removeRows<T>(rows: T[], predicate: (row: T) => boolean): number {
       let removed = 0;
       for (let index = rows.length - 1; index >= 0; index -= 1) {
@@ -841,6 +889,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         agentRuns: cloneRows(agentRuns),
         agentToolCalls: cloneRows(agentToolCalls),
         agentRunEvents: cloneRows(agentRunEvents),
+        agentPlaybookOverrides: cloneRows(agentPlaybookOverrides),
         safetySettings: { ...safetySettings },
         safetyAuditEvents: cloneRows(safetyAuditEvents),
         rateLimitEvents: cloneRows(rateLimitEvents),
@@ -912,6 +961,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(agentRuns, snapshot.agentRuns);
       restoreRows(agentToolCalls, snapshot.agentToolCalls);
       restoreRows(agentRunEvents, snapshot.agentRunEvents);
+      restoreRows(agentPlaybookOverrides, snapshot.agentPlaybookOverrides);
       safetySettings.global_kill_switch =
         snapshot.safetySettings.global_kill_switch;
       safetySettings.kill_switch_reason =
@@ -1670,6 +1720,20 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
     }
 
+    function selectAgentPlaybookOverrides(
+      values: unknown[],
+    ): AgentPlaybookOverride[] {
+      if (values.length > 0) {
+        const key = String(values[0] ?? "");
+        return agentPlaybookOverrides.filter(
+          (override) => override.playbook_key === key,
+        );
+      }
+      return [...agentPlaybookOverrides].sort((left, right) =>
+        left.playbook_key.localeCompare(right.playbook_key),
+      );
+    }
+
     function selectAgentRunEvents(values: unknown[]): AgentRunEvent[] {
       const ids = new Set(
         values.filter((value): value is number => typeof value === "number"),
@@ -2396,6 +2460,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (query.includes("FROM agent_run_events")) {
         return selectAgentRunEvents(values);
+      }
+      if (query.includes("FROM agent_playbook_overrides")) {
+        return selectAgentPlaybookOverrides(values);
       }
       if (query.includes("FROM workflow_runs WHERE id")) {
         return selectWorkflowRunById(values);
@@ -3175,7 +3242,32 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: event.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO agent_playbook_overrides")) {
+        const key = String(values[0] ?? "");
+        const customInstructions = String(values[2] ?? "");
+        assertValidAgentPlaybookKey(key);
+        assertValidCustomInstructions(customInstructions);
+        const existing = agentPlaybookOverrides.find(
+          (override) => override.playbook_key === key,
+        );
+        if (existing) {
+          existing.enabled = Number(values[1] ?? 1);
+          existing.custom_instructions = customInstructions;
+          existing.updated_at = now;
+        } else {
+          agentPlaybookOverrides.push({
+            playbook_key: key,
+            enabled: Number(values[1] ?? 1),
+            custom_instructions: customInstructions,
+            updated_at: now,
+          });
+        }
+        return { lastInsertId: 0, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT INTO agent_runs")) {
+        const playbookKey = String(values[6] ?? "");
+        assertValidAgentRunPlaybookKey(playbookKey);
         const run: AgentRun = {
           id: nextAgentRunId,
           campaign_id: Number(values[0] ?? 0),
@@ -3184,8 +3276,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           agent_role: values[3] as AgentRole,
           provider_key: values[4] as AgentProviderKey,
           model_name: String(values[5] ?? ""),
+          playbook_key: playbookKey,
           status: "queued",
-          input_summary: String(values[6] ?? ""),
+          input_summary: String(values[7] ?? ""),
           output_summary: "",
           error_message: "",
           iteration_count: 0,
@@ -4384,6 +4477,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
     w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
+    w.__LINKGO_SQL_PLAYBOOK_OVERRIDES__ = () =>
+      cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_COMMENT_THREADS__ = () => cloneRows(commentThreads);
     w.__LINKGO_SQL_COMMENT_VARIANTS__ = () => cloneRows(commentVariants);
     w.__LINKGO_SQL_COMMENT_AUDITS__ = () => cloneRows(commentAudits);
@@ -4422,6 +4517,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       agentRuns: agentRuns.length,
       agentToolCalls: agentToolCalls.length,
       agentRunEvents: agentRunEvents.length,
+      playbookOverrides: agentPlaybookOverrides.length,
       safetySettings: 1,
       safetyAuditEvents: safetyAuditEvents.length,
       rateLimitEvents: rateLimitEvents.length,

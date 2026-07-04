@@ -132,6 +132,24 @@ Implemented now:
 
 LinkedIn scraping, comments, and autonomous content generation are not implemented in this slice.
 
+### Skills + playbooks slice
+
+Roadmap coverage:
+
+- Section 18: reusable LinkedIn playbooks stored as modular prompt contracts.
+- Sections 6, 7, 9, 13, and 15: writer, humanizer, calendar, commenter guidance, and analyst prompt modules.
+
+Implemented now:
+
+- Built-in TypeScript playbook definitions for LinkedIn Writer, LinkedIn Humanizer, Content Calendar, LinkedIn Commenter, and Campaign Analyst.
+- `agent_runs.playbook_key` persistence for selected runtime playbooks.
+- `agent_playbook_overrides` for local enable/disable state and bounded custom instructions.
+- Playbooks tab for cards, role/tool/roadmap badges, custom overrides, and guidance-only commenter visibility.
+- Agent Runtime playbook selection filtered by compatible role and enabled runtime state.
+- Provider and dry-run prompt assembly that layers selected playbook instructions on top of non-removable safety lines.
+
+Scraping, autonomous publishing, autonomous commenting, browser automation, and external telemetry are not implemented in this slice.
+
 ### Safety + observability slice
 
 Roadmap coverage:

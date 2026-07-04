@@ -77,11 +77,12 @@ test("starts a provider-backed run through a mocked GG AI stream", async ({
         yield {
           type: "tool_call",
           providerToolCallId: "mock-provider-tool-call-1",
-          toolName: "research_posts",
+          toolName: "draft_post",
           input: {
             campaignId: 1,
-            keywords: ["founder content"],
-            maxPosts: 1,
+            candidatePostId: 1,
+            variantCount: 2,
+            angle: "Provider-backed writer playbook",
           },
         };
         yield { type: "done", outputSummary: "Provider run completed." };
@@ -105,10 +106,22 @@ test("starts a provider-backed run through a mocked GG AI stream", async ({
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
+  await page.getByRole("button", { name: /Playbooks/ }).click();
+  const writerCard = getPlaybookCard(page, "LinkedIn Writer");
+  const customInstructions =
+    "Prefer punchy operator lessons with one concrete metric.";
+  await writerCard
+    .getByLabel("Custom runtime instructions")
+    .fill(customInstructions);
+  await writerCard.getByRole("button", { name: "Save playbook" }).click();
+  await expect(
+    writerCard.getByLabel("Custom runtime instructions"),
+  ).toHaveValue(customInstructions);
+
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await createCampaign(page);
   await openAgentRuntime(page);
-  await createProviderRun(page, "custom");
+  await createProviderRun(page, "custom", "drafter", "linkedin_writer");
 
   await page.getByRole("button", { name: "Start Custom API" }).click();
   await expect(getBadge(page, "Completed").first()).toBeVisible();
@@ -117,12 +130,12 @@ test("starts a provider-backed run through a mocked GG AI stream", async ({
   const runs = await getAgentRuns(page);
   const toolCalls = await getAgentToolCalls(page);
   expect(runs[0]?.status).toBe("completed");
+  expect(runs[0]?.playbook_key).toBe("linkedin_writer");
   expect(toolCalls[0]?.provider_tool_call_id).toBe("mock-provider-tool-call-1");
   const streamOptions = await page.evaluate(
     () =>
-      (
-        window as unknown as { __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown }
-      ).__LINKGO_PROVIDER_STREAM_OPTIONS__,
+      (window as unknown as { __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown })
+        .__LINKGO_PROVIDER_STREAM_OPTIONS__,
   );
   expect(streamOptions).toMatchObject({
     provider: "openai",
@@ -130,6 +143,58 @@ test("starts a provider-backed run through a mocked GG AI stream", async ({
     apiKey: "sk-test-custom-key",
     baseUrl: "https://custom.example.com/v1",
   });
+  const serializedStreamOptions = JSON.stringify(streamOptions);
+  expect(serializedStreamOptions).toContain("LinkedIn Writer playbook");
+  expect(serializedStreamOptions).toContain(
+    "Selected playbook: LinkedIn Writer",
+  );
+  expect(serializedStreamOptions).toContain(
+    "Operator custom playbook instructions:",
+  );
+  expect(serializedStreamOptions).toContain(customInstructions);
+});
+
+test("selects the LinkedIn writer playbook for drafter runs", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openAgentRuntime(page);
+
+  await createDryRun(page, "drafter", "linkedin_writer");
+
+  await expect(page.getByText("Playbook: LinkedIn Writer")).toBeVisible();
+  const runs = await getAgentRuns(page);
+  expect(runs[0]?.playbook_key).toBe("linkedin_writer");
+
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(
+    page.getByText("with playbook LinkedIn Writer (linkedin_writer)").first(),
+  ).toBeVisible();
+});
+
+test("hides disabled runtime playbooks from new agent runs", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Playbooks/ }).click();
+  const writerCard = getPlaybookCard(page, "LinkedIn Writer");
+  await writerCard.getByRole("switch", { name: "Runtime enabled" }).click();
+  await writerCard.getByRole("button", { name: "Save playbook" }).click();
+  await expect(writerCard.getByText("Disabled", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await page.getByRole("button", { name: "Create run" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Create agent run" });
+  await dialog.getByLabel("Agent role").selectOption("drafter");
+  await expect(
+    dialog
+      .getByLabel("Playbook")
+      .locator("option", { hasText: "LinkedIn Writer" }),
+  ).toHaveCount(0);
 });
 
 test("stops schedule dry-run at waiting approval without publishing", async ({
@@ -215,6 +280,66 @@ test("blocks archived campaign agent runtime mutations", async ({ page }) => {
   expect(result).toEqual({ ok: false, message: "Campaign is archived" });
 });
 
+test("mock SQLite rejects invalid agent run playbook keys and keeps empty valid", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(
+    executeSql(page, {
+      query: `INSERT INTO agent_runs (
+        campaign_id,
+        workflow_run_id,
+        workflow_step_id,
+        agent_role,
+        provider_key,
+        model_name,
+        playbook_key,
+        status,
+        input_summary,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, datetime('now'))`,
+      values: [
+        1,
+        null,
+        null,
+        "researcher",
+        "dry_run",
+        "dry-run-local",
+        "",
+        "No playbook",
+      ],
+    }),
+  ).resolves.toMatchObject({ rowsAffected: 1 });
+
+  await expect(
+    executeSql(page, {
+      query: `INSERT INTO agent_runs (
+        campaign_id,
+        workflow_run_id,
+        workflow_step_id,
+        agent_role,
+        provider_key,
+        model_name,
+        playbook_key,
+        status,
+        input_summary,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, datetime('now'))`,
+      values: [
+        1,
+        null,
+        null,
+        "researcher",
+        "dry_run",
+        "dry-run-local",
+        "bad_playbook",
+        "Invalid playbook",
+      ],
+    }),
+  ).rejects.toThrow("CHECK constraint failed: playbook_key");
+});
+
 function getBadge(page: Page, label: string): Locator {
   return page
     .locator("span")
@@ -241,13 +366,16 @@ async function getStateCounts(page: Page): Promise<Record<string, number>> {
 
 async function getAgentRuns(
   page: Page,
-): Promise<Array<{ status: string; error_message: string }>> {
+): Promise<
+  Array<{ status: string; error_message: string; playbook_key: string }>
+> {
   return page.evaluate(() => {
     const getRuns = (
       window as unknown as {
         __LINKGO_SQL_AGENT_RUNS__?: () => Array<{
           status: string;
           error_message: string;
+          playbook_key: string;
         }>;
       }
     ).__LINKGO_SQL_AGENT_RUNS__;
@@ -274,6 +402,23 @@ async function getAgentToolCalls(
     }
     return getToolCalls();
   });
+}
+
+async function executeSql(
+  page: Page,
+  args: { query: string; values: unknown[] },
+): Promise<unknown> {
+  return page.evaluate((sqlArgs) => {
+    const internals = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: {
+          invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    if (internals === undefined) throw new Error("Tauri mocks unavailable");
+    return internals.invoke("plugin:sql|execute", sqlArgs);
+  }, args);
 }
 
 async function openAgentRuntime(page: Page): Promise<void> {
@@ -305,10 +450,15 @@ async function createCampaign(page: Page): Promise<void> {
 async function createProviderRun(
   page: Page,
   providerKey: "openai" | "anthropic" | "gemini" | "custom",
+  role: "researcher" | "drafter" = "researcher",
+  playbookKey = "",
 ): Promise<void> {
   await page.getByRole("button", { name: "Create run" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create agent run" });
   await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Agent role").selectOption(role);
+  if (playbookKey)
+    await dialog.getByLabel("Playbook").selectOption(playbookKey);
   await dialog.getByLabel("Provider").selectOption(providerKey);
   await dialog
     .getByLabel("Input summary")
@@ -319,17 +469,26 @@ async function createProviderRun(
 
 async function createDryRun(
   page: Page,
-  role: "researcher" | "scheduler" = "researcher",
+  role: "researcher" | "drafter" | "scheduler" = "researcher",
+  playbookKey = "",
 ): Promise<void> {
   await page.getByRole("button", { name: "Create run" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create agent run" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Agent role").selectOption(role);
+  if (playbookKey)
+    await dialog.getByLabel("Playbook").selectOption(playbookKey);
   await dialog
     .getByLabel("Input summary")
     .fill("Validate runtime contracts for this campaign.");
   await dialog.getByRole("button", { name: "Create run" }).click();
   await expect(dialog).toBeHidden();
+}
+
+function getPlaybookCard(page: Page, label: string): Locator {
+  return page
+    .getByText(label, { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
 }
 
 async function archiveSelectedCampaign(page: Page): Promise<void> {

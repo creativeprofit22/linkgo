@@ -485,6 +485,7 @@ Stores one local agent execution attempt for one campaign, optionally tied to a 
 | `agent_role`       | TEXT    | `researcher`, `scorer`, `drafter`, `auditor`, `scheduler`, or `analyst`                                                                                                                                         |
 | `provider_key`     | TEXT    | `dry_run`, GG AI provider keys (`anthropic`, `xiaomi`, `openai`, `gemini`, `glm`, `moonshot`, `deepseek`, `openrouter`, `sakana`, `minimax`), or Linkgo-only `custom`; legacy `google` rows migrate to `gemini` |
 | `model_name`       | TEXT    | Provider model label                                                                                                                                                                                            |
+| `playbook_key`     | TEXT    | Selected built-in playbook key for this run, default empty string for base role instructions                                                                                                                    |
 | `status`           | TEXT    | `queued`, `running`, `waiting_approval`, `completed`, `failed`, or `cancelled`                                                                                                                                  |
 | `input_summary`    | TEXT    | Compact operator/runtime input                                                                                                                                                                                  |
 | `output_summary`   | TEXT    | Compact runtime result                                                                                                                                                                                          |
@@ -495,7 +496,18 @@ Stores one local agent execution attempt for one campaign, optionally tied to a 
 | `created_at`       | TEXT    | SQLite datetime                                                                                                                                                                                                 |
 | `updated_at`       | TEXT    | SQLite datetime                                                                                                                                                                                                 |
 
-Indexes: `idx_agent_runs_campaign_id`, `idx_agent_runs_workflow_run_id`, `idx_agent_runs_workflow_step_id`, `idx_agent_runs_status`, `idx_agent_runs_agent_role`, `idx_agent_runs_updated_at`.
+Indexes: `idx_agent_runs_campaign_id`, `idx_agent_runs_workflow_run_id`, `idx_agent_runs_workflow_step_id`, `idx_agent_runs_status`, `idx_agent_runs_agent_role`, `idx_agent_runs_playbook_key`, `idx_agent_runs_updated_at`.
+
+### `agent_playbook_overrides`
+
+Stores local operator state for built-in playbooks. Built-in prompt text stays in TypeScript code.
+
+| Column                | Type    | Notes                                                                 |
+| --------------------- | ------- | --------------------------------------------------------------------- |
+| `playbook_key`        | TEXT    | Primary key matching one built-in playbook key                        |
+| `enabled`             | INTEGER | Boolean-like runtime visibility flag constrained to `0` or `1`        |
+| `custom_instructions` | TEXT    | Optional bounded operator instructions appended to compatible prompts |
+| `updated_at`          | TEXT    | SQLite datetime                                                       |
 
 ### `agent_tool_calls`
 

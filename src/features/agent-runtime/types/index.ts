@@ -1,3 +1,4 @@
+import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type {
   AgentProviderKey,
   AgentRole,
@@ -17,6 +18,7 @@ export interface AgentRun {
   agent_role: AgentRole;
   provider_key: AgentProviderKey;
   model_name: string;
+  playbook_key: AgentPlaybookKey | "";
   status: AgentRunStatus;
   input_summary: string;
   output_summary: string;
@@ -79,6 +81,7 @@ export interface CreateAgentRunInput {
   agentRole: AgentRole;
   providerKey?: AgentProviderKey;
   modelName?: string;
+  playbookKey?: AgentPlaybookKey | "";
   inputSummary?: string;
 }
 

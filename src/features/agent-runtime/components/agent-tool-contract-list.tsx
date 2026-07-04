@@ -15,7 +15,12 @@ export function AgentToolContractList({
           <Wrench className="text-linkgo-blue size-5" /> Tool contracts
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        <p className="text-muted-foreground text-sm">
+          Tool contracts are stable typed capabilities. Playbooks are modular
+          prompt guidance layered on top and never add autonomous publishing or
+          commenting.
+        </p>
         <div className="grid gap-3 lg:grid-cols-2">
           {toolContracts.map((tool) => (
             <div key={tool.name} className="bg-muted/20 rounded-xl border p-4">

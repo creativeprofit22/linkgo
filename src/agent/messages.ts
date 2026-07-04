@@ -1,3 +1,4 @@
+import type { AgentPlaybookDefinition } from "@/agent/playbooks";
 import type { AgentMessage, AgentRole } from "@/agent/types";
 import type { WorkflowStepKey } from "@/workflows/types";
 
@@ -8,22 +9,30 @@ interface AgentPromptContext {
   inputSummary: string;
   memorySummary?: string;
   metricsSummary?: string;
+  playbook?: AgentPlaybookDefinition | null;
+  customPlaybookInstructions?: string;
 }
 
 const roleInstructions: Record<AgentRole, string> = {
   researcher:
-    "Research relevant LinkedIn post opportunities using only Linkgo tools and local campaign context.",
+    "Base role: research relevant LinkedIn post opportunities using only Linkgo tools and local campaign context.",
   scorer:
-    "Score relevance conservatively, dedupe obvious repeats, and explain why a candidate is useful.",
+    "Base role: score relevance conservatively, dedupe obvious repeats, and explain why a candidate is useful.",
   drafter:
-    "Draft concise LinkedIn post variants in the campaign voice without inventing unsupported claims.",
+    "Base role: draft concise LinkedIn post variants in the campaign voice without inventing unsupported claims.",
   auditor:
-    "Audit drafts for safety, clarity, quality, and approval readiness before any external action.",
+    "Base role: audit drafts for safety, clarity, quality, and approval readiness before any external action.",
   scheduler:
-    "Prepare scheduling metadata, then stop at human approval for any schedule_post request.",
+    "Base role: prepare scheduling metadata, then stop at human approval for any schedule_post request.",
   analyst:
-    "Collect metrics and summarize campaign learning into actionable local memory.",
+    "Base role: collect metrics and summarize campaign learning into actionable local memory.",
 };
+
+const lockedSafetyInstructions = [
+  "Use only the registered Linkgo tools.",
+  "Keep LinkedIn publishing, commenting, and scheduling approval-gated.",
+  "Never request shell, browser automation, file editing, repository scanning, or coding tools.",
+] as const;
 
 const stepGoal: Partial<Record<WorkflowStepKey, string>> = {
   research: "Find source material and candidate posts.",
@@ -48,10 +57,30 @@ export function buildAgentMessages(
   const systemLines = [
     "You are a Linkgo growth operations agent, not a coding agent.",
     roleInstructions[role],
-    "Use only the registered Linkgo tools.",
-    "Keep LinkedIn publishing, commenting, and scheduling approval-gated.",
-    "Never request shell, browser automation, file editing, repository scanning, or coding tools.",
   ];
+  const playbook = context.playbook;
+  const shouldUsePlaybook =
+    playbook !== null &&
+    playbook !== undefined &&
+    playbook.runtimeEnabled &&
+    !playbook.operatorGuidanceOnly &&
+    playbook.compatibleRoles.includes(role);
+
+  if (shouldUsePlaybook) {
+    systemLines.push(
+      `Selected playbook: ${playbook.label} (${playbook.key}).`,
+      ...playbook.instructions,
+    );
+    const customInstructions = context.customPlaybookInstructions?.trim();
+    if (customInstructions) {
+      systemLines.push(
+        "Operator custom playbook instructions:",
+        customInstructions,
+      );
+    }
+  }
+
+  systemLines.push(...lockedSafetyInstructions);
 
   const userLines = [
     `Campaign: ${context.campaignName ?? "Current campaign"}`,

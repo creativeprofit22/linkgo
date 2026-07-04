@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { playbookKeySchema } from "@/features/playbooks/schemas";
 import {
   agentProviderKeySchema,
   agentRoleSchema,
@@ -17,6 +18,7 @@ export const createAgentRunSchema = z.object({
   agentRole: agentRoleSchema,
   providerKey: agentProviderKeySchema.default("dry_run"),
   modelName: z.string().trim().max(120).default("dry-run-local"),
+  playbookKey: playbookKeySchema.or(z.literal("")).optional(),
   inputSummary: optionalSummarySchema,
 });
 

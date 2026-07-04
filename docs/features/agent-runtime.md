@@ -22,7 +22,8 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 - Provider-backed execution using explicitly connected credentials fetched for the operator-triggered run.
 - Approval interrupt for `schedule_post`.
 - Agent run, tool call, and runtime event tables.
-- Agent Runtime tab with campaign filtering, summary cards, tool contracts, run cards, tool payloads, and event history.
+- Selected playbook persistence on `agent_runs.playbook_key`.
+- Agent Runtime tab with campaign filtering, summary cards, tool contracts, compatible playbook selection, run cards, tool payloads, and event history.
 - Archived-campaign mutation blocking in UI and data API.
 
 ## Intentionally not implemented
@@ -36,13 +37,15 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 ## Runtime lifecycle
 
 1. Create a dry-run or connected provider-backed agent run for a non-archived campaign.
-2. Start the run; the global kill switch is checked first.
-3. For provider-backed runs, Linkgo fetches the stored API key/base URL only for that explicit start.
-4. The run is claimed in a short SQLite transaction, then the model stream executes outside that transaction.
-5. The loop validates each role-appropriate tool request.
-6. Non-approval tools execute locally and persist completed tool calls.
-7. `schedule_post` stops at `waiting_approval` and persists an approval-required tool call.
-8. Final status, output, errors, iteration count, tool calls, and events are persisted in a final transaction.
+2. Select an enabled playbook compatible with the agent role, or run with base role instructions.
+3. Start the run; the global kill switch is checked first.
+4. For provider-backed runs, Linkgo fetches the stored API key/base URL only for that explicit start.
+5. The run is claimed in a short SQLite transaction, then the model stream executes outside that transaction.
+6. Prompt assembly layers compatible playbook instructions and custom override text before locked safety lines.
+7. The loop validates each role-appropriate tool request.
+8. Non-approval tools execute locally and persist completed tool calls.
+9. `schedule_post` stops at `waiting_approval` and persists an approval-required tool call.
+10. Final status, output, errors, iteration count, tool calls, and events are persisted in a final transaction.
 
 ## Safety and approval notes
 
@@ -54,6 +57,8 @@ Provider secrets enter the Tauri webview process only during an explicit operato
 
 `schedule_post` is approval-gated and does not create schedule jobs, publish content, or call LinkedIn.
 
+Playbooks shape prompts only. Disabling a playbook hides it from new runtime creation while historical runs remain readable.
+
 Archived campaigns keep runtime history visible while create/start/cancel mutations are blocked.
 
 ## Test coverage
@@ -64,6 +69,7 @@ Playwright covers:
 - Six tool contracts and approval metadata rendering.
 - Dry-run persistence for runs, tool calls, and events.
 - Provider-backed execution through a mocked GG AI stream.
+- Playbook selection, default display, provider message injection, and disabled-playbook filtering.
 - `schedule_post` waiting-approval behavior without publishing or scheduling.
 - Archived-campaign mutation blocking in UI and data API.
 

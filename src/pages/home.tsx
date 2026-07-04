@@ -8,6 +8,7 @@ import {
   FileText,
   ListChecks,
   MessageCircle,
+  NotebookTabs,
   ShieldAlert,
   Target,
   Workflow,
@@ -27,6 +28,7 @@ import { CommentsView } from "@/features/comments";
 import { DraftsView } from "@/features/drafts";
 import { IntegrationsView } from "@/features/integrations";
 import { MetricsView } from "@/features/metrics";
+import { PlaybooksView } from "@/features/playbooks";
 import { SafetyView } from "@/features/safety";
 import { SchedulerView } from "@/features/scheduler";
 import { WorkflowsView } from "@/features/workflows";
@@ -41,6 +43,7 @@ type HomeTab =
   | "metrics"
   | "workflows"
   | "agents"
+  | "playbooks"
   | "integrations"
   | "safety";
 
@@ -125,6 +128,14 @@ const tabs: RoadmapTab[] = [
     icon: Bot,
     enabled: true,
     docHref: "docs/features/agent-runtime.md",
+  },
+  {
+    id: "playbooks",
+    label: "Playbooks",
+    description: "Reusable LinkedIn prompt modules and operator guidance.",
+    icon: NotebookTabs,
+    enabled: true,
+    docHref: "docs/features/playbooks.md",
   },
   {
     id: "integrations",
@@ -226,6 +237,8 @@ export function HomePage(): React.ReactNode {
             <WorkflowsView />
           ) : activeRoadmapTab.id === "agents" ? (
             <AgentRuntimeView />
+          ) : activeRoadmapTab.id === "playbooks" ? (
+            <PlaybooksView />
           ) : activeRoadmapTab.id === "integrations" ? (
             <IntegrationsView />
           ) : (

@@ -3,7 +3,10 @@ import {
   agentToolRegistry,
   buildAgentMessages,
   createConfiguredAgentProvider,
+  getAgentPlaybook,
+  getDefaultPlaybookForRole,
   runAgentLoop,
+  type AgentPlaybookKey,
   type AgentProgressEvent,
   type AgentToolMetadata,
 } from "@/agent";
@@ -16,6 +19,7 @@ import {
   upsertErrorQueueItem,
 } from "@/features/safety/data";
 import { getProviderSecret } from "@/features/integrations/data";
+import { getPlaybookPromptForRuntime } from "@/features/playbooks/data";
 import {
   cancelAgentRunSchema,
   createAgentRunSchema,
@@ -92,6 +96,7 @@ function mapRunWithDetails(
     agent_role: row.agent_role,
     provider_key: row.provider_key,
     model_name: row.model_name,
+    playbook_key: row.playbook_key,
     status: row.status,
     input_summary: row.input_summary,
     output_summary: row.output_summary,
@@ -210,6 +215,26 @@ async function insertAgentRunEvent(
     ) VALUES ($1, $2, $3)`,
     [parsed.agentRunId, parsed.eventType, parsed.summary],
   );
+}
+
+async function resolvePlaybookKeyForCreate(
+  role: CreateAgentRunInput["agentRole"],
+  requestedKey?: AgentPlaybookKey | "",
+): Promise<AgentPlaybookKey | ""> {
+  const candidateKey = requestedKey ?? getDefaultPlaybookForRole(role) ?? "";
+  if (candidateKey === "") return "";
+
+  const definition = getAgentPlaybook(candidateKey);
+  if (!definition) throw new Error("Playbook was not found");
+  const runtimePrompt = await getPlaybookPromptForRuntime(candidateKey);
+  if (runtimePrompt === null) {
+    if (requestedKey !== undefined) throw new Error("Playbook is disabled");
+    return "";
+  }
+  if (!definition.compatibleRoles.includes(role)) {
+    throw new Error("Playbook is not compatible with the selected agent role");
+  }
+  return definition.key;
 }
 
 async function insertAgentToolCall(
@@ -350,6 +375,10 @@ export async function createAgentRun(
 ): Promise<number> {
   const parsed = createAgentRunSchema.parse(input);
   const db = await getDb();
+  const playbookKey = await resolvePlaybookKeyForCreate(
+    parsed.agentRole,
+    parsed.playbookKey,
+  );
 
   await db.execute("BEGIN TRANSACTION");
   try {
@@ -369,10 +398,11 @@ export async function createAgentRun(
         agent_role,
         provider_key,
         model_name,
+        playbook_key,
         status,
         input_summary,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, datetime('now'))`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, datetime('now'))`,
       [
         parsed.campaignId,
         workflow.workflowRunId,
@@ -380,6 +410,7 @@ export async function createAgentRun(
         parsed.agentRole,
         parsed.providerKey,
         parsed.modelName,
+        playbookKey,
         parsed.inputSummary,
       ],
     );
@@ -428,6 +459,7 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     run.model_name || undefined,
     providerOptions,
   );
+  const runtimePlaybook = await getPlaybookPromptForRuntime(run.playbook_key);
 
   await db.execute("BEGIN TRANSACTION");
   try {
@@ -460,21 +492,30 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     throw error;
   }
 
+  const request = {
+    runId: run.id,
+    campaignId: run.campaign_id,
+    workflowRunId: run.workflow_run_id,
+    workflowStepId: run.workflow_step_id,
+    agentRole: run.agent_role,
+    inputSummary: run.input_summary,
+    messages: buildAgentMessages(run.agent_role, {
+      inputSummary: run.input_summary || "Validate runtime contracts locally.",
+      playbook: runtimePlaybook?.definition ?? null,
+      customPlaybookInstructions: runtimePlaybook?.customInstructions ?? "",
+    }),
+    ...(runtimePlaybook
+      ? {
+          playbookKey: runtimePlaybook.definition.key,
+          playbookLabel: runtimePlaybook.definition.label,
+        }
+      : {}),
+  };
+
   const result = await runAgentLoop({
     provider,
     tools: agentToolRegistry,
-    request: {
-      runId: run.id,
-      campaignId: run.campaign_id,
-      workflowRunId: run.workflow_run_id,
-      workflowStepId: run.workflow_step_id,
-      agentRole: run.agent_role,
-      inputSummary: run.input_summary,
-      messages: buildAgentMessages(run.agent_role, {
-        inputSummary:
-          run.input_summary || "Validate runtime contracts locally.",
-      }),
-    },
+    request,
     maxIterations: 8,
     maxRetries: run.provider_key === "dry_run" ? 0 : 1,
     onProgress: (event) => recordProgressEvent(db, run.id, event),

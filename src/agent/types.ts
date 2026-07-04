@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type { AgentProviderKey } from "@/agent/provider-catalog";
 import type { WorkflowStepKey } from "@/workflows/types";
 
@@ -93,6 +94,8 @@ export interface AgentModelRequest {
   workflowRunId: number | null;
   workflowStepId: number | null;
   agentRole: AgentRole;
+  playbookKey?: AgentPlaybookKey;
+  playbookLabel?: string;
   inputSummary: string;
   messages: AgentMessage[];
 }
