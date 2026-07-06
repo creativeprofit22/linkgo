@@ -19,6 +19,29 @@ test("app root renders campaigns by default", async ({ page }) => {
   await expect(page.getByText("No campaigns yet")).toBeVisible();
 });
 
+test("renderer shell does not load GG AI provider code", async ({ page }) => {
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(
+    page.getByRole("heading", { name: "Campaigns", exact: true }),
+  ).toBeVisible();
+
+  const scriptTexts = await page.evaluate(async () => {
+    const scriptUrls = Array.from(document.scripts)
+      .map((script) => script.src)
+      .filter((src) => src.length > 0);
+    return Promise.all(
+      scriptUrls.map(async (src) => {
+        const response = await fetch(src);
+        return `${src}\n${await response.text()}`;
+      }),
+    );
+  });
+  const rendererBundle = scriptTexts.join("\n");
+
+  expect(rendererBundle).not.toContain("@kenkaiiii/gg-ai");
+  expect(rendererBundle).not.toContain("@kenkaiiii_gg-ai");
+});
+
 test("queue, drafts, approvals, metrics, workflows, and agent runtime render real views", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 

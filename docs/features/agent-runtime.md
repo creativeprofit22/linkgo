@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The Agent Runtime slice runs typed model/tool loops through either the deterministic `dry_run` provider or connected GG AI providers.
+The Agent Runtime slice runs typed model/tool loops through either the deterministic `dry_run` provider or connected native provider adapters.
 
-It makes the automation layer visible and testable: typed tool contracts, provider-independent loop types, GG AI stream mapping, durable run history, tool-call history, approval interrupts, retries, and runtime events.
+It makes the automation layer visible and testable: typed tool contracts, provider-independent loop types, native provider response mapping, durable run history, tool-call history, approval interrupts, retries, and runtime events.
 
 ## Implemented
 
@@ -17,9 +17,10 @@ It makes the automation layer visible and testable: typed tool contracts, provid
   - `schedule_post`
   - `collect_metrics`
 - Dry-run provider that emits deterministic model chunks and provider-style tool-call correlation IDs.
-- GG AI adapter for Anthropic, Xiaomi, OpenAI, Gemini, Z.AI/GLM, Moonshot, DeepSeek, OpenRouter, Sakana, MiniMax, plus Linkgo-only custom OpenAI-compatible endpoints.
+- Native Tauri runtime adapter for Anthropic-compatible (Anthropic, MiniMax), Gemini Code Assist, OpenAI-compatible (Xiaomi, OpenAI, Z.AI/GLM, Moonshot, DeepSeek, OpenRouter, Sakana), plus Linkgo-only custom OpenAI-compatible endpoints.
+- Native provider adapters own provider payload construction, Linkgo tool definitions, and provider tool-call mapping inside the Tauri boundary.
 - Runtime loop that validates tool inputs and outputs with Zod, supports cancellation checks, retry classification, and iteration caps.
-- Provider-backed execution using explicitly connected credentials fetched for the operator-triggered run.
+- Provider-backed execution using explicitly connected credentials and native HTTP requests inside the Tauri boundary for the operator-triggered run.
 - Approval interrupt for `schedule_post`.
 - Agent run, tool call, and runtime event tables.
 - Selected playbook persistence on `agent_runs.playbook_key`.
@@ -51,7 +52,7 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 
 Secrets stay out of SQLite and rendered UI.
 
-Provider secrets enter the Tauri webview process only during an explicit operator-triggered agent run.
+Provider secrets stay inside the native Tauri command boundary during explicit operator-triggered agent runs.
 
 `dry_run` remains executable with no credentials.
 
@@ -68,7 +69,8 @@ Playwright covers:
 - Agent Runtime tab rendering in the app shell.
 - Six tool contracts and approval metadata rendering.
 - Dry-run persistence for runs, tool calls, and events.
-- Provider-backed execution through a mocked GG AI stream.
+- Provider-backed renderer execution through mocked native Tauri command results that assert only `providerKey`, `modelName`, and `request` cross the command boundary.
+- Native adapter unit coverage for provider payload construction, command-boundary rejection of renderer-supplied provider options, and provider tool-call mapping.
 - Playbook selection, default display, provider message injection, and disabled-playbook filtering.
 - `schedule_post` waiting-approval behavior without publishing or scheduling.
 - Archived-campaign mutation blocking in UI and data API.

@@ -1,8 +1,5 @@
 import { createDryRunProvider } from "@/agent/dry-run";
-import {
-  createGgAiProvider,
-  type GgAiProviderOptions,
-} from "@/agent/gg-ai-provider";
+import { createTauriAgentProvider } from "@/agent/tauri-provider";
 import {
   DEFAULT_AGENT_MODELS,
   PROVIDER_LABELS,
@@ -17,15 +14,10 @@ export const AGENT_PROVIDER_LABELS: Record<AgentProviderKey, string> =
 export function createConfiguredAgentProvider(
   key: AgentProviderKey,
   modelName = DEFAULT_AGENT_MODELS[key],
-  options: GgAiProviderOptions = {},
 ): AgentProvider {
   if (key === "dry_run")
     return createDryRunProvider(modelName || "dry-run-local");
-  return createGgAiProvider(
-    key,
-    modelName || DEFAULT_AGENT_MODELS[key],
-    options,
-  );
+  return createTauriAgentProvider(key, modelName || DEFAULT_AGENT_MODELS[key]);
 }
 
 export function createUnavailableProvider(

@@ -9,6 +9,8 @@ build/
 
 # Tauri/Rust
 src-tauri/target/
+src-tauri/target-tauri-smoke/
+src-tauri/src-tauri/target-tauri-smoke/
 src-tauri/gen/schemas/
 
 # Test output

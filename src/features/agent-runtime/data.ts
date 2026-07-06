@@ -18,7 +18,6 @@ import {
   recordSafetyAuditEvent,
   upsertErrorQueueItem,
 } from "@/features/safety/data";
-import { getProviderSecret } from "@/features/integrations/data";
 import { getPlaybookPromptForRuntime } from "@/features/playbooks/data";
 import {
   cancelAgentRunSchema,
@@ -450,14 +449,9 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     summary: "Agent run start",
   });
 
-  const providerOptions =
-    run.provider_key === "dry_run"
-      ? {}
-      : await getProviderSecret({ providerKey: run.provider_key });
   const provider = createConfiguredAgentProvider(
     run.provider_key,
     run.model_name || undefined,
-    providerOptions,
   );
   const runtimePlaybook = await getPlaybookPromptForRuntime(run.playbook_key);
 

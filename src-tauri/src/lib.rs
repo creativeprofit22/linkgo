@@ -1,3 +1,4 @@
+mod agent_runtime;
 mod auth;
 mod metric_refresh;
 mod migrations;
@@ -37,6 +38,7 @@ pub fn run() {
             auth::commands::linkgo_auth_check,
             auth::commands::linkgo_linkedin_publish_post,
             auth::commands::linkgo_linkedin_publish_comment,
+            agent_runtime::linkgo_agent_provider_stream,
             scheduler::linkgo_scheduler_status,
             scheduler::linkgo_scheduler_start,
             scheduler::linkgo_scheduler_stop,

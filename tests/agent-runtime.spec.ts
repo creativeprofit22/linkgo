@@ -56,36 +56,29 @@ test("persists a completed dry-run with tool calls and events", async ({
   expect(toolCalls[0]?.provider_tool_call_id).toBe("dry-run-1-tool-call-2");
 });
 
-test("starts a provider-backed run through a mocked GG AI stream", async ({
+test("starts a provider-backed run through the native command boundary", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as {
-        __LINKGO_GG_AI_PROVIDER_TEST_API__?: {
-          stream: (options: unknown) => AsyncIterable<unknown>;
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => unknown;
         };
-        __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown;
+        __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown;
       }
-    ).__LINKGO_GG_AI_PROVIDER_TEST_API__ = {
-      async *stream(options: unknown): AsyncIterable<unknown> {
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute(args: unknown): unknown {
         (
-          window as unknown as { __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown }
-        ).__LINKGO_PROVIDER_STREAM_OPTIONS__ = options;
-        yield { type: "text", text: "Provider stream started." };
-        yield {
-          type: "tool_call",
-          providerToolCallId: "mock-provider-tool-call-1",
-          toolName: "draft_post",
-          input: {
-            campaignId: 1,
-            candidatePostId: 1,
-            variantCount: 2,
-            angle: "Provider-backed writer playbook",
-          },
+          window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown }
+        ).__LINKGO_PROVIDER_COMMAND_ARGS__ = args;
+        return {
+          chunks: [
+            { type: "text", text: "Provider stream started." },
+            { type: "done", outputSummary: "Provider run completed." },
+          ],
         };
-        yield { type: "done", outputSummary: "Provider run completed." };
       },
     };
   });
@@ -131,27 +124,107 @@ test("starts a provider-backed run through a mocked GG AI stream", async ({
   const toolCalls = await getAgentToolCalls(page);
   expect(runs[0]?.status).toBe("completed");
   expect(runs[0]?.playbook_key).toBe("linkedin_writer");
-  expect(toolCalls[0]?.provider_tool_call_id).toBe("mock-provider-tool-call-1");
-  const streamOptions = await page.evaluate(
+  expect(toolCalls).toEqual([]);
+  const commandArgs = await page.evaluate(
     () =>
-      (window as unknown as { __LINKGO_PROVIDER_STREAM_OPTIONS__?: unknown })
-        .__LINKGO_PROVIDER_STREAM_OPTIONS__,
+      (window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown })
+        .__LINKGO_PROVIDER_COMMAND_ARGS__,
   );
-  expect(streamOptions).toMatchObject({
-    provider: "openai",
-    model: "custom-model",
-    apiKey: "sk-test-custom-key",
-    baseUrl: "https://custom.example.com/v1",
+  expect(commandArgs).toEqual({
+    input: {
+      providerKey: "custom",
+      modelName: "custom-model",
+      request: expect.objectContaining({ messages: expect.any(Array) }),
+    },
   });
-  const serializedStreamOptions = JSON.stringify(streamOptions);
-  expect(serializedStreamOptions).toContain("LinkedIn Writer playbook");
-  expect(serializedStreamOptions).toContain(
-    "Selected playbook: LinkedIn Writer",
-  );
-  expect(serializedStreamOptions).toContain(
+  expect(commandArgs).not.toHaveProperty("input.provider");
+  expect(commandArgs).not.toHaveProperty("input.apiKey");
+  expect(commandArgs).not.toHaveProperty("input.baseUrl");
+  expect(commandArgs).not.toHaveProperty("input.messages");
+  expect(commandArgs).not.toHaveProperty("input.tools");
+  expect(commandArgs).not.toHaveProperty("input.toolChoice");
+  const serializedCommandArgs = JSON.stringify(commandArgs);
+  expect(serializedCommandArgs).not.toContain("sk-test-custom-key");
+  expect(serializedCommandArgs).not.toContain("https://custom.example.com/v1");
+  expect(serializedCommandArgs).toContain("LinkedIn Writer playbook");
+  expect(serializedCommandArgs).toContain("Selected playbook: LinkedIn Writer");
+  expect(serializedCommandArgs).toContain(
     "Operator custom playbook instructions:",
   );
-  expect(serializedStreamOptions).toContain(customInstructions);
+  expect(serializedCommandArgs).toContain(customInstructions);
+});
+
+test("starts an Anthropic provider-backed run through the native command boundary", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => unknown;
+        };
+        __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown;
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute(args: unknown): unknown {
+        (
+          window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown }
+        ).__LINKGO_PROVIDER_COMMAND_ARGS__ = args;
+        return {
+          chunks: [
+            { type: "text", text: "Anthropic stream started." },
+            { type: "done", outputSummary: "Anthropic run completed." },
+          ],
+        };
+      },
+    };
+  });
+
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  const anthropicCard = page
+    .getByText("Anthropic", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await anthropicCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Anthropic connection" });
+  await dialog
+    .getByLabel("Anthropic API key or OAuth token")
+    .fill("sk-ant-test-key");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Connected").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "anthropic");
+
+  await page.getByRole("button", { name: "Start Anthropic" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(
+    page.getByText("Anthropic run completed.").first(),
+  ).toBeVisible();
+
+  const commandArgs = await page.evaluate(
+    () =>
+      (window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown })
+        .__LINKGO_PROVIDER_COMMAND_ARGS__,
+  );
+  expect(commandArgs).toEqual({
+    input: {
+      providerKey: "anthropic",
+      modelName: "claude-sonnet-4-6",
+      request: expect.objectContaining({ messages: expect.any(Array) }),
+    },
+  });
+  expect(commandArgs).not.toHaveProperty("input.provider");
+  expect(commandArgs).not.toHaveProperty("input.apiKey");
+  expect(commandArgs).not.toHaveProperty("input.baseUrl");
+  expect(commandArgs).not.toHaveProperty("input.messages");
+  expect(commandArgs).not.toHaveProperty("input.tools");
+  expect(commandArgs).not.toHaveProperty("input.toolChoice");
+  expect(JSON.stringify(commandArgs)).not.toContain("sk-ant-test-key");
 });
 
 test("selects the LinkedIn writer playbook for drafter runs", async ({

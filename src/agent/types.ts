@@ -81,6 +81,23 @@ export interface AgentToolContract<
 
 export type AgentToolRegistry = Record<AgentToolName, AgentToolContract>;
 
+export interface AgentProviderToolDefinition {
+  name: AgentToolName;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export type AgentProviderToolChoice =
+  | "auto"
+  | "none"
+  | "required"
+  | { name: AgentToolName };
+
+export interface AgentProviderStreamOptions {
+  tools: AgentProviderToolDefinition[];
+  toolChoice: AgentProviderToolChoice;
+}
+
 export interface AgentMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
@@ -119,7 +136,10 @@ export type AgentModelChunk =
 export interface AgentProvider {
   key: AgentProviderKey;
   modelName: string;
-  stream: (request: AgentModelRequest) => AsyncIterable<AgentModelChunk>;
+  stream: (
+    request: AgentModelRequest,
+    options?: AgentProviderStreamOptions,
+  ) => AsyncIterable<AgentModelChunk>;
 }
 
 export type AgentProgressEvent =

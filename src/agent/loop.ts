@@ -1,8 +1,12 @@
+import { z } from "zod";
 import type {
   AgentLoopOptions,
   AgentLoopResult,
   AgentLoopToolCallResult,
   AgentProgressEvent,
+  AgentProviderToolDefinition,
+  AgentToolContract,
+  AgentToolRegistry,
 } from "@/agent/types";
 
 async function emitProgress(
@@ -35,6 +39,27 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function emptyUsage(): AgentLoopResult["usage"] {
   return { inputTokens: 0, outputTokens: 0, providerRequestId: "" };
+}
+
+function toProviderInputSchema(
+  tool: AgentToolContract,
+): AgentProviderToolDefinition["inputSchema"] {
+  const inputSchema = z.toJSONSchema(tool.inputSchema, {
+    target: "draft-7",
+    io: "input",
+  }) as Record<string, unknown>;
+  delete inputSchema.$schema;
+  return inputSchema;
+}
+
+function toProviderToolDefinitions(
+  tools: AgentToolRegistry,
+): AgentProviderToolDefinition[] {
+  return Object.values(tools).map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: toProviderInputSchema(tool),
+  }));
 }
 
 function getProviderToolCallId(
@@ -73,7 +98,12 @@ async function runSingleAgentLoopAttempt({
     onProgress,
   );
 
-  for await (const chunk of provider.stream(request)) {
+  const providerTools = toProviderToolDefinitions(tools);
+
+  for await (const chunk of provider.stream(request, {
+    tools: providerTools,
+    toolChoice: "auto",
+  })) {
     assertNotAborted(signal);
     iterationCount += 1;
     if (iterationCount > maxIterations) {

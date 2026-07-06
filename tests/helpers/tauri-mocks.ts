@@ -4754,6 +4754,35 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
         if (cmd === "linkgo_auth_check")
           return Promise.resolve(getAuthStatusMock());
+        if (cmd === "linkgo_agent_provider_stream") {
+          const input =
+            (
+              args as
+                | {
+                    input?: {
+                      providerKey?: string;
+                      modelName?: string;
+                      request?: unknown;
+                    };
+                  }
+                | undefined
+            )?.input ?? {};
+          const providerKey = input.providerKey ?? "openai";
+          const secret = providerSecrets[providerKey];
+          if (secret === undefined)
+            throw new Error("Provider is not connected");
+          const testApi = (
+            w as unknown as {
+              __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+                execute: (args: unknown) => Promise<unknown> | unknown;
+              };
+            }
+          ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__;
+          if (testApi === undefined) {
+            throw new Error("Provider command test API is not configured");
+          }
+          return Promise.resolve(testApi.execute(args));
+        }
         if (cmd === "linkgo_scheduler_status") {
           return Promise.resolve(schedulerStatusPayload());
         }

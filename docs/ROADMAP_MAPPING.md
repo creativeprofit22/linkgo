@@ -124,8 +124,8 @@ Implemented now:
 
 - Agent run, tool call, and runtime event tables.
 - Six Zod tool contracts: `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, and `collect_metrics`.
-- Provider-independent runtime interfaces, GG AI adapter, and deterministic `dry_run` provider.
-- Provider-backed GG AI execution after explicit credential connection.
+- Provider-independent runtime interfaces, native Tauri provider adapter, and deterministic `dry_run` provider.
+- Provider-backed execution after explicit credential connection, with model credentials, provider payload construction, tool definitions, and transport handling kept behind the Tauri command boundary.
 - Provider-aware Agent Runtime tab with contract visibility and local run history.
 - Approval-gated `schedule_post` behavior.
 - Archived-campaign mutation blocking.
