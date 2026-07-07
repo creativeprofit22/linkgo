@@ -18,8 +18,13 @@ import {
   type SchedulePostInput,
   type ScoreRelevanceInput,
 } from "@/agent/schemas";
+import {
+  applyRelevanceScoresFromTool,
+  insertDiscoveryItemsFromTool,
+} from "@/features/candidate-queue/data";
 import type {
   AgentToolContract,
+  AgentToolExecutionContext,
   AgentToolMetadata,
   AgentToolName,
   AgentToolRegistry,
@@ -97,30 +102,39 @@ export const agentToolRegistry = {
     ...getToolMetadata("research_posts"),
     inputSchema: researchPostsInputSchema,
     outputSchema: researchPostsOutputSchema,
-    execute: async (input: ResearchPostsInput) => ({
-      candidates: Array.from(
-        { length: Math.min(input.maxPosts, 3) },
-        (_, index) => ({
-          title: `Dry-run candidate ${index + 1}`,
-          sourceSummary: `Local dry-run summary for ${getKeyword(input)}.`,
-          suggestedAngle: `Turn ${getKeyword(input)} into a concrete operator lesson.`,
-        }),
-      ),
-      summary: `Prepared ${Math.min(input.maxPosts, 3)} local candidate summaries.`,
-    }),
+    execute: async (
+      input: ResearchPostsInput,
+      context: AgentToolExecutionContext,
+    ) => {
+      const discoveryItems = await insertDiscoveryItemsFromTool(input, context);
+      return {
+        candidates: Array.from(
+          { length: Math.min(input.maxPosts, 3) },
+          (_, index) => ({
+            title: `Dry-run candidate ${index + 1}`,
+            sourceSummary: `Local dry-run summary for ${getKeyword(input)}.`,
+            suggestedAngle: `Turn ${getKeyword(input)} into a concrete operator lesson.`,
+          }),
+        ),
+        discoveryItems,
+        summary: `Prepared ${Math.min(input.maxPosts, 3)} local candidate summaries and saved ${discoveryItems.length} discovery suggestions.`,
+      };
+    },
   },
   score_relevance: {
     ...getToolMetadata("score_relevance"),
     inputSchema: scoreRelevanceInputSchema,
     outputSchema: scoreRelevanceOutputSchema,
-    execute: async (input: ScoreRelevanceInput) => ({
-      scores: input.candidatePostIds.map((candidatePostId, index) => ({
-        candidatePostId,
-        score: Math.min(100, Math.max(input.minimumScore, 72 + index)),
-        rationale: "Dry-run score based on bounded local contract inputs.",
-      })),
-      summary: `Scored ${input.candidatePostIds.length} candidate posts locally.`,
-    }),
+    execute: async (
+      input: ScoreRelevanceInput,
+      context: AgentToolExecutionContext,
+    ) => {
+      const scores = await applyRelevanceScoresFromTool(input, context);
+      return {
+        scores,
+        summary: `Applied ${scores.length} relevance scores locally.`,
+      };
+    },
   },
   draft_post: {
     ...getToolMetadata("draft_post"),

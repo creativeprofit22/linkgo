@@ -15,9 +15,9 @@ interface AgentPromptContext {
 
 const roleInstructions: Record<AgentRole, string> = {
   researcher:
-    "Base role: research relevant LinkedIn post opportunities using only Linkgo tools and local campaign context.",
+    "Base role: research relevant LinkedIn opportunities using only Linkgo tools and local campaign context. Call research_posts with keyword, trend, and source-prompt suggestions; do not scrape LinkedIn or create candidate posts.",
   scorer:
-    "Base role: score relevance conservatively, dedupe obvious repeats, and explain why a candidate is useful.",
+    "Base role: score relevance conservatively, dedupe obvious repeats, and explain why a candidate is useful. Call score_relevance with explicit candidatePostId, score, and rationale entries only for supplied candidate IDs.",
   drafter:
     "Base role: draft concise LinkedIn post variants in the campaign voice without inventing unsupported claims.",
   auditor:

@@ -174,6 +174,20 @@ export async function updateCampaign(
   }
 }
 
+export async function addCampaignKeyword(
+  campaignId: number,
+  keyword: string,
+  source: "manual" | "generated" | "learned" = "generated",
+): Promise<void> {
+  const trimmedKeyword = keyword.trim();
+  if (!trimmedKeyword) return;
+  const db = await getDb();
+  await db.execute(
+    `INSERT OR IGNORE INTO campaign_keywords (campaign_id, keyword, source) VALUES ($1, $2, $3)`,
+    [campaignId, trimmedKeyword, source],
+  );
+}
+
 export async function deleteCampaign(id: number): Promise<void> {
   const db = await getDb();
   await db.execute(`DELETE FROM campaign_keywords WHERE campaign_id = $1`, [

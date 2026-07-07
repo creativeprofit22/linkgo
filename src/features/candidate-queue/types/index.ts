@@ -1,3 +1,6 @@
+import type { AgentPlaybookKey } from "@/agent/playbooks";
+import type { AgentProviderKey } from "@/agent/provider-catalog";
+
 export type CandidateStatus = "new" | "shortlisted" | "rejected" | "drafted";
 
 export type CandidatePlatform = "linkedin";
@@ -66,4 +69,53 @@ export interface UpdateCandidateInput {
   relevanceScore?: number | null;
   scoreReason?: string;
   notes?: string;
+}
+
+export type CandidateDiscoveryKind = "keyword" | "trend" | "source_prompt";
+
+export type CandidateDiscoveryStatus = "suggested" | "promoted" | "dismissed";
+
+export interface CandidateDiscoveryItem {
+  id: number;
+  campaign_id: number;
+  agent_run_id: number | null;
+  workflow_run_id: number | null;
+  kind: CandidateDiscoveryKind;
+  title: string;
+  keyword: string;
+  rationale: string;
+  source_keyword: string;
+  confidence_score: number | null;
+  status: CandidateDiscoveryStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RunCandidateDiscoveryInput {
+  campaignId: number;
+  seedKeywords?: string[];
+  notes?: string;
+  providerKey?: AgentProviderKey;
+  modelName?: string;
+  playbookKey?: AgentPlaybookKey | "";
+}
+
+export interface ScoreCandidatesInput {
+  campaignId: number;
+  candidatePostIds?: number[];
+  minimumScore?: number;
+  autoRejectBelowMinimum?: boolean;
+  providerKey?: AgentProviderKey;
+  modelName?: string;
+  playbookKey?: AgentPlaybookKey | "";
+}
+
+export interface PromoteDiscoveryItemInput {
+  id: number;
+  campaignId: number;
+}
+
+export interface DismissDiscoveryItemInput {
+  id: number;
+  campaignId: number;
 }

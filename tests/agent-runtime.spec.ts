@@ -56,6 +56,53 @@ test("persists a completed dry-run with tool calls and events", async ({
   expect(toolCalls[0]?.provider_tool_call_id).toBe("dry-run-1-tool-call-2");
 });
 
+test("dry-run researcher persists discovery items through research_posts", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createDryRun(page);
+
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+
+  const counts = await getStateCounts(page);
+  expect(counts.candidateDiscoveryItems).toBe(3);
+});
+
+test("dry-run scorer applies candidate scores through score_relevance", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await insertCandidateForScoring(page);
+  await openAgentRuntime(page);
+  await createDryRun(page, "scorer", "", "Candidate IDs: 1. Auto-reject: true.");
+
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+
+  const candidateScores = await page.evaluate(() => {
+    const getCandidates = (
+      window as unknown as {
+        __LINKGO_SQL_CANDIDATE_POSTS__?: () => Array<{
+          relevance_score: number | null;
+          score_reason: string;
+        }>;
+      }
+    ).__LINKGO_SQL_CANDIDATE_POSTS__;
+    return getCandidates?.().map((candidate) => ({
+      relevanceScore: candidate.relevance_score,
+      scoreReason: candidate.score_reason,
+    }));
+  });
+  expect(candidateScores?.[0]).toEqual({
+    relevanceScore: 78,
+    scoreReason: "Dry-run score: strong campaign fit with a clear operator lesson.",
+  });
+});
+
 test("starts a provider-backed run through the native command boundary", async ({
   page,
 }) => {
@@ -152,6 +199,256 @@ test("starts a provider-backed run through the native command boundary", async (
     "Operator custom playbook instructions:",
   );
   expect(serializedCommandArgs).toContain(customInstructions);
+});
+
+test("provider-backed tool calls persist model-supplied suggestions", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => unknown;
+        };
+        __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown;
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute(args: unknown): unknown {
+        (
+          window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown }
+        ).__LINKGO_PROVIDER_COMMAND_ARGS__ = args;
+        return {
+          chunks: [
+            {
+              type: "tool_call",
+              providerToolCallId: "provider-research-1",
+              toolName: "research_posts",
+              input: {
+                campaignId: 1,
+                keywords: ["founder content"],
+                maxPosts: 1,
+                suggestions: [
+                  {
+                    kind: "keyword",
+                    title: "Provider supplied keyword",
+                    keyword: "provider keyword",
+                    rationale: "Provider-generated suggestion through native boundary.",
+                    sourceKeyword: "founder content",
+                    confidenceScore: 91,
+                  },
+                ],
+              },
+            },
+            { type: "done", outputSummary: "Provider research completed." },
+          ],
+        };
+      },
+    };
+  });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://custom.example.com/v1");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Connected").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "researcher");
+
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+
+  const counts = await getStateCounts(page);
+  expect(counts.candidateDiscoveryItems).toBe(1);
+  const serializedCommandArgs = JSON.stringify(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown })
+          .__LINKGO_PROVIDER_COMMAND_ARGS__,
+    ),
+  );
+  expect(serializedCommandArgs).not.toContain("sk-test-custom-key");
+});
+
+test("provider-backed score_relevance calls persist model-supplied scores", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => unknown;
+        };
+        __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown;
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute(args: unknown): unknown {
+        (
+          window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown }
+        ).__LINKGO_PROVIDER_COMMAND_ARGS__ = args;
+        return {
+          chunks: [
+            {
+              type: "tool_call",
+              providerToolCallId: "provider-score-1",
+              toolName: "score_relevance",
+              input: {
+                campaignId: 1,
+                candidatePostIds: [1],
+                minimumScore: 60,
+                scores: [
+                  {
+                    candidatePostId: 1,
+                    score: 84,
+                    rationale:
+                      "Provider score: strong fit with a specific operator lesson.",
+                  },
+                ],
+                autoRejectBelowMinimum: true,
+              },
+            },
+            { type: "done", outputSummary: "Provider scoring completed." },
+          ],
+        };
+      },
+    };
+  });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://custom.example.com/v1");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Connected").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await insertCandidateForScoring(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "scorer");
+
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+
+  const candidateScores = await page.evaluate(() => {
+    const getCandidates = (
+      window as unknown as {
+        __LINKGO_SQL_CANDIDATE_POSTS__?: () => Array<{
+          relevance_score: number | null;
+          score_reason: string;
+        }>;
+      }
+    ).__LINKGO_SQL_CANDIDATE_POSTS__;
+    return getCandidates?.().map((candidate) => ({
+      relevanceScore: candidate.relevance_score,
+      scoreReason: candidate.score_reason,
+    }));
+  });
+  expect(candidateScores?.[0]).toEqual({
+    relevanceScore: 84,
+    scoreReason: "Provider score: strong fit with a specific operator lesson.",
+  });
+  const serializedCommandArgs = JSON.stringify(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown })
+          .__LINKGO_PROVIDER_COMMAND_ARGS__,
+    ),
+  );
+  expect(serializedCommandArgs).not.toContain("sk-test-custom-key");
+  expect(serializedCommandArgs).not.toContain("https://custom.example.com/v1");
+});
+
+test("provider duplicate research_posts calls are rejected before local writes", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => unknown;
+        };
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute(): unknown {
+        const duplicateToolCall = {
+          type: "tool_call",
+          providerToolCallId: "provider-research-duplicate",
+          toolName: "research_posts",
+          input: {
+            campaignId: 1,
+            keywords: ["founder content"],
+            maxPosts: 1,
+            suggestions: [
+              {
+                kind: "keyword",
+                title: "Duplicate-safe keyword",
+                keyword: "duplicate safe keyword",
+                rationale: "Provider emitted the same tool call twice.",
+                sourceKeyword: "founder content",
+                confidenceScore: 88,
+              },
+            ],
+          },
+        };
+        return {
+          chunks: [
+            duplicateToolCall,
+            duplicateToolCall,
+            { type: "done", outputSummary: "Provider research completed." },
+          ],
+        };
+      },
+    };
+  });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://custom.example.com/v1");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Connected").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "researcher");
+
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+
+  const counts = await getStateCounts(page);
+  const toolCalls = await getAgentToolCalls(page);
+  expect(counts.candidateDiscoveryItems).toBe(1);
+  expect(counts.agentToolCalls).toBe(2);
+  expect(toolCalls.map((call) => call.status)).toEqual(["completed", "rejected"]);
+  await expect(
+    page.getByText("Duplicate provider tool call ignored.", { exact: true }),
+  ).toBeVisible();
 });
 
 test("starts an Anthropic provider-backed run through the native command boundary", async ({
@@ -461,12 +758,13 @@ async function getAgentRuns(
 
 async function getAgentToolCalls(
   page: Page,
-): Promise<Array<{ provider_tool_call_id: string }>> {
+): Promise<Array<{ provider_tool_call_id: string; status: string }>> {
   return page.evaluate(() => {
     const getToolCalls = (
       window as unknown as {
         __LINKGO_SQL_AGENT_TOOL_CALLS__?: () => Array<{
           provider_tool_call_id: string;
+          status: string;
         }>;
       }
     ).__LINKGO_SQL_AGENT_TOOL_CALLS__;
@@ -523,7 +821,7 @@ async function createCampaign(page: Page): Promise<void> {
 async function createProviderRun(
   page: Page,
   providerKey: "openai" | "anthropic" | "gemini" | "custom",
-  role: "researcher" | "drafter" = "researcher",
+  role: "researcher" | "scorer" | "drafter" = "researcher",
   playbookKey = "",
 ): Promise<void> {
   await page.getByRole("button", { name: "Create run" }).first().click();
@@ -542,8 +840,9 @@ async function createProviderRun(
 
 async function createDryRun(
   page: Page,
-  role: "researcher" | "drafter" | "scheduler" = "researcher",
+  role: "researcher" | "scorer" | "drafter" | "scheduler" = "researcher",
   playbookKey = "",
+  inputSummary = "Validate runtime contracts for this campaign.",
 ): Promise<void> {
   await page.getByRole("button", { name: "Create run" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create agent run" });
@@ -551,11 +850,29 @@ async function createDryRun(
   await dialog.getByLabel("Agent role").selectOption(role);
   if (playbookKey)
     await dialog.getByLabel("Playbook").selectOption(playbookKey);
-  await dialog
-    .getByLabel("Input summary")
-    .fill("Validate runtime contracts for this campaign.");
+  await dialog.getByLabel("Input summary").fill(inputSummary);
   await dialog.getByRole("button", { name: "Create run" }).click();
   await expect(dialog).toBeHidden();
+}
+
+async function insertCandidateForScoring(page: Page): Promise<void> {
+  await executeSql(page, {
+    query: `INSERT INTO target_posts (platform, url, normalized_url, author_name, author_profile_url, platform_resource_urn, posted_at, content, content_hash, updated_at) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, $8, datetime('now'))`,
+    values: [
+      "https://www.linkedin.com/posts/runtime-score/",
+      "https://www.linkedin.com/posts/runtime-score/",
+      "Runtime Author",
+      "",
+      "urn:li:activity:runtime-score",
+      null,
+      "Runtime scorer candidate",
+      "runtime-score-hash",
+    ],
+  });
+  await executeSql(page, {
+    query: `INSERT INTO candidate_posts (campaign_id, target_post_id, source_keyword, relevance_score, score_reason, notes, updated_at) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
+    values: [1, 1, "founder content", null, "", ""],
+  });
 }
 
 function getPlaybookCard(page: Page, label: string): Locator {

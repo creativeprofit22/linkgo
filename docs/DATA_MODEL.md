@@ -79,6 +79,30 @@ Constraints: unique `(campaign_id, target_post_id)`, checked status values, and 
 
 Indexes: `idx_candidate_posts_campaign_id`, `idx_candidate_posts_status`, `idx_candidate_posts_relevance_score`.
 
+### `candidate_discovery_items`
+
+Stores operator-triggered local AI keyword, trend, and source-prompt suggestions for a campaign. Suggestions are not scraped LinkedIn posts.
+
+| Column             | Type    | Notes                                                              |
+| ------------------ | ------- | ------------------------------------------------------------------ |
+| `id`               | INTEGER | Primary key                                                        |
+| `campaign_id`      | INTEGER | References `campaigns(id)` with cascade delete                     |
+| `agent_run_id`     | INTEGER | Nullable, references `agent_runs(id)` with `ON DELETE SET NULL`    |
+| `workflow_run_id`  | INTEGER | Nullable, references `workflow_runs(id)` with `ON DELETE SET NULL` |
+| `kind`             | TEXT    | `keyword`, `trend`, or `source_prompt`                             |
+| `title`            | TEXT    | Optional display title, default empty string                       |
+| `keyword`          | TEXT    | Optional generated keyword, default empty string                   |
+| `rationale`        | TEXT    | Optional model/operator rationale, default empty string            |
+| `source_keyword`   | TEXT    | Optional seed keyword that inspired the suggestion                 |
+| `confidence_score` | INTEGER | Nullable `0` through `100` confidence                              |
+| `status`           | TEXT    | `suggested`, `promoted`, or `dismissed`                            |
+| `created_at`       | TEXT    | SQLite datetime                                                    |
+| `updated_at`       | TEXT    | SQLite datetime                                                    |
+
+Constraints: checked kind/status values, checked confidence range, and unique active `(campaign_id, kind, keyword, title)` where status is not `dismissed`.
+
+Indexes: campaign, agent run, workflow run, kind, status, confidence score, and active de-dupe indexes.
+
 ### `dedupe_keys`
 
 Stores per-campaign duplicate keys for normalized URL and content hash collisions.

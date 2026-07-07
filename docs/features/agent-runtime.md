@@ -19,8 +19,9 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 - Dry-run provider that emits deterministic model chunks and provider-style tool-call correlation IDs.
 - Native Tauri runtime adapter for Anthropic-compatible (Anthropic, MiniMax), Gemini Code Assist, OpenAI-compatible (Xiaomi, OpenAI, Z.AI/GLM, Moonshot, DeepSeek, OpenRouter, Sakana), plus Linkgo-only custom OpenAI-compatible endpoints.
 - Native provider adapters own provider payload construction, Linkgo tool definitions, and provider tool-call mapping inside the Tauri boundary.
-- Runtime loop that validates tool inputs and outputs with Zod, supports cancellation checks, retry classification, and iteration caps.
+- Runtime loop that validates tool inputs and outputs with Zod, supports cancellation checks, retry classification, iteration caps, and tool execution context for local side effects.
 - Provider-backed execution using explicitly connected credentials and native HTTP requests inside the Tauri boundary for the operator-triggered run.
+- `research_posts` can persist local discovery suggestions, and `score_relevance` can apply validated relevance scores to existing campaign candidates.
 - Approval interrupt for `schedule_post`.
 - Agent run, tool call, and runtime event tables.
 - Selected playbook persistence on `agent_runs.playbook_key`.

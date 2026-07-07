@@ -157,7 +157,7 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
   expect(transactionCalls).not.toContain("COMMIT");
 });
 
-test("archived campaign cannot receive a new candidate", async ({ page }) => {
+test("archived campaigns disable discovery and scoring actions", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await archiveCampaign(page, "Founder-led growth");
@@ -167,24 +167,10 @@ test("archived campaign cannot receive a new candidate", async ({ page }) => {
   await page
     .getByRole("combobox")
     .selectOption({ label: "Founder-led growth (archived)" });
-  await addCandidate(page, { expectSuccess: false });
 
-  await expect(page.getByText("Candidate was not added")).toBeVisible();
-  await expect(page.getByText("Campaign is archived")).toBeVisible();
-
-  const candidateInsertCount = await page.evaluate(() => {
-    const calls =
-      (
-        window as unknown as {
-          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
-        }
-      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
-    return calls.filter((call) =>
-      call.query.includes("INSERT INTO candidate_posts"),
-    ).length;
-  });
-
-  expect(candidateInsertCount).toBe(0);
+  await expect(page.getByRole("button", { name: "Run discovery" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Score candidates" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add candidate" })).toBeDisabled();
 });
 
 test("candidate status actions move through triage states", async ({
@@ -247,6 +233,174 @@ test("queue renders no-campaign empty state", async ({ page }) => {
   await expect(page.getByText("Open Campaigns first")).toBeVisible();
 });
 
+test("discovery blocks seed keywords over schema max length", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+
+  await page.getByRole("button", { name: "Run discovery" }).click();
+  const dialog = page.getByRole("dialog", { name: "Run discovery" });
+  await page.getByLabel("Seed keywords").fill("a".repeat(81));
+  await dialog.getByRole("button", { name: "Run discovery" }).click();
+
+  await expect(dialog).toBeVisible();
+  await expect(
+    page.getByText("Seed keywords must be 80 characters or fewer."),
+  ).toBeVisible();
+  const agentRunInsertCount = await page.evaluate(() => {
+    const calls =
+      (
+        window as unknown as {
+          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+        }
+      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
+    return calls.filter((call) => call.query.includes("INSERT INTO agent_runs"))
+      .length;
+  });
+
+  expect(agentRunInsertCount).toBe(0);
+});
+
+test("dry-run discovery creates, promotes, and dismisses suggestions", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+
+  await page.getByRole("button", { name: "Run discovery" }).click();
+  await page
+    .getByRole("dialog", { name: "Run discovery" })
+    .getByRole("button", { name: "Run discovery" })
+    .click();
+
+  await expect(page.getByText("founder-led content", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Operator-led AI workflow proof", { exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Promote keyword" }).first().click();
+  await expect(page.getByText("Promoted", { exact: true })).toBeVisible();
+
+  const generatedKeywordCount = await page.evaluate(() => {
+    const getKeywords = (
+      window as unknown as {
+        __LINKGO_SQL_KEYWORDS__?: () => Array<{ source: string }>;
+      }
+    ).__LINKGO_SQL_KEYWORDS__;
+    return (
+      getKeywords?.().filter((keyword) => keyword.source === "generated")
+        .length ?? 0
+    );
+  });
+  expect(generatedKeywordCount).toBe(1);
+
+  await page
+    .getByText("founder-led content", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]")
+    .getByRole("button", { name: "Dismiss" })
+    .click();
+  await expect(page.getByText("founder-led content", { exact: true })).toBeHidden();
+});
+
+test("failed discovery promotion rolls back generated keyword", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+
+  await page.getByRole("button", { name: "Run discovery" }).click();
+  await page
+    .getByRole("dialog", { name: "Run discovery" })
+    .getByRole("button", { name: "Run discovery" })
+    .click();
+
+  await expect(page.getByText("founder-led content", { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    (
+      window as unknown as { __LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__?: boolean }
+    ).__LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__ = true;
+  });
+  await page.getByRole("button", { name: "Promote keyword" }).first().click();
+
+  await expect(page.getByText("Suggestion was not promoted")).toBeVisible();
+  await expect(
+    page.getByText("Injected discovery status update failure"),
+  ).toBeVisible();
+
+  const rollbackState = await page.evaluate(() => {
+    const getKeywords = (
+      window as unknown as {
+        __LINKGO_SQL_KEYWORDS__?: () => Array<{ source: string }>;
+      }
+    ).__LINKGO_SQL_KEYWORDS__;
+    const getDiscoveryItems = (
+      window as unknown as {
+        __LINKGO_SQL_CANDIDATE_DISCOVERY_ITEMS__?: () => Array<{
+          keyword: string;
+          status: string;
+        }>;
+      }
+    ).__LINKGO_SQL_CANDIDATE_DISCOVERY_ITEMS__;
+    const calls =
+      (
+        window as unknown as {
+          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+        }
+      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
+    const transactionCalls = calls.map((call) =>
+      call.query.trim().toLocaleUpperCase(),
+    );
+    const promotionTransactionCalls = transactionCalls.slice(
+      transactionCalls.lastIndexOf("BEGIN TRANSACTION"),
+    );
+    return {
+      generatedKeywords:
+        getKeywords?.().filter((keyword) => keyword.source === "generated")
+          .length ?? 0,
+      founderLedStatus: getDiscoveryItems?.().find(
+        (item) => item.keyword === "founder-led content",
+      )?.status,
+      promotionTransactionCalls,
+    };
+  });
+
+  expect(rollbackState.generatedKeywords).toBe(0);
+  expect(rollbackState.founderLedStatus).toBe("suggested");
+  expect(rollbackState.promotionTransactionCalls).toContain("BEGIN TRANSACTION");
+  expect(rollbackState.promotionTransactionCalls).toContain("ROLLBACK");
+  expect(rollbackState.promotionTransactionCalls).not.toContain("COMMIT");
+});
+
+test("dry-run scoring applies rationale and can auto-reject new low scores", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page, {
+    score: null,
+    urlSuffix: "one",
+    content: "First unscored candidate.",
+  });
+  await addCandidate(page, {
+    score: null,
+    urlSuffix: "two",
+    content: "Second unscored candidate.",
+  });
+
+  await page.getByRole("button", { name: "Score candidates" }).click();
+  await page.getByLabel("Reject new candidates below minimum score").check();
+  await page
+    .getByRole("dialog", { name: "Score candidates" })
+    .getByRole("button", { name: "Score candidates" })
+    .click();
+
+  await expect(page.getByText("Dry-run score: strong campaign fit")).toBeVisible();
+  await expect(page.getByText("78/100", { exact: true })).toBeVisible();
+  await expect(page.getByText("Rejected", { exact: true }).first()).toBeVisible();
+});
 async function openQueue(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Queue/ }).click();
   await expect(
@@ -288,7 +442,12 @@ async function archiveCampaign(page: Page, name: string): Promise<void> {
 
 async function addCandidate(
   page: Page,
-  options: { expectSuccess: boolean } = { expectSuccess: true },
+  options: {
+    expectSuccess?: boolean;
+    score?: string | null;
+    urlSuffix?: string;
+    content?: string;
+  } = { expectSuccess: true, score: "87" },
 ): Promise<void> {
   await page.getByRole("button", { name: "Add candidate" }).first().click();
   await expect(
@@ -297,20 +456,22 @@ async function addCandidate(
 
   await page
     .getByLabel("LinkedIn post URL")
-    .fill("https://www.linkedin.com/posts/example-activity-123/");
+    .fill(`https://www.linkedin.com/posts/example-activity-${options.urlSuffix ?? "123"}/`);
   await page
     .getByLabel("Post text")
-    .fill("This founder post has a sharp ICP signal.");
+    .fill(options.content ?? "This founder post has a sharp ICP signal.");
   await page.getByLabel("Author name").fill("Jane Operator");
   await page
     .getByLabel("Author profile URL")
     .fill("https://www.linkedin.com/in/jane-operator/");
   await page.getByLabel("Posted at").fill("2026-06-25");
   await page.getByLabel("Source keyword").fill("founder content");
-  await page.getByLabel("Relevance score").fill("87");
-  await page.getByLabel("Score reason").fill("Strong audience overlap.");
+  if (options.score !== null) {
+    await page.getByLabel("Relevance score").fill(options.score ?? "87");
+    await page.getByLabel("Score reason").fill("Strong audience overlap.");
+  }
   await page.getByLabel("Notes").fill("Good comment opportunity.");
   const dialog = page.getByRole("dialog", { name: "Add candidate" });
   await dialog.getByRole("button", { name: "Add candidate" }).click();
-  if (options.expectSuccess) await expect(dialog).toBeHidden();
+  if (options.expectSuccess ?? true) await expect(dialog).toBeHidden();
 }

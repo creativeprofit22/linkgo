@@ -87,6 +87,7 @@ async function runSingleAgentLoopAttempt({
   onProgress: AgentLoopOptions["onProgress"] | undefined;
 }): Promise<Omit<AgentLoopResult, "retryCount">> {
   const toolCalls: AgentLoopToolCallResult[] = [];
+  const handledProviderToolCallIds = new Set<string>();
   let iterationCount = 0;
   let outputSummary = "";
 
@@ -143,6 +144,33 @@ async function runSingleAgentLoopAttempt({
       onProgress,
     );
 
+    if (handledProviderToolCallIds.has(providerToolCallId)) {
+      const errorMessage = "Duplicate provider tool call ignored.";
+      toolCalls.push({
+        providerToolCallId,
+        toolName: tool.name,
+        status: "rejected",
+        requiresApproval: tool.requiresApproval,
+        input: parsedInput,
+        output: {},
+        errorMessage,
+      });
+      await emitProgress(
+        {
+          type: "tool_failed",
+          summary: `${tool.label} rejected: ${errorMessage}`,
+          providerToolCallId,
+          toolName: tool.name,
+          input: parsedInput,
+          errorMessage,
+          requiresApproval: tool.requiresApproval,
+        },
+        onProgress,
+      );
+      continue;
+    }
+    handledProviderToolCallIds.add(providerToolCallId);
+
     if (tool.requiresApproval) {
       toolCalls.push({
         providerToolCallId,
@@ -175,7 +203,10 @@ async function runSingleAgentLoopAttempt({
     }
 
     try {
-      const rawOutput = await tool.execute(parsedInput);
+      const rawOutput = await tool.execute(parsedInput, {
+        request,
+        providerToolCallId,
+      });
       assertNotAborted(signal);
       const parsedOutput = tool.outputSchema.parse(rawOutput);
       toolCalls.push({

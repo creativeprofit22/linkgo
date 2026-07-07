@@ -9,6 +9,17 @@ function getWorkflowRunId(request: AgentModelRequest): number | undefined {
   return request.workflowRunId ?? undefined;
 }
 
+function getCandidatePostIds(request: AgentModelRequest): number[] {
+  const candidateIdsPattern = /candidate ids?:\s*([\d,\s]+)/iu;
+  const idList = candidateIdsPattern.exec(request.inputSummary)?.[1];
+  if (idList === undefined || idList.trim().length === 0) return [];
+  const ids = idList
+    .split(",")
+    .map((value) => Number.parseInt(value.trim(), 10))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  return ids.length > 0 ? ids.slice(0, 50) : [1];
+}
+
 function buildToolCall(request: AgentModelRequest): {
   providerToolCallId: string;
   toolName: AgentToolName;
@@ -20,8 +31,19 @@ function buildToolCall(request: AgentModelRequest): {
       toolName: "score_relevance",
       input: {
         campaignId: request.campaignId,
-        candidatePostIds: [1],
+        candidatePostIds: getCandidatePostIds(request),
         minimumScore: 60,
+        scores: getCandidatePostIds(request).map((candidatePostId, index) => ({
+          candidatePostId,
+          score: index === 0 ? 78 : 54,
+          rationale:
+            index === 0
+              ? "Dry-run score: strong campaign fit with a clear operator lesson."
+              : "Dry-run score: useful but less directly tied to the campaign promise.",
+        })),
+        autoRejectBelowMinimum: /auto[-\s]?reject:\s*true/iu.test(
+          request.inputSummary,
+        ),
       },
     };
   }
@@ -86,6 +108,35 @@ function buildToolCall(request: AgentModelRequest): {
       keywords: ["LinkedIn growth", "founder content"],
       maxPosts: 3,
       notes: request.inputSummary,
+      suggestions: [
+        {
+          kind: "keyword",
+          title: "Founder-led LinkedIn content",
+          keyword: "founder-led content",
+          rationale:
+            "Dry-run suggestion based on campaign positioning and queue seed keywords.",
+          sourceKeyword: "LinkedIn growth",
+          confidenceScore: 84,
+        },
+        {
+          kind: "trend",
+          title: "Operator-led AI workflow proof",
+          keyword: "AI workflow proof",
+          rationale:
+            "Dry-run trend for posts that show concrete workflow outcomes without scraping LinkedIn.",
+          sourceKeyword: "founder content",
+          confidenceScore: 76,
+        },
+        {
+          kind: "source_prompt",
+          title: "Ask customers about manual review bottlenecks",
+          keyword: "manual review bottlenecks",
+          rationale:
+            "Dry-run source prompt for finding compliant first-party research angles.",
+          sourceKeyword: "LinkedIn growth",
+          confidenceScore: 68,
+        },
+      ],
     },
   };
 }

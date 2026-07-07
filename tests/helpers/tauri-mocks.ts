@@ -55,6 +55,22 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       updated_at: string;
     };
 
+    type CandidateDiscoveryItem = {
+      id: number;
+      campaign_id: number;
+      agent_run_id: number | null;
+      workflow_run_id: number | null;
+      kind: "keyword" | "trend" | "source_prompt";
+      title: string;
+      keyword: string;
+      rationale: string;
+      source_keyword: string;
+      confidence_score: number | null;
+      status: "suggested" | "promoted" | "dismissed";
+      created_at: string;
+      updated_at: string;
+    };
+
     type DedupeKey = {
       id: number;
       campaign_id: number;
@@ -654,6 +670,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       targetPosts: TargetPost[];
       candidatePosts: CandidatePost[];
       dedupeKeys: DedupeKey[];
+      candidateDiscoveryItems: CandidateDiscoveryItem[];
       drafts: Draft[];
       draftVariants: DraftVariant[];
       draftAudits: DraftAudit[];
@@ -721,6 +738,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const targetPosts: TargetPost[] = [];
     const candidatePosts: CandidatePost[] = [];
     const dedupeKeys: DedupeKey[] = [];
+    const candidateDiscoveryItems: CandidateDiscoveryItem[] = [];
     const drafts: Draft[] = [];
     const draftVariants: DraftVariant[] = [];
     const draftAudits: DraftAudit[] = [];
@@ -777,6 +795,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextTargetPostId = 1;
     let nextCandidatePostId = 1;
     let nextDedupeKeyId = 1;
+    let nextCandidateDiscoveryItemId = 1;
     let nextDraftId = 1;
     let nextDraftVariantId = 1;
     let nextDraftAuditId = 1;
@@ -867,6 +886,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         targetPosts: cloneRows(targetPosts),
         candidatePosts: cloneRows(candidatePosts),
         dedupeKeys: cloneRows(dedupeKeys),
+        candidateDiscoveryItems: cloneRows(candidateDiscoveryItems),
         drafts: cloneRows(drafts),
         draftVariants: cloneRows(draftVariants),
         draftAudits: cloneRows(draftAudits),
@@ -901,6 +921,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextTargetPostId,
         nextCandidatePostId,
         nextDedupeKeyId,
+        nextCandidateDiscoveryItemId,
         nextDraftId,
         nextDraftVariantId,
         nextDraftAuditId,
@@ -939,6 +960,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(targetPosts, snapshot.targetPosts);
       restoreRows(candidatePosts, snapshot.candidatePosts);
       restoreRows(dedupeKeys, snapshot.dedupeKeys);
+      restoreRows(candidateDiscoveryItems, snapshot.candidateDiscoveryItems);
       restoreRows(drafts, snapshot.drafts);
       restoreRows(draftVariants, snapshot.draftVariants);
       restoreRows(draftAudits, snapshot.draftAudits);
@@ -984,6 +1006,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextTargetPostId = snapshot.nextTargetPostId;
       nextCandidatePostId = snapshot.nextCandidatePostId;
       nextDedupeKeyId = snapshot.nextDedupeKeyId;
+      nextCandidateDiscoveryItemId = snapshot.nextCandidateDiscoveryItemId;
       nextDraftId = snapshot.nextDraftId;
       nextDraftVariantId = snapshot.nextDraftVariantId;
       nextDraftAuditId = snapshot.nextDraftAuditId;
@@ -2668,6 +2691,67 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return selectDraftVariants(query, values);
       }
       if (query.includes("FROM draft_audits")) return selectDraftAudits(values);
+      if (query.includes("FROM candidate_discovery_items")) {
+        if (query.includes("WHERE id = $1")) {
+          const id = Number(values[0] ?? 0);
+          const campaignId = values.length > 1 ? Number(values[1] ?? 0) : null;
+          return candidateDiscoveryItems.filter(
+            (item) =>
+              item.id === id &&
+              (campaignId === null || item.campaign_id === campaignId),
+          );
+        }
+        const campaignId = Number(values[0] ?? 0);
+        if (query.includes("AND kind = $2")) {
+          const kind = String(values[1] ?? "");
+          const keyword = String(values[2] ?? "");
+          const title = String(values[3] ?? "");
+          return candidateDiscoveryItems.filter(
+            (item) =>
+              item.campaign_id === campaignId &&
+              item.kind === kind &&
+              item.keyword === keyword &&
+              item.title === title &&
+              item.status !== "dismissed",
+          );
+        }
+        return candidateDiscoveryItems
+          .filter(
+            (item) => item.campaign_id === campaignId && item.status !== "dismissed",
+          )
+          .sort((left, right) => {
+            const leftPromoted = left.status === "promoted" ? 1 : 0;
+            const rightPromoted = right.status === "promoted" ? 1 : 0;
+            if (leftPromoted !== rightPromoted) return leftPromoted - rightPromoted;
+            const leftConfidence = left.confidence_score ?? -1;
+            const rightConfidence = right.confidence_score ?? -1;
+            if (leftConfidence !== rightConfidence) return rightConfidence - leftConfidence;
+            const updatedDelta = right.updated_at.localeCompare(left.updated_at);
+            if (updatedDelta !== 0) return updatedDelta;
+            return right.id - left.id;
+          });
+      }
+      if (query.includes("FROM candidate_posts") && query.includes("id IN")) {
+        const campaignId = Number(values[0] ?? 0);
+        const ids = new Set(
+          values.slice(1).filter((value): value is number => typeof value === "number"),
+        );
+        return candidatePosts
+          .filter((candidate) => candidate.campaign_id === campaignId && ids.has(candidate.id))
+          .map((candidate) => ({ id: candidate.id, status: candidate.status }));
+      }
+      if (query.includes("FROM candidate_posts") && query.includes("relevance_score IS NULL")) {
+        const campaignId = Number(values[0] ?? 0);
+        return candidatePosts
+          .filter(
+            (candidate) =>
+              candidate.campaign_id === campaignId &&
+              candidate.status === "new" &&
+              candidate.relevance_score === null,
+          )
+          .map((candidate) => ({ id: candidate.id }))
+          .slice(0, 50);
+      }
       if (query.includes("FROM candidate_posts cp"))
         return selectCandidateJoin(values);
       if (query.includes("FROM dedupe_keys")) {
@@ -2890,7 +2974,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             id: nextKeywordId,
             campaign_id: campaignId,
             keyword,
-            source: "manual",
+            source: (values[2] as Keyword["source"] | undefined) ?? "manual",
             created_at: now,
           });
           nextKeywordId += 1;
@@ -2936,6 +3020,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: candidatePost.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO candidate_discovery_items")) {
+        const discoveryItem: CandidateDiscoveryItem = {
+          id: nextCandidateDiscoveryItemId,
+          campaign_id: Number(values[0] ?? 0),
+          agent_run_id: values[1] === null ? null : Number(values[1] ?? 0),
+          workflow_run_id: values[2] === null ? null : Number(values[2] ?? 0),
+          kind: values[3] as CandidateDiscoveryItem["kind"],
+          title: String(values[4] ?? ""),
+          keyword: String(values[5] ?? ""),
+          rationale: String(values[6] ?? ""),
+          source_keyword: String(values[7] ?? ""),
+          confidence_score: values[8] === null ? null : Number(values[8] ?? 0),
+          status: "suggested",
+          created_at: now,
+          updated_at: now,
+        };
+        candidateDiscoveryItems.push(discoveryItem);
+        nextCandidateDiscoveryItemId += 1;
+        return { lastInsertId: discoveryItem.id, rowsAffected: 1 };
+      }
       if (query.includes("INSERT INTO dedupe_keys")) {
         const keyType = query.includes("'normalized_url'")
           ? "normalized_url"
@@ -3706,6 +3810,43 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           campaign.updated_at = now;
           return { lastInsertId: id, rowsAffected: 1 };
         }
+      }
+
+      if (query.includes("UPDATE candidate_posts") && query.includes("score_reason") && query.includes("CASE")) {
+        const score = Number(values[0] ?? 0);
+        const rationale = String(values[1] ?? "");
+        const autoReject = Number(values[2] ?? 0) === 1;
+        const minimumScore = Number(values[3] ?? 0);
+        const candidateId = Number(values[4] ?? 0);
+        const campaignId = Number(values[5] ?? 0);
+        const candidate = candidatePosts.find(
+          (row) => row.id === candidateId && row.campaign_id === campaignId,
+        );
+        if (!candidate) return { lastInsertId: candidateId, rowsAffected: 0 };
+        candidate.relevance_score = score;
+        candidate.score_reason = rationale;
+        if (autoReject && candidate.status === "new" && score < minimumScore) {
+          candidate.status = "rejected";
+        }
+        candidate.updated_at = now;
+        return { lastInsertId: candidateId, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE candidate_discovery_items")) {
+        if (w.__LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__) {
+          w.__LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__ = undefined;
+          throw new Error("Injected discovery status update failure");
+        }
+        const id = Number(values[0] ?? 0);
+        const campaignId = Number(values[1] ?? 0);
+        const discoveryItem = candidateDiscoveryItems.find(
+          (item) => item.id === id && item.campaign_id === campaignId,
+        );
+        if (!discoveryItem) return { lastInsertId: id, rowsAffected: 0 };
+        if (query.includes("status = 'promoted'")) discoveryItem.status = "promoted";
+        if (query.includes("status = 'dismissed'")) discoveryItem.status = "dismissed";
+        discoveryItem.updated_at = now;
+        return { lastInsertId: id, rowsAffected: 1 };
       }
 
       if (query.includes("UPDATE candidate_posts")) {
@@ -4479,6 +4620,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
     w.__LINKGO_SQL_PLAYBOOK_OVERRIDES__ = () =>
       cloneRows(agentPlaybookOverrides);
+    w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);
+    w.__LINKGO_SQL_CANDIDATE_POSTS__ = () => cloneRows(candidatePosts);
+    w.__LINKGO_SQL_CANDIDATE_DISCOVERY_ITEMS__ = () =>
+      cloneRows(candidateDiscoveryItems);
     w.__LINKGO_SQL_COMMENT_THREADS__ = () => cloneRows(commentThreads);
     w.__LINKGO_SQL_COMMENT_VARIANTS__ = () => cloneRows(commentVariants);
     w.__LINKGO_SQL_COMMENT_AUDITS__ = () => cloneRows(commentAudits);
@@ -4498,6 +4643,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       targetPosts: targetPosts.length,
       candidatePosts: candidatePosts.length,
       dedupeKeys: dedupeKeys.length,
+      candidateDiscoveryItems: candidateDiscoveryItems.length,
       drafts: drafts.length,
       draftVariants: draftVariants.length,
       draftAudits: draftAudits.length,

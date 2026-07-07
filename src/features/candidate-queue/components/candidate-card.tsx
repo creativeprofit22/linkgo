@@ -88,7 +88,11 @@ export function CandidateCard({
 
         <div className="grid gap-3 text-sm sm:grid-cols-2">
           <InfoBlock label="Campaign" value={candidate.campaign_name} />
-          <InfoBlock label="Relevance" value={scoreLabel} />
+          <InfoBlock
+            label="Relevance"
+            value={scoreLabel}
+            muted={candidate.relevance_score === null}
+          />
           {candidate.source_keyword && (
             <InfoBlock
               label="Source keyword"
@@ -161,16 +165,26 @@ export function CandidateCard({
 function InfoBlock({
   label,
   value,
+  muted = false,
 }: {
   label: string;
   value: string;
+  muted?: boolean;
 }): React.ReactNode {
   return (
     <div className="bg-background/45 rounded-lg border p-3">
       <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
         {label}
       </p>
-      <p className="text-sm leading-relaxed">{value}</p>
+      <p
+        className={
+          muted
+            ? "text-muted-foreground text-sm leading-relaxed italic"
+            : "text-sm leading-relaxed"
+        }
+      >
+        {value}
+      </p>
     </div>
   );
 }

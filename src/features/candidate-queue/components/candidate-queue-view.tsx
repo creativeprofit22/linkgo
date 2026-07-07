@@ -1,6 +1,9 @@
 import { AlertCircle, ListChecks, Target } from "lucide-react";
 import { AddCandidateDialog } from "@/features/candidate-queue/components/add-candidate-dialog";
 import { CandidateCard } from "@/features/candidate-queue/components/candidate-card";
+import { DiscoveryItemCard } from "@/features/candidate-queue/components/discovery-item-card";
+import { RunCandidateDiscoveryDialog } from "@/features/candidate-queue/components/run-candidate-discovery-dialog";
+import { ScoreCandidatesDialog } from "@/features/candidate-queue/components/score-candidates-dialog";
 import { useCandidateQueue } from "@/features/candidate-queue/hooks/use-candidate-queue";
 import type {
   CandidateStatus,
@@ -26,6 +29,7 @@ const statusHeadings: Record<CandidateStatus, string> = {
 export function CandidateQueueView(): React.ReactNode {
   const {
     candidates,
+    discoveryItems,
     campaigns,
     selectedCampaignId,
     loading,
@@ -35,9 +39,16 @@ export function CandidateQueueView(): React.ReactNode {
     addCandidate,
     setStatus,
     removeCandidate,
+    runDiscovery,
+    scoreSelectedCandidates,
+    promoteDiscoveryItem,
+    dismissDiscoveryItem,
   } = useCandidateQueue();
 
-  const summary = getCandidateSummary(candidates);
+  const selectedCampaign =
+    campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
+  const selectedCampaignArchived = selectedCampaign?.status === "archived";
+  const summary = getCandidateSummary(candidates, discoveryItems.length);
   const groupedCandidates = groupCandidatesByStatus(candidates);
 
   return (
@@ -53,18 +64,31 @@ export function CandidateQueueView(): React.ReactNode {
                 Candidate Queue
               </h2>
               <p className="text-muted-foreground text-sm">
-                Intake is manual in this slice. Drafting, commenting, and
-                publishing remain approval-gated for later.
+                Discovery and scoring are operator-triggered and local-first.
+                LinkedIn scraping, commenting, and publishing stay excluded.
               </p>
             </div>
           </div>
         </div>
-        <AddCandidateDialog
-          campaigns={campaigns}
-          selectedCampaignId={selectedCampaignId}
-          onCreate={addCandidate}
-          disabled={campaigns.length === 0}
-        />
+        <div className="flex flex-wrap gap-2">
+          <RunCandidateDiscoveryDialog
+            campaign={selectedCampaign}
+            onRun={runDiscovery}
+            disabled={campaigns.length === 0 || selectedCampaignArchived}
+          />
+          <ScoreCandidatesDialog
+            campaignId={selectedCampaignId}
+            candidates={candidates}
+            onScore={scoreSelectedCandidates}
+            disabled={campaigns.length === 0 || selectedCampaignArchived}
+          />
+          <AddCandidateDialog
+            campaigns={campaigns}
+            selectedCampaignId={selectedCampaignId}
+            onCreate={addCandidate}
+            disabled={campaigns.length === 0 || selectedCampaignArchived}
+          />
+        </div>
       </div>
 
       {error && (
@@ -120,15 +144,60 @@ export function CandidateQueueView(): React.ReactNode {
             </select>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard label="Total" value={String(summary.total)} />
+            <SummaryCard
+              label="Suggestions"
+              value={String(summary.suggestions)}
+            />
+            <SummaryCard label="Scored" value={String(summary.scored)} />
             <SummaryCard
               label="Shortlisted"
               value={String(summary.shortlisted)}
             />
-            <SummaryCard label="Rejected" value={String(summary.rejected)} />
             <SummaryCard label="Average score" value={summary.averageScore} />
           </div>
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold tracking-wide uppercase">
+                Discovery suggestions
+              </h3>
+              <span className="text-muted-foreground text-xs">
+                {discoveryItems.length} local suggestion
+                {discoveryItems.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            {discoveryItems.length === 0 ? (
+              <Card className="bg-card/70 border-dashed">
+                <CardContent className="text-muted-foreground p-6 text-sm">
+                  Run discovery to save keyword, trend, and source-prompt ideas.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-3">
+                {discoveryItems.map((item) => (
+                  <DiscoveryItemCard
+                    key={item.id}
+                    item={item}
+                    disabled={selectedCampaignArchived}
+                    onPromote={(id) =>
+                      promoteDiscoveryItem({
+                        id,
+                        campaignId: item.campaign_id,
+                      })
+                    }
+                    onDismiss={(id) =>
+                      dismissDiscoveryItem({
+                        id,
+                        campaignId: item.campaign_id,
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </section>
 
           {candidates.length === 0 ? (
             <EmptyQueue />
@@ -169,8 +238,13 @@ export function CandidateQueueView(): React.ReactNode {
   );
 }
 
-function getCandidateSummary(candidates: CandidateWithTarget[]): {
+function getCandidateSummary(
+  candidates: CandidateWithTarget[],
+  suggestionCount: number,
+): {
   total: number;
+  suggestions: number;
+  scored: number;
   shortlisted: number;
   rejected: number;
   averageScore: string;
@@ -185,6 +259,8 @@ function getCandidateSummary(candidates: CandidateWithTarget[]): {
 
   return {
     total: candidates.length,
+    suggestions: suggestionCount,
+    scored: scoredCandidates.length,
     shortlisted: candidates.filter(
       (candidate) => candidate.status === "shortlisted",
     ).length,

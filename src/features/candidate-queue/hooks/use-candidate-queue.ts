@@ -5,19 +5,30 @@ import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import {
   createCandidate,
   deleteCandidate,
+  dismissDiscoveryItem as dismissDiscoveryItemRecord,
   listCandidates,
+  listDiscoveryItems,
+  promoteDiscoveryItem as promoteDiscoveryItemRecord,
+  runCandidateDiscovery,
+  scoreCandidates,
   setCandidateStatus,
   updateCandidate as updateCandidateRecord,
 } from "@/features/candidate-queue/data";
 import type {
+  CandidateDiscoveryItem,
   CandidateStatus,
   CandidateWithTarget,
   CreateCandidateInput,
+  DismissDiscoveryItemInput,
+  PromoteDiscoveryItemInput,
+  RunCandidateDiscoveryInput,
+  ScoreCandidatesInput,
   UpdateCandidateInput,
 } from "@/features/candidate-queue/types";
 
 interface UseCandidateQueueState {
   candidates: CandidateWithTarget[];
+  discoveryItems: CandidateDiscoveryItem[];
   campaigns: CampaignWithKeywords[];
   selectedCampaignId: number | null;
   loading: boolean;
@@ -28,6 +39,10 @@ interface UseCandidateQueueState {
   updateCandidate: (input: UpdateCandidateInput) => Promise<void>;
   setStatus: (id: number, status: CandidateStatus) => Promise<void>;
   removeCandidate: (id: number) => Promise<void>;
+  runDiscovery: (input: RunCandidateDiscoveryInput) => Promise<void>;
+  scoreSelectedCandidates: (input: ScoreCandidatesInput) => Promise<void>;
+  promoteDiscoveryItem: (input: PromoteDiscoveryItemInput) => Promise<void>;
+  dismissDiscoveryItem: (input: DismissDiscoveryItemInput) => Promise<void>;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -46,6 +61,9 @@ function getDefaultCampaignId(
 
 export function useCandidateQueue(): UseCandidateQueueState {
   const [candidates, setCandidates] = useState<CandidateWithTarget[]>([]);
+  const [discoveryItems, setDiscoveryItems] = useState<
+    CandidateDiscoveryItem[]
+  >([]);
   const [campaigns, setCampaigns] = useState<CampaignWithKeywords[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(
     null,
@@ -57,9 +75,15 @@ export function useCandidateQueue(): UseCandidateQueueState {
     async (campaignId: number | null) => {
       if (campaignId === null) {
         setCandidates([]);
+        setDiscoveryItems([]);
         return;
       }
-      setCandidates(await listCandidates(campaignId));
+      const [loadedCandidates, loadedDiscoveryItems] = await Promise.all([
+        listCandidates(campaignId),
+        listDiscoveryItems(campaignId),
+      ]);
+      setCandidates(loadedCandidates);
+      setDiscoveryItems(loadedDiscoveryItems);
     },
     [],
   );
@@ -157,9 +181,73 @@ export function useCandidateQueue(): UseCandidateQueueState {
     [loadCandidatesForCampaign, selectedCampaignId],
   );
 
+  const runDiscovery = useCallback(
+    async (input: RunCandidateDiscoveryInput) => {
+      try {
+        await runCandidateDiscovery(input);
+        setSelectedCampaignId(input.campaignId);
+        await loadCandidatesForCampaign(input.campaignId);
+        toast.success("Discovery run completed");
+      } catch (caught) {
+        const message = getErrorMessage(caught);
+        toast.error("Discovery was not run", { description: message });
+        throw caught;
+      }
+    },
+    [loadCandidatesForCampaign],
+  );
+
+  const scoreSelectedCandidates = useCallback(
+    async (input: ScoreCandidatesInput) => {
+      try {
+        await scoreCandidates(input);
+        setSelectedCampaignId(input.campaignId);
+        await loadCandidatesForCampaign(input.campaignId);
+        toast.success("Candidate scoring completed");
+      } catch (caught) {
+        const message = getErrorMessage(caught);
+        toast.error("Candidates were not scored", { description: message });
+        throw caught;
+      }
+    },
+    [loadCandidatesForCampaign],
+  );
+
+  const promoteDiscoveryItem = useCallback(
+    async (input: PromoteDiscoveryItemInput) => {
+      try {
+        await promoteDiscoveryItemRecord(input);
+        await loadCandidatesForCampaign(input.campaignId);
+        setCampaigns(await listCampaigns());
+        toast.success("Keyword promoted");
+      } catch (caught) {
+        const message = getErrorMessage(caught);
+        toast.error("Suggestion was not promoted", { description: message });
+        throw caught;
+      }
+    },
+    [loadCandidatesForCampaign],
+  );
+
+  const dismissDiscoveryItem = useCallback(
+    async (input: DismissDiscoveryItemInput) => {
+      try {
+        await dismissDiscoveryItemRecord(input);
+        await loadCandidatesForCampaign(input.campaignId);
+        toast.success("Suggestion dismissed");
+      } catch (caught) {
+        const message = getErrorMessage(caught);
+        toast.error("Suggestion was not dismissed", { description: message });
+        throw caught;
+      }
+    },
+    [loadCandidatesForCampaign],
+  );
+
   return useMemo(
     () => ({
       candidates,
+      discoveryItems,
       campaigns,
       selectedCampaignId,
       loading,
@@ -170,9 +258,14 @@ export function useCandidateQueue(): UseCandidateQueueState {
       updateCandidate,
       setStatus,
       removeCandidate,
+      runDiscovery,
+      scoreSelectedCandidates,
+      promoteDiscoveryItem,
+      dismissDiscoveryItem,
     }),
     [
       candidates,
+      discoveryItems,
       campaigns,
       selectedCampaignId,
       loading,
@@ -183,6 +276,10 @@ export function useCandidateQueue(): UseCandidateQueueState {
       updateCandidate,
       setStatus,
       removeCandidate,
+      runDiscovery,
+      scoreSelectedCandidates,
+      promoteDiscoveryItem,
+      dismissDiscoveryItem,
     ],
   );
 }

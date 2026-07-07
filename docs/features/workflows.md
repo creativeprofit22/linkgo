@@ -54,8 +54,9 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 1. Run executor starts or resumes the workflow run.
 2. The executor creates a role-specific agent run for the active step.
 3. Agent output completes, fails, blocks, or pauses the step.
-4. The executor stops at `approve` and approval-gated `schedule_post` calls.
-5. Resume executor continues from failed or blocked steps.
+4. Research and score steps can populate discovery suggestions or candidate scores through the same dry-run tools when valid local inputs exist.
+5. The executor stops at `approve` and approval-gated `schedule_post` calls.
+6. Resume executor continues from failed or blocked steps.
 
 ## Manual lifecycle
 

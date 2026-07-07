@@ -69,6 +69,10 @@ export interface AgentToolMetadata {
   requiresApproval: boolean;
   stepKeys: WorkflowStepKey[];
 }
+export interface AgentToolExecutionContext {
+  request: AgentModelRequest;
+  providerToolCallId: string;
+}
 
 export interface AgentToolContract<
   TInput extends z.ZodType = z.ZodType,
@@ -76,7 +80,10 @@ export interface AgentToolContract<
 > extends AgentToolMetadata {
   inputSchema: TInput;
   outputSchema: TOutput;
-  execute: (input: z.infer<TInput>) => Promise<z.infer<TOutput>>;
+  execute: (
+    input: z.infer<TInput>,
+    context: AgentToolExecutionContext,
+  ) => Promise<z.infer<TOutput>>;
 }
 
 export type AgentToolRegistry = Record<AgentToolName, AgentToolContract>;

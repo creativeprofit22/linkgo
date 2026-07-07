@@ -26,18 +26,21 @@ Automation is not implemented in this slice.
 Roadmap coverage:
 
 - Section 3: manual candidate post intake for existing campaigns.
-- Section 4: source keyword capture for future discovery loops.
-- Section 5: relevance score and rationale storage for triage.
+- Section 4: AI-assisted keyword/trend/source-prompt discovery as saved local suggestions.
+- Section 5: operator-triggered relevance scoring with rationale storage for triage.
 
 Implemented now:
 
-- Target post, candidate post, and dedupe key tables.
+- Target post, candidate post, dedupe key, and candidate discovery tables.
 - Manual LinkedIn post add flow.
 - Per-campaign duplicate prevention by normalized URL and content hash.
 - Queue cards grouped by triage status.
 - Status updates for `new`, `shortlisted`, `rejected`, and `drafted`.
+- Dry-run/provider researcher suggestions persisted through `research_posts`.
+- Dry-run/provider scorer outputs applied through `score_relevance` after campaign ownership validation.
+- Keyword suggestion promotion into generated campaign keywords and suggestion dismissal.
 
-Scraping, AI scoring, commenting, and publishing are not implemented in this slice.
+LinkedIn scraping, autonomous scoring runs, autonomous commenting, and autonomous publishing are not implemented in this slice.
 
 ### Drafting + audit slice
 

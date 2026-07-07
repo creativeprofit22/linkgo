@@ -19,6 +19,25 @@ export const agentRunStatusSchema = z.enum(AGENT_RUN_STATUSES);
 export const agentToolCallStatusSchema = z.enum(AGENT_TOOL_CALL_STATUSES);
 export const agentRunEventTypeSchema = z.enum(AGENT_RUN_EVENT_TYPES);
 
+export const discoveryToolSuggestionSchema = z
+  .object({
+    kind: z.enum(["keyword", "trend", "source_prompt"]),
+    title: z.string().trim().max(160).default(""),
+    keyword: z.string().trim().max(80).default(""),
+    rationale: z.string().trim().max(500).default(""),
+    sourceKeyword: z.string().trim().max(80).optional().default(""),
+    confidenceScore: z.number().int().min(0).max(100).nullable().optional(),
+  })
+  .strict();
+
+export const scoreToolEvaluationSchema = z
+  .object({
+    candidatePostId: positiveIdSchema,
+    score: z.number().int().min(0).max(100),
+    rationale: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
 export const researchPostsInputSchema = z
   .object({
     campaignId: positiveIdSchema,
@@ -26,6 +45,11 @@ export const researchPostsInputSchema = z
     keywords: z.array(z.string().trim().min(1).max(80)).min(1).max(12),
     maxPosts: z.number().int().min(1).max(25).default(5),
     notes: optionalTextSchema,
+    suggestions: z
+      .array(discoveryToolSuggestionSchema)
+      .max(25)
+      .optional()
+      .default([]),
   })
   .strict();
 
@@ -42,6 +66,23 @@ export const researchPostsOutputSchema = z
           .strict(),
       )
       .max(25),
+    discoveryItems: z
+      .array(
+        z
+          .object({
+            id: positiveIdSchema,
+            kind: z.enum(["keyword", "trend", "source_prompt"]),
+            title: z.string().trim().max(160),
+            keyword: z.string().trim().max(80),
+            rationale: z.string().trim().max(500),
+            sourceKeyword: z.string().trim().max(80),
+            confidenceScore: z.number().int().min(0).max(100).nullable(),
+            status: z.enum(["suggested", "promoted", "dismissed"]),
+          })
+          .strict(),
+      )
+      .max(25)
+      .default([]),
     summary: summarySchema,
   })
   .strict();
@@ -49,8 +90,10 @@ export const researchPostsOutputSchema = z
 export const scoreRelevanceInputSchema = z
   .object({
     campaignId: positiveIdSchema,
-    candidatePostIds: z.array(positiveIdSchema).min(1).max(50),
+    candidatePostIds: z.array(positiveIdSchema).max(50).default([]),
     minimumScore: z.number().int().min(0).max(100).default(60),
+    scores: z.array(scoreToolEvaluationSchema).max(50).optional().default([]),
+    autoRejectBelowMinimum: z.boolean().optional().default(false),
   })
   .strict();
 
