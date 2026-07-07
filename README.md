@@ -2,7 +2,7 @@
 
 Linkgo is a local-first Tauri desktop app for LinkedIn growth operations.
 
-Current status: the app shell, Campaigns slice, Candidate Queue slice with AI-assisted keyword/trend discovery and operator-triggered relevance scoring, Drafting + Audit slice, Approvals slice, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice with opt-in LinkedIn reactions/comments refresh, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, Skills + Playbooks slice, GG AI provider-backed execution behind explicit connected credentials, and Safety + Observability slice are implemented. LinkedIn scraping, member-post impression/click analytics, external telemetry, autonomous content generation, autonomous commenting, and running scheduler or metric refresh jobs after Linkgo quits remain intentionally not implemented.
+Current status: the app shell, Campaigns slice, Candidate Queue slice with AI-assisted keyword/trend discovery and operator-triggered relevance scoring, Drafting + Audit slice, Approvals slice, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice with opt-in LinkedIn reactions/comments refresh, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, Skills + Playbooks slice, GG AI provider-backed execution behind explicit connected credentials, Safety + Observability slice, and OS launch-on-login toggle are implemented. LinkedIn scraping, member-post impression/click analytics, external telemetry, autonomous content generation, autonomous commenting, and running scheduler or metric refresh jobs after Linkgo quits remain intentionally not implemented.
 
 ## Stack
 
@@ -58,6 +58,7 @@ src/agent/              Tool contracts, provider interfaces, dry-run loop
 src/features/agent-runtime Agent runtime history, hooks, and UI components
 src/features/playbooks Built-in LinkedIn prompt modules and local overrides
 src/features/safety   Kill switch, rate limits, audit events, and error queue
+src/features/settings OS launch-on-login setting and local app preferences
 docs/                   Architecture, data model, roadmap mapping, feature docs
 tests/                  Playwright specs and Tauri IPC mocks
 ```

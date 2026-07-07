@@ -208,7 +208,7 @@ Implemented now:
 - Retryable failures keep schedules active with backoff; terminal failures return approvals to `approved` and create error queue items.
 - Scheduler tab with status, start/stop, manual tick, pending due jobs, recent events, and scheduler-linked attempts.
 
-OS launch-on-login, running after the Linkgo process quits, LinkedIn API commenting, scraping, and autonomous content generation are not implemented.
+Launch-on-login can open Linkgo, but running after the Linkgo process quits, LinkedIn API commenting, scraping, and autonomous content generation are not implemented.
 
 ### Integrations + provider auth foundation
 
@@ -232,6 +232,21 @@ Implemented now:
 
 Autonomous content generation, autonomous LinkedIn commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.
 
+### OS launch-on-login settings slice
+
+Roadmap coverage:
+
+- App-level operating-system startup preference for opening Linkgo at login.
+
+Implemented now:
+
+- Tauri v2 autostart plugin registration and permissions.
+- Settings page Startup card with one launch-on-login switch.
+- Singleton `app_settings` mirror row for local preference sync/error audit.
+- Playwright coverage for render, enable, disable, persistence, and failure rollback.
+
+Explicit exclusions: no scheduler execution after process quits, no hidden startup args, no daemon, and no automatic job execution on login.
+
 ## Future slices
 
-Future slices will add external integrations and automation only behind explicit approval gates. Remaining comment work is limited to richer LinkedIn surfaces after product access is available; organization-page analytics, OS-level launch-on-login, and after-quit schedulers remain future work.
+Future slices will add external integrations and automation only behind explicit approval gates. Remaining comment work is limited to richer LinkedIn surfaces after product access is available; organization-page analytics and after-quit schedulers remain future work.

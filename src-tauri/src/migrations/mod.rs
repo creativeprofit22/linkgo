@@ -1,4 +1,5 @@
 pub mod agent_runtime;
+pub mod app_settings;
 pub mod approvals;
 pub mod campaigns;
 pub mod candidate_queue;
@@ -14,7 +15,6 @@ pub mod provider_parity;
 pub mod safety;
 pub mod scheduler;
 pub mod workflows;
-
 use tauri_plugin_sql::Migration;
 
 pub fn get_migrations() -> Vec<Migration> {
@@ -34,5 +34,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(metric_refresh::migrations());
     migrations.extend(playbooks::migrations());
     migrations.extend(candidate_discovery::migrations());
+    migrations.extend(app_settings::migrations());
     migrations
 }

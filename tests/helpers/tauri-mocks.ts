@@ -345,6 +345,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       updated_at: string;
     };
 
+    type AppSettings = {
+      id: 1;
+      launch_on_login_enabled: number;
+      launch_on_login_last_synced_at: string | null;
+      launch_on_login_last_error: string;
+      created_at: string;
+      updated_at: string;
+    };
+
     type WorkflowRunStatus =
       | "queued"
       | "running"
@@ -687,6 +696,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       metricRefreshJobs: MetricRefreshJob[];
       metricRefreshEvents: MetricRefreshEvent[];
       metricRefreshSettings: MetricRefreshSettings;
+      appSettings: AppSettings;
       workflowRuns: WorkflowRun[];
       workflowSteps: WorkflowStep[];
       workflowEvents: WorkflowEvent[];
@@ -763,6 +773,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       retry_backoff_minutes: 60,
       updated_at: new Date().toISOString(),
     };
+    const appSettings: AppSettings = {
+      id: 1,
+      launch_on_login_enabled: 0,
+      launch_on_login_last_synced_at: null,
+      launch_on_login_last_error: "",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
     const workflowRuns: WorkflowRun[] = [];
     const workflowSteps: WorkflowStep[] = [];
     const workflowEvents: WorkflowEvent[] = [];
@@ -822,6 +840,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextErrorQueueItemId = 1;
     let nextSchedulerEventId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
+    let autostartMutationCount = 0;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
       const sqlArgs = (args ?? {}) as { query?: string; values?: unknown[] };
@@ -903,6 +922,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         metricRefreshJobs: cloneRows(metricRefreshJobs),
         metricRefreshEvents: cloneRows(metricRefreshEvents),
         metricRefreshSettings: { ...metricRefreshSettings },
+        appSettings: { ...appSettings },
         workflowRuns: cloneRows(workflowRuns),
         workflowSteps: cloneRows(workflowSteps),
         workflowEvents: cloneRows(workflowEvents),
@@ -977,6 +997,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(metricRefreshJobs, snapshot.metricRefreshJobs);
       restoreRows(metricRefreshEvents, snapshot.metricRefreshEvents);
       Object.assign(metricRefreshSettings, snapshot.metricRefreshSettings);
+      Object.assign(appSettings, snapshot.appSettings);
       restoreRows(workflowRuns, snapshot.workflowRuns);
       restoreRows(workflowSteps, snapshot.workflowSteps);
       restoreRows(workflowEvents, snapshot.workflowEvents);
@@ -2162,6 +2183,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("FROM scheduler_settings")) {
         return [{ ...schedulerSettings }];
       }
+      if (query.includes("FROM app_settings")) {
+        return [{ ...appSettings }];
+      }
       if (query.includes("FROM safety_settings")) {
         return [{ ...safetySettings }];
       }
@@ -2839,6 +2863,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       if (query.includes("INSERT OR IGNORE INTO scheduler_settings")) {
         return { lastInsertId: 1, rowsAffected: 0 };
+      }
+
+      if (query.includes("INSERT OR IGNORE INTO app_settings")) {
+        return { lastInsertId: 1, rowsAffected: 0 };
+      }
+
+      if (query.includes("UPDATE app_settings")) {
+        if (query.includes("launch_on_login_enabled")) {
+          appSettings.launch_on_login_enabled = Number(values[0] ?? 0);
+          appSettings.launch_on_login_last_synced_at = String(values[1] ?? "");
+          appSettings.launch_on_login_last_error = String(values[2] ?? "");
+          appSettings.updated_at = String(values[1] ?? now);
+        } else if (query.includes("launch_on_login_last_error")) {
+          appSettings.launch_on_login_last_error = String(values[0] ?? "");
+          appSettings.updated_at = String(values[1] ?? now);
+        }
+        return { lastInsertId: 1, rowsAffected: 1 };
       }
 
       if (query.includes("UPDATE scheduler_settings")) {
@@ -4636,6 +4677,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_PUBLISH_ATTEMPTS__ = () => cloneRows(publishAttempts);
     w.__LINKGO_SQL_SCHEDULER_SETTINGS__ = () => ({ ...schedulerSettings });
     w.__LINKGO_SQL_SCHEDULER_EVENTS__ = () => cloneRows(schedulerEvents);
+    w.__LINKGO_SQL_APP_SETTINGS__ = () => ({ ...appSettings });
 
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
       campaigns: campaigns.length,
@@ -4773,6 +4815,40 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           return Promise.resolve(executeSql(args));
         if (cmd === "plugin:sql|close") return Promise.resolve(true);
         if (cmd === "plugin:sql|load") return Promise.resolve("");
+        if (cmd === "plugin:autostart|is_enabled") {
+          if (
+            w.__LINKGO_FAIL_AUTOSTART_IS_ENABLED__ === true ||
+            (w.__LINKGO_FAIL_AUTOSTART_IS_ENABLED_AFTER_MUTATION__ === true &&
+              autostartMutationCount > 0)
+          ) {
+            throw new Error("Autostart status read failed");
+          }
+          if (typeof w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__ === "boolean") {
+            return Promise.resolve(w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__);
+          }
+          const stored = window.localStorage.getItem("linkgo.autostart.enabled");
+          return Promise.resolve(
+            stored === "true" || w.__LINKGO_AUTOSTART_ENABLED__ === true,
+          );
+        }
+        if (cmd === "plugin:autostart|enable") {
+          if (w.__LINKGO_FAIL_AUTOSTART_ENABLE__ === true) {
+            throw new Error("Autostart enable failed");
+          }
+          autostartMutationCount += 1;
+          w.__LINKGO_AUTOSTART_ENABLED__ = true;
+          window.localStorage.setItem("linkgo.autostart.enabled", "true");
+          return Promise.resolve(null);
+        }
+        if (cmd === "plugin:autostart|disable") {
+          if (w.__LINKGO_FAIL_AUTOSTART_DISABLE__ === true) {
+            throw new Error("Autostart disable failed");
+          }
+          autostartMutationCount += 1;
+          w.__LINKGO_AUTOSTART_ENABLED__ = false;
+          window.localStorage.setItem("linkgo.autostart.enabled", "false");
+          return Promise.resolve(null);
+        }
         if (cmd === "update_tray_menu") return Promise.resolve(null);
         if (cmd === "linkgo_auth_status")
           return Promise.resolve(getAuthStatusMock());

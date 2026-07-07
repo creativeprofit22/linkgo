@@ -2,6 +2,21 @@
 
 ## Current schema
 
+### `app_settings`
+
+Stores singleton local app preferences mirrored from OS-level integration state.
+
+| Column                           | Type    | Notes                                                     |
+| -------------------------------- | ------- | --------------------------------------------------------- |
+| `id`                             | INTEGER | Primary key constrained to singleton value `1`            |
+| `launch_on_login_enabled`        | INTEGER | Boolean-like mirror of the OS autostart state, `0` or `1` |
+| `launch_on_login_last_synced_at` | TEXT    | Nullable timestamp for the last successful OS sync        |
+| `launch_on_login_last_error`     | TEXT    | Last safe error message from enable/disable attempts      |
+| `created_at`                     | TEXT    | SQLite datetime                                           |
+| `updated_at`                     | TEXT    | SQLite datetime                                           |
+
+Source of truth: Tauri autostart plugin `isEnabled()` when available. The table is a local mirror/audit row only.
+
 ### `campaigns`
 
 Stores local campaign context and automation intent.

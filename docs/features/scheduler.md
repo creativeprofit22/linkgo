@@ -95,7 +95,7 @@ The Scheduler tab shows:
 
 ## Explicit exclusions
 
-- No OS launch-on-login daemon.
+- Launch-on-login can open Linkgo, but the scheduler still only runs while Linkgo is running or hidden to tray and only after the operator starts it.
 - No scheduler execution after Linkgo quits.
 - No LinkedIn API commenting.
 - No scraping or browser automation.

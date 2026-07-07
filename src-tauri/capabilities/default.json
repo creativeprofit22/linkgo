@@ -45,6 +45,9 @@
     "sql:allow-execute",
     "sql:allow-select",
     "sql:allow-close",
-    "sql:allow-load"
+    "sql:allow-load",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }
