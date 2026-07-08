@@ -7,6 +7,7 @@ pub mod candidate_discovery;
 pub mod comment_publishing;
 pub mod comments;
 pub mod drafts;
+pub mod draft_generation;
 pub mod integrations;
 pub mod metric_refresh;
 pub mod metrics;
@@ -35,5 +36,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(playbooks::migrations());
     migrations.extend(candidate_discovery::migrations());
     migrations.extend(app_settings::migrations());
+    migrations.extend(draft_generation::migrations());
     migrations
 }

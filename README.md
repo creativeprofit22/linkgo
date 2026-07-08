@@ -2,7 +2,7 @@
 
 Linkgo is a local-first Tauri desktop app for LinkedIn growth operations.
 
-Current status: the app shell, Campaigns slice, Candidate Queue slice with AI-assisted keyword/trend discovery and operator-triggered relevance scoring, Drafting + Audit slice, Approvals slice, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice with opt-in LinkedIn reactions/comments refresh, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, Skills + Playbooks slice, GG AI provider-backed execution behind explicit connected credentials, Safety + Observability slice, and OS launch-on-login toggle are implemented. LinkedIn scraping, member-post impression/click analytics, external telemetry, autonomous content generation, autonomous commenting, and running scheduler or metric refresh jobs after Linkgo quits remain intentionally not implemented.
+Current status: the app shell, Campaigns slice, Candidate Queue slice with AI-assisted keyword/trend discovery and operator-triggered relevance scoring, Drafting + Audit slice with operator-triggered save-gated AI draft generation, Approvals slice, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice with opt-in LinkedIn reactions/comments refresh, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, Skills + Playbooks slice, GG AI provider-backed execution behind explicit connected credentials, Safety + Observability slice, and OS launch-on-login toggle are implemented. LinkedIn scraping, member-post impression/click analytics, external telemetry, autonomous/background content generation, autonomous commenting, and running scheduler or metric refresh jobs after Linkgo quits remain intentionally not implemented.
 
 ## Stack
 
@@ -46,7 +46,7 @@ src/lib/                Frontend infrastructure and external boundaries
 src/components/         Desktop shell and shared UI primitives
 src/features/campaigns First product slice: data, schemas, hooks, UI
 src/features/candidate-queue Manual candidate intake, dedupe, and triage
-src/features/drafts    Manual variants and deterministic audit checks
+src/features/drafts    Manual/generated variants and deterministic audit checks
 src/features/approvals Human review, schedule records, and publish attempts
 src/features/scheduler Opt-in native due-job controls and scheduler dashboard
 src/features/linkedin-actions Approval-gated LinkedIn API action wrappers

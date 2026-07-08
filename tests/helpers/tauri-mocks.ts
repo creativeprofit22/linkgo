@@ -123,6 +123,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type DraftGenerationRequest = {
+      id: number;
+      campaign_id: number;
+      candidate_post_id: number;
+      agent_run_id: number | null;
+      provider_key: AgentProviderKey;
+      model_name: string;
+      playbook_key: AgentPlaybookKey | "";
+      variant_count: number;
+      angle: string;
+      voice_notes: string;
+      status: "pending" | "generated" | "saved" | "failed" | "dismissed";
+      summary: string;
+      generated_variants_json: string;
+      error_message: string;
+      created_draft_id: number | null;
+      created_at: string;
+      updated_at: string;
+    };
+
     type ApprovalStatus =
       | "needs_review"
       | "changes_requested"
@@ -752,6 +772,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const drafts: Draft[] = [];
     const draftVariants: DraftVariant[] = [];
     const draftAudits: DraftAudit[] = [];
+    const draftGenerationRequests: DraftGenerationRequest[] = [];
     const approvals: Approval[] = [];
     const scheduleJobs: ScheduleJob[] = [];
     const publishAttempts: PublishAttempt[] = [];
@@ -817,6 +838,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextDraftId = 1;
     let nextDraftVariantId = 1;
     let nextDraftAuditId = 1;
+    let nextDraftGenerationRequestId = 1;
     let nextApprovalId = 1;
     let nextScheduleJobId = 1;
     let nextPublishAttemptId = 1;
@@ -1131,6 +1153,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           campaign_id: candidate.campaign_id,
           campaign_status: campaign.status,
           candidate_status: candidate.status,
+          campaign_name: campaign.name,
+          candidate_source_keyword: candidate.source_keyword,
+          candidate_score_reason: candidate.score_reason,
+          candidate_notes: candidate.notes,
+          target_author_name: target.author_name,
+          target_content: target.content,
         },
       ];
     }
@@ -1190,6 +1218,58 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         if (updatedDelta !== 0) return updatedDelta;
         return Number(right.id) - Number(left.id);
       });
+    }
+
+    function selectDraftGenerationRequestJoin(
+      query: string,
+      values: unknown[],
+    ): unknown[] {
+      const requestId = query.includes("WHERE dgr.id")
+        ? Number(values[0] ?? 0)
+        : null;
+      const campaignId = query.includes("WHERE dgr.campaign_id")
+        ? Number(values[0] ?? 0)
+        : null;
+      const rows: Array<Record<string, unknown>> = [];
+
+      for (const request of draftGenerationRequests) {
+        if (campaignId !== null && request.campaign_id !== campaignId) continue;
+        if (requestId !== null && request.id !== requestId) continue;
+        const campaign = campaigns.find(
+          (row) => row.id === request.campaign_id,
+        );
+        const candidate = candidatePosts.find(
+          (row) => row.id === request.candidate_post_id,
+        );
+        const target = candidate
+          ? targetPosts.find((row) => row.id === candidate.target_post_id)
+          : undefined;
+        if (!campaign || !candidate || !target) continue;
+        rows.push({
+          ...request,
+          campaign_name: campaign.name,
+          candidate_source_keyword: candidate.source_keyword,
+          candidate_status: candidate.status,
+          candidate_relevance_score: candidate.relevance_score,
+          candidate_score_reason: candidate.score_reason,
+          candidate_notes: candidate.notes,
+          candidate_created_at: candidate.created_at,
+          candidate_updated_at: candidate.updated_at,
+          target_id: target.id,
+          target_platform: target.platform,
+          target_url: target.url,
+          target_normalized_url: target.normalized_url,
+          target_platform_resource_urn: target.platform_resource_urn,
+          target_author_name: target.author_name,
+          target_author_profile_url: target.author_profile_url,
+          target_posted_at: target.posted_at,
+          target_content: target.content,
+          target_content_hash: target.content_hash,
+          target_created_at: target.created_at,
+          target_updated_at: target.updated_at,
+        });
+      }
+      return rows.sort((left, right) => Number(right.id) - Number(left.id));
     }
 
     function selectDraftVariants(
@@ -2707,6 +2787,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             return right.id - left.id;
           });
       }
+      if (query.includes("FROM draft_generation_requests dgr")) {
+        return selectDraftGenerationRequestJoin(query, values);
+      }
       if (query.includes("c.status AS campaign_status")) {
         return selectDraftCandidate(values);
       }
@@ -2741,16 +2824,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
         return candidateDiscoveryItems
           .filter(
-            (item) => item.campaign_id === campaignId && item.status !== "dismissed",
+            (item) =>
+              item.campaign_id === campaignId && item.status !== "dismissed",
           )
           .sort((left, right) => {
             const leftPromoted = left.status === "promoted" ? 1 : 0;
             const rightPromoted = right.status === "promoted" ? 1 : 0;
-            if (leftPromoted !== rightPromoted) return leftPromoted - rightPromoted;
+            if (leftPromoted !== rightPromoted)
+              return leftPromoted - rightPromoted;
             const leftConfidence = left.confidence_score ?? -1;
             const rightConfidence = right.confidence_score ?? -1;
-            if (leftConfidence !== rightConfidence) return rightConfidence - leftConfidence;
-            const updatedDelta = right.updated_at.localeCompare(left.updated_at);
+            if (leftConfidence !== rightConfidence)
+              return rightConfidence - leftConfidence;
+            const updatedDelta = right.updated_at.localeCompare(
+              left.updated_at,
+            );
             if (updatedDelta !== 0) return updatedDelta;
             return right.id - left.id;
           });
@@ -2758,13 +2846,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("FROM candidate_posts") && query.includes("id IN")) {
         const campaignId = Number(values[0] ?? 0);
         const ids = new Set(
-          values.slice(1).filter((value): value is number => typeof value === "number"),
+          values
+            .slice(1)
+            .filter((value): value is number => typeof value === "number"),
         );
         return candidatePosts
-          .filter((candidate) => candidate.campaign_id === campaignId && ids.has(candidate.id))
+          .filter(
+            (candidate) =>
+              candidate.campaign_id === campaignId && ids.has(candidate.id),
+          )
           .map((candidate) => ({ id: candidate.id, status: candidate.status }));
       }
-      if (query.includes("FROM candidate_posts") && query.includes("relevance_score IS NULL")) {
+      if (
+        query.includes("FROM candidate_posts") &&
+        query.includes("relevance_score IS NULL")
+      ) {
         const campaignId = Number(values[0] ?? 0);
         return candidatePosts
           .filter(
@@ -3100,6 +3196,31 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         dedupeKeys.push(dedupeKey);
         nextDedupeKeyId += 1;
         return { lastInsertId: dedupeKey.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO draft_generation_requests")) {
+        const request: DraftGenerationRequest = {
+          id: nextDraftGenerationRequestId,
+          campaign_id: Number(values[0] ?? 0),
+          candidate_post_id: Number(values[1] ?? 0),
+          agent_run_id: values[2] === null ? null : Number(values[2] ?? 0),
+          provider_key: values[3] as AgentProviderKey,
+          model_name: String(values[4] ?? ""),
+          playbook_key: values[5] as AgentPlaybookKey | "",
+          variant_count: Number(values[6] ?? 3),
+          angle: String(values[7] ?? ""),
+          voice_notes: String(values[8] ?? ""),
+          status: "pending",
+          summary: "",
+          generated_variants_json: "[]",
+          error_message: "",
+          created_draft_id: null,
+          created_at: now,
+          updated_at: now,
+        };
+        draftGenerationRequests.push(request);
+        nextDraftGenerationRequestId += 1;
+        return { lastInsertId: request.id, rowsAffected: 1 };
       }
 
       if (query.includes("INSERT INTO drafts")) {
@@ -3527,6 +3648,28 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: event.id, rowsAffected: 1 };
       }
 
+      if (query.includes("UPDATE draft_generation_requests")) {
+        const id = Number(values[values.length - 1] ?? 0);
+        const request = draftGenerationRequests.find((row) => row.id === id);
+        if (!request) return { lastInsertId: 0, rowsAffected: 0 };
+        if (query.includes("status = 'generated'")) {
+          request.status = "generated";
+          request.summary = String(values[0] ?? "");
+          request.generated_variants_json = String(values[1] ?? "[]");
+          request.error_message = "";
+        } else if (query.includes("status = 'failed'")) {
+          request.status = "failed";
+          request.error_message = String(values[0] ?? "");
+        } else if (query.includes("status = 'saved'")) {
+          request.status = "saved";
+          request.created_draft_id = Number(values[0] ?? 0);
+        } else if (query.includes("status = 'dismissed'")) {
+          request.status = "dismissed";
+        }
+        request.updated_at = now;
+        return { lastInsertId: 0, rowsAffected: 1 };
+      }
+
       if (query.includes("UPDATE agent_runs")) {
         const literalRunning = query.includes("status = 'running'");
         const literalCancelled = query.includes("status = 'cancelled'");
@@ -3853,7 +3996,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
       }
 
-      if (query.includes("UPDATE candidate_posts") && query.includes("score_reason") && query.includes("CASE")) {
+      if (
+        query.includes("UPDATE candidate_posts") &&
+        query.includes("score_reason") &&
+        query.includes("CASE")
+      ) {
         const score = Number(values[0] ?? 0);
         const rationale = String(values[1] ?? "");
         const autoReject = Number(values[2] ?? 0) === 1;
@@ -3884,8 +4031,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           (item) => item.id === id && item.campaign_id === campaignId,
         );
         if (!discoveryItem) return { lastInsertId: id, rowsAffected: 0 };
-        if (query.includes("status = 'promoted'")) discoveryItem.status = "promoted";
-        if (query.includes("status = 'dismissed'")) discoveryItem.status = "dismissed";
+        if (query.includes("status = 'promoted'"))
+          discoveryItem.status = "promoted";
+        if (query.includes("status = 'dismissed'"))
+          discoveryItem.status = "dismissed";
         discoveryItem.updated_at = now;
         return { lastInsertId: id, rowsAffected: 1 };
       }
@@ -4826,7 +4975,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (typeof w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__ === "boolean") {
             return Promise.resolve(w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__);
           }
-          const stored = window.localStorage.getItem("linkgo.autostart.enabled");
+          const stored = window.localStorage.getItem(
+            "linkgo.autostart.enabled",
+          );
           return Promise.resolve(
             stored === "true" || w.__LINKGO_AUTOSTART_ENABLED__ === true,
           );

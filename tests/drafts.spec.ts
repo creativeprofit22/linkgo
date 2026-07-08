@@ -16,16 +16,129 @@ test("creates a draft with two variants and shows audit output", async ({
 
   await createDraft(page, [cleanVariant(), warningVariant()]);
 
-  await expect(page.getByRole("heading", { name: "Jane Operator" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Jane Operator" }),
+  ).toBeVisible();
   await expect(page.getByText("Variant 1")).toBeVisible();
   await expect(page.getByText("Variant 2")).toBeVisible();
   await expect(
     page.getByText("This variant has draft text to review.").first(),
   ).toBeVisible();
-  await expect(page.getByText("Warnings", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("Warnings", { exact: true }).first(),
+  ).toBeVisible();
 });
 
-test("creating a draft removes the drafted candidate from draft creation", async ({
+test("generates dry-run variants then saves them as an audited draft", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+
+  await generateDraftVariants(page);
+
+  await expect(page.getByText("Generated request #1")).toBeVisible();
+  await expect(page.getByText("Drafted 3 local variants.")).toBeVisible();
+  const inputSummary = await page.evaluate(() => {
+    const getAgentRuns = (
+      window as unknown as {
+        __LINKGO_SQL_AGENT_RUNS__: () => Array<{ input_summary: string }>;
+      }
+    ).__LINKGO_SQL_AGENT_RUNS__;
+    return getAgentRuns()[0]?.input_summary ?? "";
+  });
+  expect(inputSummary).toContain("Campaign: Founder-led growth.");
+  expect(inputSummary).toContain("Target author: Jane Operator.");
+  expect(inputSummary).toContain(
+    'Target post excerpt: "This founder post has a sharp ICP signal.".',
+  );
+  expect(inputSummary).toContain("Source keyword: founder content.");
+  expect(inputSummary).toContain("Score reason: Strong audience overlap.");
+  expect(inputSummary).toContain("Candidate notes: Good comment opportunity.");
+  await page.getByRole("button", { name: "Save as draft" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Generated drafts pending" }),
+  ).toBeHidden();
+  await expect(page.getByText("Generated request #1")).toBeHidden();
+
+  await expect(
+    page.getByRole("heading", { name: "Jane Operator" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("This variant has draft text to review.").first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate variants" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Create draft" }),
+  ).toBeDisabled();
+});
+
+test("dismisses generated variants from the pending work area", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+
+  await generateDraftVariants(page);
+  await expect(page.getByText("Generated request #1")).toBeVisible();
+
+  await page.getByRole("button", { name: "Dismiss" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Generated drafts pending" }),
+  ).toBeHidden();
+  await expect(page.getByText("Generated request #1")).toBeHidden();
+});
+
+test("persists a failed generation request and dismisses it", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+
+  await page.getByRole("button", { name: "Generate variants" }).click();
+  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Provider").selectOption({ label: "OpenAI" });
+  await dialog
+    .getByLabel("Angle")
+    .fill("Turn this into a concrete operator lesson");
+  await dialog.getByRole("button", { name: "Generate variants" }).click();
+
+  await expect(page.getByText("Draft variants were not generated")).toBeVisible();
+  await expect(
+    page
+      .locator("p")
+      .filter({ hasText: "Drafter did not return draft_post variants" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Generated request #1")).toBeVisible();
+  await expect(getBadge(page, "failed")).toBeVisible();
+  await expect(
+    page
+      .locator("p")
+      .filter({ hasText: "Drafter did not return draft_post variants" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Dismiss failed request" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Generated drafts pending" }),
+  ).toBeHidden();
+  await expect(page.getByText("Generated request #1")).toBeHidden();
+});
+
+test("creating a draft removes the drafted candidate from draft flows", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -35,10 +148,17 @@ test("creating a draft removes the drafted candidate from draft creation", async
   await openDrafts(page);
 
   await createDraft(page, [cleanVariant()]);
-  await expect(page.getByRole("button", { name: "Create draft" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Create draft" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Generate variants" }),
+  ).toBeDisabled();
   await openQueue(page);
 
-  await expect(page.getByText("Drafted", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("Drafted", { exact: true }).first(),
+  ).toBeVisible();
 });
 
 test("audit blocks external links and too many hashtags", async ({ page }) => {
@@ -50,9 +170,13 @@ test("audit blocks external links and too many hashtags", async ({ page }) => {
 
   await createDraft(page, [blockedVariant()]);
 
-  await expect(page.getByText("Blocked", { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByText("Remove external links from the hook, body, and CTA before review."),
+    page.getByText("Blocked", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Remove external links from the hook, body, and CTA before review.",
+    ),
   ).toBeVisible();
   await expect(page.getByText("Use five or fewer hashtags.")).toBeVisible();
 });
@@ -67,8 +191,12 @@ test("blocked variant cannot be selected", async ({ page }) => {
 
   await page.getByRole("button", { name: "Select for review" }).click();
 
-  await expect(page.getByText("Draft variant status was not changed")).toBeVisible();
-  await expect(page.getByText("Blocked variants cannot be selected")).toBeVisible();
+  await expect(
+    page.getByText("Draft variant status was not changed"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Blocked variants cannot be selected"),
+  ).toBeVisible();
   await expect(getBadge(page, "Ready for review")).toBeHidden();
 });
 
@@ -99,7 +227,9 @@ test("editing a variant re-runs audit and clears an external link block", async 
   await createDraft(page, [linkBlockedVariant()]);
 
   await expect(
-    page.getByText("Remove external links from the hook, body, and CTA before review."),
+    page.getByText(
+      "Remove external links from the hook, body, and CTA before review.",
+    ),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Edit variant" }).click();
@@ -110,11 +240,13 @@ test("editing a variant re-runs audit and clears an external link block", async 
 
   await expect(page.getByText("No external link was found")).toBeVisible();
   await expect(
-    page.getByText("Remove external links from the hook, body, and CTA before review."),
+    page.getByText(
+      "Remove external links from the hook, body, and CTA before review.",
+    ),
   ).toBeHidden();
 });
 
-test("rejected candidates are not available for draft creation", async ({
+test("rejected candidates are not available for draft flows", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -122,14 +254,21 @@ test("rejected candidates are not available for draft creation", async ({
   await openQueue(page);
   await addCandidate(page);
   await page.getByRole("button", { name: "Reject" }).click();
-  await expect(page.getByText("Rejected", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("Rejected", { exact: true }).first(),
+  ).toBeVisible();
 
   await openDrafts(page);
 
-  await expect(page.getByRole("button", { name: "Create draft" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Create draft" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Generate variants" }),
+  ).toBeDisabled();
 });
 
-test("archived campaign candidates are not available for draft creation", async ({
+test("archived campaign candidates are not available for draft flows", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -145,7 +284,12 @@ test("archived campaign candidates are not available for draft creation", async 
     .getByRole("combobox")
     .selectOption({ label: "Founder-led growth (archived)" });
 
-  await expect(page.getByRole("button", { name: "Create draft" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Create draft" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Generate variants" }),
+  ).toBeDisabled();
 });
 
 interface VariantFormInput {
@@ -156,7 +300,9 @@ interface VariantFormInput {
 }
 
 function getBadge(page: Page, label: string): Locator {
-  return page.locator("span").filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page
+    .locator("span")
+    .filter({ hasText: new RegExp(`^${label}$`, "u") });
 }
 
 function cleanVariant(): VariantFormInput {
@@ -272,6 +418,17 @@ async function addCandidate(page: Page): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
+async function generateDraftVariants(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Generate variants" }).click();
+  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await expect(dialog).toBeVisible();
+  await dialog
+    .getByLabel("Angle")
+    .fill("Turn this into a concrete operator lesson");
+  await dialog.getByRole("button", { name: "Generate variants" }).click();
+  await expect(dialog).toBeHidden();
+}
+
 async function createDraft(
   page: Page,
   variants: VariantFormInput[],
@@ -281,15 +438,20 @@ async function createDraft(
     page.getByRole("dialog", { name: "Create draft" }),
   ).toBeVisible();
 
-  await page.getByLabel("Angle").fill("Turn the source post into a tactical lesson");
+  await page
+    .getByLabel("Angle")
+    .fill("Turn the source post into a tactical lesson");
   await page.getByLabel("Notes").fill("Keep the operator tone concrete.");
 
   for (const [index, variant] of variants.entries()) {
-    if (index > 0) await page.getByRole("button", { name: "Add variant" }).click();
+    if (index > 0)
+      await page.getByRole("button", { name: "Add variant" }).click();
     await page.locator(`#draft-variant-${index}-hook`).fill(variant.hook);
     await page.locator(`#draft-variant-${index}-body`).fill(variant.body);
     await page.locator(`#draft-variant-${index}-cta`).fill(variant.cta);
-    await page.locator(`#draft-variant-${index}-hashtags`).fill(variant.hashtags);
+    await page
+      .locator(`#draft-variant-${index}-hashtags`)
+      .fill(variant.hashtags);
   }
 
   const dialog = page.getByRole("dialog", { name: "Create draft" });

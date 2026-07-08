@@ -1,3 +1,5 @@
+import type { AgentPlaybookKey } from "@/agent/playbooks";
+import type { AgentProviderKey } from "@/agent/types";
 import type { CandidateWithTarget } from "@/features/candidate-queue/types";
 
 export type DraftStatus =
@@ -86,4 +88,54 @@ export interface UpdateDraftVariantInput {
 export interface SetDraftVariantStatusInput {
   id: number;
   status: DraftVariantStatus;
+}
+
+export type DraftGenerationRequestStatus =
+  | "pending"
+  | "generated"
+  | "saved"
+  | "failed"
+  | "dismissed";
+
+export interface GeneratedDraftVariant {
+  hook: string;
+  body: string;
+  cta: string;
+  hashtags: string[];
+}
+
+export interface DraftGenerationRequest {
+  id: number;
+  campaign_id: number;
+  candidate_post_id: number;
+  agent_run_id: number | null;
+  provider_key: AgentProviderKey;
+  model_name: string;
+  playbook_key: AgentPlaybookKey | "";
+  variant_count: number;
+  angle: string;
+  voice_notes: string;
+  status: DraftGenerationRequestStatus;
+  summary: string;
+  generated_variants: GeneratedDraftVariant[];
+  error_message: string;
+  created_draft_id: number | null;
+  created_at: string;
+  updated_at: string;
+  candidate: CandidateWithTarget;
+}
+
+export interface GenerateDraftVariantsInput {
+  campaignId: number;
+  candidateId: number;
+  providerKey?: AgentProviderKey;
+  modelName?: string;
+  playbookKey?: AgentPlaybookKey | "";
+  variantCount?: number;
+  angle?: string;
+  voiceNotes?: string;
+}
+
+export interface SaveGeneratedDraftInput {
+  id: number;
 }

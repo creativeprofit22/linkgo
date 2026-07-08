@@ -7,14 +7,21 @@ import type { CandidateWithTarget } from "@/features/candidate-queue/types";
 import {
   archiveDraft as archiveDraftRecord,
   createDraft,
+  dismissDraftGenerationRequest,
+  generateDraftVariants,
+  listDraftGenerationRequests,
   listDrafts,
+  saveGeneratedDraft,
   setDraftVariantStatus,
   updateDraft as updateDraftRecord,
   updateDraftVariant,
 } from "@/features/drafts/data";
 import type {
   CreateDraftInput,
+  DraftGenerationRequest,
   DraftWithDetails,
+  GenerateDraftVariantsInput,
+  SaveGeneratedDraftInput,
   SetDraftVariantStatusInput,
   UpdateDraftInput,
   UpdateDraftVariantInput,
@@ -22,6 +29,7 @@ import type {
 
 interface UseDraftsState {
   drafts: DraftWithDetails[];
+  generationRequests: DraftGenerationRequest[];
   campaigns: CampaignWithKeywords[];
   candidates: CandidateWithTarget[];
   selectedCampaignId: number | null;
@@ -34,6 +42,9 @@ interface UseDraftsState {
   updateVariant: (input: UpdateDraftVariantInput) => Promise<void>;
   setVariantStatus: (input: SetDraftVariantStatusInput) => Promise<void>;
   archiveDraft: (id: number) => Promise<void>;
+  generateDraft: (input: GenerateDraftVariantsInput) => Promise<void>;
+  saveGenerationRequest: (input: SaveGeneratedDraftInput) => Promise<void>;
+  dismissGenerationRequest: (id: number) => Promise<void>;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -50,6 +61,9 @@ function getDefaultCampaignId(
 
 export function useDrafts(): UseDraftsState {
   const [drafts, setDrafts] = useState<DraftWithDetails[]>([]);
+  const [generationRequests, setGenerationRequests] = useState<
+    DraftGenerationRequest[]
+  >([]);
   const [campaigns, setCampaigns] = useState<CampaignWithKeywords[]>([]);
   const [candidates, setCandidates] = useState<CandidateWithTarget[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(
@@ -63,15 +77,19 @@ export function useDrafts(): UseDraftsState {
       if (campaignId === null) {
         setCandidates([]);
         setDrafts([]);
+        setGenerationRequests([]);
         return;
       }
 
-      const [loadedCandidates, loadedDrafts] = await Promise.all([
-        listCandidates(campaignId),
-        listDrafts(campaignId),
-      ]);
+      const [loadedCandidates, loadedDrafts, loadedGenerationRequests] =
+        await Promise.all([
+          listCandidates(campaignId),
+          listDrafts(campaignId),
+          listDraftGenerationRequests(campaignId),
+        ]);
       setCandidates(loadedCandidates);
       setDrafts(loadedDrafts);
+      setGenerationRequests(loadedGenerationRequests);
     },
     [],
   );
@@ -182,9 +200,63 @@ export function useDrafts(): UseDraftsState {
     [loadDraftsForCampaign, selectedCampaignId],
   );
 
+  const generateDraft = useCallback(
+    async (input: GenerateDraftVariantsInput) => {
+      try {
+        await generateDraftVariants(input);
+        await loadDraftsForCampaign(selectedCampaignId);
+        toast.success("Draft variants generated", {
+          description: "Review them in Generated drafts pending.",
+        });
+      } catch (caught) {
+        await loadDraftsForCampaign(selectedCampaignId);
+        const message = getErrorMessage(caught);
+        toast.error("Draft variants were not generated", {
+          description: message,
+        });
+        throw caught;
+      }
+    },
+    [loadDraftsForCampaign, selectedCampaignId],
+  );
+
+  const saveGenerationRequest = useCallback(
+    async (input: SaveGeneratedDraftInput) => {
+      try {
+        await saveGeneratedDraft(input);
+        await loadDraftsForCampaign(selectedCampaignId);
+        toast.success("Generated variants saved as a draft", {
+          description: "Deterministic audits ran on the saved draft.",
+        });
+      } catch (caught) {
+        const message = getErrorMessage(caught);
+        toast.error("Generated draft was not saved", { description: message });
+        throw caught;
+      }
+    },
+    [loadDraftsForCampaign, selectedCampaignId],
+  );
+
+  const dismissGenerationRequest = useCallback(
+    async (id: number) => {
+      try {
+        await dismissDraftGenerationRequest(id);
+        await loadDraftsForCampaign(selectedCampaignId);
+      } catch (caught) {
+        const message = getErrorMessage(caught);
+        toast.error("Generated draft request was not dismissed", {
+          description: message,
+        });
+        throw caught;
+      }
+    },
+    [loadDraftsForCampaign, selectedCampaignId],
+  );
+
   return useMemo(
     () => ({
       drafts,
+      generationRequests,
       campaigns,
       candidates,
       selectedCampaignId,
@@ -197,9 +269,13 @@ export function useDrafts(): UseDraftsState {
       updateVariant,
       setVariantStatus,
       archiveDraft,
+      generateDraft,
+      saveGenerationRequest,
+      dismissGenerationRequest,
     }),
     [
       drafts,
+      generationRequests,
       campaigns,
       candidates,
       selectedCampaignId,
@@ -212,6 +288,9 @@ export function useDrafts(): UseDraftsState {
       updateVariant,
       setVariantStatus,
       archiveDraft,
+      generateDraft,
+      saveGenerationRequest,
+      dismissGenerationRequest,
     ],
   );
 }

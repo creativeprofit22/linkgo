@@ -20,6 +20,32 @@ function getCandidatePostIds(request: AgentModelRequest): number[] {
   return ids.length > 0 ? ids.slice(0, 50) : [1];
 }
 
+function getDraftRequestDetails(request: AgentModelRequest): {
+  candidatePostId: number;
+  variantCount: number;
+  angle: string;
+} {
+  const candidatePostId = Number.parseInt(
+    /candidate #(?<id>\d+)/iu.exec(request.inputSummary)?.groups?.id ?? "1",
+    10,
+  );
+  const variantCount = Number.parseInt(
+    /generate (?<count>[1-5]) linkedin draft variants/iu.exec(
+      request.inputSummary,
+    )?.groups?.count ?? "3",
+    10,
+  );
+  const angle =
+    /angle: (?<angle>[^.]+)\./iu.exec(request.inputSummary)?.groups?.angle ??
+    "Dry-run operator lesson";
+
+  return {
+    candidatePostId: Number.isInteger(candidatePostId) ? candidatePostId : 1,
+    variantCount: Number.isInteger(variantCount) ? variantCount : 3,
+    angle,
+  };
+}
+
 function buildToolCall(request: AgentModelRequest): {
   providerToolCallId: string;
   toolName: AgentToolName;
@@ -49,14 +75,15 @@ function buildToolCall(request: AgentModelRequest): {
   }
 
   if (request.agentRole === "drafter") {
+    const draftDetails = getDraftRequestDetails(request);
     return {
       providerToolCallId: `dry-run-${request.runId}-tool-call-2`,
       toolName: "draft_post",
       input: {
         campaignId: request.campaignId,
-        candidatePostId: 1,
-        variantCount: 3,
-        angle: "Dry-run operator lesson",
+        candidatePostId: draftDetails.candidatePostId,
+        variantCount: draftDetails.variantCount,
+        angle: draftDetails.angle,
         voiceNotes: request.inputSummary,
       },
     };

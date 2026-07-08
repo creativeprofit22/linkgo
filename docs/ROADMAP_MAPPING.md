@@ -46,20 +46,23 @@ LinkedIn scraping, autonomous scoring runs, autonomous commenting, and autonomou
 
 Roadmap coverage:
 
-- Section 6: draft generation foundation via manual variants.
+- Section 6: manual and operator-triggered AI-assisted draft variants.
 - Section 7: deterministic audit checks for draft safety.
 - Section 8: rewrite-loop foundation via edit-and-re-audit, without AI loops.
+- Sections 17 and 18: drafter role/playbook path through the agent runtime.
 
 Implemented now:
 
-- Draft, draft variant, and draft audit tables.
+- Draft, draft variant, draft audit, and draft generation request tables.
 - Manual one-to-five variant creation for non-rejected candidates.
+- Operator-triggered dry-run/provider draft generation through `draft_post`.
+- Save-gated generated drafts that reuse `createDraft` and deterministic audits.
 - Deterministic audit findings for required text, length, links, hashtags, hook strength, and specificity.
 - Variant edit-and-re-audit flow.
 - Variant status actions for selected, rejected, and draft reset.
 - Drafts tab with campaign filtering, summary cards, draft cards, and archive action.
 
-AI draft generation and AI audit/rewrite loops are not implemented in this slice.
+Autonomous content generation, AI audit/rewrite loops, LinkedIn scraping, autonomous approval creation, scheduling, publishing, and commenting are not implemented in this slice.
 
 ### Approvals slice
 
@@ -133,7 +136,7 @@ Implemented now:
 - Approval-gated `schedule_post` behavior.
 - Archived-campaign mutation blocking.
 
-LinkedIn scraping, comments, and autonomous content generation are not implemented in this slice.
+LinkedIn scraping, comments, and autonomous/background content generation are not implemented in this slice; operator-triggered save-gated draft generation lives in Drafting + audit.
 
 ### Skills + playbooks slice
 

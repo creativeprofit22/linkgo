@@ -1,3 +1,5 @@
+import { agentProviderKeySchema } from "@/agent/schemas";
+import { AGENT_PLAYBOOK_KEYS } from "@/agent/playbooks";
 import { z } from "zod";
 
 export const draftStatusSchema = z.enum([
@@ -47,4 +49,40 @@ export const updateDraftVariantSchema = z.object({
 export const setDraftVariantStatusSchema = z.object({
   id: z.number().int().positive(),
   status: draftVariantStatusSchema,
+});
+
+const playbookKeySchema = z.union([z.enum(AGENT_PLAYBOOK_KEYS), z.literal("")]);
+
+export const generatedDraftVariantSchema = z.object({
+  hook: z.string().trim().min(1).max(280),
+  body: z.string().trim().min(1).max(2500),
+  cta: z.string().trim().max(240).default(""),
+  hashtags: z.array(z.string().trim().min(1).max(40)).max(5).default([]),
+});
+
+export const draftGenerationRequestStatusSchema = z.enum([
+  "pending",
+  "generated",
+  "saved",
+  "failed",
+  "dismissed",
+]);
+
+export const generateDraftVariantsSchema = z.object({
+  campaignId: z.number().int().positive(),
+  candidateId: z.number().int().positive(),
+  providerKey: agentProviderKeySchema.default("dry_run"),
+  modelName: z.string().trim().max(120).default(""),
+  playbookKey: playbookKeySchema.default("linkedin_writer"),
+  variantCount: z.number().int().min(1).max(5).default(3),
+  angle: z.string().trim().max(240).default(""),
+  voiceNotes: z.string().trim().max(1000).default(""),
+});
+
+export const saveGeneratedDraftSchema = z.object({
+  id: z.number().int().positive(),
+});
+
+export const dismissDraftGenerationRequestSchema = z.object({
+  id: z.number().int().positive(),
 });

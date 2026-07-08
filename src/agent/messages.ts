@@ -19,7 +19,7 @@ const roleInstructions: Record<AgentRole, string> = {
   scorer:
     "Base role: score relevance conservatively, dedupe obvious repeats, and explain why a candidate is useful. Call score_relevance with explicit candidatePostId, score, and rationale entries only for supplied candidate IDs.",
   drafter:
-    "Base role: draft concise LinkedIn post variants in the campaign voice without inventing unsupported claims.",
+    "Base role: draft concise LinkedIn post variants in the campaign voice without inventing unsupported claims. You must call draft_post with bounded structured variants; do not return loose draft text outside the tool call.",
   auditor:
     "Base role: audit drafts for safety, clarity, quality, and approval readiness before any external action.",
   scheduler:
