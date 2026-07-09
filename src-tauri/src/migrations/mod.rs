@@ -6,6 +6,7 @@ pub mod candidate_queue;
 pub mod candidate_discovery;
 pub mod comment_publishing;
 pub mod comments;
+pub mod content_calendar;
 pub mod drafts;
 pub mod draft_generation;
 pub mod integrations;
@@ -37,5 +38,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(candidate_discovery::migrations());
     migrations.extend(app_settings::migrations());
     migrations.extend(draft_generation::migrations());
+    migrations.extend(content_calendar::migrations());
     migrations
 }

@@ -253,6 +253,33 @@ Constraints: checked platform and checked status values.
 
 Indexes: `idx_publish_attempts_approval_id`, `idx_publish_attempts_schedule_job_id`, `idx_publish_attempts_status`.
 
+### `content_calendar_slots`
+
+Stores one local planning slot for one approved approval.
+
+| Column             | Type    | Notes                                                                |
+| ------------------ | ------- | -------------------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                          |
+| `campaign_id`      | INTEGER | References `campaigns(id)` cascade delete                            |
+| `approval_id`      | INTEGER | References `approvals(id)` cascade delete; unique per approval       |
+| `purpose`          | TEXT    | `reach`, `trust`, `proof`, `conversion`, or `community`              |
+| `slot_for`         | TEXT    | Required local datetime string                                       |
+| `timezone`         | TEXT    | Freeform label, default `local`                                      |
+| `format`           | TEXT    | `text`, `image`, `carousel`, `document`, `video`, `poll`, or `event` |
+| `angle`            | TEXT    | Required operator planning angle                                     |
+| `visual_direction` | TEXT    | Required creative or asset direction                                 |
+| `cta`              | TEXT    | Required call-to-action intent                                       |
+| `notes`            | TEXT    | Optional planning notes, default empty string                        |
+| `status`           | TEXT    | Local planning state: `planned` or `archived`                        |
+| `created_at`       | TEXT    | SQLite datetime                                                      |
+| `updated_at`       | TEXT    | SQLite datetime                                                      |
+
+Constraints: unique `approval_id`, checked purpose, checked format, checked status, and non-empty trimmed `angle`, `visual_direction`, and `cta`.
+
+Indexes: `idx_content_calendar_slots_campaign_id`, `idx_content_calendar_slots_approval_id`, `idx_content_calendar_slots_slot_for`, `idx_content_calendar_slots_purpose`, `idx_content_calendar_slots_status`.
+
+Scheduled and published state is derived from `approvals`, `schedule_jobs`, and `publish_attempts` instead of duplicated here.
+
 ### `comment_threads`
 
 Stores one local, approval-gated comment workflow for one candidate target post.

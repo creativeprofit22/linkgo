@@ -82,6 +82,24 @@ Implemented now:
 
 Autonomous LinkedIn API publishing, LinkedIn API commenting, and scheduler worker execution are handled outside this approvals slice.
 
+### Content calendar slice
+
+Roadmap coverage:
+
+- Section 9: content calendar planning for approved LinkedIn drafts.
+- Section 10 bridge: calendar slots are created only from human-approved approvals.
+- Sections 12 and 16 bridge: scheduling uses the existing approval scheduling path with kill switch, rate limit, idempotency, and status checks.
+
+Implemented now:
+
+- `content_calendar_slots` table with one slot per approval.
+- Required purpose, local slot time, timezone, format, angle, visual direction, CTA, and optional notes.
+- Calendar tab between Approvals and Scheduler with all-campaign planning, campaign filtering, summary cards, create/edit/archive actions, and schedule-slot action.
+- Slot lists joined to campaign, approval, draft variant, source post, schedule job, and successful publish attempt context.
+- Lifecycle labels derived from approval, schedule job, publish attempt, and archived slot state.
+
+Drag-and-drop grids, recurring plans, autonomous calendar generation, media asset management, scraping, and autonomous scheduling/publishing are not implemented in this slice.
+
 ### Metrics + learning slice
 
 Roadmap coverage:

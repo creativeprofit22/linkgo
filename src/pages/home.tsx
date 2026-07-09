@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   Bot,
+  CalendarDays,
   KeyRound,
   CheckCircle2,
   Clock3,
@@ -25,6 +26,7 @@ import { ApprovalsView } from "@/features/approvals";
 import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
 import { CandidateQueueView } from "@/features/candidate-queue";
 import { CommentsView } from "@/features/comments";
+import { ContentCalendarView } from "@/features/content-calendar";
 import { DraftsView } from "@/features/drafts";
 import { IntegrationsView } from "@/features/integrations";
 import { MetricsView } from "@/features/metrics";
@@ -38,6 +40,7 @@ type HomeTab =
   | "queue"
   | "drafts"
   | "approvals"
+  | "calendar"
   | "scheduler"
   | "comments"
   | "metrics"
@@ -88,6 +91,14 @@ const tabs: RoadmapTab[] = [
     icon: CheckCircle2,
     enabled: true,
     docHref: "docs/features/approvals.md",
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    description: "Post planning before scheduler execution.",
+    icon: CalendarDays,
+    enabled: true,
+    docHref: "docs/features/content-calendar.md",
   },
   {
     id: "scheduler",
@@ -227,6 +238,8 @@ export function HomePage(): React.ReactNode {
             <DraftsView />
           ) : activeRoadmapTab.id === "approvals" ? (
             <ApprovalsView />
+          ) : activeRoadmapTab.id === "calendar" ? (
+            <ContentCalendarView />
           ) : activeRoadmapTab.id === "scheduler" ? (
             <SchedulerView />
           ) : activeRoadmapTab.id === "comments" ? (

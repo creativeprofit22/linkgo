@@ -200,6 +200,39 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type ContentCalendarPurpose =
+      | "reach"
+      | "trust"
+      | "proof"
+      | "conversion"
+      | "community";
+    type ContentCalendarFormat =
+      | "text"
+      | "image"
+      | "carousel"
+      | "document"
+      | "video"
+      | "poll"
+      | "event";
+    type ContentCalendarSlotStatus = "planned" | "archived";
+
+    type ContentCalendarSlot = {
+      id: number;
+      campaign_id: number;
+      approval_id: number;
+      purpose: ContentCalendarPurpose;
+      slot_for: string;
+      timezone: string;
+      format: ContentCalendarFormat;
+      angle: string;
+      visual_direction: string;
+      cta: string;
+      notes: string;
+      status: ContentCalendarSlotStatus;
+      created_at: string;
+      updated_at: string;
+    };
+
     type CommentThreadStatus =
       | "drafting"
       | "needs_review"
@@ -706,6 +739,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       approvals: Approval[];
       scheduleJobs: ScheduleJob[];
       publishAttempts: PublishAttempt[];
+      contentCalendarSlots: ContentCalendarSlot[];
       commentThreads: CommentThread[];
       commentVariants: CommentVariant[];
       commentAudits: CommentAudit[];
@@ -741,6 +775,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextApprovalId: number;
       nextScheduleJobId: number;
       nextPublishAttemptId: number;
+      nextContentCalendarSlotId: number;
       nextCommentThreadId: number;
       nextCommentVariantId: number;
       nextCommentAuditId: number;
@@ -776,6 +811,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const approvals: Approval[] = [];
     const scheduleJobs: ScheduleJob[] = [];
     const publishAttempts: PublishAttempt[] = [];
+    const contentCalendarSlots: ContentCalendarSlot[] = [];
     const commentThreads: CommentThread[] = [];
     const commentVariants: CommentVariant[] = [];
     const commentAudits: CommentAudit[] = [];
@@ -842,6 +878,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextApprovalId = 1;
     let nextScheduleJobId = 1;
     let nextPublishAttemptId = 1;
+    let nextContentCalendarSlotId = 1;
     let nextCommentThreadId = 1;
     let nextCommentVariantId = 1;
     let nextCommentAuditId = 1;
@@ -934,6 +971,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         approvals: cloneRows(approvals),
         scheduleJobs: cloneRows(scheduleJobs),
         publishAttempts: cloneRows(publishAttempts),
+        contentCalendarSlots: cloneRows(contentCalendarSlots),
         commentThreads: cloneRows(commentThreads),
         commentVariants: cloneRows(commentVariants),
         commentAudits: cloneRows(commentAudits),
@@ -970,6 +1008,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextApprovalId,
         nextScheduleJobId,
         nextPublishAttemptId,
+        nextContentCalendarSlotId,
         nextCommentThreadId,
         nextCommentVariantId,
         nextCommentAuditId,
@@ -1009,6 +1048,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(approvals, snapshot.approvals);
       restoreRows(scheduleJobs, snapshot.scheduleJobs);
       restoreRows(publishAttempts, snapshot.publishAttempts);
+      restoreRows(contentCalendarSlots, snapshot.contentCalendarSlots);
       restoreRows(commentThreads, snapshot.commentThreads);
       restoreRows(commentVariants, snapshot.commentVariants);
       restoreRows(commentAudits, snapshot.commentAudits);
@@ -1056,6 +1096,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextApprovalId = snapshot.nextApprovalId;
       nextScheduleJobId = snapshot.nextScheduleJobId;
       nextPublishAttemptId = snapshot.nextPublishAttemptId;
+      nextContentCalendarSlotId = snapshot.nextContentCalendarSlotId;
       nextCommentThreadId = snapshot.nextCommentThreadId;
       nextCommentVariantId = snapshot.nextCommentVariantId;
       nextCommentAuditId = snapshot.nextCommentAuditId;
@@ -1533,6 +1574,178 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (createdDelta !== 0) return createdDelta;
           return right.id - left.id;
         })[0];
+    }
+
+    function getLatestScheduleJob(approvalId: number): ScheduleJob | undefined {
+      return scheduleJobs
+        .filter((job) => job.approval_id === approvalId)
+        .sort((left, right) => {
+          const updatedDelta = right.updated_at.localeCompare(left.updated_at);
+          if (updatedDelta !== 0) return updatedDelta;
+          return right.id - left.id;
+        })[0];
+    }
+
+    function getContentCalendarBaseRow(
+      approval: Approval,
+    ): Record<string, unknown> | null {
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      const draft = drafts.find((row) => row.id === approval.draft_id);
+      const variant = draftVariants.find(
+        (row) => row.id === approval.draft_variant_id,
+      );
+      const candidate = draft
+        ? candidatePosts.find((row) => row.id === draft.candidate_post_id)
+        : undefined;
+      const target = candidate
+        ? targetPosts.find((row) => row.id === candidate.target_post_id)
+        : undefined;
+      if (!campaign || !draft || !variant || !candidate || !target) return null;
+
+      const scheduleJob = getLatestScheduleJob(approval.id);
+      return {
+        approval_id: approval.id,
+        campaign_id: approval.campaign_id,
+        approval_status: approval.status,
+        approval_reviewer_notes: approval.reviewer_notes,
+        approval_approved_at: approval.approved_at,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+        draft_id: draft.id,
+        draft_angle: draft.angle,
+        draft_notes: draft.notes,
+        candidate_post_id: draft.candidate_post_id,
+        candidate_source_keyword: candidate.source_keyword,
+        target_url: target.url,
+        target_author_name: target.author_name,
+        target_author_profile_url: target.author_profile_url,
+        target_content: target.content,
+        variant_id: variant.id,
+        variant_number: variant.variant_number,
+        variant_hook: variant.hook,
+        variant_body: variant.body,
+        variant_cta: variant.cta,
+        variant_hashtags: variant.hashtags,
+        schedule_job_id: scheduleJob?.id ?? null,
+        schedule_scheduled_for: scheduleJob?.scheduled_for ?? null,
+        schedule_timezone: scheduleJob?.timezone ?? null,
+        schedule_status: scheduleJob?.status ?? null,
+        schedule_attempt_count: scheduleJob?.attempt_count ?? null,
+        schedule_last_error: scheduleJob?.last_error ?? null,
+        schedule_updated_at: scheduleJob?.updated_at ?? null,
+      };
+    }
+
+    function selectContentCalendarSlots(values: unknown[]): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return contentCalendarSlots
+        .filter((slot) => campaignId === null || slot.campaign_id === campaignId)
+        .map((slot) => {
+          const approval = approvals.find((row) => row.id === slot.approval_id);
+          const base = approval ? getContentCalendarBaseRow(approval) : null;
+          if (!approval || !base) return null;
+          const publishAttempt = getLatestSuccessfulPublishAttempt(approval.id);
+          return {
+            ...slot,
+            ...base,
+            publish_attempt_id: publishAttempt?.id ?? null,
+            publish_status: publishAttempt?.status ?? null,
+            publish_external_post_url: publishAttempt?.external_post_url ?? null,
+            publish_platform_post_id: publishAttempt?.platform_post_id ?? null,
+            publish_error_message: publishAttempt?.error_message ?? null,
+            publish_created_at: publishAttempt?.created_at ?? null,
+          };
+        })
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const leftArchived = left.status === "archived" ? 1 : 0;
+          const rightArchived = right.status === "archived" ? 1 : 0;
+          if (leftArchived !== rightArchived) return leftArchived - rightArchived;
+          const slotDelta = String(left.slot_for).localeCompare(
+            String(right.slot_for),
+          );
+          if (slotDelta !== 0) return slotDelta;
+          return Number(left.id) - Number(right.id);
+        });
+    }
+
+    function selectContentCalendarEligibleApprovals(
+      values: unknown[],
+    ): unknown[] {
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      return approvals
+        .filter(
+          (approval) =>
+            ["approved", "scheduled", "published"].includes(approval.status) &&
+            (campaignId === null || approval.campaign_id === campaignId) &&
+            !contentCalendarSlots.some(
+              (slot) => slot.approval_id === approval.id,
+            ),
+        )
+        .map((approval) => {
+          const campaign = campaigns.find(
+            (row) => row.id === approval.campaign_id,
+          );
+          const base = getContentCalendarBaseRow(approval);
+          if (!campaign || campaign.status === "archived" || !base) return null;
+          return base;
+        })
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          const updatedLeft = approvals.find(
+            (approval) => approval.id === Number(left.approval_id),
+          )?.updated_at;
+          const updatedRight = approvals.find(
+            (approval) => approval.id === Number(right.approval_id),
+          )?.updated_at;
+          const updatedDelta = String(updatedRight).localeCompare(
+            String(updatedLeft),
+          );
+          if (updatedDelta !== 0) return updatedDelta;
+          return Number(right.approval_id) - Number(left.approval_id);
+        });
+    }
+
+    function selectContentCalendarApprovalValidation(
+      values: unknown[],
+    ): unknown[] {
+      const approvalId = Number(values[0] ?? 0);
+      const approval = approvals.find((row) => row.id === approvalId);
+      if (!approval) return [];
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      if (!campaign) return [];
+      return [
+        {
+          id: approval.id,
+          campaign_id: approval.campaign_id,
+          campaign_status: campaign.status,
+          approval_status: approval.status,
+          slot_count: contentCalendarSlots.filter(
+            (slot) => slot.approval_id === approval.id,
+          ).length,
+        },
+      ];
+    }
+
+    function selectContentCalendarSlotValidation(values: unknown[]): unknown[] {
+      const slotId = Number(values[0] ?? 0);
+      const slot = contentCalendarSlots.find((row) => row.id === slotId);
+      if (!slot) return [];
+      const campaign = campaigns.find((row) => row.id === slot.campaign_id);
+      const approval = approvals.find((row) => row.id === slot.approval_id);
+      if (!campaign || !approval) return [];
+      return [
+        {
+          id: slot.id,
+          approval_id: slot.approval_id,
+          campaign_id: slot.campaign_id,
+          campaign_status: campaign.status,
+          approval_status: approval.status,
+          status: slot.status,
+          slot_for: slot.slot_for,
+          timezone: slot.timezone,
+        },
+      ];
     }
 
     function getMetricJoinBase(
@@ -2469,6 +2682,46 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return selectSafetyAuditEvents(values);
       }
       if (
+        query.includes("FROM content_calendar_slots ccs") &&
+        query.includes("WHERE ccs.id = $1")
+      ) {
+        return selectContentCalendarSlotValidation(values);
+      }
+      if (
+        query.includes("LEFT JOIN content_calendar_slots ccs") &&
+        query.includes("FROM approvals a")
+      ) {
+        return selectContentCalendarEligibleApprovals(values);
+      }
+      if (
+        query.includes("FROM approvals a") &&
+        query.includes("slot_count")
+      ) {
+        return selectContentCalendarApprovalValidation(values);
+      }
+      if (
+        query.includes("SELECT COUNT(*) FROM content_calendar_slots") &&
+        query.includes("existing_ccs.approval_id = a.id")
+      ) {
+        return selectContentCalendarApprovalValidation(values);
+      }
+      if (query.includes("FROM content_calendar_slots ccs")) {
+        return selectContentCalendarSlots(values);
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
+        query.includes("FROM content_calendar_slots")
+      ) {
+        const approvalId = Number(values[0] ?? 0);
+        return [
+          {
+            count: contentCalendarSlots.filter(
+              (slot) => slot.approval_id === approvalId,
+            ).length,
+          },
+        ];
+      }
+      if (
         query.includes("COUNT(*) AS count") &&
         query.includes("FROM draft_audits")
       ) {
@@ -3359,6 +3612,36 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: publishAttempt.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO content_calendar_slots")) {
+        const approvalId = Number(values[1] ?? 0);
+        if (
+          contentCalendarSlots.some((slot) => slot.approval_id === approvalId)
+        ) {
+          throw new Error(
+            "UNIQUE constraint failed: content_calendar_slots.approval_id",
+          );
+        }
+        const slot: ContentCalendarSlot = {
+          id: nextContentCalendarSlotId,
+          campaign_id: Number(values[0] ?? 0),
+          approval_id: approvalId,
+          purpose: values[2] as ContentCalendarPurpose,
+          slot_for: String(values[3] ?? ""),
+          timezone: String(values[4] ?? "local"),
+          format: values[5] as ContentCalendarFormat,
+          angle: String(values[6] ?? ""),
+          visual_direction: String(values[7] ?? ""),
+          cta: String(values[8] ?? ""),
+          notes: String(values[9] ?? ""),
+          status: "planned",
+          created_at: now,
+          updated_at: now,
+        };
+        contentCalendarSlots.push(slot);
+        nextContentCalendarSlotId += 1;
+        return { lastInsertId: slot.id, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT INTO comment_threads")) {
         const thread: CommentThread = {
           id: nextCommentThreadId,
@@ -3843,6 +4126,27 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             });
           }
           variant.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
+      }
+
+      if (query.includes("UPDATE content_calendar_slots")) {
+        const id = Number(values.at(-1) ?? 0);
+        const slot = contentCalendarSlots.find((row) => row.id === id);
+        if (slot) {
+          if (query.includes("status = 'archived'")) {
+            slot.status = "archived";
+          } else {
+            slot.purpose = values[0] as ContentCalendarPurpose;
+            slot.slot_for = String(values[1] ?? "");
+            slot.timezone = String(values[2] ?? "local");
+            slot.format = values[3] as ContentCalendarFormat;
+            slot.angle = String(values[4] ?? "");
+            slot.visual_direction = String(values[5] ?? "");
+            slot.cta = String(values[6] ?? "");
+            slot.notes = String(values[7] ?? "");
+          }
+          slot.updated_at = now;
           return { lastInsertId: id, rowsAffected: 1 };
         }
       }
@@ -4814,6 +5118,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_CANDIDATE_POSTS__ = () => cloneRows(candidatePosts);
     w.__LINKGO_SQL_CANDIDATE_DISCOVERY_ITEMS__ = () =>
       cloneRows(candidateDiscoveryItems);
+    w.__LINKGO_SQL_CONTENT_CALENDAR_SLOTS__ = () =>
+      cloneRows(contentCalendarSlots);
     w.__LINKGO_SQL_COMMENT_THREADS__ = () => cloneRows(commentThreads);
     w.__LINKGO_SQL_COMMENT_VARIANTS__ = () => cloneRows(commentVariants);
     w.__LINKGO_SQL_COMMENT_AUDITS__ = () => cloneRows(commentAudits);
@@ -4841,6 +5147,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       approvals: approvals.length,
       scheduleJobs: scheduleJobs.length,
       publishAttempts: publishAttempts.length,
+      contentCalendarSlots: contentCalendarSlots.length,
       commentThreads: commentThreads.length,
       commentVariants: commentVariants.length,
       commentAudits: commentAudits.length,

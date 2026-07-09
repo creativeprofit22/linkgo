@@ -109,7 +109,9 @@ test("records a failed LinkedIn OAuth publish attempt and error queue item", asy
 
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(getBadge(page, "Failed")).toBeVisible();
-  await expect(page.getByText("LinkedIn API rejected the post.")).toBeVisible();
+  await expect(
+    page.getByRole("paragraph").filter({ hasText: "LinkedIn API rejected the post." }),
+  ).toBeVisible();
   const counts = await getStateCounts(page);
   expect(counts.publishAttempts).toBe(1);
   expect(counts.errorQueueItems).toBe(1);
