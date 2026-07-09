@@ -5,6 +5,7 @@ import {
   startAgentRun,
 } from "@/features/agent-runtime/data";
 import {
+  createWorkflowArtifact,
   createWorkflowStepExecution,
   listWorkflowRuns,
   setWorkflowStepStatus,
@@ -110,6 +111,13 @@ export async function runContentPipelineExecutor(
       modelName: "dry-run-local",
       inputSummary:
         `${run.title}: execute ${step.title}. ${run.context_summary}`.trim(),
+    });
+    await createWorkflowArtifact({
+      workflowRunId,
+      workflowStepId: step.id,
+      artifactType: "agent_run",
+      artifactId: agentRunId,
+      summary: `${step.title} executor agent run`,
     });
     await updateWorkflowStepExecution({
       id: executionId,

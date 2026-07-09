@@ -47,6 +47,8 @@ export const WORKFLOW_EVENT_TYPES = [
   "note_added",
 ] as const;
 
+export const WORKFLOW_ARTIFACT_TYPES = ["agent_run"] as const;
+
 export const CONTENT_PIPELINE_STEPS = [
   {
     step_key: "research",
@@ -97,6 +99,7 @@ export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
 export type WorkflowStepKey = (typeof WORKFLOW_STEP_KEYS)[number];
 export type WorkflowStepStatus = (typeof WORKFLOW_STEP_STATUSES)[number];
 export type WorkflowEventType = (typeof WORKFLOW_EVENT_TYPES)[number];
+export type WorkflowArtifactType = (typeof WORKFLOW_ARTIFACT_TYPES)[number];
 
 export interface WorkflowRun {
   id: number;
@@ -137,6 +140,22 @@ export interface WorkflowEvent {
   created_at: string;
 }
 
+export interface WorkflowArtifact {
+  id: number;
+  workflow_run_id: number;
+  workflow_step_id: number | null;
+  artifact_type: WorkflowArtifactType;
+  artifact_id: number;
+  summary: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowArtifactWithDetails extends WorkflowArtifact {
+  agent_role: string | null;
+  agent_status: string | null;
+}
+
 export interface WorkflowCampaignSnapshot {
   id: number;
   name: string;
@@ -156,6 +175,7 @@ export type WorkflowRunWithDetails = WorkflowRun &
     campaign: WorkflowCampaignSnapshot;
     steps: WorkflowStep[];
     events: WorkflowEvent[];
+    artifacts: WorkflowArtifactWithDetails[];
   };
 
 export interface CreateWorkflowRunInput {
@@ -182,4 +202,12 @@ export interface CancelWorkflowRunInput {
 export interface AddWorkflowNoteInput {
   workflowRunId: number;
   note: string;
+}
+
+export interface CreateWorkflowArtifactInput {
+  workflowRunId: number;
+  workflowStepId?: number;
+  artifactType: WorkflowArtifactType;
+  artifactId: number;
+  summary?: string;
 }

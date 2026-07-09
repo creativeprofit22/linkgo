@@ -16,6 +16,7 @@ pub mod playbooks;
 pub mod provider_parity;
 pub mod safety;
 pub mod scheduler;
+pub mod workflow_artifacts;
 pub mod workflows;
 use tauri_plugin_sql::Migration;
 
@@ -39,5 +40,6 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(app_settings::migrations());
     migrations.extend(draft_generation::migrations());
     migrations.extend(content_calendar::migrations());
+    migrations.extend(workflow_artifacts::migrations());
     migrations
 }

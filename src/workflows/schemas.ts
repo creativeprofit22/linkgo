@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  WORKFLOW_ARTIFACT_TYPES,
   WORKFLOW_EVENT_TYPES,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_KEYS,
@@ -15,6 +16,7 @@ export const workflowRunStatusSchema = z.enum(WORKFLOW_RUN_STATUSES);
 export const workflowStepKeySchema = z.enum(WORKFLOW_STEP_KEYS);
 export const workflowStepStatusSchema = z.enum(WORKFLOW_STEP_STATUSES);
 export const workflowEventTypeSchema = z.enum(WORKFLOW_EVENT_TYPES);
+export const workflowArtifactTypeSchema = z.enum(WORKFLOW_ARTIFACT_TYPES);
 
 export const createWorkflowRunSchema = z.object({
   campaignId: positiveIdSchema,
@@ -40,4 +42,12 @@ export const cancelWorkflowRunSchema = z.object({
 export const addWorkflowNoteSchema = z.object({
   workflowRunId: positiveIdSchema,
   note: z.string().trim().min(1, "Note is required").max(1000),
+});
+
+export const createWorkflowArtifactSchema = z.object({
+  workflowRunId: positiveIdSchema,
+  workflowStepId: positiveIdSchema.optional(),
+  artifactType: workflowArtifactTypeSchema,
+  artifactId: positiveIdSchema,
+  summary: optionalSummarySchema,
 });

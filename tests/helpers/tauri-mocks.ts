@@ -487,6 +487,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type WorkflowArtifact = {
+      id: number;
+      workflow_run_id: number;
+      workflow_step_id: number | null;
+      artifact_type: "agent_run";
+      artifact_id: number;
+      summary: string;
+      created_at: string;
+      updated_at: string;
+    };
+
     type AgentRole =
       | "researcher"
       | "scorer"
@@ -754,6 +765,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       workflowRuns: WorkflowRun[];
       workflowSteps: WorkflowStep[];
       workflowEvents: WorkflowEvent[];
+      workflowArtifacts: WorkflowArtifact[];
       agentRuns: AgentRun[];
       agentToolCalls: AgentToolCall[];
       agentRunEvents: AgentRunEvent[];
@@ -788,6 +800,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextWorkflowRunId: number;
       nextWorkflowStepId: number;
       nextWorkflowEventId: number;
+      nextWorkflowArtifactId: number;
       nextAgentRunId: number;
       nextAgentToolCallId: number;
       nextAgentRunEventId: number;
@@ -841,6 +854,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const workflowRuns: WorkflowRun[] = [];
     const workflowSteps: WorkflowStep[] = [];
     const workflowEvents: WorkflowEvent[] = [];
+    const workflowArtifacts: WorkflowArtifact[] = [];
     const agentRuns: AgentRun[] = [];
     const agentToolCalls: AgentToolCall[] = [];
     const agentRunEvents: AgentRunEvent[] = [];
@@ -891,6 +905,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextWorkflowRunId = 1;
     let nextWorkflowStepId = 1;
     let nextWorkflowEventId = 1;
+    let nextWorkflowArtifactId = 1;
     let nextAgentRunId = 1;
     let nextAgentToolCallId = 1;
     let nextAgentRunEventId = 1;
@@ -986,6 +1001,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         workflowRuns: cloneRows(workflowRuns),
         workflowSteps: cloneRows(workflowSteps),
         workflowEvents: cloneRows(workflowEvents),
+        workflowArtifacts: cloneRows(workflowArtifacts),
         agentRuns: cloneRows(agentRuns),
         agentToolCalls: cloneRows(agentToolCalls),
         agentRunEvents: cloneRows(agentRunEvents),
@@ -1021,6 +1037,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextWorkflowRunId,
         nextWorkflowStepId,
         nextWorkflowEventId,
+        nextWorkflowArtifactId,
         nextAgentRunId,
         nextAgentToolCallId,
         nextAgentRunEventId,
@@ -1063,6 +1080,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(workflowRuns, snapshot.workflowRuns);
       restoreRows(workflowSteps, snapshot.workflowSteps);
       restoreRows(workflowEvents, snapshot.workflowEvents);
+      restoreRows(workflowArtifacts, snapshot.workflowArtifacts);
       restoreRows(agentRuns, snapshot.agentRuns);
       restoreRows(agentToolCalls, snapshot.agentToolCalls);
       restoreRows(agentRunEvents, snapshot.agentRunEvents);
@@ -1109,6 +1127,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextWorkflowRunId = snapshot.nextWorkflowRunId;
       nextWorkflowStepId = snapshot.nextWorkflowStepId;
       nextWorkflowEventId = snapshot.nextWorkflowEventId;
+      nextWorkflowArtifactId = snapshot.nextWorkflowArtifactId;
       nextAgentRunId = snapshot.nextAgentRunId;
       nextAgentToolCallId = snapshot.nextAgentToolCallId;
       nextAgentRunEventId = snapshot.nextAgentRunEventId;
@@ -1998,6 +2017,63 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
     }
 
+    function selectWorkflowArtifacts(values: unknown[]): unknown[] {
+      const ids = new Set(
+        values.filter((value): value is number => typeof value === "number"),
+      );
+      return workflowArtifacts
+        .filter((artifact) => ids.has(artifact.workflow_run_id))
+        .map((artifact) => mapWorkflowArtifactWithDetails(artifact))
+        .sort((left, right) => {
+          if (left.workflow_run_id !== right.workflow_run_id) {
+            return left.workflow_run_id - right.workflow_run_id;
+          }
+          return left.id - right.id;
+        });
+    }
+
+    function selectWorkflowArtifactId(values: unknown[]): unknown[] {
+      const workflowRunId = Number(values[0] ?? 0);
+      const artifactType = String(values[1] ?? "");
+      const artifactId = Number(values[2] ?? 0);
+      const artifact = workflowArtifacts.find(
+        (row) =>
+          row.workflow_run_id === workflowRunId &&
+          row.artifact_type === artifactType &&
+          row.artifact_id === artifactId,
+      );
+      return artifact ? [{ id: artifact.id }] : [];
+    }
+
+    function mapWorkflowArtifactWithDetails(artifact: WorkflowArtifact) {
+      const agentRun = agentRuns.find(
+        (run) =>
+          artifact.artifact_type === "agent_run" &&
+          run.id === artifact.artifact_id,
+      );
+      return {
+        ...artifact,
+        agent_role: agentRun?.agent_role ?? null,
+        agent_status: agentRun?.status ?? null,
+      };
+    }
+
+    function selectAgentRunArtifactOwnership(values: unknown[]): unknown[] {
+      const id = Number(values[0] ?? 0);
+      const artifactType = String(values[1] ?? "");
+      if (artifactType !== "agent_run") return [];
+      const run = agentRuns.find((row) => row.id === id);
+      return run
+        ? [
+            {
+              campaign_id: run.campaign_id,
+              workflow_run_id: run.workflow_run_id,
+              workflow_step_id: run.workflow_step_id,
+            },
+          ]
+        : [];
+    }
+
     function selectAgentRunJoin(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return agentRuns
@@ -2835,6 +2911,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("FROM agent_runs ar")) {
         return selectAgentRunValidation(values);
       }
+      if (query.includes("FROM agent_runs")) {
+        return selectAgentRunArtifactOwnership(values);
+      }
       if (query.includes("FROM agent_tool_calls")) {
         return selectAgentToolCalls(values);
       }
@@ -2868,6 +2947,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (query.includes("FROM workflow_steps")) {
         return selectWorkflowSteps(values);
+      }
+      if (query.includes("FROM workflow_artifacts")) {
+        if (query.includes("SELECT id")) {
+          return selectWorkflowArtifactId(values);
+        }
+        return selectWorkflowArtifacts(values);
       }
       if (query.includes("FROM workflow_events")) {
         return selectWorkflowEvents(values);
@@ -3929,6 +4014,35 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         workflowEvents.push(event);
         nextWorkflowEventId += 1;
         return { lastInsertId: event.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO workflow_artifacts")) {
+        const existing = workflowArtifacts.find(
+          (artifact) =>
+            artifact.workflow_run_id === Number(values[0] ?? 0) &&
+            artifact.artifact_type === values[2] &&
+            artifact.artifact_id === Number(values[3] ?? 0),
+        );
+        if (existing) {
+          existing.workflow_step_id =
+            values[1] === null ? null : Number(values[1] ?? 0);
+          existing.summary = String(values[4] ?? "");
+          existing.updated_at = now;
+          return { lastInsertId: existing.id, rowsAffected: 1 };
+        }
+        const artifact: WorkflowArtifact = {
+          id: nextWorkflowArtifactId,
+          workflow_run_id: Number(values[0] ?? 0),
+          workflow_step_id: values[1] === null ? null : Number(values[1] ?? 0),
+          artifact_type: values[2] as "agent_run",
+          artifact_id: Number(values[3] ?? 0),
+          summary: String(values[4] ?? ""),
+          created_at: now,
+          updated_at: now,
+        };
+        workflowArtifacts.push(artifact);
+        nextWorkflowArtifactId += 1;
+        return { lastInsertId: artifact.id, rowsAffected: 1 };
       }
 
       if (query.includes("UPDATE draft_generation_requests")) {
@@ -5112,6 +5226,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
     w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
+    w.__LINKGO_SQL_WORKFLOW_ARTIFACTS__ = () => cloneRows(workflowArtifacts);
     w.__LINKGO_SQL_PLAYBOOK_OVERRIDES__ = () =>
       cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);
@@ -5158,6 +5273,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       workflowRuns: workflowRuns.length,
       workflowSteps: workflowSteps.length,
       workflowEvents: workflowEvents.length,
+      workflowArtifacts: workflowArtifacts.length,
       agentRuns: agentRuns.length,
       agentToolCalls: agentToolCalls.length,
       agentRunEvents: agentRunEvents.length,

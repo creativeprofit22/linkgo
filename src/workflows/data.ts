@@ -5,6 +5,7 @@ import type { CampaignStatus } from "@/features/campaigns/types";
 import {
   addWorkflowNoteSchema,
   cancelWorkflowRunSchema,
+  createWorkflowArtifactSchema,
   createWorkflowRunSchema,
   setWorkflowStepStatusSchema,
   startWorkflowRunSchema,
@@ -13,9 +14,13 @@ import {
   CONTENT_PIPELINE_STEPS,
   type AddWorkflowNoteInput,
   type CancelWorkflowRunInput,
+  type CreateWorkflowArtifactInput,
   type CreateWorkflowRunInput,
   type StartWorkflowRunInput,
   type SetWorkflowStepStatusInput,
+  type WorkflowArtifact,
+  type WorkflowArtifactType,
+  type WorkflowArtifactWithDetails,
   type WorkflowEvent,
   type WorkflowEventType,
   type WorkflowRun,
@@ -46,6 +51,17 @@ interface WorkflowStepValidationRow extends WorkflowStep {
   campaign_status: CampaignStatus;
 }
 
+interface WorkflowArtifactRow extends WorkflowArtifact {
+  agent_role: string | null;
+  agent_status: string | null;
+}
+
+interface WorkflowArtifactOwnershipRow {
+  campaign_id: number;
+  workflow_run_id: number | null;
+  workflow_step_id: number | null;
+}
+
 const TERMINAL_RUN_STATUSES: WorkflowRunStatus[] = ["completed", "cancelled"];
 const FINISHED_STEP_STATUSES: WorkflowStepStatus[] = ["completed", "skipped"];
 
@@ -67,6 +83,7 @@ function mapRunWithDetails(
   row: WorkflowRunRow,
   steps: WorkflowStep[],
   events: WorkflowEvent[],
+  artifacts: WorkflowArtifactWithDetails[],
 ): WorkflowRunWithDetails {
   const completedStepCount = steps.filter((step) =>
     FINISHED_STEP_STATUSES.includes(step.status),
@@ -93,6 +110,7 @@ function mapRunWithDetails(
     },
     steps,
     events,
+    artifacts,
     completedStepCount,
     totalStepCount,
     progressPercent:
@@ -277,7 +295,7 @@ export async function listWorkflowRuns(
 
   const runIds = runRows.map((run) => run.id);
   const placeholders = getPlaceholders(runIds);
-  const [stepRows, eventRows] = await Promise.all([
+  const [stepRows, eventRows, artifactRows] = await Promise.all([
     db.select<WorkflowStep[]>(
       `SELECT * FROM workflow_steps
       WHERE workflow_run_id IN (${placeholders})
@@ -288,6 +306,19 @@ export async function listWorkflowRuns(
       `SELECT * FROM workflow_events
       WHERE workflow_run_id IN (${placeholders})
       ORDER BY workflow_run_id ASC, datetime(created_at) DESC, id DESC`,
+      runIds,
+    ),
+    db.select<WorkflowArtifactRow[]>(
+      `SELECT
+        wa.*,
+        ar.agent_role,
+        ar.status AS agent_status
+      FROM workflow_artifacts wa
+      LEFT JOIN agent_runs ar
+        ON wa.artifact_type = 'agent_run'
+        AND ar.id = wa.artifact_id
+      WHERE wa.workflow_run_id IN (${placeholders})
+      ORDER BY wa.workflow_run_id ASC, wa.id ASC`,
       runIds,
     ),
   ]);
@@ -306,11 +337,19 @@ export async function listWorkflowRuns(
     eventsByRunId.set(event.workflow_run_id, events);
   }
 
+  const artifactsByRunId = new Map<number, WorkflowArtifactWithDetails[]>();
+  for (const artifact of artifactRows) {
+    const artifacts = artifactsByRunId.get(artifact.workflow_run_id) ?? [];
+    artifacts.push(artifact);
+    artifactsByRunId.set(artifact.workflow_run_id, artifacts);
+  }
+
   return runRows.map((row) =>
     mapRunWithDetails(
       row,
       stepsByRunId.get(row.id) ?? [],
       eventsByRunId.get(row.id) ?? [],
+      artifactsByRunId.get(row.id) ?? [],
     ),
   );
 }
@@ -473,6 +512,140 @@ export async function startWorkflowRun(
     }
 
     await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackWorkflowTransaction(db);
+    throw error;
+  }
+}
+
+async function getWorkflowArtifactOwnership(
+  db: LinkgoDatabase,
+  artifactType: WorkflowArtifactType,
+  artifactId: number,
+  workflowStepId: number | undefined,
+  workflowRunId: number,
+  campaignId: number,
+  campaignStatus: CampaignStatus,
+): Promise<WorkflowArtifactOwnershipRow> {
+  if (campaignStatus === "archived") throw new Error("Campaign is archived");
+
+  if (workflowStepId !== undefined) {
+    const stepRows = await db.select<WorkflowArtifactOwnershipRow[]>(
+      `SELECT
+        wr.campaign_id,
+        ws.workflow_run_id,
+        NULL AS workflow_step_id
+      FROM workflow_steps ws
+      INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+      WHERE ws.id = $1
+      LIMIT 1`,
+      [workflowStepId],
+    );
+    const step = stepRows[0];
+    if (step === undefined) throw new Error("Workflow step was not found");
+    if (step.workflow_run_id !== workflowRunId) {
+      throw new Error("Workflow step belongs to a different workflow run");
+    }
+    if (step.campaign_id !== campaignId) {
+      throw new Error("Workflow step belongs to a different campaign");
+    }
+  }
+
+  const artifactRows = await db.select<WorkflowArtifactOwnershipRow[]>(
+    `SELECT
+      campaign_id,
+      workflow_run_id,
+      workflow_step_id
+    FROM agent_runs
+    WHERE id = $1
+      AND $2 = 'agent_run'
+    LIMIT 1`,
+    [artifactId, artifactType],
+  );
+  const artifact = artifactRows[0];
+  if (artifact === undefined)
+    throw new Error("Agent run artifact was not found");
+  if (artifact.campaign_id !== campaignId) {
+    throw new Error("Artifact belongs to a different campaign");
+  }
+  if (
+    artifact.workflow_run_id !== null &&
+    artifact.workflow_run_id !== workflowRunId
+  ) {
+    throw new Error("Artifact belongs to a different workflow run");
+  }
+  if (
+    workflowStepId !== undefined &&
+    artifact.workflow_step_id !== null &&
+    artifact.workflow_step_id !== workflowStepId
+  ) {
+    throw new Error("Artifact belongs to a different workflow step");
+  }
+
+  return artifact;
+}
+
+export async function createWorkflowArtifact(
+  input: CreateWorkflowArtifactInput,
+): Promise<number> {
+  const parsed = createWorkflowArtifactSchema.parse(input);
+  const db = await getDb();
+
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const run = await getWorkflowRunValidation(db, parsed.workflowRunId);
+    await getWorkflowArtifactOwnership(
+      db,
+      parsed.artifactType,
+      parsed.artifactId,
+      parsed.workflowStepId,
+      parsed.workflowRunId,
+      run.campaign_id,
+      run.campaign_status,
+    );
+
+    await db.execute(
+      `INSERT INTO workflow_artifacts (
+        workflow_run_id,
+        workflow_step_id,
+        artifact_type,
+        artifact_id,
+        summary,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, datetime('now'))
+      ON CONFLICT(workflow_run_id, artifact_type, artifact_id) DO UPDATE SET
+        workflow_step_id = excluded.workflow_step_id,
+        summary = excluded.summary,
+        updated_at = datetime('now')`,
+      [
+        parsed.workflowRunId,
+        parsed.workflowStepId ?? null,
+        parsed.artifactType,
+        parsed.artifactId,
+        parsed.summary,
+      ],
+    );
+    const artifactRows = await db.select<Array<{ id: number }>>(
+      `SELECT id
+      FROM workflow_artifacts
+      WHERE workflow_run_id = $1
+        AND artifact_type = $2
+        AND artifact_id = $3
+      LIMIT 1`,
+      [parsed.workflowRunId, parsed.artifactType, parsed.artifactId],
+    );
+    const artifact = artifactRows[0];
+    if (artifact === undefined) {
+      throw new Error("Workflow artifact was not found after upsert");
+    }
+    await db.execute(
+      `UPDATE workflow_runs
+      SET updated_at = datetime('now')
+      WHERE id = $1`,
+      [parsed.workflowRunId],
+    );
+    await db.execute("COMMIT");
+    return artifact.id;
   } catch (error) {
     await rollbackWorkflowTransaction(db);
     throw error;

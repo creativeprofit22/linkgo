@@ -18,6 +18,8 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Automatic next-step start after a step completes.
 - Append-only workflow events for run and step progress.
 - Operator notes in workflow history.
+- Executor-created `agent_run` artifacts auto-linked to workflow runs and steps.
+- Artifact chips in workflow run cards for executor-created agent runs.
 - Campaign filtering and archived-campaign mutation blocking.
 - Local SQLite persistence through Tauri migrations.
 
@@ -27,7 +29,9 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Autonomous LinkedIn posting/commenting.
 - Scraping or LinkedIn API calls.
 - Background workers, cron, or automatic scheduler execution.
+- Manual artifact pickers.
 - Automatic links to candidates, drafts, approvals, schedules, or metrics.
+- Non-`agent_run` artifact UI or attachment flows.
 - Generic arbitrary workflow builder.
 - Safety/error queue tables.
 
@@ -45,6 +49,10 @@ Stores ordered step state for each run. Each run has one row per canonical step 
 
 Stores append-only lifecycle events for run creation, start/resume, step changes, completion, cancellation, and notes.
 
+### `workflow_artifacts`
+
+Links workflow runs and optional workflow steps to artifacts. This slice only creates `agent_run` rows from the foreground executor; the table shape leaves room for future artifact types without exposing manual pickers.
+
 ### `workflow_step_executions`
 
 Links workflow steps to agent runs so executor work can be resumed and audited without duplicating active step claims.
@@ -53,10 +61,11 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 
 1. Run executor starts or resumes the workflow run.
 2. The executor creates a role-specific agent run for the active step.
-3. Agent output completes, fails, blocks, or pauses the step.
-4. Research and score steps can populate discovery suggestions or candidate scores through the same dry-run tools when valid local inputs exist.
-5. The executor stops at `approve` and approval-gated `schedule_post` calls.
-6. Resume executor continues from failed or blocked steps.
+3. The executor auto-links that agent run into `workflow_artifacts`.
+4. Agent output completes, fails, blocks, or pauses the step.
+5. Research and score steps can populate discovery suggestions or candidate scores through the same dry-run tools when valid local inputs exist.
+6. The executor stops at `approve` and approval-gated `schedule_post` calls.
+7. Resume executor continues from failed or blocked steps.
 
 ## Manual lifecycle
 
@@ -85,6 +94,7 @@ Playwright covers:
 - Advancing steps and recording progress events.
 - Waiting-for-approval state.
 - Archived-campaign mutation blocking.
+- Executor-created agent run artifact chips.
 - Workflows tab rendering in the app shell.
 
-Rust migration tests assert workflow tables, constraints, event types, step keys, unique constraints, and indexes.
+Rust migration tests assert workflow tables, artifact table shape, constraints, event types, step keys, unique constraints, and indexes.

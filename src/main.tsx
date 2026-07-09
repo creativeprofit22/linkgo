@@ -6,6 +6,10 @@ import type {
 } from "@/features/approvals/types";
 import type { RecordCommentAttemptInput } from "@/features/comments/types";
 import { IS_TAURI } from "@/lib/env";
+import type {
+  CreateWorkflowArtifactInput,
+  CreateWorkflowRunInput,
+} from "@/workflows/types";
 import { HomePage } from "@/pages/home";
 import { SettingsPage } from "@/pages/settings";
 import "./index.css";
@@ -27,6 +31,13 @@ type CommentTestApi = {
   recordCommentAttempt: (input: RecordCommentAttemptInput) => Promise<number>;
 };
 
+type WorkflowTestApi = {
+  createWorkflowArtifact: (
+    input: CreateWorkflowArtifactInput,
+  ) => Promise<number>;
+  createWorkflowRun: (input: CreateWorkflowRunInput) => Promise<number>;
+};
+
 if (import.meta.env.VITE_PLAYWRIGHT) {
   void import("@/features/approvals/data").then(
     ({ recordPublishAttempt, scheduleApproval }) => {
@@ -45,6 +56,16 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
       recordCommentAttempt,
     };
   });
+  void import("@/workflows/data").then(
+    ({ createWorkflowArtifact, createWorkflowRun }) => {
+      (
+        window as unknown as { __LINKGO_WORKFLOWS_TEST_API__?: WorkflowTestApi }
+      ).__LINKGO_WORKFLOWS_TEST_API__ = {
+        createWorkflowArtifact,
+        createWorkflowRun,
+      };
+    },
+  );
 }
 
 function RootShell(): React.ReactNode {

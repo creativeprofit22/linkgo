@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +26,16 @@ interface WorkflowRunCardProps {
 }
 
 const terminalStatuses = ["completed", "cancelled"];
+
+function getArtifactChipLabel(
+  artifact: WorkflowRunWithDetails["artifacts"][number],
+): string {
+  const baseLabel = `Agent run #${artifact.artifact_id}`;
+  const details = [artifact.agent_role, artifact.agent_status].filter(Boolean);
+  return details.length > 0
+    ? `${baseLabel} · ${details.join(" · ")}`
+    : baseLabel;
+}
 
 export function WorkflowRunCard({
   run,
@@ -78,6 +89,18 @@ export function WorkflowRunCard({
               <p className="text-muted-foreground max-w-3xl text-sm whitespace-pre-wrap">
                 {run.context_summary}
               </p>
+            )}
+            {run.artifacts.length > 0 && (
+              <div
+                className="flex max-w-3xl flex-wrap gap-2"
+                aria-label="Workflow artifacts"
+              >
+                {run.artifacts.map((artifact) => (
+                  <Badge key={artifact.id} variant="outline">
+                    {getArtifactChipLabel(artifact)}
+                  </Badge>
+                ))}
+              </div>
             )}
           </div>
           {!selectedCampaignArchived && (

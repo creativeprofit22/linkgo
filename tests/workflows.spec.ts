@@ -37,6 +37,127 @@ test("creates and starts a workflow run", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("shows executor-created agent run artifact chips", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openWorkflows(page);
+  await createWorkflowRun(page);
+
+  await page.getByRole("button", { name: "Run executor" }).click();
+
+  await expect(page.getByLabel("Workflow artifacts")).toContainText(
+    /Agent run #\d+ · researcher · completed/u,
+  );
+  await expect(page.getByText("Research completed")).toBeVisible();
+});
+
+test("updates duplicate executor-created agent run artifacts in place", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openWorkflows(page);
+  await createWorkflowRun(page);
+
+  await page.getByRole("button", { name: "Run executor" }).click();
+
+  const artifactChip = page
+    .getByLabel("Workflow artifacts")
+    .locator("span")
+    .filter({ hasText: /Agent run #\d+/u });
+  await expect(artifactChip).toHaveCount(1);
+  await page.waitForFunction(
+    () =>
+      "__LINKGO_WORKFLOWS_TEST_API__" in window &&
+      "__LINKGO_SQL_WORKFLOW_ARTIFACTS__" in window,
+  );
+
+  const result = await page.evaluate(async () => {
+    type WorkflowArtifact = {
+      id: number;
+      workflow_run_id: number;
+      workflow_step_id: number | null;
+      artifact_type: "agent_run";
+      artifact_id: number;
+      summary: string;
+    };
+    type DuplicateResult =
+      | {
+          ok: true;
+          initialId: number;
+          firstId: number;
+          secondId: number;
+          artifactCount: number;
+          artifactIds: number[];
+          summary: string;
+        }
+      | { ok: false; message: string };
+
+    const testWindow = window as unknown as {
+      __LINKGO_WORKFLOWS_TEST_API__?: {
+        createWorkflowArtifact: (input: {
+          workflowRunId: number;
+          workflowStepId?: number;
+          artifactType: "agent_run";
+          artifactId: number;
+          summary?: string;
+        }) => Promise<number>;
+      };
+      __LINKGO_SQL_WORKFLOW_ARTIFACTS__?: () => WorkflowArtifact[];
+    };
+    const api = testWindow.__LINKGO_WORKFLOWS_TEST_API__;
+    const readArtifacts = testWindow.__LINKGO_SQL_WORKFLOW_ARTIFACTS__;
+    const artifact = readArtifacts?.()[0];
+    if (api === undefined || readArtifacts === undefined) {
+      return { ok: false, message: "Workflow artifact test API missing" };
+    }
+    if (artifact === undefined) {
+      return { ok: false, message: "Initial workflow artifact missing" };
+    }
+
+    const input = {
+      workflowRunId: artifact.workflow_run_id,
+      workflowStepId: artifact.workflow_step_id ?? undefined,
+      artifactType: artifact.artifact_type,
+      artifactId: artifact.artifact_id,
+    };
+    const firstId = await api.createWorkflowArtifact({
+      ...input,
+      summary: "Duplicate relink one",
+    });
+    const secondId = await api.createWorkflowArtifact({
+      ...input,
+      summary: "Duplicate relink two",
+    });
+    const artifacts = readArtifacts();
+    return {
+      ok: true,
+      initialId: artifact.id,
+      firstId,
+      secondId,
+      artifactCount: artifacts.length,
+      artifactIds: artifacts.map((row) => row.id),
+      summary: artifacts[0]?.summary ?? "",
+    } satisfies DuplicateResult;
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw new Error(result.message);
+  expect(result.firstId).toBe(result.initialId);
+  expect(result.secondId).toBe(result.initialId);
+  expect(result.artifactCount).toBe(1);
+  expect(result.artifactIds).toEqual([result.initialId]);
+  expect(result.summary).toBe("Duplicate relink two");
+
+  await openCampaigns(page);
+  await openWorkflows(page);
+
+  await expect(artifactChip).toHaveCount(1);
+  await expect(artifactChip).toContainText(
+    /Agent run #\d+ · researcher · completed/u,
+  );
+});
+
 test("keeps whitespace-only workflow titles client-side disabled", async ({
   page,
 }) => {
