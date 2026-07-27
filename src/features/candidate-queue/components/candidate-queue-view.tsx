@@ -9,6 +9,13 @@ import type {
   CandidateStatus,
   CandidateWithTarget,
 } from "@/features/candidate-queue/types";
+import {
+  ImportSourcePostsDialog,
+  SourceImportBatchList,
+  useSourceImports,
+  type CreateSourceImportBatchInput,
+  type SourceImportBatchResult,
+} from "@/features/source-imports";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -48,8 +55,17 @@ export function CandidateQueueView(): React.ReactNode {
   const selectedCampaign =
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
+  const sourceImports = useSourceImports(selectedCampaignId);
   const summary = getCandidateSummary(candidates, discoveryItems.length);
   const groupedCandidates = groupCandidatesByStatus(candidates);
+
+  const handleSourceImport = async (
+    input: CreateSourceImportBatchInput,
+  ): Promise<SourceImportBatchResult> => {
+    const result = await sourceImports.submitImport(input);
+    await Promise.all([loadQueue(), sourceImports.loadImports()]);
+    return result;
+  };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -64,8 +80,9 @@ export function CandidateQueueView(): React.ReactNode {
                 Candidate Queue
               </h2>
               <p className="text-muted-foreground text-sm">
-                Discovery and scoring are operator-triggered and local-first.
-                LinkedIn scraping, commenting, and publishing stay excluded.
+                Import approved source posts or run local-first discovery and
+                scoring. LinkedIn scraping and autonomous external actions stay
+                excluded.
               </p>
             </div>
           </div>
@@ -80,6 +97,12 @@ export function CandidateQueueView(): React.ReactNode {
             campaignId={selectedCampaignId}
             candidates={candidates}
             onScore={scoreSelectedCandidates}
+            disabled={campaigns.length === 0 || selectedCampaignArchived}
+          />
+          <ImportSourcePostsDialog
+            campaignId={selectedCampaignId}
+            onImport={handleSourceImport}
+            pending={sourceImports.pending}
             disabled={campaigns.length === 0 || selectedCampaignArchived}
           />
           <AddCandidateDialog
@@ -198,6 +221,13 @@ export function CandidateQueueView(): React.ReactNode {
               </div>
             )}
           </section>
+
+          <SourceImportBatchList
+            batches={sourceImports.batches}
+            loading={sourceImports.loading}
+            error={sourceImports.error}
+            onRetry={sourceImports.loadImports}
+          />
 
           {candidates.length === 0 ? (
             <EmptyQueue />

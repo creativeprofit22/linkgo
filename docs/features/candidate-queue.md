@@ -1,12 +1,13 @@
 # Candidate Queue Feature
 
-Candidate Queue turns the Queue tab into a local-first manual intake and triage surface for LinkedIn post candidates.
+Candidate Queue turns the Queue tab into a local-first intake and triage surface for approved LinkedIn post candidates. Operators can add one post manually or import a bounded local JSON batch.
 
 ## Purpose
 
 The queue stores:
 
 - Manually added LinkedIn post URLs and content excerpts.
+- Source posts imported from local JSON arrays of 1–50 rows.
 - Optional author/source metadata.
 - Campaign-specific candidate records.
 - Duplicate keys for normalized URL and content hash.
@@ -14,11 +15,11 @@ The queue stores:
 - Optional relevance score and scoring reason from manual entry or explicit scoring runs.
 - Operator-triggered discovery suggestions for keywords, trends, and source prompts.
 
-No LinkedIn scraping, autonomous draft generation, autonomous commenting, publishing, or scheduling happens in this slice. Discovery saves suggestions only; scoring updates existing manually-added candidates only after an operator starts the run.
+No LinkedIn scraping, autonomous draft generation, autonomous commenting, publishing, or scheduling happens during intake. Import only processes operator-supplied local data. Discovery saves suggestions only; scoring updates existing candidates only after an operator starts the run.
 
 ## Schema
 
-Migrations: `src-tauri/src/migrations/candidate_queue.rs` and `src-tauri/src/migrations/candidate_discovery.rs`.
+Migrations: `src-tauri/src/migrations/candidate_queue.rs`, `src-tauri/src/migrations/candidate_discovery.rs`, and `src-tauri/src/migrations/source_imports.rs`.
 
 Tables:
 
@@ -26,7 +27,10 @@ Tables:
 - `candidate_posts`
 - `dedupe_keys`
 - `candidate_discovery_items`
-  Duplicate prevention is per campaign:
+- `source_import_batches`
+- `source_import_items`
+
+Duplicate prevention is per campaign:
 
 - `normalized_url` prevents adding the same LinkedIn source URL twice.
 - `content_hash` prevents adding the same post text twice from a different URL.
@@ -54,7 +58,7 @@ Data functions live in `src/features/candidate-queue/data.ts`:
 - `promoteDiscoveryItem(input)`
 - `dismissDiscoveryItem(input)`
 
-`createCandidate` validates input, computes normalized URL/content hash, checks `dedupe_keys`, inserts or reuses a target post, creates the candidate, then stores both dedupe keys.
+`createCandidate` validates input, computes normalized URL/content hash, checks `dedupe_keys`, inserts or reuses a target post, creates the candidate, then stores both dedupe keys in one transaction. Source imports call the same transaction-safe insert helper, so manual and batch intake cannot drift in normalization or dedupe behavior.
 
 `runCandidateDiscovery` creates and starts a researcher agent run. The `research_posts` tool persists up to 25 validated suggestions and attaches agent/workflow provenance.
 
@@ -64,14 +68,17 @@ Data functions live in `src/features/candidate-queue/data.ts`:
 
 `CandidateQueueView` renders:
 
-- Header and explanation that discovery/scoring are operator-triggered and publishing remains gated.
+- Header and explanation that intake, discovery, and scoring are operator-triggered while external actions remain gated.
 - Campaign selector.
-- `Run discovery`, `Score candidates`, and `Add candidate` actions.
+- `Run discovery`, `Score candidates`, `Import source posts`, and `Add candidate` actions.
 - Loading and retry states.
 - No-campaign and empty-queue states.
 - Summary cards for total candidates, suggestions, scored candidates, shortlisted candidates, and average score.
 - Discovery suggestion cards with promote/dismiss actions.
+- Recent source import batches with accepted, duplicate, and rejected item reasons.
 - Candidate cards grouped by status.
+
+`ImportSourcePostsDialog` accepts bounded local JSON, preserves text after validation errors, and reports batch totals without closing immediately. Import mutations are disabled for archived campaigns while history stays visible. See `docs/features/source-imports.md` for the format and lifecycle.
 
 `AddCandidateDialog` captures URL, content, author metadata, posted-at text, source keyword, score, reason, and notes.
 

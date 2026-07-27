@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
@@ -55,7 +55,9 @@ function getDefaultCampaignId(
   campaigns: CampaignWithKeywords[],
 ): number | null {
   return (
-    campaigns.find((campaign) => campaign.status !== "archived")?.id ?? null
+    campaigns.find((campaign) => campaign.status !== "archived")?.id ??
+    campaigns[0]?.id ??
+    null
   );
 }
 
@@ -70,92 +72,142 @@ export function useCandidateQueue(): UseCandidateQueueState {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const selectedCampaignIdRef = useRef<number | null>(null);
+  const campaignRequestIdRef = useRef(0);
 
   const loadCandidatesForCampaign = useCallback(
-    async (campaignId: number | null) => {
-      if (campaignId === null) {
-        setCandidates([]);
-        setDiscoveryItems([]);
-        return;
+    async (campaignId: number | null, requestId: number): Promise<void> => {
+      if (campaignId === null) return;
+
+      try {
+        const [loadedCandidates, loadedDiscoveryItems] = await Promise.all([
+          listCandidates(campaignId),
+          listDiscoveryItems(campaignId),
+        ]);
+        if (
+          campaignRequestIdRef.current !== requestId ||
+          selectedCampaignIdRef.current !== campaignId
+        ) {
+          return;
+        }
+        setCandidates(loadedCandidates);
+        setDiscoveryItems(loadedDiscoveryItems);
+      } catch (caught) {
+        if (
+          campaignRequestIdRef.current === requestId &&
+          selectedCampaignIdRef.current === campaignId
+        ) {
+          setError(getErrorMessage(caught));
+        }
       }
-      const [loadedCandidates, loadedDiscoveryItems] = await Promise.all([
-        listCandidates(campaignId),
-        listDiscoveryItems(campaignId),
-      ]);
-      setCandidates(loadedCandidates);
-      setDiscoveryItems(loadedDiscoveryItems);
     },
     [],
   );
 
+  const loadSelectedCampaign = useCallback(
+    async (
+      campaignId: number | null,
+      clearExisting: boolean,
+    ): Promise<void> => {
+      const requestId = campaignRequestIdRef.current + 1;
+      campaignRequestIdRef.current = requestId;
+      selectedCampaignIdRef.current = campaignId;
+      setSelectedCampaignId(campaignId);
+      setLoading(false);
+      setError(null);
+      if (clearExisting || campaignId === null) {
+        setCandidates([]);
+        setDiscoveryItems([]);
+      }
+      await loadCandidatesForCampaign(campaignId, requestId);
+    },
+    [loadCandidatesForCampaign],
+  );
+
+  const reloadSelectedCampaign = useCallback(async (): Promise<void> => {
+    await loadSelectedCampaign(selectedCampaignIdRef.current, false);
+  }, [loadSelectedCampaign]);
+
   const loadQueue = useCallback(async () => {
+    const requestId = campaignRequestIdRef.current + 1;
+    campaignRequestIdRef.current = requestId;
     setLoading(true);
     setError(null);
     try {
       const loadedCampaigns = await listCampaigns();
+      if (campaignRequestIdRef.current !== requestId) return;
+
       setCampaigns(loadedCampaigns);
+      const currentCampaignId = selectedCampaignIdRef.current;
       const campaignStillExists = loadedCampaigns.some(
-        (campaign) => campaign.id === selectedCampaignId,
+        (campaign) => campaign.id === currentCampaignId,
       );
       const nextCampaignId = campaignStillExists
-        ? selectedCampaignId
+        ? currentCampaignId
         : getDefaultCampaignId(loadedCampaigns);
+      selectedCampaignIdRef.current = nextCampaignId;
       setSelectedCampaignId(nextCampaignId);
-      await loadCandidatesForCampaign(nextCampaignId);
+      setCandidates([]);
+      setDiscoveryItems([]);
+      await loadCandidatesForCampaign(nextCampaignId, requestId);
     } catch (caught) {
-      const message = getErrorMessage(caught);
-      setError(message);
+      if (campaignRequestIdRef.current === requestId) {
+        setError(getErrorMessage(caught));
+      }
     } finally {
-      setLoading(false);
+      if (campaignRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
-  }, [loadCandidatesForCampaign, selectedCampaignId]);
+  }, [loadCandidatesForCampaign]);
 
   useEffect(() => {
     void loadQueue();
+    return () => {
+      campaignRequestIdRef.current += 1;
+    };
   }, [loadQueue]);
 
   const selectCampaign = useCallback(
     (id: number | null) => {
-      setSelectedCampaignId(id);
-      void loadCandidatesForCampaign(id);
+      void loadSelectedCampaign(id, true);
     },
-    [loadCandidatesForCampaign],
+    [loadSelectedCampaign],
   );
 
   const addCandidate = useCallback(
     async (input: CreateCandidateInput) => {
       try {
         await createCandidate(input);
-        setSelectedCampaignId(input.campaignId);
-        await loadCandidatesForCampaign(input.campaignId);
+        await loadSelectedCampaign(input.campaignId, true);
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error("Candidate was not added", { description: message });
         throw caught;
       }
     },
-    [loadCandidatesForCampaign],
+    [loadSelectedCampaign],
   );
 
   const updateCandidate = useCallback(
     async (input: UpdateCandidateInput) => {
       try {
         await updateCandidateRecord(input);
-        await loadCandidatesForCampaign(selectedCampaignId);
+        await reloadSelectedCampaign();
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error("Candidate was not updated", { description: message });
         throw caught;
       }
     },
-    [loadCandidatesForCampaign, selectedCampaignId],
+    [reloadSelectedCampaign],
   );
 
   const setStatus = useCallback(
     async (id: number, status: CandidateStatus) => {
       try {
         await setCandidateStatus(id, status);
-        await loadCandidatesForCampaign(selectedCampaignId);
+        await reloadSelectedCampaign();
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error("Candidate status was not changed", {
@@ -164,29 +216,28 @@ export function useCandidateQueue(): UseCandidateQueueState {
         throw caught;
       }
     },
-    [loadCandidatesForCampaign, selectedCampaignId],
+    [reloadSelectedCampaign],
   );
 
   const removeCandidate = useCallback(
     async (id: number) => {
       try {
         await deleteCandidate(id);
-        await loadCandidatesForCampaign(selectedCampaignId);
+        await reloadSelectedCampaign();
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error("Candidate was not deleted", { description: message });
         throw caught;
       }
     },
-    [loadCandidatesForCampaign, selectedCampaignId],
+    [reloadSelectedCampaign],
   );
 
   const runDiscovery = useCallback(
     async (input: RunCandidateDiscoveryInput) => {
       try {
         await runCandidateDiscovery(input);
-        setSelectedCampaignId(input.campaignId);
-        await loadCandidatesForCampaign(input.campaignId);
+        await loadSelectedCampaign(input.campaignId, true);
         toast.success("Discovery run completed");
       } catch (caught) {
         const message = getErrorMessage(caught);
@@ -194,15 +245,14 @@ export function useCandidateQueue(): UseCandidateQueueState {
         throw caught;
       }
     },
-    [loadCandidatesForCampaign],
+    [loadSelectedCampaign],
   );
 
   const scoreSelectedCandidates = useCallback(
     async (input: ScoreCandidatesInput) => {
       try {
         await scoreCandidates(input);
-        setSelectedCampaignId(input.campaignId);
-        await loadCandidatesForCampaign(input.campaignId);
+        await loadSelectedCampaign(input.campaignId, true);
         toast.success("Candidate scoring completed");
       } catch (caught) {
         const message = getErrorMessage(caught);
@@ -210,14 +260,16 @@ export function useCandidateQueue(): UseCandidateQueueState {
         throw caught;
       }
     },
-    [loadCandidatesForCampaign],
+    [loadSelectedCampaign],
   );
 
   const promoteDiscoveryItem = useCallback(
     async (input: PromoteDiscoveryItemInput) => {
       try {
         await promoteDiscoveryItemRecord(input);
-        await loadCandidatesForCampaign(input.campaignId);
+        if (selectedCampaignIdRef.current === input.campaignId) {
+          await reloadSelectedCampaign();
+        }
         setCampaigns(await listCampaigns());
         toast.success("Keyword promoted");
       } catch (caught) {
@@ -226,14 +278,16 @@ export function useCandidateQueue(): UseCandidateQueueState {
         throw caught;
       }
     },
-    [loadCandidatesForCampaign],
+    [reloadSelectedCampaign],
   );
 
   const dismissDiscoveryItem = useCallback(
     async (input: DismissDiscoveryItemInput) => {
       try {
         await dismissDiscoveryItemRecord(input);
-        await loadCandidatesForCampaign(input.campaignId);
+        if (selectedCampaignIdRef.current === input.campaignId) {
+          await reloadSelectedCampaign();
+        }
         toast.success("Suggestion dismissed");
       } catch (caught) {
         const message = getErrorMessage(caught);
@@ -241,7 +295,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
         throw caught;
       }
     },
-    [loadCandidatesForCampaign],
+    [reloadSelectedCampaign],
   );
 
   return useMemo(

@@ -135,6 +135,48 @@ Constraints: unique `(campaign_id, key_type, key_value)` and checked key type va
 
 Indexes: `idx_dedupe_keys_campaign_id`, `idx_dedupe_keys_key`.
 
+### `source_import_batches`
+
+Stores one bounded local source-post import attempt for one campaign.
+
+| Column            | Type    | Notes                                                           |
+| ----------------- | ------- | --------------------------------------------------------------- |
+| `id`              | INTEGER | Primary key                                                     |
+| `campaign_id`     | INTEGER | References `campaigns(id)` with cascade delete                  |
+| `source_type`     | TEXT    | Constrained to `local_json` for Roadmap 3A                      |
+| `status`          | TEXT    | `processing`, `completed`, `completed_with_errors`, or `failed` |
+| `total_count`     | INTEGER | Non-negative supplied row count                                 |
+| `accepted_count`  | INTEGER | Non-negative rows that created candidates                       |
+| `duplicate_count` | INTEGER | Non-negative URL/content collisions                             |
+| `rejected_count`  | INTEGER | Non-negative validation or safely recorded processing failures  |
+| `error_message`   | TEXT    | Bounded operator-safe batch failure text                        |
+| `created_at`      | TEXT    | SQLite datetime                                                 |
+| `updated_at`      | TEXT    | SQLite datetime                                                 |
+
+Indexes: `idx_source_import_batches_campaign_id`, `idx_source_import_batches_status`, `idx_source_import_batches_created_at`.
+
+Campaign deletion cascades to its import batches and items. Normal history is retained locally with the campaign; Roadmap 3A does not add automatic retention cleanup.
+
+### `source_import_items`
+
+Stores the bounded audit input and outcome for each row in a source import batch.
+
+| Column                   | Type    | Notes                                                                                               |
+| ------------------------ | ------- | --------------------------------------------------------------------------------------------------- |
+| `id`                     | INTEGER | Primary key                                                                                         |
+| `source_import_batch_id` | INTEGER | References `source_import_batches(id)` with cascade delete                                          |
+| `row_number`             | INTEGER | Positive and unique within the batch                                                                |
+| `status`                 | TEXT    | `pending`, `accepted`, `duplicate`, or `rejected`                                                   |
+| `input_json`             | TEXT    | Valid bounded audit JSON, constrained to 20,000 characters; oversized values use a preview envelope |
+| `candidate_post_id`      | INTEGER | Nullable candidate reference with `ON DELETE SET NULL`                                              |
+| `reason`                 | TEXT    | Bounded validation, duplicate, acceptance, or safe processing explanation                           |
+| `created_at`             | TEXT    | SQLite datetime                                                                                     |
+| `updated_at`             | TEXT    | SQLite datetime                                                                                     |
+
+Indexes: `idx_source_import_items_batch_id`, `idx_source_import_items_status`, `idx_source_import_items_candidate_id`.
+
+Deleting a candidate preserves its import history and clears only `candidate_post_id`. Deleting a batch or campaign cascades its item rows. The source payload contains only locally supplied post metadata; it never stores OAuth credentials or provider secrets.
+
 ### `drafts`
 
 Stores one local drafting workspace for a candidate post.

@@ -223,7 +223,18 @@ async function rollbackTransaction(db: LinkgoDatabase): Promise<void> {
   }
 }
 
-export async function createCandidate(
+export function isDuplicateCandidateError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message === DUPLICATE_CANDIDATE_MESSAGE ||
+    /UNIQUE constraint failed: (?:dedupe_keys|candidate_posts)/iu.test(
+      error.message,
+    )
+  );
+}
+
+export async function createCandidateInTransaction(
+  db: LinkgoDatabase,
   input: CreateCandidateInput,
 ): Promise<number> {
   const parsed = createCandidateSchema.parse(input);
@@ -231,104 +242,102 @@ export async function createCandidate(
   const contentHash = createContentHash(parsed.content);
   const platformResourceUrn =
     parsed.platformResourceUrn?.trim() || resolveLinkedInTargetUrn(parsed.url);
-  const db = await getDb();
 
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    const campaigns = await db.select<CandidateCampaignRow[]>(
-      `SELECT status FROM campaigns WHERE id = $1 LIMIT 1`,
-      [parsed.campaignId],
-    );
-    const campaign = campaigns[0];
-    if (campaign === undefined) {
-      throw new Error("Campaign was not found");
-    }
-    if (campaign.status === "archived") {
-      throw new Error("Campaign is archived");
-    }
+  await assertCandidateCampaignCanMutate(db, parsed.campaignId);
 
-    const existingDedupe = await db.select<DedupeMatchRow[]>(
-      `SELECT id FROM dedupe_keys
-      WHERE campaign_id = $1
-        AND ((key_type = 'normalized_url' AND key_value = $2)
-          OR (key_type = 'content_hash' AND key_value = $3))
-      LIMIT 1`,
-      [parsed.campaignId, normalizedUrl, contentHash],
-    );
-    if (existingDedupe.length > 0) {
-      throw new Error(DUPLICATE_CANDIDATE_MESSAGE);
-    }
+  const existingDedupe = await db.select<DedupeMatchRow[]>(
+    `SELECT id FROM dedupe_keys
+    WHERE campaign_id = $1
+      AND ((key_type = 'normalized_url' AND key_value = $2)
+        OR (key_type = 'content_hash' AND key_value = $3))
+    LIMIT 1`,
+    [parsed.campaignId, normalizedUrl, contentHash],
+  );
+  if (existingDedupe.length > 0) {
+    throw new Error(DUPLICATE_CANDIDATE_MESSAGE);
+  }
 
-    const existingTargets = await db.select<TargetPostRow[]>(
-      `SELECT * FROM target_posts
-      WHERE platform = 'linkedin'
-        AND (normalized_url = $1 OR content_hash = $2)
-      ORDER BY normalized_url = $1 DESC, id ASC
-      LIMIT 1`,
-      [normalizedUrl, contentHash],
-    );
+  const existingTargets = await db.select<TargetPostRow[]>(
+    `SELECT * FROM target_posts
+    WHERE platform = 'linkedin'
+      AND (normalized_url = $1 OR content_hash = $2)
+    ORDER BY normalized_url = $1 DESC, id ASC
+    LIMIT 1`,
+    [normalizedUrl, contentHash],
+  );
 
-    let targetPostId = existingTargets[0]?.id;
-    if (targetPostId === undefined) {
-      const targetResult = await db.execute(
-        `INSERT INTO target_posts (
-        platform,
-        url,
-        normalized_url,
-        author_name,
-        author_profile_url,
-        platform_resource_urn,
-        posted_at,
-        content,
-        content_hash,
-        updated_at
-      ) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, $8, datetime('now'))`,
-        [
-          parsed.url,
-          normalizedUrl,
-          parsed.authorName,
-          parsed.authorProfileUrl,
-          platformResourceUrn,
-          parsed.postedAt,
-          parsed.content,
-          contentHash,
-        ],
-      );
-      targetPostId = targetResult.lastInsertId;
-    }
-
-    const candidateResult = await db.execute(
-      `INSERT INTO candidate_posts (
-      campaign_id,
-      target_post_id,
-      source_keyword,
-      relevance_score,
-      score_reason,
-      notes,
+  let targetPostId = existingTargets[0]?.id;
+  if (targetPostId === undefined) {
+    const targetResult = await db.execute(
+      `INSERT INTO target_posts (
+      platform,
+      url,
+      normalized_url,
+      author_name,
+      author_profile_url,
+      platform_resource_urn,
+      posted_at,
+      content,
+      content_hash,
       updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
+    ) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, $8, datetime('now'))`,
       [
-        parsed.campaignId,
-        targetPostId,
-        parsed.sourceKeyword,
-        parsed.relevanceScore,
-        parsed.scoreReason,
-        parsed.notes,
+        parsed.url,
+        normalizedUrl,
+        parsed.authorName,
+        parsed.authorProfileUrl,
+        platformResourceUrn,
+        parsed.postedAt,
+        parsed.content,
+        contentHash,
       ],
     );
-    const candidateId = candidateResult.lastInsertId;
+    targetPostId = targetResult.lastInsertId;
+  }
 
-    await db.execute(
-      `INSERT INTO dedupe_keys (campaign_id, key_type, key_value, candidate_post_id)
-      VALUES ($1, 'normalized_url', $2, $3)`,
-      [parsed.campaignId, normalizedUrl, candidateId],
-    );
-    await db.execute(
-      `INSERT INTO dedupe_keys (campaign_id, key_type, key_value, candidate_post_id)
-      VALUES ($1, 'content_hash', $2, $3)`,
-      [parsed.campaignId, contentHash, candidateId],
-    );
+  const candidateResult = await db.execute(
+    `INSERT INTO candidate_posts (
+    campaign_id,
+    target_post_id,
+    source_keyword,
+    relevance_score,
+    score_reason,
+    notes,
+    updated_at
+  ) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
+    [
+      parsed.campaignId,
+      targetPostId,
+      parsed.sourceKeyword,
+      parsed.relevanceScore,
+      parsed.scoreReason,
+      parsed.notes,
+    ],
+  );
+  const candidateId = candidateResult.lastInsertId;
 
+  await db.execute(
+    `INSERT INTO dedupe_keys (campaign_id, key_type, key_value, candidate_post_id)
+    VALUES ($1, 'normalized_url', $2, $3)`,
+    [parsed.campaignId, normalizedUrl, candidateId],
+  );
+  await db.execute(
+    `INSERT INTO dedupe_keys (campaign_id, key_type, key_value, candidate_post_id)
+    VALUES ($1, 'content_hash', $2, $3)`,
+    [parsed.campaignId, contentHash, candidateId],
+  );
+
+  return candidateId;
+}
+
+export async function createCandidate(
+  input: CreateCandidateInput,
+): Promise<number> {
+  const parsed = createCandidateSchema.parse(input);
+  const db = await getDb();
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const candidateId = await createCandidateInTransaction(db, parsed);
     await db.execute("COMMIT");
     return candidateId;
   } catch (error) {

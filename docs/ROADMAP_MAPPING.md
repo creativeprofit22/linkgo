@@ -1,8 +1,8 @@
 # Roadmap Mapping
 
-This document maps `roadmap.md` to implementation slices.
+This document maps `roadmap.md` to implementation slices. The roadmap audit dated July 27, 2026 is the source of truth: Roadmaps 1, 9, and 18 are implemented; Roadmap 8 is not started; the remaining items are partial. Roadmap 3 is the current next item and remains partial through slice 3A.
 
-## Implemented slices
+## Delivered slices and partial foundations
 
 ### Campaigns slice
 
@@ -12,7 +12,7 @@ Roadmap coverage:
 - Section 4 foundation: manual keywords, with generated and learned sources reserved.
 - Section 16 foundation: conservative post/comment limits stored per campaign.
 
-Implemented now:
+Delivered in this slice:
 
 - Campaign tables and keyword table.
 - Campaign CRUD/listing data access.
@@ -29,7 +29,7 @@ Roadmap coverage:
 - Section 4: AI-assisted keyword/trend/source-prompt discovery as saved local suggestions.
 - Section 5: operator-triggered relevance scoring with rationale storage for triage.
 
-Implemented now:
+Delivered in this slice:
 
 - Target post, candidate post, dedupe key, and candidate discovery tables.
 - Manual LinkedIn post add flow.
@@ -42,6 +42,24 @@ Implemented now:
 
 LinkedIn scraping, autonomous scoring runs, autonomous commenting, and autonomous publishing are not implemented in this slice.
 
+### Roadmap 3A local source import slice
+
+Roadmap coverage:
+
+- Section 3 foundation: bounded local source-post intake for existing campaigns.
+- Section 5 foundation: every accepted row reuses normalized URL/content-hash dedupe and candidate creation.
+- Section 16 foundation: bounded, reviewable local input with no external action.
+
+Delivered in this slice:
+
+- A JSON-array import boundary for 1–50 approved source-post rows.
+- Per-row validation with valid rows preserved when neighboring rows are rejected.
+- Durable import batches and item outcomes for accepted, duplicate, and rejected rows.
+- Shared Candidate Queue normalization, target-post reuse, and dedupe behavior.
+- Campaign-scoped import history with operator-safe reasons.
+
+The import is local only. It does not scrape LinkedIn, fetch target posts, call a model, draft, approve, comment, schedule, or publish. Remote connectors and recurring autopilot planning remain future Roadmap 3 work.
+
 ### Drafting + audit slice
 
 Roadmap coverage:
@@ -51,7 +69,7 @@ Roadmap coverage:
 - Section 8: rewrite-loop foundation via edit-and-re-audit, without AI loops.
 - Sections 17 and 18: drafter role/playbook path through the agent runtime.
 
-Implemented now:
+Delivered in this slice:
 
 - Draft, draft variant, draft audit, and draft generation request tables.
 - Manual one-to-five variant creation for non-rejected candidates.
@@ -72,7 +90,7 @@ Roadmap coverage:
 - Section 12 foundation: local schedule job records behind approval status.
 - Section 14 foundation: manual publish-attempt history.
 
-Implemented now:
+Delivered in this slice:
 
 - Approval records for selected clean draft variants.
 - Local schedule job records behind approval status for operator scheduling.
@@ -91,7 +109,7 @@ Roadmap coverage:
 - Section 10 bridge: calendar slots are created only from human-approved approvals.
 - Sections 12 and 16 bridge: scheduling uses the existing approval scheduling path with kill switch, rate limit, idempotency, and status checks.
 
-Implemented now:
+Delivered in this slice:
 
 - `content_calendar_slots` table with one slot per approval.
 - Required purpose, local slot time, timezone, format, angle, visual direction, CTA, and optional notes.
@@ -107,7 +125,7 @@ Roadmap coverage:
 
 - Section 15: post metrics, campaign memory foundation, and conservative LinkedIn social metadata refresh.
 
-Implemented now:
+Delivered in this slice:
 
 - Manual metric snapshots for published approvals.
 - Opt-in LinkedIn social metadata refresh for published approvals with resolvable LinkedIn URNs.
@@ -126,7 +144,7 @@ Roadmap coverage:
 - Section 11: durable workflow engine with typed resumable pipeline steps.
 - Section 19: persistent task backlog foundation through resumable runs and progress events.
 
-Implemented now:
+Delivered in this slice:
 
 - Workflow run, step, event, and step-execution tables.
 - Manual content pipeline state machine: `research -> score -> draft -> audit -> approve -> schedule -> measure`.
@@ -145,7 +163,7 @@ Roadmap coverage:
 - Section 17: role-based multi-agent worker foundation.
 - Section 18: typed skill/playbook slots through tool metadata.
 
-Implemented now:
+Delivered in this slice:
 
 - Agent run, tool call, and runtime event tables.
 - Six Zod tool contracts: `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, and `collect_metrics`.
@@ -164,7 +182,7 @@ Roadmap coverage:
 - Section 18: reusable LinkedIn playbooks stored as modular prompt contracts.
 - Sections 6, 7, 9, 13, and 15: writer, humanizer, calendar, commenter guidance, and analyst prompt modules.
 
-Implemented now:
+Delivered in this slice:
 
 - Built-in TypeScript playbook definitions for LinkedIn Writer, LinkedIn Humanizer, Content Calendar, LinkedIn Commenter, and Campaign Analyst.
 - `agent_runs.playbook_key` persistence for selected runtime playbooks.
@@ -182,7 +200,7 @@ Roadmap coverage:
 - Section 16: conservative daily scheduling caps and emergency stop controls.
 - Section 20: local observability through audit history, rate-limit events, and an operator error queue.
 
-Implemented now:
+Delivered in this slice:
 
 - Global app-level kill switch for local schedule starts and agent dry-run starts.
 - Daily post scheduling cap enforcement using each campaign's `daily_post_limit`.
@@ -199,7 +217,7 @@ Roadmap coverage:
 - Section 13: comment/reply agent.
 - Section 16 foundation: conservative daily comment-limit enforcement using `campaigns.daily_comment_limit` and `rate_limit_events.action = 'comment'`.
 
-Implemented now:
+Delivered in this slice:
 
 - Local comment threads for eligible shortlisted or drafted candidate posts.
 - One-to-three manual reply variants with deterministic audit findings.
@@ -221,7 +239,7 @@ Roadmap coverage:
 - Section 16: global kill switch enforcement and safety audit history for scheduled publishing.
 - Section 20: scheduler events and error queue items for terminal failures.
 
-Implemented now:
+Delivered in this slice:
 
 - Migration version `12` adds scheduler settings, retry/lock fields on `schedule_jobs`, scheduler events, and due-job indexes.
 - Native Tauri scheduler commands: status, start, stop, and bounded tick.
@@ -242,7 +260,7 @@ Roadmap coverage:
 - Section 16: credential-health visibility before external actions.
 - Sections 17 and 18: provider-ready role agents and typed tools.
 
-Implemented now:
+Delivered in this slice:
 
 - Full installed GG AI provider catalog: Anthropic, Xiaomi, OpenAI, Gemini, Z.AI/GLM, Moonshot, DeepSeek, OpenRouter, Sakana, and MiniMax.
 - Linkgo-only custom API and LinkedIn provider catalog entries.
@@ -260,7 +278,7 @@ Roadmap coverage:
 
 - App-level operating-system startup preference for opening Linkgo at login.
 
-Implemented now:
+Delivered in this slice:
 
 - Tauri v2 autostart plugin registration and permissions.
 - Settings page Startup card with one launch-on-login switch.

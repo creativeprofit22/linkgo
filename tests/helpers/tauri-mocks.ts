@@ -1,7 +1,9 @@
 import type { Page } from "@playwright/test";
 
+import { MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH } from "../../src/features/source-imports/schemas";
+
 export async function setupTauriMocks(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+  await page.addInitScript((maxSourceImportInputJsonLength) => {
     type Campaign = {
       id: number;
       name: string;
@@ -78,6 +80,43 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       key_value: string;
       candidate_post_id: number;
       created_at: string;
+    };
+
+    type SourceImportBatchStatus =
+      | "processing"
+      | "completed"
+      | "completed_with_errors"
+      | "failed";
+    type SourceImportItemStatus =
+      | "pending"
+      | "accepted"
+      | "duplicate"
+      | "rejected";
+
+    type SourceImportBatch = {
+      id: number;
+      campaign_id: number;
+      source_type: "local_json";
+      status: SourceImportBatchStatus;
+      total_count: number;
+      accepted_count: number;
+      duplicate_count: number;
+      rejected_count: number;
+      error_message: string;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type SourceImportItem = {
+      id: number;
+      source_import_batch_id: number;
+      row_number: number;
+      status: SourceImportItemStatus;
+      input_json: string;
+      candidate_post_id: number | null;
+      reason: string;
+      created_at: string;
+      updated_at: string;
     };
 
     type DraftStatus =
@@ -777,6 +816,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       targetPosts: TargetPost[];
       candidatePosts: CandidatePost[];
       dedupeKeys: DedupeKey[];
+      sourceImportBatches: SourceImportBatch[];
+      sourceImportItems: SourceImportItem[];
       candidateDiscoveryItems: CandidateDiscoveryItem[];
       drafts: Draft[];
       draftVariants: DraftVariant[];
@@ -817,6 +858,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextTargetPostId: number;
       nextCandidatePostId: number;
       nextDedupeKeyId: number;
+      nextSourceImportBatchId: number;
+      nextSourceImportItemId: number;
       nextDraftId: number;
       nextDraftVariantId: number;
       nextDraftAuditId: number;
@@ -853,6 +896,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const targetPosts: TargetPost[] = [];
     const candidatePosts: CandidatePost[] = [];
     const dedupeKeys: DedupeKey[] = [];
+    const sourceImportBatches: SourceImportBatch[] = [];
+    const sourceImportItems: SourceImportItem[] = [];
     const candidateDiscoveryItems: CandidateDiscoveryItem[] = [];
     const drafts: Draft[] = [];
     const draftVariants: DraftVariant[] = [];
@@ -923,6 +968,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextTargetPostId = 1;
     let nextCandidatePostId = 1;
     let nextDedupeKeyId = 1;
+    let nextSourceImportBatchId = 1;
+    let nextSourceImportItemId = 1;
     let nextCandidateDiscoveryItemId = 1;
     let nextDraftId = 1;
     let nextDraftVariantId = 1;
@@ -954,6 +1001,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextErrorQueueItemId = 1;
     let nextSchedulerEventId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
+    const campaignSelectGates = new Map<
+      number,
+      { promise: Promise<void>; release: () => void; pending: number }
+    >();
     const reloadSnapshotKey = "linkgo:test:sql-snapshot";
     let persistedReloadSnapshot: string | null = null;
     try {
@@ -1028,6 +1079,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         targetPosts: cloneRows(targetPosts),
         candidatePosts: cloneRows(candidatePosts),
         dedupeKeys: cloneRows(dedupeKeys),
+        sourceImportBatches: cloneRows(sourceImportBatches),
+        sourceImportItems: cloneRows(sourceImportItems),
         candidateDiscoveryItems: cloneRows(candidateDiscoveryItems),
         drafts: cloneRows(drafts),
         draftVariants: cloneRows(draftVariants),
@@ -1068,6 +1121,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextTargetPostId,
         nextCandidatePostId,
         nextDedupeKeyId,
+        nextSourceImportBatchId,
+        nextSourceImportItemId,
         nextCandidateDiscoveryItemId,
         nextDraftId,
         nextDraftVariantId,
@@ -1122,6 +1177,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(targetPosts, snapshot.targetPosts);
       restoreRows(candidatePosts, snapshot.candidatePosts);
       restoreRows(dedupeKeys, snapshot.dedupeKeys);
+      restoreRows(sourceImportBatches, snapshot.sourceImportBatches ?? []);
+      restoreRows(sourceImportItems, snapshot.sourceImportItems ?? []);
       restoreRows(candidateDiscoveryItems, snapshot.candidateDiscoveryItems);
       restoreRows(drafts, snapshot.drafts);
       restoreRows(draftVariants, snapshot.draftVariants);
@@ -1176,6 +1233,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextTargetPostId = snapshot.nextTargetPostId;
       nextCandidatePostId = snapshot.nextCandidatePostId;
       nextDedupeKeyId = snapshot.nextDedupeKeyId;
+      nextSourceImportBatchId = snapshot.nextSourceImportBatchId ?? 1;
+      nextSourceImportItemId = snapshot.nextSourceImportItemId ?? 1;
       nextCandidateDiscoveryItemId = snapshot.nextCandidateDiscoveryItemId;
       nextDraftId = snapshot.nextDraftId;
       nextDraftVariantId = snapshot.nextDraftVariantId;
@@ -3379,6 +3438,31 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             return right.id - left.id;
           });
       }
+      if (query.includes("FROM source_import_batches")) {
+        const campaignId = Number(values[0] ?? 0);
+        const batches = sourceImportBatches.filter(
+          (batch) =>
+            batch.campaign_id === campaignId &&
+            (!query.includes("status = 'processing'") ||
+              batch.status === "processing"),
+        );
+        if (query.includes("ORDER BY id ASC")) {
+          return batches.sort((left, right) => left.id - right.id);
+        }
+        const sortedBatches = batches.sort((left, right) => {
+          const createdDelta = right.created_at.localeCompare(left.created_at);
+          return createdDelta !== 0 ? createdDelta : right.id - left.id;
+        });
+        return query.includes("LIMIT")
+          ? sortedBatches.slice(0, 10)
+          : sortedBatches;
+      }
+      if (query.includes("FROM source_import_items")) {
+        const batchId = Number(values[0] ?? 0);
+        return sourceImportItems
+          .filter((item) => item.source_import_batch_id === batchId)
+          .sort((left, right) => left.row_number - right.row_number);
+      }
       if (query.includes("FROM candidate_posts") && query.includes("id IN")) {
         const campaignId = Number(values[0] ?? 0);
         const ids = new Set(
@@ -3456,6 +3540,37 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
       }
       return [];
+    }
+
+    function getDelayedSelectCampaignId(args?: unknown): number | null {
+      const { query, values } = readSqlArgs(args);
+      const isCandidateList =
+        query.includes("FROM candidate_posts cp") &&
+        query.includes("INNER JOIN target_posts tp");
+      const isDiscoveryList =
+        query.includes("FROM candidate_discovery_items") &&
+        query.includes("ORDER BY status = 'promoted'");
+      const isSourceImportList = query.includes("FROM source_import_batches");
+      if (!isCandidateList && !isDiscoveryList && !isSourceImportList) {
+        return null;
+      }
+
+      const campaignId = Number(values[0] ?? 0);
+      return Number.isInteger(campaignId) && campaignId > 0 ? campaignId : null;
+    }
+
+    function selectSqlWithCampaignDelay(args?: unknown): Promise<unknown[]> {
+      const result = selectSql(args);
+      const campaignId = getDelayedSelectCampaignId(args);
+      const gate =
+        campaignId === null ? undefined : campaignSelectGates.get(campaignId);
+      if (gate === undefined) return Promise.resolve(result);
+
+      gate.pending += 1;
+      return gate.promise.then(() => {
+        gate.pending -= 1;
+        return result;
+      });
     }
 
     function executeSql(args?: unknown): {
@@ -3656,6 +3771,75 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: nextKeywordId - 1, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO source_import_batches")) {
+        const campaignId = Number(values[0] ?? 0);
+        const totalCount = Number(values[1] ?? 0);
+        if (!campaigns.some((campaign) => campaign.id === campaignId)) {
+          throw new Error("FOREIGN KEY constraint failed");
+        }
+        if (!Number.isInteger(totalCount) || totalCount < 0) {
+          throw new Error("CHECK constraint failed: total_count >= 0");
+        }
+        const batch: SourceImportBatch = {
+          id: nextSourceImportBatchId,
+          campaign_id: campaignId,
+          source_type: "local_json",
+          status: "processing",
+          total_count: totalCount,
+          accepted_count: 0,
+          duplicate_count: 0,
+          rejected_count: 0,
+          error_message: "",
+          created_at: now,
+          updated_at: now,
+        };
+        sourceImportBatches.push(batch);
+        nextSourceImportBatchId += 1;
+        return { lastInsertId: batch.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO source_import_items")) {
+        const batchId = Number(values[0] ?? 0);
+        const rowNumber = Number(values[1] ?? 0);
+        const inputJson = String(values[2] ?? "");
+        if (!sourceImportBatches.some((batch) => batch.id === batchId)) {
+          throw new Error("FOREIGN KEY constraint failed");
+        }
+        if (!Number.isInteger(rowNumber) || rowNumber <= 0) {
+          throw new Error("CHECK constraint failed: row_number > 0");
+        }
+        if (
+          sourceImportItems.some(
+            (item) =>
+              item.source_import_batch_id === batchId &&
+              item.row_number === rowNumber,
+          )
+        ) {
+          throw new Error(
+            "UNIQUE constraint failed: source_import_items.source_import_batch_id, source_import_items.row_number",
+          );
+        }
+        if (inputJson.length > maxSourceImportInputJsonLength) {
+          throw new Error(
+            `CHECK constraint failed: length(input_json) <= ${maxSourceImportInputJsonLength}`,
+          );
+        }
+        const item: SourceImportItem = {
+          id: nextSourceImportItemId,
+          source_import_batch_id: batchId,
+          row_number: rowNumber,
+          status: "pending",
+          input_json: inputJson,
+          candidate_post_id: null,
+          reason: "",
+          created_at: now,
+          updated_at: now,
+        };
+        sourceImportItems.push(item);
+        nextSourceImportItemId += 1;
+        return { lastInsertId: item.id, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT INTO target_posts")) {
         const targetPost: TargetPost = {
           id: nextTargetPostId,
@@ -3677,6 +3861,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
 
       if (query.includes("INSERT INTO candidate_posts")) {
+        const failInsertNumber = Number(
+          w.__LINKGO_FAIL_CANDIDATE_INSERT_NUMBER__ ?? 0,
+        );
+        if (failInsertNumber === nextCandidatePostId) {
+          w.__LINKGO_FAIL_CANDIDATE_INSERT_NUMBER__ = undefined;
+          throw new Error("Injected candidate insert failure");
+        }
         const candidatePost: CandidatePost = {
           id: nextCandidatePostId,
           campaign_id: Number(values[0] ?? 0),
@@ -4729,6 +4920,88 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
       }
 
+      if (query.includes("UPDATE source_import_items")) {
+        const remainingFailures = Number(
+          w.__LINKGO_FAIL_SOURCE_IMPORT_ITEM_UPDATE_COUNT__ ?? 0,
+        );
+        if (remainingFailures > 0) {
+          w.__LINKGO_FAIL_SOURCE_IMPORT_ITEM_UPDATE_COUNT__ =
+            remainingFailures - 1;
+          throw new Error("Injected source import item update failure");
+        }
+        const status = values[0] as SourceImportItemStatus;
+        const candidatePostId =
+          values[1] === null ? null : Number(values[1] ?? 0);
+        const reason = String(values[2] ?? "");
+        const batchId = Number(values[3] ?? 0);
+        const rowNumber = Number(values[4] ?? 0);
+        if (
+          !["accepted", "duplicate", "rejected"].includes(status) ||
+          reason.length > 2000
+        ) {
+          throw new Error("CHECK constraint failed: source_import_items");
+        }
+        if (
+          candidatePostId !== null &&
+          !candidatePosts.some((candidate) => candidate.id === candidatePostId)
+        ) {
+          throw new Error("FOREIGN KEY constraint failed");
+        }
+        const item = sourceImportItems.find(
+          (row) =>
+            row.source_import_batch_id === batchId &&
+            row.row_number === rowNumber,
+        );
+        if (!item) return { lastInsertId: 0, rowsAffected: 0 };
+        item.status = status;
+        item.candidate_post_id = candidatePostId;
+        item.reason = reason;
+        item.updated_at = now;
+        if (transactionSnapshot === null) persistReloadSnapshot();
+        return { lastInsertId: item.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE source_import_batches")) {
+        const remainingFailures = Number(
+          w.__LINKGO_FAIL_SOURCE_IMPORT_BATCH_UPDATE_COUNT__ ?? 0,
+        );
+        if (remainingFailures > 0) {
+          w.__LINKGO_FAIL_SOURCE_IMPORT_BATCH_UPDATE_COUNT__ =
+            remainingFailures - 1;
+          throw new Error("Injected source import batch update failure");
+        }
+        const status = values[0] as SourceImportBatchStatus;
+        const acceptedCount = Number(values[1] ?? 0);
+        const duplicateCount = Number(values[2] ?? 0);
+        const rejectedCount = Number(values[3] ?? 0);
+        const errorMessage = String(values[4] ?? "");
+        const id = Number(values[5] ?? 0);
+        if (
+          ![
+            "processing",
+            "completed",
+            "completed_with_errors",
+            "failed",
+          ].includes(status) ||
+          [acceptedCount, duplicateCount, rejectedCount].some(
+            (count) => !Number.isInteger(count) || count < 0,
+          ) ||
+          errorMessage.length > 1000
+        ) {
+          throw new Error("CHECK constraint failed: source_import_batches");
+        }
+        const batch = sourceImportBatches.find((row) => row.id === id);
+        if (!batch) return { lastInsertId: 0, rowsAffected: 0 };
+        batch.status = status;
+        batch.accepted_count = acceptedCount;
+        batch.duplicate_count = duplicateCount;
+        batch.rejected_count = rejectedCount;
+        batch.error_message = errorMessage;
+        batch.updated_at = now;
+        if (transactionSnapshot === null) persistReloadSnapshot();
+        return { lastInsertId: id, rowsAffected: 1 };
+      }
+
       if (query.includes("UPDATE campaigns SET status")) {
         const status = values[0] as Campaign["status"];
         const id = Number(values[1] ?? 0);
@@ -5002,6 +5275,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("DELETE FROM candidate_posts")) {
         const id = Number(values[0] ?? 0);
         const rowsAffected = removeRows(candidatePosts, (row) => row.id === id);
+        for (const item of sourceImportItems) {
+          if (item.candidate_post_id === id) item.candidate_post_id = null;
+        }
         const draftIds = drafts
           .filter((draft) => draft.candidate_post_id === id)
           .map((draft) => draft.id);
@@ -5098,6 +5374,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         removeRows(keywords, (keyword) => keyword.campaign_id === id);
         removeRows(candidatePosts, (candidate) => candidate.campaign_id === id);
         removeRows(dedupeKeys, (key) => key.campaign_id === id);
+        const removedSourceBatchIds = sourceImportBatches
+          .filter((batch) => batch.campaign_id === id)
+          .map((batch) => batch.id);
+        removeRows(sourceImportBatches, (batch) => batch.campaign_id === id);
+        removeRows(sourceImportItems, (item) =>
+          removedSourceBatchIds.includes(item.source_import_batch_id),
+        );
         removeRows(drafts, (draft) => draft.campaign_id === id);
         removeRows(draftVariants, (variant) =>
           removedDraftIds.includes(variant.draft_id),
@@ -5640,6 +5923,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);
     w.__LINKGO_SQL_CANDIDATE_POSTS__ = () => cloneRows(candidatePosts);
+    w.__LINKGO_SQL_SOURCE_IMPORT_BATCHES__ = () =>
+      cloneRows(sourceImportBatches);
+    w.__LINKGO_SQL_SOURCE_IMPORT_ITEMS__ = () => cloneRows(sourceImportItems);
     w.__LINKGO_SQL_CANDIDATE_DISCOVERY_ITEMS__ = () =>
       cloneRows(candidateDiscoveryItems);
     w.__LINKGO_SQL_CONTENT_CALENDAR_SLOTS__ = () =>
@@ -5657,9 +5943,76 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_SCHEDULER_SETTINGS__ = () => ({ ...schedulerSettings });
     w.__LINKGO_SQL_SCHEDULER_EVENTS__ = () => cloneRows(schedulerEvents);
     w.__LINKGO_SQL_APP_SETTINGS__ = () => ({ ...appSettings });
+    w.__LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__ = (campaignId: number) => {
+      campaignSelectGates.get(campaignId)?.release();
+      let release = (): void => {};
+      const promise = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      campaignSelectGates.set(campaignId, { promise, release, pending: 0 });
+    };
+    w.__LINKGO_SQL_RELEASE_CAMPAIGN_SELECTS__ = (campaignId: number) => {
+      campaignSelectGates.get(campaignId)?.release();
+    };
+    w.__LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__ = (campaignId: number) =>
+      campaignSelectGates.get(campaignId)?.pending ?? 0;
+    w.__LINKGO_SQL_SET_CAMPAIGN_STATUS__ = (
+      campaignId: number,
+      status: Campaign["status"],
+    ) => {
+      const campaign = campaigns.find((row) => row.id === campaignId);
+      if (!campaign) return;
+      campaign.status = status;
+      campaign.updated_at = getNow();
+      persistReloadSnapshot();
+    };
     w.__LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__ = () => {
       reloadPersistenceEnabled = true;
       persistReloadSnapshot();
+    };
+    w.__LINKGO_SQL_CREATE_STALE_SOURCE_IMPORT__ = (
+      campaignId: number,
+      totalCount = 2,
+    ) => {
+      if (!campaigns.some((campaign) => campaign.id === campaignId)) {
+        throw new Error("Campaign was not found");
+      }
+      const now = getNow();
+      const batchId = nextSourceImportBatchId;
+      sourceImportBatches.push({
+        id: batchId,
+        campaign_id: campaignId,
+        source_type: "local_json",
+        status: "processing",
+        total_count: totalCount,
+        accepted_count: 0,
+        duplicate_count: 0,
+        rejected_count: 0,
+        error_message: "",
+        created_at: now,
+        updated_at: now,
+      });
+      nextSourceImportBatchId += 1;
+      for (let index = 0; index < totalCount; index += 1) {
+        const rowNumber = index + 1;
+        sourceImportItems.push({
+          id: nextSourceImportItemId,
+          source_import_batch_id: batchId,
+          row_number: rowNumber,
+          status: "pending",
+          input_json: JSON.stringify({
+            url: `https://www.linkedin.com/posts/interrupted-${rowNumber}`,
+            content: `Interrupted source row ${rowNumber}`,
+          }),
+          candidate_post_id: null,
+          reason: "",
+          created_at: now,
+          updated_at: now,
+        });
+        nextSourceImportItemId += 1;
+      }
+      persistReloadSnapshot();
+      return batchId;
     };
 
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
@@ -5668,6 +6021,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       targetPosts: targetPosts.length,
       candidatePosts: candidatePosts.length,
       dedupeKeys: dedupeKeys.length,
+      sourceImportBatches: sourceImportBatches.length,
+      sourceImportItems: sourceImportItems.length,
       candidateDiscoveryItems: candidateDiscoveryItems.length,
       drafts: drafts.length,
       draftVariants: draftVariants.length,
@@ -5810,7 +6165,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__TAURI_INTERNALS__ = {
       invoke: (cmd: string, args?: unknown) => {
         if (cmd === "plugin:sql|select")
-          return Promise.resolve(selectSql(args));
+          return selectSqlWithCampaignDelay(args);
         if (cmd === "plugin:sql|execute")
           return Promise.resolve(executeSql(args));
         if (cmd === "plugin:sql|close") return Promise.resolve(true);
@@ -6163,5 +6518,5 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     Object.defineProperty(window, "__TAURI_MOCK_WINDOW__", {
       value: mockWindow,
     });
-  });
+  }, MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH);
 }

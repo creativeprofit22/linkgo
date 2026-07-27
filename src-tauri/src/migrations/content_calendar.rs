@@ -47,9 +47,9 @@ mod tests {
             .contains("CREATE TABLE IF NOT EXISTS content_calendar_slots"));
         assert!(migration.sql.contains("campaign_id INTEGER NOT NULL"));
         assert!(migration.sql.contains("approval_id INTEGER NOT NULL"));
-        assert!(migration.sql.contains(
-            "CHECK(purpose IN ('reach', 'trust', 'proof', 'conversion', 'community'))"
-        ));
+        assert!(migration
+            .sql
+            .contains("CHECK(purpose IN ('reach', 'trust', 'proof', 'conversion', 'community'))"));
         assert!(migration.sql.contains("slot_for TEXT NOT NULL"));
         assert!(migration
             .sql
@@ -60,9 +60,9 @@ mod tests {
         assert!(migration
             .sql
             .contains("angle TEXT NOT NULL CHECK(length(trim(angle)) > 0)"));
-        assert!(migration.sql.contains(
-            "visual_direction TEXT NOT NULL CHECK(length(trim(visual_direction)) > 0)"
-        ));
+        assert!(migration
+            .sql
+            .contains("visual_direction TEXT NOT NULL CHECK(length(trim(visual_direction)) > 0)"));
         assert!(migration
             .sql
             .contains("cta TEXT NOT NULL CHECK(length(trim(cta)) > 0)"));
@@ -86,11 +86,7 @@ mod tests {
         assert!(migration
             .sql
             .contains("idx_content_calendar_slots_slot_for"));
-        assert!(migration
-            .sql
-            .contains("idx_content_calendar_slots_purpose"));
-        assert!(migration
-            .sql
-            .contains("idx_content_calendar_slots_status"));
+        assert!(migration.sql.contains("idx_content_calendar_slots_purpose"));
+        assert!(migration.sql.contains("idx_content_calendar_slots_status"));
     }
 }

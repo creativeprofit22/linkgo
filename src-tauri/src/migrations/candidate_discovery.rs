@@ -73,9 +73,9 @@ mod tests {
         assert!(migration
             .sql
             .contains("FOREIGN KEY (agent_run_id) REFERENCES agent_runs(id) ON DELETE SET NULL"));
-        assert!(migration
-            .sql
-            .contains("FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL"));
+        assert!(migration.sql.contains(
+            "FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL"
+        ));
         assert!(migration
             .sql
             .contains("idx_candidate_discovery_items_campaign_id"));
@@ -85,9 +85,7 @@ mod tests {
         assert!(migration
             .sql
             .contains("idx_candidate_discovery_items_workflow_run_id"));
-        assert!(migration
-            .sql
-            .contains("idx_candidate_discovery_items_kind"));
+        assert!(migration.sql.contains("idx_candidate_discovery_items_kind"));
         assert!(migration
             .sql
             .contains("idx_candidate_discovery_items_status"));
@@ -97,9 +95,9 @@ mod tests {
         assert!(migration
             .sql
             .contains("idx_candidate_discovery_items_unique_active"));
-        assert!(migration.sql.contains(
-            "ON candidate_discovery_items(campaign_id, kind, keyword, title)"
-        ));
+        assert!(migration
+            .sql
+            .contains("ON candidate_discovery_items(campaign_id, kind, keyword, title)"));
         assert!(migration.sql.contains("WHERE status != 'dismissed'"));
     }
 }

@@ -53,18 +53,18 @@ mod tests {
         assert!(migration.sql.contains("candidate_post_id INTEGER NOT NULL"));
         assert!(migration.sql.contains("agent_run_id INTEGER"));
         assert!(migration.sql.contains("provider_key TEXT NOT NULL"));
-        assert!(migration
-            .sql
-            .contains("variant_count INTEGER NOT NULL CHECK(variant_count >= 1 AND variant_count <= 5)"));
+        assert!(migration.sql.contains(
+            "variant_count INTEGER NOT NULL CHECK(variant_count >= 1 AND variant_count <= 5)"
+        ));
         assert!(migration
             .sql
             .contains("angle TEXT NOT NULL DEFAULT '' CHECK(length(angle) <= 240)"));
         assert!(migration
             .sql
             .contains("voice_notes TEXT NOT NULL DEFAULT '' CHECK(length(voice_notes) <= 1000)"));
-        assert!(migration.sql.contains(
-            "CHECK(status IN ('pending', 'generated', 'saved', 'failed', 'dismissed'))"
-        ));
+        assert!(migration
+            .sql
+            .contains("CHECK(status IN ('pending', 'generated', 'saved', 'failed', 'dismissed'))"));
         assert!(migration
             .sql
             .contains("generated_variants_json TEXT NOT NULL DEFAULT '[]'"));

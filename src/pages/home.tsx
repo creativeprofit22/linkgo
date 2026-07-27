@@ -246,19 +246,22 @@ export function HomePage(): React.ReactNode {
       titleBar={<MainTitleBar />}
       contentClassName="flex overflow-hidden"
     >
-      <div className="flex h-full w-full overflow-hidden">
-        <aside className="border-border/70 bg-background/55 flex w-72 shrink-0 flex-col border-r p-4 backdrop-blur">
-          <div className="mb-6 space-y-2">
+      <div className="flex h-full w-full flex-col overflow-hidden sm:flex-row">
+        <aside className="border-border/70 bg-background/55 flex w-full shrink-0 flex-col border-b p-2 backdrop-blur sm:w-72 sm:border-r sm:border-b-0 sm:p-4">
+          <div className="mb-2 space-y-2 sm:mb-6">
             <div className="flex items-center gap-2">
               <Activity className="text-linkgo-blue size-5" />
               <h1 className="text-lg font-semibold">Linkgo</h1>
             </div>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground hidden text-sm sm:block">
               LinkedIn growth operations, built local-first and approval-gated.
             </p>
           </div>
 
-          <nav className="space-y-2" aria-label="Linkgo sections">
+          <nav
+            className="flex gap-2 overflow-x-auto pb-1 sm:block sm:space-y-2 sm:overflow-visible sm:pb-0"
+            aria-label="Linkgo sections"
+          >
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const selected = activeTab === tab.id;
@@ -269,20 +272,20 @@ export function HomePage(): React.ReactNode {
                   aria-current={selected ? "page" : undefined}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors",
+                    "flex w-auto shrink-0 items-center gap-2 rounded-xl border p-2 text-left transition-colors sm:w-full sm:items-start sm:gap-3 sm:p-3",
                     selected
                       ? "border-linkgo-blue/50 bg-linkgo-blue/10 text-foreground"
                       : "hover:bg-accent/60 border-transparent",
                     !tab.enabled && "opacity-70",
                   )}
                 >
-                  <Icon className="mt-0.5 size-4" />
+                  <Icon className="size-4 sm:mt-0.5" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2 text-sm font-medium">
                       {tab.label}
                       {!tab.enabled && <Badge variant="outline">Roadmap</Badge>}
                     </span>
-                    <span className="text-muted-foreground mt-1 block text-xs leading-relaxed">
+                    <span className="text-muted-foreground mt-1 hidden text-xs leading-relaxed sm:block">
                       {tab.description}
                     </span>
                   </span>
@@ -292,7 +295,7 @@ export function HomePage(): React.ReactNode {
           </nav>
         </aside>
 
-        <section className="min-w-0 flex-1 overflow-auto p-6">
+        <section className="min-w-0 flex-1 overflow-auto p-3 sm:p-6">
           <Suspense fallback={featureViewFallback}>
             {activeRoadmapTab.id === "campaigns" ? (
               <CampaignsView />

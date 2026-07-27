@@ -2,18 +2,18 @@
 
 ## Status
 
-Implemented as the local-first Safety tab and cross-feature safety data layer.
+Partially implements Roadmaps 16 and 20 through the local-first Safety tab and cross-feature safety data layer. External telemetry, complete per-account policy, cooldowns, and automatic rejected-draft/low-performance error items remain future work.
 
 ## What it does
 
-- Provides a global kill switch for local automation-like actions.
-- Blocks local schedule starts, agent run starts, and approved comment posting records while the kill switch is enabled.
-- Enforces each campaign's `daily_post_limit` for same-day post scheduling.
-- Enforces each campaign's `daily_comment_limit` for same-day successful comment posting records.
+- Provides a global kill switch for automation-like and external actions.
+- Blocks local schedule starts, agent run starts, native scheduled publishing, and approved LinkedIn comment posting while the kill switch is enabled.
+- Enforces each campaign's `daily_post_limit` for same-day scheduling and publishing safety paths.
+- Enforces each campaign's `daily_comment_limit` before successful LinkedIn or manual comment posting records.
 - Records append-only safety audit events.
-- Records append-only rate-limit decisions for allowed and blocked schedule/comment attempts.
-- Creates operator-fixable error queue items for failed publish attempts, failed manual comment attempts, rejected approvals, and failed agent runs.
-- Lets operators move error queue items through `open -> in_progress -> awaiting_review -> resolved`, plus failed/reopen paths.
+- Records append-only rate-limit decisions for allowed and blocked schedule, publish, and comment attempts.
+- Creates operator-fixable error queue items for failed publish attempts, failed comment attempts, rejected approvals, failed agent runs, and terminal scheduler failures.
+- Lets operators move error queue items through `open -> in_progress -> awaiting_review -> resolved`, plus failed and reopen paths.
 
 ## UI
 
@@ -26,11 +26,7 @@ The Safety tab includes:
 - Rate-limit decision history.
 - Safety audit event history.
 
-Archived campaign history stays visible.
-
-Archived campaign error queue rows cannot be changed until the campaign is restored.
-
-The global kill switch remains editable because it is app-level.
+Archived campaign history stays visible. Archived campaign error queue rows cannot be changed until the campaign is restored. The global kill switch remains editable because it is app-level.
 
 ## Data
 
@@ -41,42 +37,49 @@ Migration version `8` creates:
 - `rate_limit_events`
 - `error_queue_items`
 
-Blocked preflight events are written before caller transactions begin, so safety history survives rejected actions.
-
-Allowed/success events are written inside the transaction that performed the action.
+Blocked preflight events are written before caller transactions begin, so safety history survives rejected actions. Allowed/success events are written inside the transaction that performed the action.
 
 ## Integrations
 
-### Approvals
+### Approvals and LinkedIn publishing
 
-- `scheduleApproval` checks the kill switch and campaign daily post limit before creating/updating a schedule.
+- `scheduleApproval` checks the kill switch and campaign daily post limit before creating or updating a schedule.
 - Allowed and blocked schedule decisions create rate-limit and safety audit rows.
 - `cancelSchedule` records `schedule_cancelled`.
+- Explicit OAuth-backed LinkedIn publishing is available only for approved or scheduled posts and records success or failure locally.
 - `recordPublishAttempt` records publish success/failure and creates an error item on failure.
 - `setApprovalStatus` records rejected approvals and creates an error item.
+
+### Native scheduler
+
+- The opt-in native scheduler runs only while Linkgo is open or hidden to the system tray.
+- Due jobs re-check approval state, the global kill switch, idempotency, lock state, retry state, and post limits before the shared OAuth publishing helper runs.
+- Retryable failures use bounded backoff. Terminal failures return the approval to a recoverable state and create scheduler events and error queue items.
+- Launch-on-login may open Linkgo, but no scheduler process continues after Linkgo quits.
 
 ### Agent runtime
 
 - `startAgentRun` checks the kill switch before claiming a dry-run or provider-backed run.
 - Claimed runs record `agent_run_started`.
-- Failed agent runs record `agent_run_failed` and create/update an error item.
+- Failed agent runs record `agent_run_failed` and create or update an error item.
 
 ### Comments
 
-- `recordCommentAttempt` checks the kill switch before successful manual posted records.
-- Successful manual posted records enforce `daily_comment_limit` with `rate_limit_events.action = 'comment'`.
-- Failed manual comment attempts create an open error queue item with `source_type = 'manual'`.
-- Linkgo records manual history only; it does not post comments to LinkedIn.
+- Approved comment variants can be posted through the LinkedIn API only after explicit operator confirmation and permission preflight.
+- LinkedIn API posting checks current publish safety before invoking the native command.
+- `recordCommentAttempt` applies kill-switch and campaign-limit rules to successful local attempt records.
+- Successful posted records enforce `daily_comment_limit` with `rate_limit_events.action = 'comment'`.
+- Failed API or manual comment attempts create an open error queue item with a safe local error message.
 
 ## Explicit exclusions
 
-This slice does not implement:
+This safety foundation does not add:
 
-- Real LinkedIn publishing.
-- LinkedIn OAuth or LinkedIn API integration.
-- Real LinkedIn comment posting.
-- Background scheduler execution.
+- Scraping or arbitrary browser automation.
+- Autonomous post, comment, approval, or calendar actions.
 - Background agent workers.
+- Scheduler or metric-refresh execution after the Linkgo process quits.
 - External telemetry or hosted observability services.
+- Complete cooldown and per-account policy controls.
 
-All behavior remains local, manual, and approval-gated.
+OAuth-backed publishing, API comments, and the native scheduler are implemented integrations, not exclusions. Every LinkedIn write remains human approval-gated, and scheduled publishing only acts on already-approved content.
