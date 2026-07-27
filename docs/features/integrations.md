@@ -2,7 +2,7 @@
 
 ## Scope
 
-Linkgo has a native credential boundary for the installed `@kenkaiiii/gg-ai` provider catalog, Linkgo-only custom OpenAI-compatible endpoints, and LinkedIn OAuth.
+Linkgo has a native credential boundary for its provider catalog, Linkgo-only custom OpenAI-compatible endpoints, and LinkedIn OAuth.
 
 GG AI providers exposed in Linkgo:
 

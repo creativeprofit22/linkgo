@@ -5,9 +5,8 @@ import { AgentRunCard } from "@/features/agent-runtime/components/agent-run-card
 import { AgentToolContractList } from "@/features/agent-runtime/components/agent-tool-contract-list";
 import { CreateAgentRunDialog } from "@/features/agent-runtime/components/create-agent-run-dialog";
 import { useAgentRuntime } from "@/features/agent-runtime/hooks/use-agent-runtime";
-import type { AgentProviderKey } from "@/agent/types";
+import { isAgentProviderReady } from "@/features/agent-runtime/provider-readiness";
 import type { AgentRunWithDetails } from "@/features/agent-runtime/types";
-import type { ConnectedAccount } from "@/features/integrations/types";
 
 export function AgentRuntimeView(): React.ReactNode {
   const {
@@ -18,6 +17,7 @@ export function AgentRuntimeView(): React.ReactNode {
     toolContracts,
     playbooks,
     loading,
+    resumingRunId,
     error,
     killSwitchEnabled,
     killSwitchReason,
@@ -26,6 +26,7 @@ export function AgentRuntimeView(): React.ReactNode {
     selectCampaign,
     createRun,
     startRun,
+    resumeRun,
     cancelRun,
   } = useAgentRuntime();
 
@@ -153,11 +154,13 @@ export function AgentRuntimeView(): React.ReactNode {
                   selectedCampaignArchived={selectedCampaignArchived}
                   killSwitchEnabled={killSwitchEnabled}
                   killSwitchReason={killSwitchReason}
-                  providerConnected={isProviderReady(
+                  providerConnected={isAgentProviderReady(
                     run.provider_key,
                     connectedAccounts,
                   )}
+                  resuming={resumingRunId === run.id}
                   onStartRun={startRun}
+                  onResumeRun={resumeRun}
                   onCancelRun={cancelRun}
                 />
               ))}
@@ -166,19 +169,6 @@ export function AgentRuntimeView(): React.ReactNode {
         </>
       )}
     </div>
-  );
-}
-
-function isProviderReady(
-  providerKey: AgentProviderKey,
-  connectedAccounts: ConnectedAccount[],
-): boolean {
-  if (providerKey === "dry_run") return true;
-  return connectedAccounts.some(
-    (account) =>
-      account.provider_key === providerKey &&
-      account.status === "connected" &&
-      (providerKey !== "custom" || account.has_base_url_override),
   );
 }
 

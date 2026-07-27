@@ -498,6 +498,29 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       updated_at: string;
     };
 
+    type WorkflowStepExecutionStatus =
+      | "claimed"
+      | "running"
+      | "completed"
+      | "waiting_approval"
+      | "failed"
+      | "blocked"
+      | "cancelled";
+
+    type WorkflowStepExecution = {
+      id: number;
+      workflow_step_id: number;
+      agent_run_id: number | null;
+      executor_role: AgentRole;
+      attempt_count: number;
+      status: WorkflowStepExecutionStatus;
+      error_summary: string;
+      started_at: string;
+      completed_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
     type AgentRole =
       | "researcher"
       | "scorer"
@@ -604,6 +627,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       event_type: AgentRunEventType;
       summary: string;
       created_at: string;
+    };
+
+    type AgentApprovalCheckpoint = {
+      agent_run_id: number;
+      pending_tool_call_id: number;
+      approval_id: number;
+      phase: "waiting_approval" | "continuation_ready";
+      messages_json: string;
+      iteration_count: number;
+      created_at: string;
+      updated_at: string;
     };
 
     type AgentPlaybookOverride = {
@@ -766,9 +800,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       workflowSteps: WorkflowStep[];
       workflowEvents: WorkflowEvent[];
       workflowArtifacts: WorkflowArtifact[];
+      workflowStepExecutions: WorkflowStepExecution[];
       agentRuns: AgentRun[];
       agentToolCalls: AgentToolCall[];
       agentRunEvents: AgentRunEvent[];
+      agentApprovalCheckpoints: AgentApprovalCheckpoint[];
       agentPlaybookOverrides: AgentPlaybookOverride[];
       safetySettings: SafetySettings;
       safetyAuditEvents: SafetyAuditEvent[];
@@ -801,6 +837,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextWorkflowStepId: number;
       nextWorkflowEventId: number;
       nextWorkflowArtifactId: number;
+      nextWorkflowStepExecutionId: number;
       nextAgentRunId: number;
       nextAgentToolCallId: number;
       nextAgentRunEventId: number;
@@ -855,9 +892,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const workflowSteps: WorkflowStep[] = [];
     const workflowEvents: WorkflowEvent[] = [];
     const workflowArtifacts: WorkflowArtifact[] = [];
+    const workflowStepExecutions: WorkflowStepExecution[] = [];
     const agentRuns: AgentRun[] = [];
     const agentToolCalls: AgentToolCall[] = [];
     const agentRunEvents: AgentRunEvent[] = [];
+    const agentApprovalCheckpoints: AgentApprovalCheckpoint[] = [];
     const agentPlaybookOverrides: AgentPlaybookOverride[] = [];
     const safetySettings: SafetySettings = {
       id: 1,
@@ -906,6 +945,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextWorkflowStepId = 1;
     let nextWorkflowEventId = 1;
     let nextWorkflowArtifactId = 1;
+    let nextWorkflowStepExecutionId = 1;
     let nextAgentRunId = 1;
     let nextAgentToolCallId = 1;
     let nextAgentRunEventId = 1;
@@ -914,6 +954,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextErrorQueueItemId = 1;
     let nextSchedulerEventId = 1;
     let transactionSnapshot: TransactionSnapshot | null = null;
+    const reloadSnapshotKey = "linkgo:test:sql-snapshot";
+    let persistedReloadSnapshot: string | null = null;
+    try {
+      persistedReloadSnapshot =
+        window.sessionStorage.getItem(reloadSnapshotKey);
+    } catch {
+      persistedReloadSnapshot = null;
+    }
+    let reloadPersistenceEnabled = persistedReloadSnapshot !== null;
     let autostartMutationCount = 0;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
@@ -1002,9 +1051,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         workflowSteps: cloneRows(workflowSteps),
         workflowEvents: cloneRows(workflowEvents),
         workflowArtifacts: cloneRows(workflowArtifacts),
+        workflowStepExecutions: cloneRows(workflowStepExecutions),
         agentRuns: cloneRows(agentRuns),
         agentToolCalls: cloneRows(agentToolCalls),
         agentRunEvents: cloneRows(agentRunEvents),
+        agentApprovalCheckpoints: cloneRows(agentApprovalCheckpoints),
         agentPlaybookOverrides: cloneRows(agentPlaybookOverrides),
         safetySettings: { ...safetySettings },
         safetyAuditEvents: cloneRows(safetyAuditEvents),
@@ -1038,6 +1089,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextWorkflowStepId,
         nextWorkflowEventId,
         nextWorkflowArtifactId,
+        nextWorkflowStepExecutionId,
         nextAgentRunId,
         nextAgentToolCallId,
         nextAgentRunEventId,
@@ -1046,6 +1098,18 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextErrorQueueItemId,
         nextSchedulerEventId,
       };
+    }
+
+    function persistReloadSnapshot(): void {
+      if (!reloadPersistenceEnabled) return;
+      try {
+        window.sessionStorage.setItem(
+          reloadSnapshotKey,
+          JSON.stringify(createTransactionSnapshot()),
+        );
+      } catch {
+        // Tests can continue without reload persistence when storage is unavailable.
+      }
     }
 
     function restoreRows<T extends object>(rows: T[], snapshotRows: T[]): void {
@@ -1081,9 +1145,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(workflowSteps, snapshot.workflowSteps);
       restoreRows(workflowEvents, snapshot.workflowEvents);
       restoreRows(workflowArtifacts, snapshot.workflowArtifacts);
+      restoreRows(
+        workflowStepExecutions,
+        snapshot.workflowStepExecutions ?? [],
+      );
       restoreRows(agentRuns, snapshot.agentRuns);
       restoreRows(agentToolCalls, snapshot.agentToolCalls);
       restoreRows(agentRunEvents, snapshot.agentRunEvents);
+      restoreRows(agentApprovalCheckpoints, snapshot.agentApprovalCheckpoints);
       restoreRows(agentPlaybookOverrides, snapshot.agentPlaybookOverrides);
       safetySettings.global_kill_switch =
         snapshot.safetySettings.global_kill_switch;
@@ -1128,6 +1197,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextWorkflowStepId = snapshot.nextWorkflowStepId;
       nextWorkflowEventId = snapshot.nextWorkflowEventId;
       nextWorkflowArtifactId = snapshot.nextWorkflowArtifactId;
+      nextWorkflowStepExecutionId = snapshot.nextWorkflowStepExecutionId ?? 1;
       nextAgentRunId = snapshot.nextAgentRunId;
       nextAgentToolCallId = snapshot.nextAgentToolCallId;
       nextAgentRunEventId = snapshot.nextAgentRunEventId;
@@ -1135,6 +1205,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextRateLimitEventId = snapshot.nextRateLimitEventId;
       nextErrorQueueItemId = snapshot.nextErrorQueueItemId;
       nextSchedulerEventId = snapshot.nextSchedulerEventId;
+    }
+
+    if (persistedReloadSnapshot !== null) {
+      try {
+        restoreTransactionSnapshot(
+          JSON.parse(persistedReloadSnapshot) as TransactionSnapshot,
+        );
+      } catch {
+        window.sessionStorage.removeItem(reloadSnapshotKey);
+        reloadPersistenceEnabled = false;
+      }
     }
 
     function getCandidateJoinRow(
@@ -1658,7 +1739,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function selectContentCalendarSlots(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return contentCalendarSlots
-        .filter((slot) => campaignId === null || slot.campaign_id === campaignId)
+        .filter(
+          (slot) => campaignId === null || slot.campaign_id === campaignId,
+        )
         .map((slot) => {
           const approval = approvals.find((row) => row.id === slot.approval_id);
           const base = approval ? getContentCalendarBaseRow(approval) : null;
@@ -1669,7 +1752,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             ...base,
             publish_attempt_id: publishAttempt?.id ?? null,
             publish_status: publishAttempt?.status ?? null,
-            publish_external_post_url: publishAttempt?.external_post_url ?? null,
+            publish_external_post_url:
+              publishAttempt?.external_post_url ?? null,
             publish_platform_post_id: publishAttempt?.platform_post_id ?? null,
             publish_error_message: publishAttempt?.error_message ?? null,
             publish_created_at: publishAttempt?.created_at ?? null,
@@ -1679,7 +1763,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         .sort((left, right) => {
           const leftArchived = left.status === "archived" ? 1 : 0;
           const rightArchived = right.status === "archived" ? 1 : 0;
-          if (leftArchived !== rightArchived) return leftArchived - rightArchived;
+          if (leftArchived !== rightArchived)
+            return leftArchived - rightArchived;
           const slotDelta = String(left.slot_for).localeCompare(
             String(right.slot_for),
           );
@@ -2119,7 +2204,69 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return [{ ...run, campaign_status: campaign.status }];
     }
 
-    function selectAgentToolCalls(values: unknown[]): AgentToolCall[] {
+    function selectAgentApprovalCheckpoints(
+      query: string,
+      values: unknown[],
+    ): unknown[] {
+      const ids = new Set(
+        values.filter((value): value is number => typeof value === "number"),
+      );
+      if (query.includes("COUNT(*) AS count")) {
+        return [...ids]
+          .map((approvalId) => ({
+            approval_id: approvalId,
+            count: agentApprovalCheckpoints.filter(
+              (checkpoint) => checkpoint.approval_id === approvalId,
+            ).length,
+          }))
+          .filter((row) => row.count > 0);
+      }
+      const byApproval = query.includes("WHERE approval_id");
+      return agentApprovalCheckpoints
+        .filter((checkpoint) =>
+          byApproval
+            ? ids.has(checkpoint.approval_id)
+            : ids.has(checkpoint.agent_run_id),
+        )
+        .filter(
+          (checkpoint) =>
+            !query.includes("phase = 'continuation_ready'") ||
+            checkpoint.phase === "continuation_ready",
+        )
+        .map((checkpoint) => {
+          if (query.includes("SELECT agent_run_id, pending_tool_call_id")) {
+            return {
+              agent_run_id: checkpoint.agent_run_id,
+              pending_tool_call_id: checkpoint.pending_tool_call_id,
+            };
+          }
+          if (
+            query.includes("SELECT agent_run_id") &&
+            !query.includes("SELECT cp.*")
+          ) {
+            return { agent_run_id: checkpoint.agent_run_id };
+          }
+          const approval = approvals.find(
+            (row) => row.id === checkpoint.approval_id,
+          );
+          return {
+            ...checkpoint,
+            approval_status: approval?.status ?? "cancelled",
+          };
+        });
+    }
+
+    function selectAgentToolCalls(
+      query: string,
+      values: unknown[],
+    ): AgentToolCall[] {
+      if (query.includes("WHERE id = $1")) {
+        const id = Number(values[0] ?? 0);
+        const runId = Number(values[1] ?? 0);
+        return agentToolCalls.filter(
+          (toolCall) => toolCall.id === id && toolCall.agent_run_id === runId,
+        );
+      }
       const ids = new Set(
         values.filter((value): value is number => typeof value === "number"),
       );
@@ -2769,10 +2916,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       ) {
         return selectContentCalendarEligibleApprovals(values);
       }
-      if (
-        query.includes("FROM approvals a") &&
-        query.includes("slot_count")
-      ) {
+      if (query.includes("FROM approvals a") && query.includes("slot_count")) {
         return selectContentCalendarApprovalValidation(values);
       }
       if (
@@ -2903,6 +3047,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         ];
       }
       if (
+        query.includes("FROM approvals") &&
+        query.includes("WHERE id = $1") &&
+        !query.includes("COUNT(*)")
+      ) {
+        const approvalId = Number(values[0] ?? 0);
+        return approvals
+          .filter((approval) => approval.id === approvalId)
+          .map((approval) => ({
+            id: approval.id,
+            campaign_id: approval.campaign_id,
+            status: approval.status,
+          }));
+      }
+      if (query.includes("FROM agent_run_approval_checkpoints")) {
+        return selectAgentApprovalCheckpoints(query, values);
+      }
+      if (
         query.includes("FROM agent_runs ar") &&
         query.includes("c.name AS campaign_name")
       ) {
@@ -2911,11 +3072,48 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("FROM agent_runs ar")) {
         return selectAgentRunValidation(values);
       }
+      if (
+        query.includes("SELECT workflow_run_id, workflow_step_id") &&
+        query.includes("FROM agent_runs")
+      ) {
+        const run = agentRuns.find(
+          (candidate) => candidate.id === Number(values[0] ?? 0),
+        );
+        return run
+          ? [
+              {
+                workflow_run_id: run.workflow_run_id,
+                workflow_step_id: run.workflow_step_id,
+              },
+            ]
+          : [];
+      }
+      if (
+        query.includes("FROM agent_runs") &&
+        query.includes("WHERE workflow_run_id = $1")
+      ) {
+        const workflowRunId = Number(values[0] ?? 0);
+        const workflowStepId = Number(values[1] ?? 0);
+        return agentRuns
+          .filter(
+            (run) =>
+              run.workflow_run_id === workflowRunId &&
+              run.workflow_step_id === workflowStepId,
+          )
+          .sort((left, right) => right.id - left.id)
+          .slice(0, 1)
+          .map((run) => ({
+            id: run.id,
+            status: run.status,
+            output_summary: run.output_summary,
+            error_message: run.error_message,
+          }));
+      }
       if (query.includes("FROM agent_runs")) {
         return selectAgentRunArtifactOwnership(values);
       }
       if (query.includes("FROM agent_tool_calls")) {
-        return selectAgentToolCalls(values);
+        return selectAgentToolCalls(query, values);
       }
       if (query.includes("FROM agent_run_events")) {
         return selectAgentRunEvents(values);
@@ -3284,6 +3482,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       if (normalizedQuery === "COMMIT") {
         transactionSnapshot = null;
+        persistReloadSnapshot();
         return { lastInsertId: 0, rowsAffected: 0 };
       }
 
@@ -3962,6 +4161,81 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: toolCall.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO agent_run_approval_checkpoints")) {
+        const checkpoint: AgentApprovalCheckpoint = {
+          agent_run_id: Number(values[0] ?? 0),
+          pending_tool_call_id: Number(values[1] ?? 0),
+          approval_id: Number(values[2] ?? 0),
+          phase: "waiting_approval",
+          messages_json: String(values[3] ?? "[]"),
+          iteration_count: Number(values[4] ?? 0),
+          created_at: now,
+          updated_at: now,
+        };
+        if (
+          agentApprovalCheckpoints.some(
+            (row) => row.agent_run_id === checkpoint.agent_run_id,
+          )
+        ) {
+          throw new Error(
+            "UNIQUE constraint failed: agent_run_approval_checkpoints.agent_run_id",
+          );
+        }
+        if (
+          !agentRuns.some((row) => row.id === checkpoint.agent_run_id) ||
+          !agentToolCalls.some(
+            (row) => row.id === checkpoint.pending_tool_call_id,
+          ) ||
+          !approvals.some((row) => row.id === checkpoint.approval_id)
+        ) {
+          throw new Error("FOREIGN KEY constraint failed");
+        }
+        JSON.parse(checkpoint.messages_json);
+        agentApprovalCheckpoints.push(checkpoint);
+        return { lastInsertId: checkpoint.agent_run_id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO workflow_step_executions")) {
+        const workflowStepId = Number(values[0] ?? 0);
+        const activeExecution = workflowStepExecutions.find(
+          (execution) =>
+            execution.workflow_step_id === workflowStepId &&
+            ["claimed", "running", "waiting_approval"].includes(
+              execution.status,
+            ),
+        );
+        if (activeExecution) {
+          throw new Error(
+            "UNIQUE constraint failed: workflow_step_executions.workflow_step_id",
+          );
+        }
+        const attemptCount =
+          Math.max(
+            0,
+            ...workflowStepExecutions
+              .filter(
+                (execution) => execution.workflow_step_id === workflowStepId,
+              )
+              .map((execution) => execution.attempt_count),
+          ) + 1;
+        const execution: WorkflowStepExecution = {
+          id: nextWorkflowStepExecutionId,
+          workflow_step_id: workflowStepId,
+          agent_run_id: values[1] === null ? null : Number(values[1] ?? 0),
+          executor_role: values[2] as AgentRole,
+          attempt_count: attemptCount,
+          status: "claimed",
+          error_summary: "",
+          started_at: now,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        workflowStepExecutions.push(execution);
+        nextWorkflowStepExecutionId += 1;
+        return { lastInsertId: execution.id, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT INTO workflow_runs")) {
         const run: WorkflowRun = {
           id: nextWorkflowRunId,
@@ -4067,12 +4341,55 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: 0, rowsAffected: 1 };
       }
 
+      if (query.includes("UPDATE agent_run_approval_checkpoints")) {
+        const runId = Number(values.at(-1) ?? 0);
+        const checkpoint = agentApprovalCheckpoints.find(
+          (row) => row.agent_run_id === runId,
+        );
+        if (!checkpoint) return { lastInsertId: 0, rowsAffected: 0 };
+        checkpoint.phase = "continuation_ready";
+        checkpoint.messages_json = String(
+          values[0] ?? checkpoint.messages_json,
+        );
+        if (query.includes("iteration_count = $2")) {
+          checkpoint.iteration_count = Number(
+            values[1] ?? checkpoint.iteration_count,
+          );
+        }
+        checkpoint.updated_at = now;
+        return { lastInsertId: runId, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE agent_tool_calls")) {
+        const id = Number(values[1] ?? 0);
+        const toolCall = agentToolCalls.find((row) => row.id === id);
+        if (!toolCall) return { lastInsertId: 0, rowsAffected: 0 };
+        const allowed = ["waiting_approval", "running"].includes(
+          toolCall.status,
+        );
+        if (!allowed) return { lastInsertId: id, rowsAffected: 0 };
+        if (query.includes("status = 'completed'")) {
+          toolCall.status = "completed";
+          toolCall.output_json = String(values[0] ?? "{}");
+          toolCall.error_message = "";
+        } else if (query.includes("status = 'rejected'")) {
+          toolCall.status = "rejected";
+          toolCall.error_message = String(values[0] ?? "Approval rejected");
+        }
+        toolCall.completed_at = now;
+        return { lastInsertId: id, rowsAffected: 1 };
+      }
+
       if (query.includes("UPDATE agent_runs")) {
         const literalRunning = query.includes("status = 'running'");
         const literalCancelled = query.includes("status = 'cancelled'");
-        const id =
-          literalRunning || literalCancelled
-            ? Number(values[0] ?? 0)
+        const literalFailed = query.includes("status = 'failed'");
+        const cancellationWithError =
+          literalCancelled && query.includes("error_message = $1");
+        const id = literalFailed
+          ? Number(values[1] ?? 0)
+          : literalRunning || literalCancelled
+            ? Number(values[cancellationWithError ? 1 : 0] ?? 0)
             : Number(values[4] ?? 0);
         const run = agentRuns.find((row) => row.id === id);
         if (run) {
@@ -4090,6 +4407,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           } else if (literalCancelled) {
             run.status = "cancelled";
             run.completed_at = now;
+            if (cancellationWithError) {
+              run.error_message = String(values[0] ?? "");
+            }
+          } else if (literalFailed) {
+            run.status = "failed";
+            run.error_message = String(values[0] ?? "");
+            run.completed_at = now;
           } else {
             run.status = values[0] as AgentRunStatus;
             run.output_summary = String(values[1] ?? "");
@@ -4104,6 +4428,41 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           run.updated_at = now;
           return { lastInsertId: id, rowsAffected: 1 };
         }
+      }
+
+      if (query.includes("UPDATE workflow_step_executions")) {
+        const reconcilesAgentRun = query.includes("WHERE agent_run_id = $3");
+        const execution = reconcilesAgentRun
+          ? workflowStepExecutions.find(
+              (row) =>
+                row.agent_run_id === Number(values[2] ?? 0) &&
+                row.workflow_step_id === Number(values[3] ?? 0),
+            )
+          : workflowStepExecutions.find(
+              (row) => row.id === Number(values[3] ?? 0),
+            );
+        if (!execution) return { lastInsertId: 0, rowsAffected: 0 };
+
+        if (reconcilesAgentRun) {
+          execution.status = values[0] as WorkflowStepExecutionStatus;
+          execution.error_summary = String(values[1] ?? "");
+        } else {
+          if (values[0] !== null) {
+            execution.agent_run_id = Number(values[0] ?? 0);
+          }
+          execution.status = values[1] as WorkflowStepExecutionStatus;
+          execution.error_summary = String(values[2] ?? "");
+        }
+        execution.completed_at = [
+          "completed",
+          "failed",
+          "blocked",
+          "cancelled",
+        ].includes(execution.status)
+          ? (execution.completed_at ?? now)
+          : null;
+        execution.updated_at = now;
+        return { lastInsertId: execution.id, rowsAffected: 1 };
       }
 
       if (query.includes("UPDATE workflow_runs")) {
@@ -4266,6 +4625,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
 
       if (query.includes("UPDATE approvals")) {
+        if (query.includes("campaign_id = $1")) {
+          const id = Number(values[1] ?? 0);
+          const approval = approvals.find((row) => row.id === id);
+          if (!approval) return { lastInsertId: id, rowsAffected: 0 };
+          approval.campaign_id = Number(values[0] ?? 0);
+          approval.updated_at = now;
+          return { lastInsertId: id, rowsAffected: 1 };
+        }
         const literalStatus = query.includes("status = 'scheduled'")
           ? "scheduled"
           : query.includes("status = 'published'")
@@ -4577,6 +4944,32 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: 0, rowsAffected };
       }
 
+      if (query.includes("DELETE FROM approvals WHERE id = $1")) {
+        const approvalId = Number(values[0] ?? 0);
+        const rowsAffected = removeRows(
+          approvals,
+          (approval) => approval.id === approvalId,
+        );
+        removeRows(
+          agentApprovalCheckpoints,
+          (checkpoint) => checkpoint.approval_id === approvalId,
+        );
+        return { lastInsertId: 0, rowsAffected };
+      }
+
+      if (query.includes("DELETE FROM agent_run_approval_checkpoints")) {
+        const id = Number(values[0] ?? 0);
+        const byApproval = query.includes("approval_id = $1");
+        const rowsAffected = removeRows(
+          agentApprovalCheckpoints,
+          (checkpoint) =>
+            byApproval
+              ? checkpoint.approval_id === id
+              : checkpoint.agent_run_id === id,
+        );
+        return { lastInsertId: 0, rowsAffected };
+      }
+
       if (query.includes("DELETE FROM comment_threads")) {
         const id = Number(values[0] ?? 0);
         const removedVariantIds = commentVariants
@@ -4621,6 +5014,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         );
         removeRows(approvals, (approval) =>
           draftIds.includes(approval.draft_id),
+        );
+        removeRows(agentApprovalCheckpoints, (checkpoint) =>
+          approvalIds.includes(checkpoint.approval_id),
         );
         removeRows(scheduleJobs, (job) =>
           approvalIds.includes(job.approval_id),
@@ -4707,6 +5103,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           removedDraftIds.includes(variant.draft_id),
         );
         removeRows(approvals, (approval) => approval.campaign_id === id);
+        removeRows(agentApprovalCheckpoints, (checkpoint) =>
+          removedApprovalIds.includes(checkpoint.approval_id),
+        );
         removeRows(scheduleJobs, (job) =>
           removedApprovalIds.includes(job.approval_id),
         );
@@ -4743,6 +5142,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         );
         removeRows(agentRunEvents, (event) =>
           removedAgentRunIds.includes(event.agent_run_id),
+        );
+        removeRows(agentApprovalCheckpoints, (checkpoint) =>
+          removedAgentRunIds.includes(checkpoint.agent_run_id),
         );
         removeRows(
           draftAudits,
@@ -5226,7 +5628,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
     w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
+    w.__LINKGO_SQL_AGENT_APPROVAL_CHECKPOINTS__ = () =>
+      cloneRows(agentApprovalCheckpoints);
     w.__LINKGO_SQL_WORKFLOW_ARTIFACTS__ = () => cloneRows(workflowArtifacts);
+    w.__LINKGO_SQL_WORKFLOW_RUNS__ = () => cloneRows(workflowRuns);
+    w.__LINKGO_SQL_WORKFLOW_STEPS__ = () => cloneRows(workflowSteps);
+    w.__LINKGO_SQL_WORKFLOW_EVENTS__ = () => cloneRows(workflowEvents);
+    w.__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__ = () =>
+      cloneRows(workflowStepExecutions);
     w.__LINKGO_SQL_PLAYBOOK_OVERRIDES__ = () =>
       cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);
@@ -5248,6 +5657,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_SCHEDULER_SETTINGS__ = () => ({ ...schedulerSettings });
     w.__LINKGO_SQL_SCHEDULER_EVENTS__ = () => cloneRows(schedulerEvents);
     w.__LINKGO_SQL_APP_SETTINGS__ = () => ({ ...appSettings });
+    w.__LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__ = () => {
+      reloadPersistenceEnabled = true;
+      persistReloadSnapshot();
+    };
 
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
       campaigns: campaigns.length,
@@ -5274,9 +5687,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       workflowSteps: workflowSteps.length,
       workflowEvents: workflowEvents.length,
       workflowArtifacts: workflowArtifacts.length,
+      workflowStepExecutions: workflowStepExecutions.length,
       agentRuns: agentRuns.length,
       agentToolCalls: agentToolCalls.length,
       agentRunEvents: agentRunEvents.length,
+      agentApprovalCheckpoints: agentApprovalCheckpoints.length,
       playbookOverrides: agentPlaybookOverrides.length,
       safetySettings: 1,
       safetyAuditEvents: safetyAuditEvents.length,
@@ -5353,6 +5768,19 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         events: [],
       };
     }
+
+    w.__LINKGO_AUTH_CLEAR_BASE_URL_OVERRIDE__ = (
+      providerKey = "custom",
+    ): void => {
+      const account = connectedAccounts.find(
+        (candidate) => candidate.provider_key === providerKey,
+      );
+      if (account === undefined)
+        throw new Error("Connected account unavailable");
+      account.has_base_url_override = false;
+      const secret = providerSecrets[providerKey];
+      if (secret !== undefined) delete secret.baseUrl;
+    };
 
     const mockWindow = {
       show: () => Promise.resolve(),

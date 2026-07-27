@@ -90,6 +90,7 @@ export interface ApprovalDraftSnapshot {
 }
 
 export type ApprovalWithDetails = Approval & {
+  linkedAgentRunCount: number;
   scheduleJob: ScheduleJob | null;
   publishAttempts: PublishAttempt[];
   draft: ApprovalDraftSnapshot;

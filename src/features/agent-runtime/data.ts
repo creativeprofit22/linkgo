@@ -1,11 +1,17 @@
 import {
   AGENT_TOOL_METADATA,
+  agentConversationSchema,
   agentToolRegistry,
   buildAgentMessages,
   createConfiguredAgentProvider,
+  createToolResultMessage,
   getAgentPlaybook,
   getDefaultPlaybookForRole,
   runAgentLoop,
+  schedulePostInputSchema,
+  type AgentLoopResult,
+  type AgentMessage,
+  type AgentModelRequest,
   type AgentPlaybookKey,
   type AgentProgressEvent,
   type AgentToolMetadata,
@@ -19,15 +25,21 @@ import {
   upsertErrorQueueItem,
 } from "@/features/safety/data";
 import { getPlaybookPromptForRuntime } from "@/features/playbooks/data";
+import { getAuthStatus } from "@/features/integrations/data";
+import { isAgentProviderReady } from "@/features/agent-runtime/provider-readiness";
 import {
+  agentRunApprovalCheckpointSchema,
   cancelAgentRunSchema,
   createAgentRunSchema,
   recordAgentRunEventSchema,
   recordAgentToolCallSchema,
+  resumeAgentRunResultSchema,
+  resumeAgentRunSchema,
   startAgentRunSchema,
 } from "@/features/agent-runtime/schemas";
 import type {
   AgentRun,
+  AgentRunApprovalCheckpoint,
   AgentRunEvent,
   AgentRunWithDetails,
   AgentToolCall,
@@ -36,9 +48,14 @@ import type {
   CreateAgentRunInput,
   RecordAgentRunEventInput,
   RecordAgentToolCallInput,
+  ResumeAgentRunInput,
+  ResumeAgentRunResult,
   StartAgentRunInput,
 } from "@/features/agent-runtime/types";
-import { listWorkflowRuns } from "@/workflows/data";
+import {
+  listWorkflowRuns,
+  reconcileWorkflowAgentRunInTransaction,
+} from "@/workflows/data";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
 
 interface CampaignStatusRow {
@@ -54,6 +71,19 @@ interface AgentRunRow extends AgentRun {
 interface AgentRunValidationRow extends AgentRun {
   campaign_status: CampaignStatus;
 }
+
+type AgentRunApprovalCheckpointRow = Omit<
+  AgentRunApprovalCheckpoint,
+  "messages"
+>;
+
+interface ApprovalLinkRow {
+  id: number;
+  campaign_id: number;
+  status: AgentRunApprovalCheckpoint["approval_status"];
+}
+
+const activeResumeRunIds = new Set<number>();
 
 interface WorkflowRunValidationRow {
   id: number;
@@ -81,11 +111,21 @@ function parseToolCallJson(call: AgentToolCall): AgentToolCallWithJson {
   return { ...call, input, output };
 }
 
+function parseApprovalCheckpoint(
+  row: AgentRunApprovalCheckpointRow,
+): AgentRunApprovalCheckpoint {
+  return agentRunApprovalCheckpointSchema.parse({
+    ...row,
+    messages: JSON.parse(row.messages_json),
+  });
+}
+
 function mapRunWithDetails(
   row: AgentRunRow,
   toolCalls: AgentToolCall[],
   events: AgentRunEvent[],
   workflowRun: WorkflowRunWithDetails | null,
+  checkpoint: AgentRunApprovalCheckpoint | null,
 ): AgentRunWithDetails {
   return {
     id: row.id,
@@ -111,6 +151,7 @@ function mapRunWithDetails(
       status: row.campaign_status,
     },
     workflowRun,
+    checkpoint,
     toolCalls: toolCalls.map(parseToolCallJson),
     events,
   };
@@ -323,21 +364,29 @@ export async function listAgentRuns(
 
   const runIds = runRows.map((run) => run.id);
   const placeholders = getPlaceholders(runIds);
-  const [toolCallRows, eventRows, workflowRuns] = await Promise.all([
-    db.select<AgentToolCall[]>(
-      `SELECT * FROM agent_tool_calls
-      WHERE agent_run_id IN (${placeholders})
-      ORDER BY agent_run_id ASC, id ASC`,
-      runIds,
-    ),
-    db.select<AgentRunEvent[]>(
-      `SELECT * FROM agent_run_events
-      WHERE agent_run_id IN (${placeholders})
-      ORDER BY agent_run_id ASC, datetime(created_at) DESC, id DESC`,
-      runIds,
-    ),
-    listWorkflowRuns(campaignId),
-  ]);
+  const [toolCallRows, eventRows, checkpointRows, workflowRuns] =
+    await Promise.all([
+      db.select<AgentToolCall[]>(
+        `SELECT * FROM agent_tool_calls
+        WHERE agent_run_id IN (${placeholders})
+        ORDER BY agent_run_id ASC, id ASC`,
+        runIds,
+      ),
+      db.select<AgentRunEvent[]>(
+        `SELECT * FROM agent_run_events
+        WHERE agent_run_id IN (${placeholders})
+        ORDER BY agent_run_id ASC, datetime(created_at) DESC, id DESC`,
+        runIds,
+      ),
+      db.select<AgentRunApprovalCheckpointRow[]>(
+        `SELECT cp.*, a.status AS approval_status
+        FROM agent_run_approval_checkpoints cp
+        INNER JOIN approvals a ON a.id = cp.approval_id
+        WHERE cp.agent_run_id IN (${placeholders})`,
+        runIds,
+      ),
+      listWorkflowRuns(campaignId),
+    ]);
 
   const toolCallsByRunId = new Map<number, AgentToolCall[]>();
   for (const toolCall of toolCallRows) {
@@ -353,6 +402,12 @@ export async function listAgentRuns(
     eventsByRunId.set(event.agent_run_id, events);
   }
 
+  const checkpointsByRunId = new Map(
+    checkpointRows.map((checkpoint) => [
+      checkpoint.agent_run_id,
+      parseApprovalCheckpoint(checkpoint),
+    ]),
+  );
   const workflowRunsById = new Map(
     workflowRuns.map((workflowRun) => [workflowRun.id, workflowRun]),
   );
@@ -365,6 +420,7 @@ export async function listAgentRuns(
       row.workflow_run_id === null
         ? null
         : (workflowRunsById.get(row.workflow_run_id) ?? null),
+      checkpointsByRunId.get(row.id) ?? null,
     ),
   );
 }
@@ -428,6 +484,230 @@ export async function createAgentRun(
   }
 }
 
+async function assertProviderConnected(
+  providerKey: AgentRun["provider_key"],
+): Promise<void> {
+  if (providerKey === "dry_run") return;
+  const authStatus = await getAuthStatus();
+  if (isAgentProviderReady(providerKey, authStatus.accounts)) return;
+  if (providerKey === "custom") {
+    throw new Error("Custom provider requires a Base URL override");
+  }
+  throw new Error("Agent provider is not connected");
+}
+
+async function getApprovalLink(
+  db: LinkgoDatabase,
+  approvalId: number,
+): Promise<ApprovalLinkRow> {
+  const rows = await db.select<ApprovalLinkRow[]>(
+    `SELECT id, campaign_id, status
+    FROM approvals
+    WHERE id = $1
+    LIMIT 1`,
+    [approvalId],
+  );
+  const approval = rows[0];
+  if (approval === undefined) throw new Error("Linked approval was not found");
+  return approval;
+}
+
+async function validateApprovalInterrupt(
+  db: LinkgoDatabase,
+  run: AgentRunValidationRow,
+  result: AgentLoopResult,
+): Promise<number | null> {
+  if (result.status !== "waiting_approval") return null;
+  const waitingCalls = result.toolCalls.filter(
+    (toolCall) => toolCall.status === "waiting_approval",
+  );
+  if (waitingCalls.length !== 1) {
+    throw new Error("Approval interrupt must contain one pending tool call");
+  }
+  const pendingCall = waitingCalls[0];
+  if (pendingCall?.toolName !== "schedule_post") {
+    throw new Error("Only schedule_post can create an approval checkpoint");
+  }
+  const scheduleInput = schedulePostInputSchema.parse(pendingCall.input);
+  if (scheduleInput.campaignId !== run.campaign_id) {
+    throw new Error("Schedule request belongs to a different campaign");
+  }
+  const approval = await getApprovalLink(db, scheduleInput.approvalId);
+  if (approval.campaign_id !== run.campaign_id) {
+    throw new Error("Linked approval belongs to a different campaign");
+  }
+  return approval.id;
+}
+
+function shouldRetainContinuationCheckpoint(result: AgentLoopResult): boolean {
+  return (
+    result.status === "failed" &&
+    result.toolCalls.length === 0 &&
+    !result.errorMessage.includes("maximum turn limit")
+  );
+}
+
+function getPersistedCheckpointPhase(
+  result: AgentLoopResult,
+  options: { allowContinuationRecovery: boolean },
+): ResumeAgentRunResult["checkpointPhase"] {
+  if (result.status === "waiting_approval") return "waiting_approval";
+  if (
+    options.allowContinuationRecovery &&
+    shouldRetainContinuationCheckpoint(result)
+  ) {
+    return "continuation_ready";
+  }
+  return null;
+}
+
+async function persistAgentLoopResult(
+  db: LinkgoDatabase,
+  run: AgentRunValidationRow,
+  result: AgentLoopResult,
+  options: { allowContinuationRecovery: boolean },
+): Promise<void> {
+  const conversation = agentConversationSchema.parse(result.conversation);
+  const approvalId = await validateApprovalInterrupt(db, run, result);
+  const checkpointPhase = getPersistedCheckpointPhase(result, options);
+  let pendingToolCallId: number | null = null;
+
+  for (const toolCall of result.toolCalls) {
+    const toolCallId = await insertAgentToolCall(db, {
+      agentRunId: run.id,
+      providerToolCallId: toolCall.providerToolCallId,
+      toolName: toolCall.toolName,
+      status: toolCall.status,
+      requiresApproval: toolCall.requiresApproval,
+      input: toolCall.input,
+      output: toolCall.output,
+      errorMessage: toolCall.errorMessage,
+    });
+    if (toolCall.status === "waiting_approval") {
+      pendingToolCallId = toolCallId;
+    }
+  }
+
+  if (checkpointPhase === "waiting_approval") {
+    if (approvalId === null || pendingToolCallId === null) {
+      throw new Error("Approval checkpoint is missing its pending tool call");
+    }
+    await db.execute(
+      `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
+      [run.id],
+    );
+    await db.execute(
+      `INSERT INTO agent_run_approval_checkpoints (
+        agent_run_id,
+        pending_tool_call_id,
+        approval_id,
+        phase,
+        messages_json,
+        iteration_count,
+        updated_at
+      ) VALUES ($1, $2, $3, 'waiting_approval', $4, $5, datetime('now'))`,
+      [
+        run.id,
+        pendingToolCallId,
+        approvalId,
+        JSON.stringify(conversation),
+        result.iterationCount,
+      ],
+    );
+  } else if (checkpointPhase === "continuation_ready") {
+    const checkpointResult = await db.execute(
+      `UPDATE agent_run_approval_checkpoints
+      SET phase = 'continuation_ready',
+        messages_json = $1,
+        iteration_count = $2,
+        updated_at = datetime('now')
+      WHERE agent_run_id = $3`,
+      [JSON.stringify(conversation), result.iterationCount, run.id],
+    );
+    if (checkpointResult.rowsAffected !== 1) {
+      throw new Error("Agent continuation checkpoint was lost");
+    }
+  } else {
+    await db.execute(
+      `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
+      [run.id],
+    );
+  }
+
+  await db.execute(
+    `UPDATE agent_runs
+    SET status = $1,
+      output_summary = $2,
+      error_message = $3,
+      iteration_count = $4,
+      completed_at = CASE WHEN $1 IN ('completed', 'failed', 'cancelled') THEN datetime('now') ELSE NULL END,
+      updated_at = datetime('now')
+    WHERE id = $5`,
+    [
+      result.status,
+      result.outputSummary,
+      result.errorMessage,
+      result.iterationCount,
+      run.id,
+    ],
+  );
+  await reconcileWorkflowAgentRunInTransaction(db, {
+    agentRunId: run.id,
+    status: result.status,
+    outputSummary: result.outputSummary,
+    errorMessage: result.errorMessage,
+  });
+
+  if (result.status === "failed") {
+    await recordSafetyAuditEvent(db, {
+      campaignId: run.campaign_id,
+      subjectType: "agent_run",
+      subjectId: run.id,
+      eventType: "agent_run_failed",
+      severity: "warning",
+      summary: result.errorMessage || "Agent run failed",
+      metadata: { iterationCount: result.iterationCount },
+    });
+    await upsertErrorQueueItem(db, {
+      campaignId: run.campaign_id,
+      sourceType: "agent_run",
+      sourceId: run.id,
+      title: "Agent run failed",
+      detail: result.errorMessage || "Agent run failed",
+      severity: "error",
+    });
+  }
+}
+
+async function failAgentRunAfterPersistenceError(
+  db: LinkgoDatabase,
+  runId: number,
+  error: unknown,
+): Promise<void> {
+  const errorMessage =
+    error instanceof Error ? error.message : "Agent result persistence failed";
+  try {
+    await db.execute("BEGIN IMMEDIATE");
+    await db.execute(
+      `UPDATE agent_runs
+      SET status = 'failed',
+        error_message = $1,
+        completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE id = $2 AND status = 'running'`,
+      [errorMessage, runId],
+    );
+    await insertAgentRunEvent(db, {
+      agentRunId: runId,
+      eventType: "run_failed",
+      summary: errorMessage,
+    });
+    await db.execute("COMMIT");
+  } catch {
+    await rollbackAgentRuntimeTransaction(db);
+  }
+}
+
 export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
   const parsed = startAgentRunSchema.parse(input);
   const db = await getDb();
@@ -442,6 +722,16 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
   if (run.status === "waiting_approval") {
     throw new Error("Agent run is waiting for approval");
   }
+  const checkpointRows = await db.select<{ agent_run_id: number }[]>(
+    `SELECT agent_run_id FROM agent_run_approval_checkpoints
+    WHERE agent_run_id = $1
+    LIMIT 1`,
+    [run.id],
+  );
+  if (checkpointRows.length > 0) {
+    throw new Error("Use approval continuation recovery for this agent run");
+  }
+  await assertProviderConnected(run.provider_key);
   await assertSafetyKillSwitchOff(db, {
     campaignId: run.campaign_id,
     subjectType: "agent_run",
@@ -455,7 +745,7 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
   );
   const runtimePlaybook = await getPlaybookPromptForRuntime(run.playbook_key);
 
-  await db.execute("BEGIN TRANSACTION");
+  await db.execute("BEGIN IMMEDIATE");
   try {
     const claimResult = await db.execute(
       `UPDATE agent_runs
@@ -486,7 +776,7 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     throw error;
   }
 
-  const request = {
+  const request: AgentModelRequest = {
     runId: run.id,
     campaignId: run.campaign_id,
     workflowRunId: run.workflow_run_id,
@@ -510,67 +800,20 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     provider,
     tools: agentToolRegistry,
     request,
-    maxIterations: 8,
+    maxTurns: 8,
     maxRetries: run.provider_key === "dry_run" ? 0 : 1,
     onProgress: (event) => recordProgressEvent(db, run.id, event),
   });
 
-  await db.execute("BEGIN TRANSACTION");
+  await db.execute("BEGIN IMMEDIATE");
   try {
-    for (const toolCall of result.toolCalls) {
-      await insertAgentToolCall(db, {
-        agentRunId: run.id,
-        providerToolCallId: toolCall.providerToolCallId,
-        toolName: toolCall.toolName,
-        status: toolCall.status,
-        requiresApproval: toolCall.requiresApproval,
-        input: toolCall.input,
-        output: toolCall.output,
-        errorMessage: toolCall.errorMessage,
-      });
-    }
-
-    await db.execute(
-      `UPDATE agent_runs
-      SET status = $1,
-        output_summary = $2,
-        error_message = $3,
-        iteration_count = $4,
-        completed_at = CASE WHEN $1 IN ('completed', 'failed', 'cancelled') THEN datetime('now') ELSE NULL END,
-        updated_at = datetime('now')
-      WHERE id = $5`,
-      [
-        result.status,
-        result.outputSummary,
-        result.errorMessage,
-        result.iterationCount,
-        run.id,
-      ],
-    );
-
-    if (result.status === "failed") {
-      await recordSafetyAuditEvent(db, {
-        campaignId: run.campaign_id,
-        subjectType: "agent_run",
-        subjectId: run.id,
-        eventType: "agent_run_failed",
-        severity: "warning",
-        summary: result.errorMessage || "Agent run failed",
-        metadata: { iterationCount: result.iterationCount },
-      });
-      await upsertErrorQueueItem(db, {
-        campaignId: run.campaign_id,
-        sourceType: "agent_run",
-        sourceId: run.id,
-        title: "Agent run failed",
-        detail: result.errorMessage || "Agent run failed",
-        severity: "error",
-      });
-    }
-
+    await persistAgentLoopResult(db, run, result, {
+      allowContinuationRecovery: false,
+    });
     await db.execute("COMMIT");
   } catch (error) {
     await rollbackAgentRuntimeTransaction(db);
+    await failAgentRunAfterPersistenceError(db, run.id, error);
     throw error;
   }
 }
@@ -579,6 +822,314 @@ export async function startDryRunAgentRun(
   input: StartAgentRunInput,
 ): Promise<void> {
   return startAgentRun(input);
+}
+
+export async function rejectAgentRunsForApprovalInTransaction(
+  db: LinkgoDatabase,
+  approvalId: number,
+  reviewerContext: string,
+): Promise<void> {
+  const checkpointRows = await db.select<
+    Array<{ agent_run_id: number; pending_tool_call_id: number }>
+  >(
+    `SELECT agent_run_id, pending_tool_call_id
+    FROM agent_run_approval_checkpoints
+    WHERE approval_id = $1`,
+    [approvalId],
+  );
+  const detail =
+    reviewerContext.trim() || "Approval rejected by operator review";
+
+  for (const checkpoint of checkpointRows) {
+    await db.execute(
+      `UPDATE agent_tool_calls
+      SET status = 'rejected',
+        error_message = $1,
+        completed_at = datetime('now')
+      WHERE id = $2
+        AND status IN ('waiting_approval', 'running')`,
+      [`Approval rejected: ${detail}`, checkpoint.pending_tool_call_id],
+    );
+    const errorMessage = `Approval rejected: ${detail}`;
+    await db.execute(
+      `UPDATE agent_runs
+      SET status = 'cancelled',
+        error_message = $1,
+        completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE id = $2`,
+      [errorMessage, checkpoint.agent_run_id],
+    );
+    await reconcileWorkflowAgentRunInTransaction(db, {
+      agentRunId: checkpoint.agent_run_id,
+      status: "cancelled",
+      outputSummary: "",
+      errorMessage,
+    });
+    await insertAgentRunEvent(db, {
+      agentRunId: checkpoint.agent_run_id,
+      eventType: "run_cancelled",
+      summary: `Agent run cancelled after approval rejection: ${detail}`,
+    });
+  }
+
+  await db.execute(
+    `DELETE FROM agent_run_approval_checkpoints WHERE approval_id = $1`,
+    [approvalId],
+  );
+}
+
+export async function resumeAgentRun(
+  input: ResumeAgentRunInput,
+): Promise<ResumeAgentRunResult> {
+  const parsed = resumeAgentRunSchema.parse(input);
+  if (activeResumeRunIds.has(parsed.id)) {
+    throw new Error("Agent continuation is already running");
+  }
+  activeResumeRunIds.add(parsed.id);
+
+  try {
+    const db = await getDb();
+    let run: AgentRunValidationRow;
+    let checkpoint: AgentRunApprovalCheckpoint;
+    let conversation: AgentMessage[];
+    let handledProviderToolCallIds: string[];
+    let committed = false;
+
+    await db.execute("BEGIN IMMEDIATE");
+    try {
+      const checkpointRows = await db.select<AgentRunApprovalCheckpointRow[]>(
+        `SELECT cp.*, a.status AS approval_status
+        FROM agent_run_approval_checkpoints cp
+        INNER JOIN approvals a ON a.id = cp.approval_id
+        WHERE cp.agent_run_id = $1
+        LIMIT 1`,
+        [parsed.id],
+      );
+      const checkpointRow = checkpointRows[0];
+      if (checkpointRow === undefined) {
+        throw new Error("Agent approval checkpoint was not found");
+      }
+      checkpoint = parseApprovalCheckpoint(checkpointRow);
+      run = await getAgentRunValidation(db, parsed.id);
+
+      const pendingRows = await db.select<AgentToolCall[]>(
+        `SELECT * FROM agent_tool_calls
+        WHERE id = $1 AND agent_run_id = $2
+        LIMIT 1`,
+        [checkpoint.pending_tool_call_id, run.id],
+      );
+      const pendingTool = pendingRows[0];
+      if (pendingTool === undefined) {
+        throw new Error("Pending approval tool call was not found");
+      }
+      if (
+        pendingTool.tool_name !== "schedule_post" ||
+        pendingTool.requires_approval !== 1
+      ) {
+        throw new Error("Approval checkpoint does not reference schedule_post");
+      }
+      const scheduleInput = schedulePostInputSchema.parse(
+        JSON.parse(pendingTool.input_json),
+      );
+      if (
+        scheduleInput.campaignId !== run.campaign_id ||
+        scheduleInput.approvalId !== checkpoint.approval_id
+      ) {
+        throw new Error("Approval checkpoint does not match the run campaign");
+      }
+      const approval = await getApprovalLink(db, checkpoint.approval_id);
+      if (approval.campaign_id !== run.campaign_id) {
+        throw new Error("Linked approval belongs to a different campaign");
+      }
+      if (approval.status === "rejected") {
+        await rejectAgentRunsForApprovalInTransaction(
+          db,
+          approval.id,
+          "Approval rejected before continuation",
+        );
+        await db.execute("COMMIT");
+        committed = true;
+        throw new Error("Linked approval was rejected");
+      }
+      if (approval.status !== "approved") {
+        throw new Error("Linked approval must be approved before resume");
+      }
+      if (run.campaign_status === "archived") {
+        throw new Error("Campaign is archived");
+      }
+      if (!["waiting_approval", "running", "failed"].includes(run.status)) {
+        throw new Error("Agent run cannot resume from its current status");
+      }
+      await assertProviderConnected(run.provider_key);
+      await assertSafetyKillSwitchOff(db, {
+        campaignId: run.campaign_id,
+        subjectType: "agent_run",
+        subjectId: run.id,
+        summary: "Approved agent continuation",
+      });
+
+      const claimResult = await db.execute(
+        `UPDATE agent_runs
+        SET status = 'running',
+          completed_at = NULL,
+          error_message = '',
+          updated_at = datetime('now')
+        WHERE id = $1
+          AND status IN ('waiting_approval', 'running', 'failed')`,
+        [run.id],
+      );
+      if (claimResult.rowsAffected !== 1) {
+        throw new Error("Agent continuation could not be claimed");
+      }
+      await reconcileWorkflowAgentRunInTransaction(db, {
+        agentRunId: run.id,
+        status: "running",
+        outputSummary: run.output_summary,
+        errorMessage: "",
+      });
+
+      conversation = [...checkpoint.messages];
+      const request: AgentModelRequest = {
+        runId: run.id,
+        campaignId: run.campaign_id,
+        workflowRunId: run.workflow_run_id,
+        workflowStepId: run.workflow_step_id,
+        agentRole: run.agent_role,
+        inputSummary: run.input_summary,
+        messages: conversation,
+        ...(run.playbook_key
+          ? {
+              playbookKey: run.playbook_key,
+              playbookLabel:
+                getAgentPlaybook(run.playbook_key)?.label ?? run.playbook_key,
+            }
+          : {}),
+      };
+
+      if (checkpoint.phase === "waiting_approval") {
+        if (!["waiting_approval", "running"].includes(pendingTool.status)) {
+          throw new Error("Pending approval tool is not executable");
+        }
+        const rawOutput = await agentToolRegistry.schedule_post.execute(
+          scheduleInput,
+          {
+            request,
+            providerToolCallId: pendingTool.provider_tool_call_id,
+          },
+        );
+        const output =
+          agentToolRegistry.schedule_post.outputSchema.parse(rawOutput);
+        const toolUpdate = await db.execute(
+          `UPDATE agent_tool_calls
+          SET status = 'completed',
+            output_json = $1,
+            error_message = '',
+            completed_at = datetime('now')
+          WHERE id = $2
+            AND status IN ('waiting_approval', 'running')`,
+          [JSON.stringify(output), pendingTool.id],
+        );
+        if (toolUpdate.rowsAffected !== 1) {
+          throw new Error("Approved tool call was already handled");
+        }
+        conversation.push(
+          createToolResultMessage(
+            pendingTool.tool_name,
+            pendingTool.provider_tool_call_id,
+            output,
+          ),
+        );
+        conversation = agentConversationSchema.parse(conversation);
+        await db.execute(
+          `UPDATE agent_run_approval_checkpoints
+          SET phase = 'continuation_ready',
+            messages_json = $1,
+            updated_at = datetime('now')
+          WHERE agent_run_id = $2`,
+          [JSON.stringify(conversation), run.id],
+        );
+      } else if (pendingTool.status !== "completed") {
+        throw new Error("Continuation-ready tool call is not completed");
+      }
+
+      const handledRows = await db.select<
+        Array<{ provider_tool_call_id: string }>
+      >(
+        `SELECT provider_tool_call_id FROM agent_tool_calls
+        WHERE agent_run_id = $1 AND provider_tool_call_id <> ''`,
+        [run.id],
+      );
+      handledProviderToolCallIds = handledRows.map(
+        (row) => row.provider_tool_call_id,
+      );
+      await db.execute("COMMIT");
+      committed = true;
+    } catch (error) {
+      if (!committed) await rollbackAgentRuntimeTransaction(db);
+      throw error;
+    }
+
+    const provider = createConfiguredAgentProvider(
+      run.provider_key,
+      run.model_name || undefined,
+    );
+    const request: AgentModelRequest = {
+      runId: run.id,
+      campaignId: run.campaign_id,
+      workflowRunId: run.workflow_run_id,
+      workflowStepId: run.workflow_step_id,
+      agentRole: run.agent_role,
+      inputSummary: run.input_summary,
+      messages: conversation,
+      ...(run.playbook_key
+        ? {
+            playbookKey: run.playbook_key,
+            playbookLabel:
+              getAgentPlaybook(run.playbook_key)?.label ?? run.playbook_key,
+          }
+        : {}),
+    };
+    const result = await runAgentLoop({
+      provider,
+      tools: agentToolRegistry,
+      request,
+      maxTurns: 8,
+      initialTurnCount: checkpoint.iteration_count,
+      handledProviderToolCallIds,
+      maxRetries: run.provider_key === "dry_run" ? 0 : 1,
+      onProgress: (event) => recordProgressEvent(db, run.id, event),
+    });
+
+    const persistOptions = { allowContinuationRecovery: true };
+    await db.execute("BEGIN IMMEDIATE");
+    try {
+      const activeCheckpointRows = await db.select<
+        Array<{ agent_run_id: number }>
+      >(
+        `SELECT agent_run_id FROM agent_run_approval_checkpoints
+        WHERE agent_run_id = $1 AND phase = 'continuation_ready'`,
+        [run.id],
+      );
+      if (activeCheckpointRows.length !== 1) {
+        throw new Error("Agent continuation checkpoint is no longer active");
+      }
+      await persistAgentLoopResult(db, run, result, persistOptions);
+      await db.execute("COMMIT");
+    } catch (error) {
+      await rollbackAgentRuntimeTransaction(db);
+      throw error;
+    }
+
+    return resumeAgentRunResultSchema.parse({
+      status: result.status,
+      outputSummary: result.outputSummary,
+      errorMessage: result.errorMessage,
+      checkpointPhase: getPersistedCheckpointPhase(result, persistOptions),
+    });
+  } finally {
+    activeResumeRunIds.delete(parsed.id);
+  }
 }
 
 export async function cancelAgentRun(
@@ -596,12 +1147,24 @@ export async function cancelAgentRun(
       throw new Error("Completed agent runs cannot be cancelled");
     }
 
+    const errorMessage = run.error_message || "Agent run cancelled";
     await db.execute(
       `UPDATE agent_runs
       SET status = 'cancelled',
+        error_message = $1,
         completed_at = datetime('now'),
         updated_at = datetime('now')
-      WHERE id = $1`,
+      WHERE id = $2`,
+      [errorMessage, parsed.id],
+    );
+    await reconcileWorkflowAgentRunInTransaction(db, {
+      agentRunId: run.id,
+      status: "cancelled",
+      outputSummary: run.output_summary,
+      errorMessage,
+    });
+    await db.execute(
+      `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
       [parsed.id],
     );
     await insertAgentRunEvent(db, {
@@ -647,6 +1210,7 @@ if (IS_TEST && typeof window !== "undefined") {
         createAgentRun: typeof createAgentRun;
         startAgentRun: typeof startAgentRun;
         startDryRunAgentRun: typeof startDryRunAgentRun;
+        resumeAgentRun: typeof resumeAgentRun;
         cancelAgentRun: typeof cancelAgentRun;
       };
     }
@@ -654,6 +1218,7 @@ if (IS_TEST && typeof window !== "undefined") {
     createAgentRun,
     startAgentRun,
     startDryRunAgentRun,
+    resumeAgentRun,
     cancelAgentRun,
   };
 }

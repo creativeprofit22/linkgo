@@ -1,5 +1,6 @@
 import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type {
+  AgentMessage,
   AgentProviderKey,
   AgentRole,
   AgentRunEventType,
@@ -7,6 +8,7 @@ import type {
   AgentToolCallStatus,
   AgentToolName,
 } from "@/agent/types";
+import type { ApprovalStatus } from "@/features/approvals/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
 
@@ -56,6 +58,23 @@ export interface AgentRunEvent {
   created_at: string;
 }
 
+export type AgentApprovalCheckpointPhase =
+  | "waiting_approval"
+  | "continuation_ready";
+
+export interface AgentRunApprovalCheckpoint {
+  agent_run_id: number;
+  pending_tool_call_id: number;
+  approval_id: number;
+  phase: AgentApprovalCheckpointPhase;
+  messages_json: string;
+  iteration_count: number;
+  created_at: string;
+  updated_at: string;
+  approval_status: ApprovalStatus;
+  messages: AgentMessage[];
+}
+
 export interface AgentCampaignSnapshot {
   id: number;
   name: string;
@@ -70,6 +89,7 @@ export interface AgentToolCallWithJson extends AgentToolCall {
 export type AgentRunWithDetails = AgentRun & {
   campaign: AgentCampaignSnapshot;
   workflowRun: WorkflowRunWithDetails | null;
+  checkpoint: AgentRunApprovalCheckpoint | null;
   toolCalls: AgentToolCallWithJson[];
   events: AgentRunEvent[];
 };
@@ -89,6 +109,16 @@ export interface StartAgentRunInput {
   id: number;
 }
 
+export interface ResumeAgentRunInput {
+  id: number;
+}
+
+export interface ResumeAgentRunResult {
+  status: Extract<AgentRunStatus, "completed" | "waiting_approval" | "failed">;
+  outputSummary: string;
+  errorMessage: string;
+  checkpointPhase: AgentApprovalCheckpointPhase | null;
+}
 export interface CancelAgentRunInput {
   id: number;
 }

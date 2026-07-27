@@ -77,11 +77,15 @@ export function ApprovalCard({
     approval.status === "approved" &&
     (!approval.scheduleJob ||
       ["cancelled", "failed"].includes(approval.scheduleJob.status));
+  const linkedAgentRunConsequence =
+    approval.linkedAgentRunCount === 1
+      ? "1 linked waiting run will be cancelled and its resumable checkpoint removed."
+      : `${approval.linkedAgentRunCount} linked waiting runs will be cancelled and their resumable checkpoints removed.`;
 
   function rejectApproval(): void {
     if (
       window.confirm(
-        "Reject this approval? The draft will stay in local history.",
+        `Reject this approval? ${linkedAgentRunConsequence} The draft will stay in local history.`,
       )
     ) {
       void onSetStatus({ id: approval.id, status: "rejected" });
@@ -125,6 +129,11 @@ export function ApprovalCard({
               <span className="truncate">{approval.draft.target_url}</span>
               <ExternalLink className="size-3" />
             </a>
+            {approval.linkedAgentRunCount > 0 && (
+              <p className="text-destructive text-sm font-medium">
+                Rejection consequence: {linkedAgentRunConsequence}
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             {isArchivedCampaign && (

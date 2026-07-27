@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { playbookKeySchema } from "@/features/playbooks/schemas";
 import {
+  agentConversationSchema,
   agentProviderKeySchema,
   agentRoleSchema,
   agentRunEventTypeSchema,
@@ -25,6 +26,47 @@ export const createAgentRunSchema = z.object({
 export const startAgentRunSchema = z.object({
   id: positiveIdSchema,
 });
+
+export const resumeAgentRunSchema = z.object({
+  id: positiveIdSchema,
+});
+
+export const agentApprovalCheckpointPhaseSchema = z.enum([
+  "waiting_approval",
+  "continuation_ready",
+]);
+
+export const resumeAgentRunResultSchema = z
+  .object({
+    status: z.enum(["completed", "waiting_approval", "failed"]),
+    outputSummary: z.string(),
+    errorMessage: z.string(),
+    checkpointPhase: agentApprovalCheckpointPhaseSchema.nullable(),
+  })
+  .strict();
+
+export const agentRunApprovalCheckpointSchema = z
+  .object({
+    agent_run_id: positiveIdSchema,
+    pending_tool_call_id: positiveIdSchema,
+    approval_id: positiveIdSchema,
+    phase: agentApprovalCheckpointPhaseSchema,
+    messages_json: z.string().min(2),
+    iteration_count: z.number().int().min(0).max(20),
+    created_at: z.string(),
+    updated_at: z.string(),
+    approval_status: z.enum([
+      "needs_review",
+      "changes_requested",
+      "approved",
+      "rejected",
+      "scheduled",
+      "published",
+      "cancelled",
+    ]),
+    messages: agentConversationSchema,
+  })
+  .strict();
 
 export const cancelAgentRunSchema = z.object({
   id: positiveIdSchema,

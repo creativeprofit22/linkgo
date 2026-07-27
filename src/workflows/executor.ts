@@ -150,26 +150,6 @@ export async function runContentPipelineExecutor(
     throw new Error("Executor agent run was not found");
 
   const nextStatus = statusFromAgentRun(agentRun.status);
-  await setWorkflowStepStatus({
-    stepId: step.id,
-    status: nextStatus,
-    outputSummary: agentRun.output_summary,
-    errorMessage: agentRun.error_message,
-  });
-  await updateWorkflowStepExecution({
-    id: executionId,
-    agentRunId,
-    status:
-      nextStatus === "completed"
-        ? "completed"
-        : nextStatus === "waiting_approval"
-          ? "waiting_approval"
-          : nextStatus === "failed"
-            ? "failed"
-            : "blocked",
-    errorSummary: agentRun.error_message,
-  });
-
   const executorStatus: WorkflowExecutorResult["status"] =
     nextStatus === "completed"
       ? "running"

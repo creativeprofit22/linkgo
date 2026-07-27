@@ -158,6 +158,158 @@ test("updates duplicate executor-created agent run artifacts in place", async ({
   );
 });
 
+test("reconciles workflow-linked schedule approval continuation and stale resume", async ({
+  page,
+}) => {
+  await prepareWorkflowLinkedScheduleAgent(page);
+
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await resumeAgentRun(page, 1);
+
+  let trace = await getWorkflowTraceState(page);
+  expect(
+    trace.steps.find((step) => step.step_key === "schedule"),
+  ).toMatchObject({
+    status: "completed",
+    error_message: "",
+  });
+  expect(trace.steps.find((step) => step.step_key === "measure")?.status).toBe(
+    "running",
+  );
+  expect(trace.executions).toHaveLength(1);
+  expect(trace.executions[0]).toMatchObject({
+    agent_run_id: 1,
+    status: "completed",
+    error_summary: "",
+  });
+
+  await setWorkflowStepState(page, 6, "waiting_approval");
+  await setWorkflowStepState(page, 7, "pending");
+  await executeSql(page, {
+    query: `UPDATE workflow_step_executions
+      SET agent_run_id = COALESCE($1, agent_run_id), status = $2, error_summary = $3, updated_at = datetime('now')
+      WHERE id = $4`,
+    values: [1, "waiting_approval", "", 1],
+  });
+  await executeSql(page, {
+    query: `UPDATE workflow_runs
+      SET status = $1, current_step_key = $2, updated_at = datetime('now')
+      WHERE id = $3`,
+    values: ["waiting_approval", "schedule", 1],
+  });
+  await resumeWorkflowRun(page, 1);
+
+  trace = await getWorkflowTraceState(page);
+  expect(trace.runs[0]).toMatchObject({
+    status: "completed",
+    current_step_key: "measure",
+  });
+  expect(
+    trace.steps.filter((step) =>
+      ["schedule", "measure"].includes(step.step_key),
+    ),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ step_key: "schedule", status: "completed" }),
+      expect.objectContaining({ step_key: "measure", status: "completed" }),
+    ]),
+  );
+  expect(trace.executions.map((execution) => execution.status)).toEqual([
+    "completed",
+    "completed",
+  ]);
+});
+
+test("recovers a failed workflow-linked approval continuation", async ({
+  page,
+}) => {
+  await prepareWorkflowLinkedScheduleAgent(page);
+  await markWorkflowLinkedAgentFailed(page);
+
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await resumeAgentRun(page, 1);
+
+  const trace = await getWorkflowTraceState(page);
+  expect(trace.runs[0]).toMatchObject({
+    status: "running",
+    current_step_key: "measure",
+  });
+  expect(
+    trace.steps.find((step) => step.step_key === "schedule"),
+  ).toMatchObject({
+    status: "completed",
+    error_message: "",
+  });
+  expect(trace.steps.find((step) => step.step_key === "measure")?.status).toBe(
+    "running",
+  );
+  expect(trace.executions[0]).toMatchObject({
+    status: "completed",
+    error_summary: "",
+  });
+});
+
+test("reconciles workflow-linked schedule rejection", async ({ page }) => {
+  await prepareWorkflowLinkedScheduleAgent(page);
+
+  await openApprovals(page);
+  page.once("dialog", async (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Reject" }).click();
+
+  const trace = await getWorkflowTraceState(page);
+  expect(trace.runs[0]).toMatchObject({
+    status: "blocked",
+    current_step_key: "schedule",
+  });
+  expect(
+    trace.steps.find((step) => step.step_key === "schedule"),
+  ).toMatchObject({
+    status: "blocked",
+    error_message: expect.stringContaining("Approval rejected"),
+  });
+  expect(trace.executions[0]).toMatchObject({
+    status: "cancelled",
+    error_summary: expect.stringContaining("Approval rejected"),
+  });
+  expect(trace.events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ event_type: "step_blocked" }),
+    ]),
+  );
+});
+
+test("cancels a failed workflow-linked schedule continuation", async ({
+  page,
+}) => {
+  await prepareWorkflowLinkedScheduleAgent(page);
+  await markWorkflowLinkedAgentFailed(page);
+
+  await cancelAgentRun(page, 1);
+
+  const trace = await getWorkflowTraceState(page);
+  expect(trace.runs[0]).toMatchObject({
+    status: "blocked",
+    current_step_key: "schedule",
+  });
+  expect(
+    trace.steps.find((step) => step.step_key === "schedule"),
+  ).toMatchObject({
+    status: "blocked",
+    error_message: "Continuation provider unavailable.",
+  });
+  expect(trace.executions[0]).toMatchObject({
+    status: "cancelled",
+    error_summary: "Continuation provider unavailable.",
+  });
+  expect(trace.events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ event_type: "step_blocked" }),
+    ]),
+  );
+});
+
 test("keeps whitespace-only workflow titles client-side disabled", async ({
   page,
 }) => {
@@ -331,6 +483,227 @@ test("blocks archived campaign mutations", async ({ page }) => {
 
   expect(result).toEqual({ ok: false, message: "Campaign is archived" });
 });
+
+type WorkflowTraceState = {
+  runs: Array<{
+    status: string;
+    current_step_key: string;
+  }>;
+  steps: Array<{
+    id: number;
+    step_key: string;
+    status: string;
+    output_summary: string;
+    error_message: string;
+  }>;
+  events: Array<{ event_type: string }>;
+  executions: Array<{
+    id: number;
+    agent_run_id: number | null;
+    status: string;
+    error_summary: string;
+  }>;
+};
+
+async function getWorkflowTraceState(page: Page): Promise<WorkflowTraceState> {
+  return page.evaluate(() => {
+    const testWindow = window as unknown as {
+      __LINKGO_SQL_WORKFLOW_RUNS__?: () => WorkflowTraceState["runs"];
+      __LINKGO_SQL_WORKFLOW_STEPS__?: () => WorkflowTraceState["steps"];
+      __LINKGO_SQL_WORKFLOW_EVENTS__?: () => WorkflowTraceState["events"];
+      __LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__?: () => WorkflowTraceState["executions"];
+    };
+    const readRuns = testWindow.__LINKGO_SQL_WORKFLOW_RUNS__;
+    const readSteps = testWindow.__LINKGO_SQL_WORKFLOW_STEPS__;
+    const readEvents = testWindow.__LINKGO_SQL_WORKFLOW_EVENTS__;
+    const readExecutions = testWindow.__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__;
+    if (!readRuns || !readSteps || !readEvents || !readExecutions) {
+      throw new Error("Workflow trace test state is unavailable");
+    }
+    return {
+      runs: readRuns(),
+      steps: readSteps(),
+      events: readEvents(),
+      executions: readExecutions(),
+    };
+  });
+}
+
+async function executeSql(
+  page: Page,
+  args: { query: string; values: unknown[] },
+): Promise<unknown> {
+  return page.evaluate((sqlArgs) => {
+    const internals = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: {
+          invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    if (!internals) throw new Error("Tauri mocks unavailable");
+    return internals.invoke("plugin:sql|execute", sqlArgs);
+  }, args);
+}
+
+async function setWorkflowStepState(
+  page: Page,
+  stepId: number,
+  status: string,
+): Promise<void> {
+  await executeSql(page, {
+    query: `UPDATE workflow_steps
+      SET status = $1, output_summary = $2, error_message = $3, updated_at = datetime('now')
+      WHERE id = $4`,
+    values: [status, "", "", stepId],
+  });
+}
+
+async function prepareWorkflowLinkedScheduleAgent(page: Page): Promise<void> {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await seedWorkflowApproval(page);
+  await openWorkflows(page);
+  await createWorkflowRun(page);
+
+  for (const stepId of [1, 2, 3, 4, 5]) {
+    await setWorkflowStepState(page, stepId, "completed");
+  }
+  await setWorkflowStepState(page, 6, "running");
+  await executeSql(page, {
+    query: `UPDATE workflow_runs
+      SET status = $1, current_step_key = $2, updated_at = datetime('now')
+      WHERE id = $3`,
+    values: ["running", "schedule", 1],
+  });
+
+  await page.getByRole("button", { name: "Run executor" }).click();
+  await expect
+    .poll(async () => (await getWorkflowTraceState(page)).runs[0]?.status)
+    .toBe("waiting_approval");
+  const trace = await getWorkflowTraceState(page);
+  expect(trace.steps.find((step) => step.step_key === "schedule")?.status).toBe(
+    "waiting_approval",
+  );
+  expect(trace.executions[0]?.status).toBe("waiting_approval");
+}
+
+async function markWorkflowLinkedAgentFailed(page: Page): Promise<void> {
+  await setWorkflowStepState(page, 6, "failed");
+  await executeSql(page, {
+    query: `UPDATE workflow_runs
+      SET status = $1, current_step_key = $2, updated_at = datetime('now')
+      WHERE id = $3`,
+    values: ["failed", "schedule", 1],
+  });
+  await executeSql(page, {
+    query: `UPDATE agent_runs
+      SET status = 'failed', error_message = $1, completed_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = $2`,
+    values: ["Continuation provider unavailable.", 1],
+  });
+}
+
+async function resumeAgentRun(page: Page, id: number): Promise<void> {
+  await page.evaluate(async (agentRunId) => {
+    const resume = (
+      window as unknown as {
+        __LINKGO_AGENT_RUNTIME_TEST_API__?: {
+          resumeAgentRun: (input: { id: number }) => Promise<void>;
+        };
+      }
+    ).__LINKGO_AGENT_RUNTIME_TEST_API__?.resumeAgentRun;
+    if (!resume) throw new Error("Agent runtime test API unavailable");
+    await resume({ id: agentRunId });
+  }, id);
+}
+
+async function cancelAgentRun(page: Page, id: number): Promise<void> {
+  await page.evaluate(async (agentRunId) => {
+    const cancel = (
+      window as unknown as {
+        __LINKGO_AGENT_RUNTIME_TEST_API__?: {
+          cancelAgentRun: (input: { id: number }) => Promise<void>;
+        };
+      }
+    ).__LINKGO_AGENT_RUNTIME_TEST_API__?.cancelAgentRun;
+    if (!cancel) throw new Error("Agent runtime test API unavailable");
+    await cancel({ id: agentRunId });
+  }, id);
+}
+
+async function resumeWorkflowRun(page: Page, id: number): Promise<void> {
+  await page.evaluate(async (workflowRunId) => {
+    const resume = (
+      window as unknown as {
+        __LINKGO_WORKFLOWS_TEST_API__?: {
+          resumeWorkflowRun: (input: { id: number }) => Promise<void>;
+        };
+      }
+    ).__LINKGO_WORKFLOWS_TEST_API__?.resumeWorkflowRun;
+    if (!resume) throw new Error("Workflow resume test API unavailable");
+    await resume({ id: workflowRunId });
+  }, id);
+}
+
+async function openApprovals(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Approvals/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Approvals", exact: true }),
+  ).toBeVisible();
+}
+
+async function seedWorkflowApproval(page: Page): Promise<void> {
+  await executeSql(page, {
+    query: `INSERT INTO target_posts (platform, url, normalized_url, author_name, author_profile_url, platform_resource_urn, posted_at, content, content_hash, updated_at) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, $8, datetime('now'))`,
+    values: [
+      "https://www.linkedin.com/posts/workflow-schedule/",
+      "https://www.linkedin.com/posts/workflow-schedule/",
+      "Workflow Author",
+      "",
+      "urn:li:activity:workflow-schedule",
+      null,
+      "Workflow schedule candidate",
+      "workflow-schedule-hash",
+    ],
+  });
+  await executeSql(page, {
+    query: `INSERT INTO candidate_posts (campaign_id, target_post_id, source_keyword, relevance_score, score_reason, notes, updated_at) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
+    values: [1, 1, "workflow", 90, "Workflow fixture", ""],
+  });
+  await executeSql(page, {
+    query:
+      "INSERT INTO drafts (campaign_id, candidate_post_id, angle, notes, updated_at) VALUES ($1, $2, $3, $4, datetime('now'))",
+    values: [1, 1, "Schedule metadata", "Workflow approval fixture"],
+  });
+  await executeSql(page, {
+    query:
+      "INSERT INTO draft_variants (draft_id, variant_number, hook, body, cta, hashtags, updated_at) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))",
+    values: [
+      1,
+      1,
+      "Workflow-linked approval",
+      "A local metadata-only scheduling request.",
+      "Review before continuing.",
+      "#ContentOps",
+    ],
+  });
+  await executeSql(page, {
+    query:
+      "UPDATE draft_variants SET status = 'selected', updated_at = datetime('now') WHERE id = $1",
+    values: [1],
+  });
+  await executeSql(page, {
+    query:
+      "UPDATE drafts SET status = 'ready_for_review', updated_at = datetime('now') WHERE id = $1",
+    values: [1],
+  });
+  await executeSql(page, {
+    query:
+      "INSERT INTO approvals (campaign_id, draft_id, draft_variant_id, status, reviewer_notes, updated_at) VALUES ($1, $2, $3, 'needs_review', $4, datetime('now'))",
+    values: [1, 1, 1, "Review workflow-linked schedule metadata."],
+  });
+}
 
 function getBadge(page: Page, label: string): Locator {
   return page

@@ -24,9 +24,12 @@ pub struct AgentModelRequestInput {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentMessageInput {
     pub role: String,
     pub content: String,
+    pub tool_name: Option<String>,
+    pub provider_tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -618,18 +621,48 @@ fn gemini_response_chunks(
     build_response_chunks((!text.is_empty()).then_some(text), tool_chunks)
 }
 
+fn parsed_message_content(message: &AgentMessageInput) -> Value {
+    serde_json::from_str(&message.content)
+        .unwrap_or_else(|_| Value::String(message.content.clone()))
+}
+
+fn openai_message(message: &AgentMessageInput) -> Value {
+    match (
+        message.role.as_str(),
+        message.tool_name.as_deref(),
+        message.provider_tool_call_id.as_deref(),
+    ) {
+        ("assistant", Some(tool_name), Some(tool_call_id)) => json!({
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [{
+                "id": tool_call_id,
+                "type": "function",
+                "function": {
+                    "name": tool_name,
+                    "arguments": message.content,
+                },
+            }],
+        }),
+        ("tool", _, Some(tool_call_id)) => json!({
+            "role": "tool",
+            "tool_call_id": tool_call_id,
+            "content": message.content,
+        }),
+        _ => json!({
+            "role": to_openai_role(&message.role),
+            "content": message.content,
+        }),
+    }
+}
+
 fn openai_payload(input: &AgentProviderStreamInput) -> Value {
-    let messages: Vec<Value> = input
+    let messages = input
         .request
         .messages
         .iter()
-        .map(|message| {
-            json!({
-                "role": to_openai_role(&message.role),
-                "content": message.content.as_str(),
-            })
-        })
-        .collect();
+        .map(openai_message)
+        .collect::<Vec<_>>();
 
     let mut payload = json!({
         "model": input.model_name,
@@ -650,15 +683,36 @@ fn anthropic_payload(input: &AgentProviderStreamInput) -> Value {
     let mut system_parts = Vec::new();
     let mut messages = Vec::new();
     for message in &input.request.messages {
-        match message.role.as_str() {
-            "system" => system_parts.push(message.content.as_str()),
-            "assistant" => messages.push(json!({
+        match (
+            message.role.as_str(),
+            message.tool_name.as_deref(),
+            message.provider_tool_call_id.as_deref(),
+        ) {
+            ("system", _, _) => system_parts.push(message.content.as_str()),
+            ("assistant", Some(tool_name), Some(tool_call_id)) => messages.push(json!({
                 "role": "assistant",
-                "content": message.content.as_str(),
+                "content": [{
+                    "type": "tool_use",
+                    "id": tool_call_id,
+                    "name": tool_name,
+                    "input": parsed_message_content(message),
+                }],
+            })),
+            ("tool", _, Some(tool_call_id)) => messages.push(json!({
+                "role": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": tool_call_id,
+                    "content": message.content,
+                }],
+            })),
+            ("assistant", _, _) => messages.push(json!({
+                "role": "assistant",
+                "content": message.content,
             })),
             _ => messages.push(json!({
                 "role": "user",
-                "content": message.content.as_str(),
+                "content": message.content,
             })),
         }
     }
@@ -697,9 +751,27 @@ fn gemini_contents_and_system(messages: &[AgentMessageInput]) -> (Vec<Value>, Op
     let mut system_parts = Vec::new();
     let mut contents = Vec::new();
     for message in messages {
-        match message.role.as_str() {
-            "system" => system_parts.push(message.content.as_str()),
-            "assistant" => contents.push(json!({
+        match (message.role.as_str(), message.tool_name.as_deref()) {
+            ("system", _) => system_parts.push(message.content.as_str()),
+            ("assistant", Some(tool_name)) => contents.push(json!({
+                "role": "model",
+                "parts": [{
+                    "functionCall": {
+                        "name": tool_name,
+                        "args": parsed_message_content(message),
+                    },
+                }],
+            })),
+            ("tool", Some(tool_name)) => contents.push(json!({
+                "role": "user",
+                "parts": [{
+                    "functionResponse": {
+                        "name": tool_name,
+                        "response": parsed_message_content(message),
+                    },
+                }],
+            })),
+            ("assistant", _) => contents.push(json!({
                 "role": "model",
                 "parts": [{ "text": message.content }],
             })),
@@ -958,10 +1030,14 @@ mod tests {
                     AgentMessageInput {
                         role: "system".to_string(),
                         content: "System guardrails".to_string(),
+                        tool_name: None,
+                        provider_tool_call_id: None,
                     },
                     AgentMessageInput {
                         role: "user".to_string(),
                         content: "Draft a post".to_string(),
+                        tool_name: None,
+                        provider_tool_call_id: None,
                     },
                 ],
             },
@@ -976,6 +1052,62 @@ mod tests {
         assert!(payload.get("provider").is_none());
         assert!(payload.get("apiKey").is_none());
         assert!(payload.get("baseUrl").is_none());
+    }
+
+    #[test]
+    fn serializes_tool_calls_and_results_for_each_provider_transport() {
+        let input: AgentProviderStreamInput = serde_json::from_value(json!({
+            "providerKey": "custom",
+            "modelName": "custom-model",
+            "request": {
+                "messages": [
+                    { "role": "user", "content": "Draft a post" },
+                    {
+                        "role": "assistant",
+                        "content": "{\"campaignId\":1,\"candidatePostId\":2}",
+                        "toolName": "draft_post",
+                        "providerToolCallId": "call_123"
+                    },
+                    {
+                        "role": "tool",
+                        "content": "{\"summary\":\"Draft saved\"}",
+                        "toolName": "draft_post",
+                        "providerToolCallId": "call_123"
+                    }
+                ]
+            }
+        }))
+        .expect("multi-turn provider input should deserialize");
+
+        let openai = openai_payload(&input);
+        assert_eq!(openai["messages"][1]["tool_calls"][0]["id"], "call_123");
+        assert_eq!(
+            openai["messages"][1]["tool_calls"][0]["function"]["name"],
+            "draft_post"
+        );
+        assert_eq!(openai["messages"][2]["role"], "tool");
+        assert_eq!(openai["messages"][2]["tool_call_id"], "call_123");
+
+        let anthropic = anthropic_payload(&input);
+        assert_eq!(anthropic["messages"][1]["content"][0]["type"], "tool_use");
+        assert_eq!(
+            anthropic["messages"][2]["content"][0]["type"],
+            "tool_result"
+        );
+        assert_eq!(
+            anthropic["messages"][2]["content"][0]["tool_use_id"],
+            "call_123"
+        );
+
+        let gemini = gemini_payload(&input);
+        assert_eq!(
+            gemini["request"]["contents"][1]["parts"][0]["functionCall"]["name"],
+            "draft_post"
+        );
+        assert_eq!(
+            gemini["request"]["contents"][2]["parts"][0]["functionResponse"]["response"]["summary"],
+            "Draft saved"
+        );
     }
 
     #[test]
@@ -1141,10 +1273,14 @@ mod tests {
                     AgentMessageInput {
                         role: "system".to_string(),
                         content: "System guardrails".to_string(),
+                        tool_name: None,
+                        provider_tool_call_id: None,
                     },
                     AgentMessageInput {
                         role: "user".to_string(),
                         content: "Draft a post".to_string(),
+                        tool_name: None,
+                        provider_tool_call_id: None,
                     },
                 ],
             },
@@ -1190,10 +1326,14 @@ mod tests {
                     AgentMessageInput {
                         role: "system".to_string(),
                         content: "System guardrails".to_string(),
+                        tool_name: None,
+                        provider_tool_call_id: None,
                     },
                     AgentMessageInput {
                         role: "user".to_string(),
                         content: "Draft a post".to_string(),
+                        tool_name: None,
+                        provider_tool_call_id: None,
                     },
                 ],
             },

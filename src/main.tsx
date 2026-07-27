@@ -9,6 +9,7 @@ import { IS_TAURI } from "@/lib/env";
 import type {
   CreateWorkflowArtifactInput,
   CreateWorkflowRunInput,
+  StartWorkflowRunInput,
 } from "@/workflows/types";
 import { HomePage } from "@/pages/home";
 import { SettingsPage } from "@/pages/settings";
@@ -36,6 +37,7 @@ type WorkflowTestApi = {
     input: CreateWorkflowArtifactInput,
   ) => Promise<number>;
   createWorkflowRun: (input: CreateWorkflowRunInput) => Promise<number>;
+  resumeWorkflowRun: (input: StartWorkflowRunInput) => Promise<void>;
 };
 
 if (import.meta.env.VITE_PLAYWRIGHT) {
@@ -57,12 +59,13 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
     };
   });
   void import("@/workflows/data").then(
-    ({ createWorkflowArtifact, createWorkflowRun }) => {
+    ({ createWorkflowArtifact, createWorkflowRun, resumeWorkflowRun }) => {
       (
         window as unknown as { __LINKGO_WORKFLOWS_TEST_API__?: WorkflowTestApi }
       ).__LINKGO_WORKFLOWS_TEST_API__ = {
         createWorkflowArtifact,
         createWorkflowRun,
+        resumeWorkflowRun,
       };
     },
   );

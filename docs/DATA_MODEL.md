@@ -610,6 +610,23 @@ Stores append-only runtime progress events.
 
 Indexes: `idx_agent_run_events_run_id`, `idx_agent_run_events_event_type`, `idx_agent_run_events_created_at`.
 
+### `agent_run_approval_checkpoints`
+
+Stores the single active, provider-neutral approval continuation for an agent run. The row is created atomically with the waiting run and pending tool call, survives app restart, and is removed when the run completes, is rejected/cancelled, or reaches a terminal failure.
+
+| Column                 | Type    | Notes                                                                                      |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `agent_run_id`         | INTEGER | Primary key; references `agent_runs(id)` with `ON DELETE CASCADE`                          |
+| `pending_tool_call_id` | INTEGER | Unique; references the interrupted `agent_tool_calls(id)` with `ON DELETE CASCADE`         |
+| `approval_id`          | INTEGER | References the authoritative `approvals(id)` with `ON DELETE CASCADE`                      |
+| `phase`                | TEXT    | `waiting_approval` before tool completion or `continuation_ready` after durable completion |
+| `messages_json`        | TEXT    | Valid provider-neutral conversation JSON, including the pending assistant tool call        |
+| `iteration_count`      | INTEGER | Total provider turns already used, constrained to `0` through `20`                         |
+| `created_at`           | TEXT    | SQLite datetime                                                                            |
+| `updated_at`           | TEXT    | SQLite datetime                                                                            |
+
+Indexes: `idx_agent_run_approval_checkpoints_approval_id`, `idx_agent_run_approval_checkpoints_phase`. Migration 21 fails legacy waiting runs closed because pre-checkpoint conversations cannot be reconstructed exactly.
+
 ### `safety_settings`
 
 Stores singleton app-level safety gates.

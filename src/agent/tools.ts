@@ -175,7 +175,7 @@ export const agentToolRegistry = {
       scheduledFor: input.scheduledFor,
       timezone: input.timezone,
       summary:
-        "Schedule request requires human approval before any local schedule record.",
+        "Approval confirmed for schedule metadata only; no schedule record or publish action was created.",
     }),
   },
   collect_metrics: {

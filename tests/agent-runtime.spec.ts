@@ -54,6 +54,8 @@ test("persists a completed dry-run with tool calls and events", async ({
   expect(counts.agentToolCalls).toBe(1);
   expect(counts.agentRunEvents).toBeGreaterThanOrEqual(5);
   expect(toolCalls[0]?.provider_tool_call_id).toBe("dry-run-1-tool-call-2");
+  const runs = await getAgentRuns(page);
+  expect(runs[0]?.iteration_count).toBe(2);
 });
 
 test("dry-run researcher persists discovery items through research_posts", async ({
@@ -78,7 +80,12 @@ test("dry-run scorer applies candidate scores through score_relevance", async ({
   await createCampaign(page);
   await insertCandidateForScoring(page);
   await openAgentRuntime(page);
-  await createDryRun(page, "scorer", "", "Candidate IDs: 1. Auto-reject: true.");
+  await createDryRun(
+    page,
+    "scorer",
+    "",
+    "Candidate IDs: 1. Auto-reject: true.",
+  );
 
   await page.getByRole("button", { name: "Start Dry run" }).click();
   await expect(getBadge(page, "Completed").first()).toBeVisible();
@@ -99,7 +106,8 @@ test("dry-run scorer applies candidate scores through score_relevance", async ({
   });
   expect(candidateScores?.[0]).toEqual({
     relevanceScore: 78,
-    scoreReason: "Dry-run score: strong campaign fit with a clear operator lesson.",
+    scoreReason:
+      "Dry-run score: strong campaign fit with a clear operator lesson.",
   });
 });
 
@@ -201,7 +209,7 @@ test("starts a provider-backed run through the native command boundary", async (
   expect(serializedCommandArgs).toContain(customInstructions);
 });
 
-test("provider-backed tool calls persist model-supplied suggestions", async ({
+test("feeds a validated tool result into a second provider turn before completion", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -212,12 +220,34 @@ test("provider-backed tool calls persist model-supplied suggestions", async ({
           execute: (args: unknown) => unknown;
         };
         __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown;
+        __LINKGO_PROVIDER_COMMAND_CALLS__?: unknown[];
       }
     ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
       execute(args: unknown): unknown {
-        (
-          window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown }
-        ).__LINKGO_PROVIDER_COMMAND_ARGS__ = args;
+        const testWindow = window as unknown as {
+          __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown;
+          __LINKGO_PROVIDER_COMMAND_CALLS__?: unknown[];
+        };
+        testWindow.__LINKGO_PROVIDER_COMMAND_ARGS__ = args;
+        testWindow.__LINKGO_PROVIDER_COMMAND_CALLS__ = [
+          ...(testWindow.__LINKGO_PROVIDER_COMMAND_CALLS__ ?? []),
+          args,
+        ];
+        const request = (
+          args as {
+            input: { request: { messages: Array<{ role: string }> } };
+          }
+        ).input.request;
+        if (request.messages.some((message) => message.role === "tool")) {
+          return {
+            chunks: [
+              {
+                type: "done",
+                outputSummary: "Provider research completed after tool result.",
+              },
+            ],
+          };
+        }
         return {
           chunks: [
             {
@@ -233,14 +263,15 @@ test("provider-backed tool calls persist model-supplied suggestions", async ({
                     kind: "keyword",
                     title: "Provider supplied keyword",
                     keyword: "provider keyword",
-                    rationale: "Provider-generated suggestion through native boundary.",
+                    rationale:
+                      "Provider-generated suggestion through native boundary.",
                     sourceKeyword: "founder content",
                     confidenceScore: 91,
                   },
                 ],
               },
             },
-            { type: "done", outputSummary: "Provider research completed." },
+            { type: "done", outputSummary: "Provider requested research." },
           ],
         };
       },
@@ -270,14 +301,58 @@ test("provider-backed tool calls persist model-supplied suggestions", async ({
 
   const counts = await getStateCounts(page);
   expect(counts.candidateDiscoveryItems).toBe(1);
-  const serializedCommandArgs = JSON.stringify(
-    await page.evaluate(
-      () =>
-        (window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown })
-          .__LINKGO_PROVIDER_COMMAND_ARGS__,
-    ),
+  const providerCalls = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __LINKGO_PROVIDER_COMMAND_CALLS__?: Array<{
+            input: {
+              request: {
+                messages: Array<{
+                  role: string;
+                  content: string;
+                  toolName?: string;
+                  providerToolCallId?: string;
+                }>;
+              };
+            };
+          }>;
+        }
+      ).__LINKGO_PROVIDER_COMMAND_CALLS__ ?? [],
   );
-  expect(serializedCommandArgs).not.toContain("sk-test-custom-key");
+  expect(providerCalls).toHaveLength(2);
+  expect(
+    providerCalls[0]?.input.request.messages.some(
+      (message) => message.role === "tool",
+    ),
+  ).toBe(false);
+  const secondTurnMessages = providerCalls[1]?.input.request.messages ?? [];
+  const toolCallMessage = secondTurnMessages.at(-2);
+  const toolResultMessage = secondTurnMessages.at(-1);
+  expect(toolCallMessage).toMatchObject({
+    role: "assistant",
+    toolName: "research_posts",
+    providerToolCallId: "provider-research-1",
+  });
+  expect(toolResultMessage).toMatchObject({
+    role: "tool",
+    toolName: "research_posts",
+    providerToolCallId: "provider-research-1",
+  });
+  expect(JSON.parse(toolResultMessage?.content ?? "{}")).toMatchObject({
+    discoveryItems: [
+      expect.objectContaining({
+        keyword: "provider keyword",
+        status: "suggested",
+      }),
+    ],
+  });
+  const runs = await getAgentRuns(page);
+  expect(runs[0]?.iteration_count).toBe(2);
+  expect(runs[0]?.output_summary).toBe(
+    "Provider research completed after tool result.",
+  );
+  expect(JSON.stringify(providerCalls)).not.toContain("[REDACTED]");
 });
 
 test("provider-backed score_relevance calls persist model-supplied scores", async ({
@@ -297,6 +372,18 @@ test("provider-backed score_relevance calls persist model-supplied scores", asyn
         (
           window as unknown as { __LINKGO_PROVIDER_COMMAND_ARGS__?: unknown }
         ).__LINKGO_PROVIDER_COMMAND_ARGS__ = args;
+        const messages = (
+          args as {
+            input: { request: { messages: Array<{ role: string }> } };
+          }
+        ).input.request.messages;
+        if (messages.some((message) => message.role === "tool")) {
+          return {
+            chunks: [
+              { type: "done", outputSummary: "Provider scoring completed." },
+            ],
+          };
+        }
         return {
           chunks: [
             {
@@ -388,7 +475,19 @@ test("provider duplicate research_posts calls are rejected before local writes",
         };
       }
     ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
-      execute(): unknown {
+      execute(args: unknown): unknown {
+        const messages = (
+          args as {
+            input: { request: { messages: Array<{ role: string }> } };
+          }
+        ).input.request.messages;
+        if (messages.some((message) => message.role === "tool")) {
+          return {
+            chunks: [
+              { type: "done", outputSummary: "Provider research completed." },
+            ],
+          };
+        }
         const duplicateToolCall = {
           type: "tool_call",
           providerToolCallId: "provider-research-duplicate",
@@ -445,11 +544,47 @@ test("provider duplicate research_posts calls are rejected before local writes",
   const toolCalls = await getAgentToolCalls(page);
   expect(counts.candidateDiscoveryItems).toBe(1);
   expect(counts.agentToolCalls).toBe(2);
-  expect(toolCalls.map((call) => call.status)).toEqual(["completed", "rejected"]);
+  expect(toolCalls.map((call) => call.status)).toEqual([
+    "completed",
+    "rejected",
+  ]);
   await expect(
     page.getByText("Duplicate provider tool call ignored.", { exact: true }),
   ).toBeVisible();
 });
+
+for (const approvalPosition of ["first", "second"] as const) {
+  test(`fails closed before tool execution when approval is ${approvalPosition} in a two-call turn`, async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await installMixedApprovalTurnProvider(page, approvalPosition);
+    await connectCustomProvider(page);
+    await page.getByRole("button", { name: /Campaigns/ }).click();
+    await createCampaign(page);
+    await seedApproval(page);
+    await openAgentRuntime(page);
+    await createProviderRun(page, "custom", "scheduler");
+
+    await page.getByRole("button", { name: "Start Custom API" }).click();
+
+    await expect(getBadge(page, "Failed").first()).toBeVisible();
+    const errorMessage =
+      "Provider turn rejected before tool execution: approval-required tool call schedule_post must be isolated; received 2 tool calls.";
+    const runs = await getAgentRuns(page);
+    expect(runs[0]).toMatchObject({
+      status: "failed",
+      error_message: errorMessage,
+    });
+    const counts = await getStateCounts(page);
+    expect(counts.agentToolCalls).toBe(0);
+    expect(counts.agentApprovalCheckpoints).toBe(0);
+    expect(counts.candidateDiscoveryItems).toBe(0);
+    expect(counts.scheduleJobs).toBe(0);
+    expect(counts.publishAttempts).toBe(0);
+    expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+  });
+}
 
 test("starts an Anthropic provider-backed run through the native command boundary", async ({
   page,
@@ -572,6 +707,7 @@ test("stops schedule dry-run at waiting approval without publishing", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
+  await seedApproval(page);
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
 
@@ -591,6 +727,442 @@ test("stops schedule dry-run at waiting approval without publishing", async ({
   expect(counts.scheduleJobs).toBe(0);
   expect(counts.publishAttempts).toBe(0);
   expect(toolCalls[0]?.provider_tool_call_id).toBe("dry-run-1-tool-call-2");
+  expect(counts.agentApprovalCheckpoints).toBe(1);
+});
+
+test("rejects checkpoint tool results without a preceding assistant call ID", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createDryRun(page, "scheduler");
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+
+  const checkpoint = await getAgentApprovalCheckpoint(page);
+  const messages = JSON.parse(checkpoint.messages_json) as unknown[];
+  messages.push({
+    role: "tool",
+    content: "{}",
+    toolName: "schedule_post",
+    providerToolCallId: "orphan-provider-call",
+  });
+  await executeSql(page, {
+    query: `UPDATE agent_run_approval_checkpoints
+      SET messages_json = $1, updated_at = datetime('now')
+      WHERE agent_run_id = $2`,
+    values: [JSON.stringify(messages), checkpoint.agent_run_id],
+  });
+
+  expect(
+    await resumeRunThroughTestApi(page, checkpoint.agent_run_id),
+  ).toContain(
+    'Tool result ID \\"orphan-provider-call\\" does not match a preceding assistant tool call',
+  );
+  const counts = await getStateCounts(page);
+  expect(counts.scheduleJobs).toBe(0);
+  expect(counts.publishAttempts).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+});
+
+test("approves and explicitly resumes a durable schedule metadata continuation", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createDryRun(page, "scheduler");
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await expect(page.getByText("Review this item in Approvals.")).toBeVisible();
+
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(getBadge(page, "Approved").first()).toBeVisible();
+  expect((await getStateCounts(page)).agentRuns).toBe(1);
+
+  await openAgentRuntime(page);
+  const resumeButton = page.getByRole("button", {
+    name: "Resume approved run for agent run 1",
+  });
+  await expect(resumeButton).toBeVisible();
+  await resumeButton.click();
+
+  await expect(page.getByText("Agent continuation completed")).toBeVisible();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  const completedToolCalls = await getAgentToolCalls(page);
+  expect(JSON.parse(completedToolCalls[0]?.output_json ?? "{}").summary).toBe(
+    "Approval confirmed for schedule metadata only; no schedule record or publish action was created.",
+  );
+  const counts = await getStateCounts(page);
+  expect(counts.agentApprovalCheckpoints).toBe(0);
+  expect(counts.agentToolCalls).toBe(1);
+  expect(counts.scheduleJobs).toBe(0);
+  expect(counts.publishAttempts).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+  expect((await getAgentToolCalls(page))[0]?.status).toBe("completed");
+});
+
+test("rejects custom continuation without a Base URL before checkpoint mutation", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await installScheduleApprovalProvider(page, 1, "provider-schedule-custom");
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "scheduler");
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(getBadge(page, "Approved").first()).toBeVisible();
+
+  const checkpointBefore = await getAgentApprovalCheckpoint(page);
+  expect(checkpointBefore.phase).toBe("waiting_approval");
+  expect((await getAgentToolCalls(page))[0]?.status).toBe("waiting_approval");
+
+  await page.evaluate(() => {
+    const clearBaseUrl = (
+      window as unknown as {
+        __LINKGO_AUTH_CLEAR_BASE_URL_OVERRIDE__?: () => void;
+      }
+    ).__LINKGO_AUTH_CLEAR_BASE_URL_OVERRIDE__;
+    if (clearBaseUrl === undefined) {
+      throw new Error("Auth Base URL test API unavailable");
+    }
+    clearBaseUrl();
+  });
+
+  expect(await resumeRunThroughTestApi(page, 1)).toBe(
+    "Custom provider requires a Base URL override",
+  );
+
+  const checkpointAfter = await getAgentApprovalCheckpoint(page);
+  expect(checkpointAfter).toMatchObject({
+    agent_run_id: checkpointBefore.agent_run_id,
+    pending_tool_call_id: checkpointBefore.pending_tool_call_id,
+    phase: "waiting_approval",
+  });
+  expect((await getAgentToolCalls(page))[0]?.status).toBe("waiting_approval");
+  expect((await getAgentRuns(page))[0]?.status).toBe("waiting_approval");
+});
+
+test("reports a second approval interrupt without claiming continuation completion", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await installScheduleApprovalProvider(page, 1, "provider-schedule-first");
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "scheduler");
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(getBadge(page, "Approved").first()).toBeVisible();
+  await seedApproval(page, 2);
+  await installScheduleApprovalProvider(page, 2, "provider-schedule-second");
+
+  await openAgentRuntime(page);
+  await page
+    .getByRole("button", { name: "Resume approved run for agent run 1" })
+    .click();
+
+  await expect(
+    page.getByText("Agent continuation needs another approval"),
+  ).toBeVisible();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await expect(page.getByText("Approval #2", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Review required", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Agent continuation completed")).toHaveCount(0);
+  expect((await getAgentRuns(page))[0]).toMatchObject({
+    status: "waiting_approval",
+    error_message: "",
+  });
+  expect((await getStateCounts(page)).agentApprovalCheckpoints).toBe(1);
+});
+
+test("reports recoverable provider failure with the saved continuation", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await installScheduleApprovalProvider(page, 1, "provider-schedule-first");
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "scheduler");
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(getBadge(page, "Approved").first()).toBeVisible();
+  await installFailingContinuationProvider(
+    page,
+    "Continuation provider unavailable.",
+  );
+
+  await openAgentRuntime(page);
+  await page
+    .getByRole("button", { name: "Resume approved run for agent run 1" })
+    .click();
+
+  await expect(
+    page.getByText("Agent continuation failed; recovery is ready"),
+  ).toBeVisible();
+  await expect(getBadge(page, "Failed").first()).toBeVisible();
+  await expect(
+    page
+      .getByText("Continuation provider unavailable.", { exact: true })
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Continuation saved", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("The approved metadata result is saved.", { exact: false }),
+  ).toBeVisible();
+  expect((await getAgentRuns(page))[0]).toMatchObject({
+    status: "failed",
+    error_message: "Continuation provider unavailable.",
+  });
+  expect((await getStateCounts(page)).agentApprovalCheckpoints).toBe(1);
+});
+
+test("rejecting through Approvals cancels the linked run without continuation", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createDryRun(page, "scheduler");
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  expect((await getStateCounts(page)).agentApprovalCheckpoints).toBe(1);
+  await createDryRun(page, "scheduler");
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  expect((await getStateCounts(page)).agentApprovalCheckpoints).toBe(2);
+
+  await openApprovals(page);
+  await expect(
+    page.getByText(
+      "Rejection consequence: 2 linked waiting runs will be cancelled and their resumable checkpoints removed.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  const confirmationPromise = page.waitForEvent("dialog");
+  const rejectClickPromise = page
+    .getByRole("button", { name: "Reject" })
+    .click();
+  const confirmation = await confirmationPromise;
+  expect(confirmation.message()).toBe(
+    "Reject this approval? 2 linked waiting runs will be cancelled and their resumable checkpoints removed. The draft will stay in local history.",
+  );
+  await confirmation.accept();
+  await rejectClickPromise;
+  await expect(getBadge(page, "Rejected").first()).toBeVisible();
+
+  await openAgentRuntime(page);
+  await expect(getBadge(page, "Cancelled")).toHaveCount(2);
+  const counts = await getStateCounts(page);
+  expect(counts.agentApprovalCheckpoints).toBe(0);
+  expect(counts.scheduleJobs).toBe(0);
+  expect(counts.publishAttempts).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+  expect(
+    (await getAgentToolCalls(page)).every((call) => call.status === "rejected"),
+  ).toBe(true);
+  expect(
+    (await getAgentRuns(page)).every(
+      (run) => run.status === "cancelled" && run.iteration_count === 1,
+    ),
+  ).toBe(true);
+});
+
+test("reload recovery skips an approved tool after a continuation provider failure", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await enableReloadPersistence(page);
+  await installScheduleApprovalProvider(page, 1, "provider-schedule-recovery");
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "scheduler");
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(getBadge(page, "Approved").first()).toBeVisible();
+  await installFailingContinuationProvider(
+    page,
+    "Continuation provider unavailable.",
+  );
+
+  await openAgentRuntime(page);
+  await page
+    .getByRole("button", { name: "Resume approved run for agent run 1" })
+    .click();
+
+  await expect(
+    page.getByText("Agent continuation failed; recovery is ready"),
+  ).toBeVisible();
+  await expect(getBadge(page, "Failed").first()).toBeVisible();
+  expect((await getAgentRuns(page))[0]).toMatchObject({
+    status: "failed",
+    error_message: "Continuation provider unavailable.",
+  });
+  expect((await getAgentApprovalCheckpoint(page)).phase).toBe(
+    "continuation_ready",
+  );
+  const failedToolCalls = await getAgentToolCalls(page);
+  expect(failedToolCalls).toHaveLength(1);
+  expect(failedToolCalls[0]).toMatchObject({
+    provider_tool_call_id: "provider-schedule-recovery",
+    tool_name: "schedule_post",
+    status: "completed",
+  });
+  const failedCounts = await getStateCounts(page);
+  expect(failedCounts.agentApprovalCheckpoints).toBe(1);
+  expect(failedCounts.agentToolCalls).toBe(1);
+  expect(failedCounts.scheduleJobs).toBe(0);
+  expect(failedCounts.publishAttempts).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await installSuccessfulContinuationProvider(
+    page,
+    "Recovered provider continuation completed.",
+  );
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openAgentRuntime(page);
+  const recoverButton = page.getByRole("button", {
+    name: "Recover continuation for agent run 1",
+  });
+  await expect(recoverButton).toBeVisible();
+  await recoverButton.click();
+
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  expect((await getAgentRuns(page))[0]).toMatchObject({
+    status: "completed",
+    output_summary: "Recovered provider continuation completed.",
+  });
+  const recoveredCounts = await getStateCounts(page);
+  expect(recoveredCounts.agentApprovalCheckpoints).toBe(0);
+  expect(recoveredCounts.agentToolCalls).toBe(1);
+  expect(recoveredCounts.scheduleJobs).toBe(0);
+  expect(recoveredCounts.publishAttempts).toBe(0);
+  const recoveredToolCalls = await getAgentToolCalls(page);
+  expect(recoveredToolCalls).toHaveLength(1);
+  expect(recoveredToolCalls[0]).toMatchObject({
+    id: failedToolCalls[0]?.id,
+    provider_tool_call_id: "provider-schedule-recovery",
+    tool_name: "schedule_post",
+    status: "completed",
+  });
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+});
+
+test("resume rejects unapproved, mismatched, and missing approvals without publishing", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createDryRun(page, "scheduler");
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+
+  expect(await resumeRunThroughTestApi(page, 1)).toContain(
+    "must be approved before resume",
+  );
+  await executeSql(page, {
+    query: "UPDATE approvals SET status = $1 WHERE id = $2",
+    values: ["changes_requested", 1],
+  });
+  expect(await resumeRunThroughTestApi(page, 1)).toContain(
+    "must be approved before resume",
+  );
+  await executeSql(page, {
+    query: "UPDATE approvals SET status = $1 WHERE id = $2",
+    values: ["approved", 1],
+  });
+  await executeSql(page, {
+    query: "UPDATE approvals SET campaign_id = $1 WHERE id = $2",
+    values: [2, 1],
+  });
+  expect(await resumeRunThroughTestApi(page, 1)).toContain(
+    "different campaign",
+  );
+  await executeSql(page, {
+    query: "DELETE FROM approvals WHERE id = $1",
+    values: [1],
+  });
+  expect(await resumeRunThroughTestApi(page, 1)).toContain(
+    "checkpoint was not found",
+  );
+
+  const counts = await getStateCounts(page);
+  expect(counts.scheduleJobs).toBe(0);
+  expect(counts.publishAttempts).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+});
+
+test("double resume handles the approved tool once and keeps one history row", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await seedApproval(page);
+  await openAgentRuntime(page);
+  await createDryRun(page, "scheduler");
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+
+  const outcomes = await page.evaluate(async () => {
+    const resume = (
+      window as unknown as {
+        __LINKGO_AGENT_RUNTIME_TEST_API__?: {
+          resumeAgentRun: (input: { id: number }) => Promise<void>;
+        };
+      }
+    ).__LINKGO_AGENT_RUNTIME_TEST_API__?.resumeAgentRun;
+    if (!resume) throw new Error("Agent runtime test API was not initialized");
+    return Promise.allSettled([resume({ id: 1 }), resume({ id: 1 })]);
+  });
+  expect(
+    outcomes.filter((outcome) => outcome.status === "fulfilled"),
+  ).toHaveLength(1);
+  expect(
+    outcomes.filter((outcome) => outcome.status === "rejected"),
+  ).toHaveLength(1);
+  expect(await resumeRunThroughTestApi(page, 1)).toContain(
+    "checkpoint was not found",
+  );
+  expect(await getAgentToolCalls(page)).toHaveLength(1);
+  expect((await getAgentToolCalls(page))[0]?.status).toBe("completed");
+  expect((await getStateCounts(page)).agentApprovalCheckpoints).toBe(0);
 });
 
 test("blocks archived campaign agent runtime mutations", async ({ page }) => {
@@ -734,10 +1306,14 @@ async function getStateCounts(page: Page): Promise<Record<string, number>> {
   });
 }
 
-async function getAgentRuns(
-  page: Page,
-): Promise<
-  Array<{ status: string; error_message: string; playbook_key: string }>
+async function getAgentRuns(page: Page): Promise<
+  Array<{
+    status: string;
+    error_message: string;
+    playbook_key: string;
+    iteration_count: number;
+    output_summary: string;
+  }>
 > {
   return page.evaluate(() => {
     const getRuns = (
@@ -746,6 +1322,8 @@ async function getAgentRuns(
           status: string;
           error_message: string;
           playbook_key: string;
+          iteration_count: number;
+          output_summary: string;
         }>;
       }
     ).__LINKGO_SQL_AGENT_RUNS__;
@@ -756,15 +1334,24 @@ async function getAgentRuns(
   });
 }
 
-async function getAgentToolCalls(
-  page: Page,
-): Promise<Array<{ provider_tool_call_id: string; status: string }>> {
+async function getAgentToolCalls(page: Page): Promise<
+  Array<{
+    id: number;
+    provider_tool_call_id: string;
+    tool_name: string;
+    status: string;
+    output_json: string;
+  }>
+> {
   return page.evaluate(() => {
     const getToolCalls = (
       window as unknown as {
         __LINKGO_SQL_AGENT_TOOL_CALLS__?: () => Array<{
+          id: number;
           provider_tool_call_id: string;
+          tool_name: string;
           status: string;
+          output_json: string;
         }>;
       }
     ).__LINKGO_SQL_AGENT_TOOL_CALLS__;
@@ -772,6 +1359,31 @@ async function getAgentToolCalls(
       throw new Error("SQL agent tool calls unavailable");
     }
     return getToolCalls();
+  });
+}
+
+async function getAgentApprovalCheckpoint(page: Page): Promise<{
+  agent_run_id: number;
+  pending_tool_call_id: number;
+  phase: string;
+  messages_json: string;
+}> {
+  return page.evaluate(() => {
+    const getCheckpoints = (
+      window as unknown as {
+        __LINKGO_SQL_AGENT_APPROVAL_CHECKPOINTS__?: () => Array<{
+          agent_run_id: number;
+          pending_tool_call_id: number;
+          phase: string;
+          messages_json: string;
+        }>;
+      }
+    ).__LINKGO_SQL_AGENT_APPROVAL_CHECKPOINTS__;
+    const checkpoint = getCheckpoints?.()[0];
+    if (checkpoint === undefined) {
+      throw new Error("Agent approval checkpoint unavailable");
+    }
+    return checkpoint;
   });
 }
 
@@ -790,6 +1402,95 @@ async function executeSql(
     if (internals === undefined) throw new Error("Tauri mocks unavailable");
     return internals.invoke("plugin:sql|execute", sqlArgs);
   }, args);
+}
+
+async function getLinkedInPublishInvokeCount(page: Page): Promise<number> {
+  return page.evaluate(() =>
+    Number(
+      (
+        window as unknown as {
+          __LINKGO_LINKEDIN_PUBLISH_INVOKES__?: number;
+        }
+      ).__LINKGO_LINKEDIN_PUBLISH_INVOKES__ ?? 0,
+    ),
+  );
+}
+
+async function resumeRunThroughTestApi(
+  page: Page,
+  id: number,
+): Promise<string> {
+  return page.evaluate(async (runId) => {
+    const resume = (
+      window as unknown as {
+        __LINKGO_AGENT_RUNTIME_TEST_API__?: {
+          resumeAgentRun: (input: { id: number }) => Promise<void>;
+        };
+      }
+    ).__LINKGO_AGENT_RUNTIME_TEST_API__?.resumeAgentRun;
+    if (!resume) return "Agent runtime test API was not initialized";
+    try {
+      await resume({ id: runId });
+      return "";
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }, id);
+}
+
+async function enableReloadPersistence(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const enable = (
+      window as unknown as {
+        __LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__?: () => void;
+      }
+    ).__LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__;
+    if (!enable) throw new Error("Reload persistence API unavailable");
+    enable();
+  });
+}
+
+async function openApprovals(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Approvals/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Approvals", exact: true }),
+  ).toBeVisible();
+}
+
+async function seedApproval(page: Page, fixtureId = 1): Promise<void> {
+  await insertCandidateForScoring(page, fixtureId);
+  await executeSql(page, {
+    query:
+      "INSERT INTO drafts (campaign_id, candidate_post_id, angle, notes, updated_at) VALUES ($1, $2, $3, $4, datetime('now'))",
+    values: [1, fixtureId, "Schedule metadata", "Approval fixture"],
+  });
+  await executeSql(page, {
+    query:
+      "INSERT INTO draft_variants (draft_id, variant_number, hook, body, cta, hashtags, updated_at) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))",
+    values: [
+      fixtureId,
+      1,
+      "Durable approval checkpoint",
+      "A local metadata-only scheduling request.",
+      "Review before continuing.",
+      "#ContentOps",
+    ],
+  });
+  await executeSql(page, {
+    query:
+      "UPDATE draft_variants SET status = 'selected', updated_at = datetime('now') WHERE id = $1",
+    values: [fixtureId],
+  });
+  await executeSql(page, {
+    query:
+      "UPDATE drafts SET status = 'ready_for_review', updated_at = datetime('now') WHERE id = $1",
+    values: [fixtureId],
+  });
+  await executeSql(page, {
+    query:
+      "INSERT INTO approvals (campaign_id, draft_id, draft_variant_id, status, reviewer_notes, updated_at) VALUES ($1, $2, $3, 'needs_review', $4, datetime('now'))",
+    values: [1, fixtureId, fixtureId, "Review agent schedule metadata."],
+  });
 }
 
 async function openAgentRuntime(page: Page): Promise<void> {
@@ -818,10 +1519,164 @@ async function createCampaign(page: Page): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
+async function connectCustomProvider(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("test-custom-api-key");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://custom.example.com/v1");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Connected").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+}
+
+async function installMixedApprovalTurnProvider(
+  page: Page,
+  approvalPosition: "first" | "second",
+): Promise<void> {
+  await page.evaluate((position) => {
+    const approvalCall = {
+      type: "tool_call",
+      providerToolCallId: "provider-schedule-mixed",
+      toolName: "schedule_post",
+      input: {
+        campaignId: 1,
+        approvalId: 1,
+        scheduledFor: "next business day 09:00",
+        timezone: "local",
+      },
+    };
+    const sideEffectCall = {
+      type: "tool_call",
+      providerToolCallId: "provider-research-mixed",
+      toolName: "research_posts",
+      input: {
+        campaignId: 1,
+        keywords: ["approval isolation"],
+        maxPosts: 1,
+        suggestions: [
+          {
+            kind: "keyword",
+            title: "Must not persist",
+            keyword: "must not persist",
+            rationale: "This write proves whether preflight ran before tools.",
+            sourceKeyword: "approval isolation",
+            confidenceScore: 99,
+          },
+        ],
+      },
+    };
+    const toolCalls =
+      position === "first"
+        ? [approvalCall, sideEffectCall]
+        : [sideEffectCall, approvalCall];
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: () => unknown;
+        };
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute: () => ({
+        chunks: [
+          ...toolCalls,
+          { type: "done", outputSummary: "Mixed tool turn rejected." },
+        ],
+      }),
+    };
+  }, approvalPosition);
+}
+
+async function installScheduleApprovalProvider(
+  page: Page,
+  approvalId: number,
+  providerToolCallId: string,
+): Promise<void> {
+  await page.evaluate(
+    ({ nextApprovalId, nextProviderToolCallId }) => {
+      (
+        window as unknown as {
+          __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+            execute: () => unknown;
+          };
+        }
+      ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+        execute: () => ({
+          chunks: [
+            {
+              type: "tool_call",
+              providerToolCallId: nextProviderToolCallId,
+              toolName: "schedule_post",
+              input: {
+                campaignId: 1,
+                approvalId: nextApprovalId,
+                scheduledFor: "next business day 09:00",
+                timezone: "local",
+              },
+            },
+            {
+              type: "done",
+              outputSummary: "Schedule metadata requires approval.",
+            },
+          ],
+        }),
+      };
+    },
+    {
+      nextApprovalId: approvalId,
+      nextProviderToolCallId: providerToolCallId,
+    },
+  );
+}
+
+async function installFailingContinuationProvider(
+  page: Page,
+  message: string,
+): Promise<void> {
+  await page.evaluate((errorMessage) => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: () => unknown;
+        };
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute: () => {
+        throw new Error(errorMessage);
+      },
+    };
+  }, message);
+}
+
+async function installSuccessfulContinuationProvider(
+  page: Page,
+  outputSummary: string,
+): Promise<void> {
+  await page.evaluate((summary) => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: () => unknown;
+        };
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute: () => ({
+        chunks: [{ type: "done", outputSummary: summary }],
+      }),
+    };
+  }, outputSummary);
+}
+
 async function createProviderRun(
   page: Page,
   providerKey: "openai" | "anthropic" | "gemini" | "custom",
-  role: "researcher" | "scorer" | "drafter" = "researcher",
+  role: "researcher" | "scorer" | "drafter" | "scheduler" = "researcher",
   playbookKey = "",
 ): Promise<void> {
   await page.getByRole("button", { name: "Create run" }).first().click();
@@ -855,23 +1710,27 @@ async function createDryRun(
   await expect(dialog).toBeHidden();
 }
 
-async function insertCandidateForScoring(page: Page): Promise<void> {
+async function insertCandidateForScoring(
+  page: Page,
+  fixtureId = 1,
+): Promise<void> {
+  const fixtureSuffix = fixtureId === 1 ? "" : `-${fixtureId}`;
   await executeSql(page, {
     query: `INSERT INTO target_posts (platform, url, normalized_url, author_name, author_profile_url, platform_resource_urn, posted_at, content, content_hash, updated_at) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, $8, datetime('now'))`,
     values: [
-      "https://www.linkedin.com/posts/runtime-score/",
-      "https://www.linkedin.com/posts/runtime-score/",
+      `https://www.linkedin.com/posts/runtime-score${fixtureSuffix}/`,
+      `https://www.linkedin.com/posts/runtime-score${fixtureSuffix}/`,
       "Runtime Author",
       "",
-      "urn:li:activity:runtime-score",
+      `urn:li:activity:runtime-score${fixtureSuffix}`,
       null,
       "Runtime scorer candidate",
-      "runtime-score-hash",
+      `runtime-score-hash${fixtureSuffix}`,
     ],
   });
   await executeSql(page, {
     query: `INSERT INTO candidate_posts (campaign_id, target_post_id, source_keyword, relevance_score, score_reason, notes, updated_at) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
-    values: [1, 1, "founder content", null, "", ""],
+    values: [1, fixtureId, "founder content", null, "", ""],
   });
 }
 

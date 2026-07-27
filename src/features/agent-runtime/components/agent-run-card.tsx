@@ -1,4 +1,4 @@
-import { Bot, ShieldCheck, Wrench } from "lucide-react";
+import { Bot, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import {
 import type {
   AgentRunWithDetails,
   CancelAgentRunInput,
+  ResumeAgentRunInput,
   StartAgentRunInput,
 } from "@/features/agent-runtime/types";
 
@@ -20,7 +21,9 @@ interface AgentRunCardProps {
   killSwitchEnabled: boolean;
   killSwitchReason: string;
   providerConnected: boolean;
+  resuming: boolean;
   onStartRun: (input: StartAgentRunInput) => Promise<void>;
+  onResumeRun: (input: ResumeAgentRunInput) => Promise<void>;
   onCancelRun: (input: CancelAgentRunInput) => Promise<void>;
 }
 
@@ -30,22 +33,54 @@ function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+function getCheckpointGuidance(run: AgentRunWithDetails): string {
+  const checkpoint = run.checkpoint;
+  if (checkpoint === null) return "";
+  if (checkpoint.phase === "continuation_ready") {
+    return "The approved metadata result is saved. Recover to continue without executing the approved tool again. No schedule or publish action was created.";
+  }
+  if (checkpoint.approval_status === "approved") {
+    return "Approval is confirmed. Resume explicitly to record metadata and continue the provider conversation. This does not schedule or publish.";
+  }
+  if (
+    checkpoint.approval_status === "needs_review" ||
+    checkpoint.approval_status === "changes_requested"
+  ) {
+    return "Review this item in Approvals. The agent remains paused and no provider, schedule, or publish action will run.";
+  }
+  return "The linked approval is no longer approved, so this continuation cannot resume.";
+}
+
 export function AgentRunCard({
   run,
   selectedCampaignArchived,
   killSwitchEnabled,
   killSwitchReason,
   providerConnected,
+  resuming,
   onStartRun,
+  onResumeRun,
   onCancelRun,
 }: AgentRunCardProps): React.ReactNode {
-  const startableStatus = ["queued", "failed"].includes(run.status);
+  const checkpoint = run.checkpoint;
+  const startableStatus =
+    checkpoint === null && ["queued", "failed"].includes(run.status);
   const providerLabel = AGENT_PROVIDER_LABELS[run.provider_key];
   const playbook = getAgentPlaybook(run.playbook_key);
   const canStart = startableStatus && !killSwitchEnabled && providerConnected;
   const startBlockedByKillSwitch = startableStatus && killSwitchEnabled;
   const startBlockedByMissingProvider =
     startableStatus && !killSwitchEnabled && !providerConnected;
+  const canResume =
+    checkpoint !== null &&
+    checkpoint.approval_status === "approved" &&
+    !killSwitchEnabled &&
+    providerConnected &&
+    !selectedCampaignArchived;
+  const resumeLabel =
+    checkpoint?.phase === "continuation_ready"
+      ? "Recover continuation"
+      : "Resume approved run";
   const canCancel = !terminalStatuses.includes(run.status);
 
   return (
@@ -92,6 +127,44 @@ export function AgentRunCard({
                 {run.error_message}
               </p>
             )}
+            {checkpoint && (
+              <div
+                className="bg-muted/40 max-w-3xl space-y-2 rounded-lg border p-3 text-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <ShieldCheck className="text-linkgo-blue size-4" />
+                  <span className="font-medium">
+                    Approval #{checkpoint.approval_id}
+                  </span>
+                  <Badge variant="outline">
+                    {checkpoint.approval_status.replace(/_/gu, " ")}
+                  </Badge>
+                  <Badge variant="outline">
+                    {checkpoint.phase === "continuation_ready"
+                      ? "Continuation saved"
+                      : checkpoint.approval_status === "approved"
+                        ? "Ready to resume"
+                        : "Review required"}
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground">
+                  {getCheckpointGuidance(run)}
+                </p>
+                {killSwitchEnabled && (
+                  <p className="text-muted-foreground">
+                    Resume is blocked by the global kill switch.
+                    {killSwitchReason ? ` ${killSwitchReason}` : ""}
+                  </p>
+                )}
+                {!killSwitchEnabled && !providerConnected && (
+                  <p className="text-muted-foreground">
+                    Connect {providerLabel} in Integrations before resuming.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           {!selectedCampaignArchived && (
             <div className="flex shrink-0 flex-wrap gap-2">
@@ -102,6 +175,22 @@ export function AgentRunCard({
                   onClick={() => void onStartRun({ id: run.id })}
                 >
                   Start {providerLabel}
+                </Button>
+              )}
+              {canResume && (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={resuming}
+                  aria-label={`${resumeLabel} for agent run ${run.id}`}
+                  onClick={() => void onResumeRun({ id: run.id })}
+                >
+                  <RefreshCw
+                    className={
+                      resuming ? "size-4 motion-safe:animate-spin" : "size-4"
+                    }
+                  />
+                  {resuming ? "Resuming…" : resumeLabel}
                 </Button>
               )}
               {startBlockedByMissingProvider && (
@@ -120,6 +209,7 @@ export function AgentRunCard({
                   type="button"
                   size="sm"
                   variant="outline"
+                  disabled={resuming}
                   onClick={() => void onCancelRun({ id: run.id })}
                 >
                   Cancel run

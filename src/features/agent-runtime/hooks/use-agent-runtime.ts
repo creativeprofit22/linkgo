@@ -8,6 +8,7 @@ import {
   createAgentRun,
   listAgentRuns,
   listAgentToolContracts,
+  resumeAgentRun,
   startAgentRun,
 } from "@/features/agent-runtime/data";
 import { getAuthStatus } from "@/features/integrations/data";
@@ -18,6 +19,8 @@ import type {
   AgentRunWithDetails,
   CancelAgentRunInput,
   CreateAgentRunInput,
+  ResumeAgentRunInput,
+  ResumeAgentRunResult,
   StartAgentRunInput,
 } from "@/features/agent-runtime/types";
 import { getSafetySettings } from "@/features/safety/data";
@@ -33,6 +36,7 @@ interface UseAgentRuntimeState {
   toolContracts: AgentToolMetadata[];
   playbooks: AgentPlaybookView[];
   loading: boolean;
+  resumingRunId: number | null;
   error: string | null;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
@@ -41,6 +45,7 @@ interface UseAgentRuntimeState {
   selectCampaign: (id: number | null) => void;
   createRun: (input: CreateAgentRunInput) => Promise<number>;
   startRun: (input: StartAgentRunInput) => Promise<void>;
+  resumeRun: (input: ResumeAgentRunInput) => Promise<void>;
   cancelRun: (input: CancelAgentRunInput) => Promise<void>;
 }
 
@@ -48,6 +53,36 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "Unexpected agent runtime error";
+}
+
+function showResumeFeedback(result: ResumeAgentRunResult): void {
+  if (result.status === "completed") {
+    toast.success("Agent continuation completed", {
+      description: result.outputSummary || undefined,
+    });
+    return;
+  }
+
+  if (result.status === "waiting_approval") {
+    toast.info("Agent continuation needs another approval", {
+      description:
+        result.outputSummary ||
+        "Review the new approval request before resuming again.",
+    });
+    return;
+  }
+
+  if (result.checkpointPhase === "continuation_ready") {
+    toast.error("Agent continuation failed; recovery is ready", {
+      description:
+        result.errorMessage || "Recover the saved continuation to try again.",
+    });
+    return;
+  }
+
+  toast.error("Agent continuation failed", {
+    description: result.errorMessage || "The continuation could not complete.",
+  });
 }
 
 function getDefaultCampaignId(
@@ -74,6 +109,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
   );
   const [playbooks, setPlaybooks] = useState<AgentPlaybookView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resumingRunId, setResumingRunId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [safetySettings, setSafetySettings] = useState<SafetySettings | null>(
     null,
@@ -177,6 +213,29 @@ export function useAgentRuntime(): UseAgentRuntimeState {
     [loadForCampaign, selectedCampaignId],
   );
 
+  const resumeRun = useCallback(
+    async (input: ResumeAgentRunInput) => {
+      setResumingRunId(input.id);
+      try {
+        const result = await resumeAgentRun(input);
+        await loadForCampaign(selectedCampaignId);
+        showResumeFeedback(result);
+      } catch (caught) {
+        void getSafetySettings()
+          .then(setSafetySettings)
+          .catch(() => undefined);
+        await loadForCampaign(selectedCampaignId).catch(() => undefined);
+        toast.error("Agent run was not resumed", {
+          description: getErrorMessage(caught),
+        });
+        throw caught;
+      } finally {
+        setResumingRunId(null);
+      }
+    },
+    [loadForCampaign, selectedCampaignId],
+  );
+
   const cancelRun = useCallback(
     async (input: CancelAgentRunInput) => {
       try {
@@ -201,6 +260,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       toolContracts,
       playbooks,
       loading,
+      resumingRunId,
       error,
       killSwitchEnabled: safetySettings?.global_kill_switch === 1,
       killSwitchReason: safetySettings?.kill_switch_reason ?? "",
@@ -209,6 +269,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       selectCampaign,
       createRun,
       startRun,
+      resumeRun,
       cancelRun,
     }),
     [
@@ -219,6 +280,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       toolContracts,
       playbooks,
       loading,
+      resumingRunId,
       error,
       safetySettings,
       connectedAccounts,
@@ -226,6 +288,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
       selectCampaign,
       createRun,
       startRun,
+      resumeRun,
       cancelRun,
     ],
   );

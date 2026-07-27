@@ -78,6 +78,7 @@ Implemented now:
 - Local schedule job records behind approval status for operator scheduling.
 - Manual publish-attempt history.
 - LinkedIn LittleText escaped preview for API-safe commentary review.
+- Visible linked agent-run counts and checkpoint-removal consequences before approval rejection.
 - Explicit operator-triggered LinkedIn API publishing for approved or scheduled posts when LinkedIn OAuth is connected.
 
 Autonomous LinkedIn API publishing, LinkedIn API commenting, and scheduler worker execution are handled outside this approvals slice.

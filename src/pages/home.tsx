@@ -14,26 +14,89 @@ import {
   Target,
   Workflow,
 } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { MainTitleBar } from "@/components/main-title-bar";
 import { WindowFrame } from "@/components/window-frame";
 import { Badge } from "@/components/ui/badge";
 import { Toaster } from "@/components/ui/sonner";
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
 import { cn } from "@/lib/utils";
-import { AgentRuntimeView } from "@/features/agent-runtime";
-import { ApprovalsView } from "@/features/approvals";
-import { CampaignsView } from "@/features/campaigns/components/campaigns-view";
-import { CandidateQueueView } from "@/features/candidate-queue";
-import { CommentsView } from "@/features/comments";
-import { ContentCalendarView } from "@/features/content-calendar";
-import { DraftsView } from "@/features/drafts";
-import { IntegrationsView } from "@/features/integrations";
-import { MetricsView } from "@/features/metrics";
-import { PlaybooksView } from "@/features/playbooks";
-import { SafetyView } from "@/features/safety";
-import { SchedulerView } from "@/features/scheduler";
-import { WorkflowsView } from "@/features/workflows";
+
+const AgentRuntimeView = lazy(() =>
+  import("@/features/agent-runtime").then(({ AgentRuntimeView }) => ({
+    default: AgentRuntimeView,
+  })),
+);
+const ApprovalsView = lazy(() =>
+  import("@/features/approvals").then(({ ApprovalsView }) => ({
+    default: ApprovalsView,
+  })),
+);
+const CampaignsView = lazy(() =>
+  import("@/features/campaigns/components/campaigns-view").then(
+    ({ CampaignsView }) => ({ default: CampaignsView }),
+  ),
+);
+const CandidateQueueView = lazy(() =>
+  import("@/features/candidate-queue").then(({ CandidateQueueView }) => ({
+    default: CandidateQueueView,
+  })),
+);
+const CommentsView = lazy(() =>
+  import("@/features/comments").then(({ CommentsView }) => ({
+    default: CommentsView,
+  })),
+);
+const ContentCalendarView = lazy(() =>
+  import("@/features/content-calendar").then(({ ContentCalendarView }) => ({
+    default: ContentCalendarView,
+  })),
+);
+const DraftsView = lazy(() =>
+  import("@/features/drafts").then(({ DraftsView }) => ({
+    default: DraftsView,
+  })),
+);
+const IntegrationsView = lazy(() =>
+  import("@/features/integrations").then(({ IntegrationsView }) => ({
+    default: IntegrationsView,
+  })),
+);
+const MetricsView = lazy(() =>
+  import("@/features/metrics").then(({ MetricsView }) => ({
+    default: MetricsView,
+  })),
+);
+const PlaybooksView = lazy(() =>
+  import("@/features/playbooks").then(({ PlaybooksView }) => ({
+    default: PlaybooksView,
+  })),
+);
+const SafetyView = lazy(() =>
+  import("@/features/safety").then(({ SafetyView }) => ({
+    default: SafetyView,
+  })),
+);
+const SchedulerView = lazy(() =>
+  import("@/features/scheduler").then(({ SchedulerView }) => ({
+    default: SchedulerView,
+  })),
+);
+const WorkflowsView = lazy(() =>
+  import("@/features/workflows").then(({ WorkflowsView }) => ({
+    default: WorkflowsView,
+  })),
+);
+
+const featureViewFallback = (
+  <div className="text-muted-foreground py-8 text-sm" role="status">
+    Loading section...
+  </div>
+);
+
+if (import.meta.env.VITE_PLAYWRIGHT) {
+  void import("@/features/integrations/data");
+}
 
 type HomeTab =
   | "campaigns"
@@ -230,33 +293,35 @@ export function HomePage(): React.ReactNode {
         </aside>
 
         <section className="min-w-0 flex-1 overflow-auto p-6">
-          {activeRoadmapTab.id === "campaigns" ? (
-            <CampaignsView />
-          ) : activeRoadmapTab.id === "queue" ? (
-            <CandidateQueueView />
-          ) : activeRoadmapTab.id === "drafts" ? (
-            <DraftsView />
-          ) : activeRoadmapTab.id === "approvals" ? (
-            <ApprovalsView />
-          ) : activeRoadmapTab.id === "calendar" ? (
-            <ContentCalendarView />
-          ) : activeRoadmapTab.id === "scheduler" ? (
-            <SchedulerView />
-          ) : activeRoadmapTab.id === "comments" ? (
-            <CommentsView />
-          ) : activeRoadmapTab.id === "metrics" ? (
-            <MetricsView />
-          ) : activeRoadmapTab.id === "workflows" ? (
-            <WorkflowsView />
-          ) : activeRoadmapTab.id === "agents" ? (
-            <AgentRuntimeView />
-          ) : activeRoadmapTab.id === "playbooks" ? (
-            <PlaybooksView />
-          ) : activeRoadmapTab.id === "integrations" ? (
-            <IntegrationsView />
-          ) : (
-            <SafetyView />
-          )}
+          <Suspense fallback={featureViewFallback}>
+            {activeRoadmapTab.id === "campaigns" ? (
+              <CampaignsView />
+            ) : activeRoadmapTab.id === "queue" ? (
+              <CandidateQueueView />
+            ) : activeRoadmapTab.id === "drafts" ? (
+              <DraftsView />
+            ) : activeRoadmapTab.id === "approvals" ? (
+              <ApprovalsView />
+            ) : activeRoadmapTab.id === "calendar" ? (
+              <ContentCalendarView />
+            ) : activeRoadmapTab.id === "scheduler" ? (
+              <SchedulerView />
+            ) : activeRoadmapTab.id === "comments" ? (
+              <CommentsView />
+            ) : activeRoadmapTab.id === "metrics" ? (
+              <MetricsView />
+            ) : activeRoadmapTab.id === "workflows" ? (
+              <WorkflowsView />
+            ) : activeRoadmapTab.id === "agents" ? (
+              <AgentRuntimeView />
+            ) : activeRoadmapTab.id === "playbooks" ? (
+              <PlaybooksView />
+            ) : activeRoadmapTab.id === "integrations" ? (
+              <IntegrationsView />
+            ) : (
+              <SafetyView />
+            )}
+          </Suspense>
         </section>
       </div>
       <Toaster />

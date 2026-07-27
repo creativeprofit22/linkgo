@@ -1,5 +1,5 @@
 import type { AgentPlaybookDefinition } from "@/agent/playbooks";
-import type { AgentMessage, AgentRole } from "@/agent/types";
+import type { AgentMessage, AgentRole, AgentToolName } from "@/agent/types";
 import type { WorkflowStepKey } from "@/workflows/types";
 
 interface AgentPromptContext {
@@ -43,6 +43,44 @@ const stepGoal: Partial<Record<WorkflowStepKey, string>> = {
   schedule: "Request schedule_post approval only.",
   measure: "Record metrics and learning.",
 };
+
+function serializeAgentMessageContent(value: unknown): string {
+  const content = JSON.stringify(value);
+  if (content === undefined) {
+    throw new Error("Agent message content must be JSON serializable");
+  }
+  return content;
+}
+
+export function createAssistantTextMessage(content: string): AgentMessage {
+  return { role: "assistant", content };
+}
+
+export function createAssistantToolCallMessage(
+  toolName: AgentToolName,
+  providerToolCallId: string,
+  input: unknown,
+): AgentMessage {
+  return {
+    role: "assistant",
+    content: serializeAgentMessageContent(input),
+    toolName,
+    providerToolCallId,
+  };
+}
+
+export function createToolResultMessage(
+  toolName: AgentToolName,
+  providerToolCallId: string,
+  output: unknown,
+): AgentMessage {
+  return {
+    role: "tool",
+    content: serializeAgentMessageContent(output),
+    toolName,
+    providerToolCallId,
+  };
+}
 
 export function getDefaultModelForRole(role: AgentRole): string {
   if (role === "researcher" || role === "drafter") return "gpt-4.1-mini";

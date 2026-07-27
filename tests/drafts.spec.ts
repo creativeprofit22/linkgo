@@ -118,7 +118,7 @@ test("persists a failed generation request and dismisses it", async ({ page }) =
   await expect(
     page
       .locator("p")
-      .filter({ hasText: "Drafter did not return draft_post variants" }),
+      .filter({ hasText: "Agent provider is not connected" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
@@ -127,7 +127,7 @@ test("persists a failed generation request and dismisses it", async ({ page }) =
   await expect(
     page
       .locator("p")
-      .filter({ hasText: "Drafter did not return draft_post variants" }),
+      .filter({ hasText: "Agent provider is not connected" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Dismiss failed request" }).click();

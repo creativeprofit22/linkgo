@@ -22,8 +22,9 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 - Runtime loop that validates tool inputs and outputs with Zod, supports cancellation checks, retry classification, iteration caps, and tool execution context for local side effects.
 - Provider-backed execution using explicitly connected credentials and native HTTP requests inside the Tauri boundary for the operator-triggered run.
 - `research_posts` can persist local discovery suggestions, and `score_relevance` can apply validated relevance scores to existing campaign candidates.
-- Approval interrupt for `schedule_post`.
-- Agent run, tool call, and runtime event tables.
+- Durable approval interrupt for `schedule_post`, linked to the authoritative approval and an exact provider-neutral conversation checkpoint.
+- Explicit **Resume approved run** and restart-safe **Recover continuation** controls in Agent Runtime.
+- Agent run, tool call, runtime event, and active approval checkpoint tables.
 - Selected playbook persistence on `agent_runs.playbook_key`.
 - Agent Runtime tab with campaign filtering, summary cards, tool contracts, compatible playbook selection, run cards, tool payloads, and event history.
 - Archived-campaign mutation blocking in UI and data API.
@@ -44,10 +45,15 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 4. For provider-backed runs, Linkgo fetches the stored API key/base URL only for that explicit start.
 5. The run is claimed in a short SQLite transaction, then the model stream executes outside that transaction.
 6. Prompt assembly layers compatible playbook instructions and custom override text before locked safety lines.
-7. The loop validates each role-appropriate tool request.
+7. The loop validates each role-appropriate tool request. A provider turn containing `schedule_post` must contain exactly that one tool call; mixed approval/non-approval turns fail before any tool executes.
 8. Non-approval tools execute locally and persist completed tool calls.
-9. `schedule_post` stops at `waiting_approval` and persists an approval-required tool call.
-10. Final status, output, errors, iteration count, tool calls, and events are persisted in a final transaction.
+9. `schedule_post` stops at `waiting_approval`; the pending tool call, linked approval ID, normalized conversation, and total provider-turn count are persisted atomically. Conversation validation requires every tool result ID and tool name to match one preceding assistant tool call.
+10. Approving in the Approvals tab changes approval state only. It does not call the provider, create a schedule, or publish.
+11. The operator selects **Resume approved run** in Agent Runtime. Linkgo rechecks the exact approval, campaign, pending tool, campaign state, provider connection, and kill switch.
+12. The metadata-only approved tool result is validated and committed before the provider continuation request. It explicitly reports that no schedule or publish action was created.
+13. The resumed loop uses the saved conversation, seeds duplicate tool-call protection from durable history, and enforces the original eight-turn budget across both halves.
+14. A provider failure after durable tool completion retains a `continuation_ready` checkpoint. **Recover continuation** retries without executing the approved tool again.
+15. Completion, cancellation, rejection, a later approval interrupt, or terminal turn-limit failure removes or replaces the active checkpoint as appropriate.
 
 ## Safety and approval notes
 
@@ -57,7 +63,13 @@ Provider secrets stay inside the native Tauri command boundary during explicit o
 
 `dry_run` remains executable with no credentials.
 
-`schedule_post` is approval-gated and does not create schedule jobs, publish content, or call LinkedIn.
+`schedule_post` is approval-gated and metadata-only. Waiting, approval, resume, and recovery do not create `schedule_jobs` or `publish_attempts` and do not call LinkedIn.
+
+Rejection in Approvals atomically rejects the linked pending tool, cancels the run, records cancellation history, and removes the checkpoint without a provider request.
+
+Checkpoints survive app restart. Recovery is bounded to approval interrupts and post-approval continuations; crashes during unrelated non-approval tool execution are not replayed.
+
+Migration 21 fails pre-checkpoint `waiting_approval` runs closed because their exact provider conversation cannot be reconstructed. Operators must restart those failed legacy runs.
 
 Playbooks shape prompts only. Disabling a playbook hides it from new runtime creation while historical runs remain readable.
 
@@ -73,7 +85,12 @@ Playwright covers:
 - Provider-backed renderer execution through mocked native Tauri command results that assert only `providerKey`, `modelName`, and `request` cross the command boundary.
 - Native adapter unit coverage for provider payload construction, command-boundary rejection of renderer-supplied provider options, and provider tool-call mapping.
 - Playbook selection, default display, provider message injection, and disabled-playbook filtering.
-- `schedule_post` waiting-approval behavior without publishing or scheduling.
+- Durable `schedule_post` waiting state linked to an existing approval.
+- Approval-first and approval-second mixed two-call turns failing closed before any tool side effect.
+- Approval plus explicit resume with validated tool-result continuation, including rejection of orphan tool-result IDs.
+- Rejection cancellation with zero provider continuation calls.
+- Reload recovery, double-resume idempotency, and one-time approved tool execution.
+- Invalid approval-state/campaign/missing-link rejection with zero schedule, publish-attempt, or LinkedIn writes.
 - Archived-campaign mutation blocking in UI and data API.
 
-Rust migration tests assert agent runtime tables, constraints, foreign keys, indexes, and provider parity expansion.
+Rust migration tests assert agent runtime and approval-checkpoint tables, constraints, foreign keys, indexes, legacy fail-closed upgrade behavior, and provider parity expansion.

@@ -24,6 +24,7 @@ import {
   type AgentRole,
 } from "@/agent";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
+import { isAgentProviderReady } from "@/features/agent-runtime/provider-readiness";
 import type { CreateAgentRunInput } from "@/features/agent-runtime/types";
 import type { ConnectedAccount } from "@/features/integrations/types";
 import type { AgentPlaybookView } from "@/features/playbooks/types";
@@ -47,19 +48,6 @@ const roleLabels: Record<AgentRole, string> = {
   scheduler: "Scheduler",
   analyst: "Analyst",
 };
-
-function isProviderReady(
-  providerKey: AgentProviderKey,
-  connectedAccounts: ConnectedAccount[],
-): boolean {
-  if (providerKey === "dry_run") return true;
-  return connectedAccounts.some(
-    (account) =>
-      account.provider_key === providerKey &&
-      account.status === "connected" &&
-      (providerKey !== "custom" || account.has_base_url_override),
-  );
-}
 
 export function CreateAgentRunDialog({
   campaigns,
@@ -101,7 +89,10 @@ export function CreateAgentRunDialog({
       !playbook.operatorGuidanceOnly &&
       playbook.compatibleRoles.includes(agentRole),
   );
-  const providerConnected = isProviderReady(providerKey, connectedAccounts);
+  const providerConnected = isAgentProviderReady(
+    providerKey,
+    connectedAccounts,
+  );
   const disabled =
     campaigns.length === 0 ||
     selectedCampaignArchived ||

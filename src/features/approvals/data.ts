@@ -1,4 +1,5 @@
 import { getDb, type LinkgoDatabase } from "@/lib/db";
+import { rejectAgentRunsForApprovalInTransaction } from "@/features/agent-runtime/data";
 import {
   assertApprovalCanPublishViaLinkedInSchema,
   cancelScheduleSchema,
@@ -112,6 +113,10 @@ interface ScheduleValidationRow {
 
 interface CountRow {
   count: number;
+}
+
+interface LinkedAgentRunCountRow extends CountRow {
+  approval_id: number;
 }
 
 function getPlaceholders(ids: number[]): string {
@@ -257,7 +262,12 @@ export async function listApprovals(
 
   const approvalIds = rows.map((row) => row.id);
   const variantIds = rows.map((row) => row.draft_variant_id);
-  const [scheduleRows, publishRows, severityByVariantId] = await Promise.all([
+  const [
+    scheduleRows,
+    publishRows,
+    linkedAgentRunCountRows,
+    severityByVariantId,
+  ] = await Promise.all([
     db.select<ScheduleJob[]>(
       `SELECT * FROM schedule_jobs
       WHERE approval_id IN (${getPlaceholders(approvalIds)})
@@ -268,6 +278,13 @@ export async function listApprovals(
       `SELECT * FROM publish_attempts
       WHERE approval_id IN (${getPlaceholders(approvalIds)})
       ORDER BY datetime(created_at) DESC, id DESC`,
+      approvalIds,
+    ),
+    db.select<LinkedAgentRunCountRow[]>(
+      `SELECT approval_id, COUNT(*) AS count
+      FROM agent_run_approval_checkpoints
+      WHERE approval_id IN (${getPlaceholders(approvalIds)})
+      GROUP BY approval_id`,
       approvalIds,
     ),
     getAuditSeverityByVariantId(db, variantIds),
@@ -285,8 +302,13 @@ export async function listApprovals(
     attemptsByApprovalId.set(row.approval_id, attempts);
   }
 
+  const linkedAgentRunCountByApprovalId = new Map(
+    linkedAgentRunCountRows.map((row) => [row.approval_id, row.count]),
+  );
+
   return rows.map((row) => ({
     ...mapApproval(row),
+    linkedAgentRunCount: linkedAgentRunCountByApprovalId.get(row.id) ?? 0,
     scheduleJob: scheduleByApprovalId.get(row.id) ?? null,
     publishAttempts: attemptsByApprovalId.get(row.id) ?? [],
     draft: mapDraftSnapshot(row),
@@ -538,6 +560,7 @@ export async function setApprovalStatus(
     if (parsed.status === "rejected") {
       const detail =
         parsed.reviewerNotes?.trim() || "Approval rejected by operator review";
+      await rejectAgentRunsForApprovalInTransaction(db, approval.id, detail);
       await recordSafetyAuditEvent(db, {
         campaignId: approval.campaign_id,
         subjectType: "approval",

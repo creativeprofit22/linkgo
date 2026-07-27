@@ -83,6 +83,8 @@ Side effects:
 - Successful publish attempts move the approval to `published` and complete the linked schedule when present.
 - Manual failed publish attempts keep approved/scheduled approvals actionable and mark the linked schedule failed when present.
 - Failed follow-up attempts on already published approvals add history only; they do not reopen the approval or mutate completed schedule state.
+- Approving a record may unlock a linked Agent Runtime checkpoint, but approval itself never invokes a provider, creates a schedule, or publishes.
+- Rejecting a record atomically rejects and cancels linked waiting agent runs, records cancellation history, and removes their resumable checkpoints without invoking a provider.
 
 ## LinkedIn LittleText escaping
 
@@ -107,6 +109,8 @@ The Approvals tab includes:
 - Buttons for approve, request changes, reject, schedule, cancel schedule, mark published, publish via LinkedIn, and record failure.
 
 Confirmation prompts guard rejection, schedule cancellation, manual published recording, and OAuth-backed LinkedIn publishing. `Publish via LinkedIn` is hidden for archived campaigns, non-approved/non-scheduled approvals, kill-switch-enabled state, and approvals with an existing successful publish attempt.
+
+An approved Agent Runtime checkpoint is resumed explicitly from Agent Runtime. The Approvals tab never starts model continuation, scheduling, or publishing as a side effect of approve/reject state changes.
 
 ## Explicit exclusions
 

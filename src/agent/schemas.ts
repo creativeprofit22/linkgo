@@ -19,6 +19,100 @@ export const agentRunStatusSchema = z.enum(AGENT_RUN_STATUSES);
 export const agentToolCallStatusSchema = z.enum(AGENT_TOOL_CALL_STATUSES);
 export const agentRunEventTypeSchema = z.enum(AGENT_RUN_EVENT_TYPES);
 
+const basicAgentMessageSchema = z
+  .object({
+    role: z.enum(["system", "user"]),
+    content: z.string(),
+  })
+  .strict();
+
+const assistantTextMessageSchema = z
+  .object({
+    role: z.literal("assistant"),
+    content: z.string(),
+  })
+  .strict();
+
+const assistantToolCallMessageSchema = z
+  .object({
+    role: z.literal("assistant"),
+    content: z.string(),
+    toolName: agentToolNameSchema,
+    providerToolCallId: z.string().trim().min(1),
+  })
+  .strict();
+
+const toolResultMessageSchema = z
+  .object({
+    role: z.literal("tool"),
+    content: z.string(),
+    toolName: agentToolNameSchema,
+    providerToolCallId: z.string().trim().min(1),
+  })
+  .strict();
+
+export const agentMessageSchema = z.union([
+  basicAgentMessageSchema,
+  assistantTextMessageSchema,
+  assistantToolCallMessageSchema,
+  toolResultMessageSchema,
+]);
+
+export const agentConversationSchema = z
+  .array(agentMessageSchema)
+  .superRefine((messages, context) => {
+    const assistantToolCalls = new Map<
+      string,
+      { toolName: z.infer<typeof agentToolNameSchema>; resultSeen: boolean }
+    >();
+
+    messages.forEach((message, index) => {
+      if (message.role === "assistant" && "providerToolCallId" in message) {
+        if (assistantToolCalls.has(message.providerToolCallId)) {
+          context.addIssue({
+            code: "custom",
+            message: `Assistant tool call ID "${message.providerToolCallId}" is duplicated`,
+            path: [index, "providerToolCallId"],
+          });
+          return;
+        }
+        assistantToolCalls.set(message.providerToolCallId, {
+          toolName: message.toolName,
+          resultSeen: false,
+        });
+        return;
+      }
+
+      if (message.role !== "tool") return;
+      const assistantToolCall = assistantToolCalls.get(
+        message.providerToolCallId,
+      );
+      if (assistantToolCall === undefined) {
+        context.addIssue({
+          code: "custom",
+          message: `Tool result ID "${message.providerToolCallId}" does not match a preceding assistant tool call`,
+          path: [index, "providerToolCallId"],
+        });
+        return;
+      }
+      if (assistantToolCall.resultSeen) {
+        context.addIssue({
+          code: "custom",
+          message: `Tool result ID "${message.providerToolCallId}" is duplicated`,
+          path: [index, "providerToolCallId"],
+        });
+      }
+      if (assistantToolCall.toolName !== message.toolName) {
+        context.addIssue({
+          code: "custom",
+          message: `Tool result ID "${message.providerToolCallId}" does not match the preceding ${assistantToolCall.toolName} call`,
+          path: [index, "toolName"],
+        });
+      }
+      assistantToolCall.resultSeen = true;
+    });
+  });
+
 export const discoveryToolSuggestionSchema = z
   .object({
     kind: z.enum(["keyword", "trend", "source_prompt"]),

@@ -180,6 +180,17 @@ export function createDryRunProvider(
       const playbookSummary = request.playbookKey
         ? ` with playbook ${request.playbookLabel ?? request.playbookKey} (${request.playbookKey})`
         : " with no playbook";
+      const hasToolResult = request.messages.some(
+        (message) => message.role === "tool",
+      );
+      if (hasToolResult) {
+        yield {
+          type: "done",
+          outputSummary: `Dry-run ${request.agentRole}${playbookSummary} completed local contract validation.`,
+        };
+        return;
+      }
+
       yield {
         type: "text",
         text: `Dry-run ${request.agentRole}${playbookSummary} is validating local runtime contracts.`,
@@ -187,7 +198,7 @@ export function createDryRunProvider(
       yield { type: "tool_call", ...buildToolCall(request) };
       yield {
         type: "done",
-        outputSummary: `Dry-run ${request.agentRole}${playbookSummary} completed local contract validation.`,
+        outputSummary: `Dry-run ${request.agentRole}${playbookSummary} requested local tool execution.`,
       };
     },
   };

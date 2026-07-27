@@ -10,7 +10,7 @@ Linkgo is a programmatic LinkedIn growth agent: code handles scraping, queues, d
 
 ## 2. Streaming + model layer
 
-- Use `@kenkaiiii/gg-ai` style provider wrapper so models can swap without changing workflow code.
+- Use a provider-neutral wrapper so models can swap without changing workflow code.
 - Pattern: `gg-framework/packages/gg-ai/src/types.ts`, `gg-framework/packages/gg-ai/README.md`.
 - Stream progress events into UI: researching, drafting, auditing, waiting approval, scheduled.
 

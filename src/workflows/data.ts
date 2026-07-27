@@ -1,6 +1,6 @@
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import { IS_TEST } from "@/lib/env";
-import type { AgentRole } from "@/agent/types";
+import type { AgentRole, AgentRunStatus } from "@/agent/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import {
   addWorkflowNoteSchema,
@@ -62,6 +62,24 @@ interface WorkflowArtifactOwnershipRow {
   workflow_step_id: number | null;
 }
 
+interface WorkflowAgentRunLinkRow {
+  workflow_run_id: number | null;
+  workflow_step_id: number | null;
+}
+
+interface WorkflowLinkedAgentRow {
+  id: number;
+  status: AgentRunStatus;
+  output_summary: string;
+  error_message: string;
+}
+
+export interface ReconcileWorkflowAgentRunInput {
+  agentRunId: number;
+  status: AgentRunStatus;
+  outputSummary: string;
+  errorMessage: string;
+}
 const TERMINAL_RUN_STATUSES: WorkflowRunStatus[] = ["completed", "cancelled"];
 const FINISHED_STEP_STATUSES: WorkflowStepStatus[] = ["completed", "skipped"];
 
@@ -70,7 +88,7 @@ const STEP_TRANSITIONS: Record<WorkflowStepStatus, WorkflowStepStatus[]> = {
   running: ["completed", "waiting_approval", "blocked", "failed", "skipped"],
   waiting_approval: ["completed", "blocked", "failed", "running"],
   blocked: ["running", "failed", "skipped"],
-  failed: ["running", "skipped"],
+  failed: ["running", "blocked", "skipped"],
   completed: ["running"],
   skipped: ["running"],
 };
@@ -259,6 +277,158 @@ async function updateRunFromSteps(
       "Workflow run completed",
     );
   }
+}
+
+async function startNextPendingWorkflowStep(
+  db: LinkgoDatabase,
+  step: WorkflowStep,
+): Promise<void> {
+  const steps = await loadWorkflowSteps(db, step.workflow_run_id);
+  const nextStep = steps.find(
+    (candidate) =>
+      candidate.sort_order === step.sort_order + 1 &&
+      candidate.status === "pending",
+  );
+  if (nextStep === undefined) return;
+
+  assertStepTransition(nextStep.status, "running");
+  await db.execute(
+    `UPDATE workflow_steps
+    SET status = 'running',
+      started_at = COALESCE(started_at, datetime('now')),
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $1`,
+    [nextStep.id],
+  );
+  await insertWorkflowEvent(
+    db,
+    step.workflow_run_id,
+    nextStep.id,
+    "step_started",
+    `${nextStep.title} started`,
+  );
+}
+
+function getWorkflowProjectionFromAgentStatus(status: AgentRunStatus): {
+  stepStatus: WorkflowStepStatus;
+  executionStatus:
+    | "running"
+    | "completed"
+    | "waiting_approval"
+    | "failed"
+    | "blocked"
+    | "cancelled";
+} {
+  if (status === "completed") {
+    return { stepStatus: "completed", executionStatus: "completed" };
+  }
+  if (status === "waiting_approval") {
+    return {
+      stepStatus: "waiting_approval",
+      executionStatus: "waiting_approval",
+    };
+  }
+  if (status === "failed") {
+    return { stepStatus: "failed", executionStatus: "failed" };
+  }
+  if (status === "cancelled") {
+    return { stepStatus: "blocked", executionStatus: "cancelled" };
+  }
+  return { stepStatus: "running", executionStatus: "running" };
+}
+
+export async function reconcileWorkflowAgentRunInTransaction(
+  db: LinkgoDatabase,
+  input: ReconcileWorkflowAgentRunInput,
+): Promise<boolean> {
+  const linkRows = await db.select<WorkflowAgentRunLinkRow[]>(
+    `SELECT workflow_run_id, workflow_step_id
+    FROM agent_runs
+    WHERE id = $1
+    LIMIT 1`,
+    [input.agentRunId],
+  );
+  const link = linkRows[0];
+  if (
+    link?.workflow_run_id === null ||
+    link?.workflow_run_id === undefined ||
+    link.workflow_step_id === null
+  ) {
+    return false;
+  }
+
+  const stepRows = await db.select<WorkflowStepValidationRow[]>(
+    `SELECT
+      ws.*,
+      wr.status AS run_status,
+      wr.campaign_id,
+      c.status AS campaign_status
+    FROM workflow_steps ws
+    INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+    INNER JOIN campaigns c ON c.id = wr.campaign_id
+    WHERE ws.id = $1
+    LIMIT 1`,
+    [link.workflow_step_id],
+  );
+  const step = stepRows[0];
+  if (
+    step === undefined ||
+    step.workflow_run_id !== link.workflow_run_id ||
+    step.run_status === "cancelled"
+  ) {
+    return false;
+  }
+
+  const projection = getWorkflowProjectionFromAgentStatus(input.status);
+  await db.execute(
+    `UPDATE workflow_step_executions
+    SET status = $1,
+      error_summary = $2,
+      completed_at = CASE
+        WHEN $1 IN ('completed', 'failed', 'blocked', 'cancelled') THEN COALESCE(completed_at, datetime('now'))
+        ELSE NULL
+      END,
+      updated_at = datetime('now')
+    WHERE agent_run_id = $3
+      AND workflow_step_id = $4`,
+    [projection.executionStatus, input.errorMessage, input.agentRunId, step.id],
+  );
+
+  if (step.status !== projection.stepStatus) {
+    assertStepTransition(step.status, projection.stepStatus);
+  }
+  await db.execute(
+    `UPDATE workflow_steps
+    SET status = $1,
+      output_summary = $2,
+      error_message = $3,
+      started_at = CASE WHEN $1 = 'running' THEN COALESCE(started_at, datetime('now')) ELSE started_at END,
+      completed_at = CASE
+        WHEN $1 IN ('completed', 'skipped') THEN COALESCE(completed_at, datetime('now'))
+        WHEN $1 IN ('running', 'blocked', 'failed', 'waiting_approval') THEN NULL
+        ELSE completed_at
+      END,
+      updated_at = datetime('now')
+    WHERE id = $4`,
+    [projection.stepStatus, input.outputSummary, input.errorMessage, step.id],
+  );
+
+  if (step.status !== projection.stepStatus) {
+    await insertWorkflowEvent(
+      db,
+      step.workflow_run_id,
+      step.id,
+      getStepEventType(step.status, projection.stepStatus),
+      getStepEventSummary(step, projection.stepStatus),
+    );
+    if (projection.stepStatus === "completed") {
+      await startNextPendingWorkflowStep(db, step);
+    }
+  }
+
+  await updateRunFromSteps(db, step.workflow_run_id, step.run_status);
+  return true;
 }
 
 export async function listWorkflowRuns(
@@ -725,7 +895,54 @@ export async function executeWorkflowRun(
 export async function resumeWorkflowRun(
   input: StartWorkflowRunInput,
 ): Promise<void> {
-  await executeWorkflowRun(input);
+  const parsed = startWorkflowRunSchema.parse(input);
+  const db = await getDb();
+  let linkedAgentIsActive = false;
+
+  await db.execute("BEGIN TRANSACTION");
+  try {
+    const run = await getWorkflowRunValidation(db, parsed.id);
+    const steps = await loadWorkflowSteps(db, parsed.id);
+    const waitingStep =
+      steps.find(
+        (step) =>
+          step.step_key === run.current_step_key &&
+          step.status === "waiting_approval",
+      ) ?? steps.find((step) => step.status === "waiting_approval");
+
+    if (waitingStep !== undefined) {
+      const agentRows = await db.select<WorkflowLinkedAgentRow[]>(
+        `SELECT id, status, output_summary, error_message
+        FROM agent_runs
+        WHERE workflow_run_id = $1
+          AND workflow_step_id = $2
+        ORDER BY id DESC
+        LIMIT 1`,
+        [parsed.id, waitingStep.id],
+      );
+      const agentRun = agentRows[0];
+      if (agentRun !== undefined) {
+        await reconcileWorkflowAgentRunInTransaction(db, {
+          agentRunId: agentRun.id,
+          status: agentRun.status,
+          outputSummary: agentRun.output_summary,
+          errorMessage: agentRun.error_message,
+        });
+        linkedAgentIsActive = [
+          "queued",
+          "running",
+          "waiting_approval",
+        ].includes(agentRun.status);
+      }
+    }
+
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackWorkflowTransaction(db);
+    throw error;
+  }
+
+  if (!linkedAgentIsActive) await executeWorkflowRun(parsed);
 }
 
 export async function setWorkflowStepStatus(
@@ -787,33 +1004,7 @@ export async function setWorkflowStepStatus(
     );
 
     if (parsed.status === "completed") {
-      const stepsBeforeRecalc = await loadWorkflowSteps(
-        db,
-        step.workflow_run_id,
-      );
-      const nextStep = stepsBeforeRecalc.find(
-        (candidate) =>
-          candidate.sort_order === step.sort_order + 1 &&
-          candidate.status === "pending",
-      );
-      if (nextStep !== undefined) {
-        await db.execute(
-          `UPDATE workflow_steps
-          SET status = 'running',
-            started_at = COALESCE(started_at, datetime('now')),
-            completed_at = NULL,
-            updated_at = datetime('now')
-          WHERE id = $1`,
-          [nextStep.id],
-        );
-        await insertWorkflowEvent(
-          db,
-          step.workflow_run_id,
-          nextStep.id,
-          "step_started",
-          `${nextStep.title} started`,
-        );
-      }
+      await startNextPendingWorkflowStep(db, step);
     }
 
     await updateRunFromSteps(db, step.workflow_run_id, step.run_status);

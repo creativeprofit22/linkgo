@@ -206,8 +206,11 @@ export interface AgentLoopOptions {
   provider: AgentProvider;
   tools: AgentToolRegistry;
   request: AgentModelRequest;
+  maxTurns?: number;
   maxIterations?: number;
   maxRetries?: number;
+  initialTurnCount?: number;
+  handledProviderToolCallIds?: Iterable<string>;
   signal?: AbortSignal;
   onProgress?: (event: AgentProgressEvent) => Promise<void> | void;
 }
@@ -233,6 +236,7 @@ export interface AgentLoopResult {
   outputSummary: string;
   iterationCount: number;
   toolCalls: AgentLoopToolCallResult[];
+  conversation: AgentMessage[];
   errorMessage: string;
   retryCount: number;
   usage: AgentLoopUsage;

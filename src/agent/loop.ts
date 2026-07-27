@@ -1,8 +1,14 @@
 import { z } from "zod";
+import {
+  createAssistantTextMessage,
+  createAssistantToolCallMessage,
+  createToolResultMessage,
+} from "@/agent/messages";
 import type {
   AgentLoopOptions,
   AgentLoopResult,
   AgentLoopToolCallResult,
+  AgentModelChunk,
   AgentProgressEvent,
   AgentProviderToolDefinition,
   AgentToolContract,
@@ -66,30 +72,46 @@ function getProviderToolCallId(
   chunkProviderToolCallId: string | undefined,
   providerKey: string,
   requestRunId: number,
-  iterationCount: number,
+  toolCallSequence: string,
 ): string {
   const providerToolCallId = chunkProviderToolCallId?.trim();
   return providerToolCallId && providerToolCallId.length > 0
     ? providerToolCallId
-    : `${providerKey}-${requestRunId}-tool-call-${iterationCount}`;
+    : `${providerKey}-${requestRunId}-tool-call-${toolCallSequence}`;
 }
 
-async function runSingleAgentLoopAttempt({
-  provider,
-  tools,
-  request,
-  maxIterations,
-  signal,
-  onProgress,
-}: Required<Pick<AgentLoopOptions, "provider" | "tools" | "request">> & {
-  maxIterations: number;
-  signal: AbortSignal | undefined;
-  onProgress: AgentLoopOptions["onProgress"] | undefined;
-}): Promise<Omit<AgentLoopResult, "retryCount">> {
+function assertApprovalToolCallIsIsolated(
+  toolCalls: Array<Extract<AgentModelChunk, { type: "tool_call" }>>,
+  tools: AgentToolRegistry,
+): void {
+  const approvalToolNames = [
+    ...new Set(
+      toolCalls
+        .filter((toolCall) => tools[toolCall.toolName].requiresApproval)
+        .map((toolCall) => toolCall.toolName),
+    ),
+  ];
+  if (approvalToolNames.length === 0 || toolCalls.length === 1) return;
+
+  throw new Error(
+    `Provider turn rejected before tool execution: approval-required tool call ${approvalToolNames.join(", ")} must be isolated; received ${toolCalls.length} tool calls.`,
+  );
+}
+
+export async function runAgentLoop(
+  options: AgentLoopOptions,
+): Promise<AgentLoopResult> {
+  const { provider, tools, request, signal, onProgress } = options;
+  const maxTurns = options.maxTurns ?? options.maxIterations ?? 8;
+  const maxRetries = options.maxRetries ?? 1;
   const toolCalls: AgentLoopToolCallResult[] = [];
-  const handledProviderToolCallIds = new Set<string>();
-  let iterationCount = 0;
-  let outputSummary = "";
+  const handledProviderToolCallIds = new Set(
+    options.handledProviderToolCallIds ?? [],
+  );
+  const messages = [...request.messages];
+  const providerTools = toProviderToolDefinitions(tools);
+  let turnCount = options.initialTurnCount ?? 0;
+  let retryCount = 0;
 
   await emitProgress(
     {
@@ -99,242 +121,282 @@ async function runSingleAgentLoopAttempt({
     onProgress,
   );
 
-  const providerTools = toProviderToolDefinitions(tools);
+  try {
+    while (turnCount < maxTurns) {
+      assertNotAborted(signal);
+      turnCount += 1;
+      const turnRequest = { ...request, messages: [...messages] };
+      let turnChunks: Awaited<ReturnType<typeof collectProviderTurn>>;
+
+      while (true) {
+        try {
+          turnChunks = await collectProviderTurn({
+            provider,
+            providerTools,
+            request: turnRequest,
+            signal,
+            onProgress,
+          });
+          break;
+        } catch (error) {
+          const retryable = isRetryableError(error) && retryCount < maxRetries;
+          if (!retryable) throw error;
+          retryCount += 1;
+          await emitProgress(
+            {
+              type: "model_streamed",
+              summary: `Retrying provider call after transient failure (${retryCount}/${maxRetries}).`,
+            },
+            onProgress,
+          );
+        }
+      }
+
+      assertApprovalToolCallIsIsolated(turnChunks.toolCalls, tools);
+
+      if (turnChunks.assistantText.length > 0) {
+        messages.push(createAssistantTextMessage(turnChunks.assistantText));
+      }
+
+      let completedToolCount = 0;
+      for (const [toolCallIndex, chunk] of turnChunks.toolCalls.entries()) {
+        assertNotAborted(signal);
+        const tool = tools[chunk.toolName];
+        const parsedInput = tool.inputSchema.parse(chunk.input);
+        const providerToolCallId = getProviderToolCallId(
+          chunk.providerToolCallId,
+          provider.key,
+          request.runId,
+          `${turnCount}-${toolCallIndex + 1}`,
+        );
+
+        await emitProgress(
+          {
+            type: "tool_requested",
+            summary: `${tool.label} requested`,
+            providerToolCallId,
+            toolName: tool.name,
+            input: parsedInput,
+            requiresApproval: tool.requiresApproval,
+          },
+          onProgress,
+        );
+
+        if (handledProviderToolCallIds.has(providerToolCallId)) {
+          const errorMessage = "Duplicate provider tool call ignored.";
+          toolCalls.push({
+            providerToolCallId,
+            toolName: tool.name,
+            status: "rejected",
+            requiresApproval: tool.requiresApproval,
+            input: parsedInput,
+            output: {},
+            errorMessage,
+          });
+          await emitProgress(
+            {
+              type: "tool_failed",
+              summary: `${tool.label} rejected: ${errorMessage}`,
+              providerToolCallId,
+              toolName: tool.name,
+              input: parsedInput,
+              errorMessage,
+              requiresApproval: tool.requiresApproval,
+            },
+            onProgress,
+          );
+          continue;
+        }
+        handledProviderToolCallIds.add(providerToolCallId);
+        messages.push(
+          createAssistantToolCallMessage(
+            tool.name,
+            providerToolCallId,
+            parsedInput,
+          ),
+        );
+
+        if (tool.requiresApproval) {
+          toolCalls.push({
+            providerToolCallId,
+            toolName: tool.name,
+            status: "waiting_approval",
+            requiresApproval: true,
+            input: parsedInput,
+            output: {},
+            errorMessage: "",
+          });
+          await emitProgress(
+            {
+              type: "approval_required",
+              summary: `${tool.label} requires human approval`,
+              providerToolCallId,
+              toolName: tool.name,
+              input: parsedInput,
+              requiresApproval: true,
+            },
+            onProgress,
+          );
+          return {
+            status: "waiting_approval",
+            outputSummary: `${tool.label} is waiting for human approval.`,
+            iterationCount: turnCount,
+            toolCalls,
+            conversation: messages,
+            errorMessage: "",
+            retryCount,
+            usage: emptyUsage(),
+          };
+        }
+
+        try {
+          const rawOutput = await tool.execute(parsedInput, {
+            request: turnRequest,
+            providerToolCallId,
+          });
+          assertNotAborted(signal);
+          const parsedOutput = tool.outputSchema.parse(rawOutput);
+          toolCalls.push({
+            providerToolCallId,
+            toolName: tool.name,
+            status: "completed",
+            requiresApproval: false,
+            input: parsedInput,
+            output: parsedOutput,
+            errorMessage: "",
+          });
+          await emitProgress(
+            {
+              type: "tool_completed",
+              summary: `${tool.label} completed`,
+              providerToolCallId,
+              toolName: tool.name,
+              input: parsedInput,
+              output: parsedOutput,
+              requiresApproval: false,
+            },
+            onProgress,
+          );
+          messages.push(
+            createToolResultMessage(
+              tool.name,
+              providerToolCallId,
+              parsedOutput,
+            ),
+          );
+          completedToolCount += 1;
+        } catch (error) {
+          const errorMessage = getErrorMessage(error);
+          toolCalls.push({
+            providerToolCallId,
+            toolName: tool.name,
+            status: "failed",
+            requiresApproval: false,
+            input: parsedInput,
+            output: {},
+            errorMessage,
+          });
+          await emitProgress(
+            {
+              type: "tool_failed",
+              summary: `${tool.label} failed: ${errorMessage}`,
+              providerToolCallId,
+              toolName: tool.name,
+              input: parsedInput,
+              errorMessage,
+              requiresApproval: false,
+            },
+            onProgress,
+          );
+          throw error;
+        }
+      }
+
+      if (completedToolCount > 0) continue;
+
+      const finalSummary =
+        turnChunks.outputSummary || "Agent loop completed locally.";
+      await emitProgress(
+        { type: "run_completed", summary: finalSummary },
+        onProgress,
+      );
+      return {
+        status: "completed",
+        outputSummary: finalSummary,
+        iterationCount: turnCount,
+        toolCalls,
+        conversation: messages,
+        errorMessage: "",
+        retryCount,
+        usage: emptyUsage(),
+      };
+    }
+
+    throw new Error(`Agent loop exceeded the maximum turn limit (${maxTurns})`);
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    await emitProgress(
+      { type: "run_failed", summary: errorMessage, errorMessage },
+      onProgress,
+    );
+    return {
+      status: "failed",
+      outputSummary: "",
+      iterationCount: turnCount,
+      toolCalls,
+      conversation: messages,
+      errorMessage,
+      retryCount,
+      usage: emptyUsage(),
+    };
+  }
+}
+
+async function collectProviderTurn({
+  provider,
+  providerTools,
+  request,
+  signal,
+  onProgress,
+}: {
+  provider: AgentLoopOptions["provider"];
+  providerTools: AgentProviderToolDefinition[];
+  request: AgentLoopOptions["request"];
+  signal: AbortSignal | undefined;
+  onProgress: AgentLoopOptions["onProgress"] | undefined;
+}): Promise<{
+  toolCalls: Array<Extract<AgentModelChunk, { type: "tool_call" }>>;
+  assistantText: string;
+  outputSummary: string;
+}> {
+  const toolCalls: Array<Extract<AgentModelChunk, { type: "tool_call" }>> = [];
+  const assistantTextChunks: string[] = [];
+  let outputSummary: string | null = null;
 
   for await (const chunk of provider.stream(request, {
     tools: providerTools,
     toolChoice: "auto",
   })) {
     assertNotAborted(signal);
-    iterationCount += 1;
-    if (iterationCount > maxIterations) {
-      throw new Error("Agent loop exceeded the maximum iteration limit");
-    }
-
     if (chunk.type === "text") {
+      assistantTextChunks.push(chunk.text);
       await emitProgress(
         { type: "model_streamed", summary: chunk.text },
         onProgress,
       );
-      continue;
-    }
-
-    if (chunk.type === "done") {
+    } else if (chunk.type === "tool_call") {
+      toolCalls.push(chunk);
+    } else {
       outputSummary = chunk.outputSummary;
-      break;
-    }
-
-    const tool = tools[chunk.toolName];
-    const parsedInput = tool.inputSchema.parse(chunk.input);
-    const providerToolCallId = getProviderToolCallId(
-      chunk.providerToolCallId,
-      provider.key,
-      request.runId,
-      iterationCount,
-    );
-    await emitProgress(
-      {
-        type: "tool_requested",
-        summary: `${tool.label} requested`,
-        providerToolCallId,
-        toolName: tool.name,
-        input: parsedInput,
-        requiresApproval: tool.requiresApproval,
-      },
-      onProgress,
-    );
-
-    if (handledProviderToolCallIds.has(providerToolCallId)) {
-      const errorMessage = "Duplicate provider tool call ignored.";
-      toolCalls.push({
-        providerToolCallId,
-        toolName: tool.name,
-        status: "rejected",
-        requiresApproval: tool.requiresApproval,
-        input: parsedInput,
-        output: {},
-        errorMessage,
-      });
-      await emitProgress(
-        {
-          type: "tool_failed",
-          summary: `${tool.label} rejected: ${errorMessage}`,
-          providerToolCallId,
-          toolName: tool.name,
-          input: parsedInput,
-          errorMessage,
-          requiresApproval: tool.requiresApproval,
-        },
-        onProgress,
-      );
-      continue;
-    }
-    handledProviderToolCallIds.add(providerToolCallId);
-
-    if (tool.requiresApproval) {
-      toolCalls.push({
-        providerToolCallId,
-        toolName: tool.name,
-        status: "waiting_approval",
-        requiresApproval: true,
-        input: parsedInput,
-        output: {},
-        errorMessage: "",
-      });
-      await emitProgress(
-        {
-          type: "approval_required",
-          summary: `${tool.label} requires human approval`,
-          providerToolCallId,
-          toolName: tool.name,
-          input: parsedInput,
-          requiresApproval: true,
-        },
-        onProgress,
-      );
-      return {
-        status: "waiting_approval",
-        outputSummary: `${tool.label} is waiting for human approval.`,
-        iterationCount,
-        toolCalls,
-        errorMessage: "",
-        usage: emptyUsage(),
-      };
-    }
-
-    try {
-      const rawOutput = await tool.execute(parsedInput, {
-        request,
-        providerToolCallId,
-      });
-      assertNotAborted(signal);
-      const parsedOutput = tool.outputSchema.parse(rawOutput);
-      toolCalls.push({
-        providerToolCallId,
-        toolName: tool.name,
-        status: "completed",
-        requiresApproval: false,
-        input: parsedInput,
-        output: parsedOutput,
-        errorMessage: "",
-      });
-      await emitProgress(
-        {
-          type: "tool_completed",
-          summary: `${tool.label} completed`,
-          providerToolCallId,
-          toolName: tool.name,
-          input: parsedInput,
-          output: parsedOutput,
-          requiresApproval: false,
-        },
-        onProgress,
-      );
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      toolCalls.push({
-        providerToolCallId,
-        toolName: tool.name,
-        status: "failed",
-        requiresApproval: false,
-        input: parsedInput,
-        output: {},
-        errorMessage,
-      });
-      await emitProgress(
-        {
-          type: "tool_failed",
-          summary: `${tool.label} failed: ${errorMessage}`,
-          providerToolCallId,
-          toolName: tool.name,
-          input: parsedInput,
-          errorMessage,
-          requiresApproval: false,
-        },
-        onProgress,
-      );
-      throw error;
     }
   }
 
-  const finalSummary = outputSummary || "Agent loop completed locally.";
-  await emitProgress(
-    { type: "run_completed", summary: finalSummary },
-    onProgress,
-  );
+  if (outputSummary === null) {
+    throw new Error("Provider turn ended without a completion marker");
+  }
   return {
-    status: "completed",
-    outputSummary: finalSummary,
-    iterationCount,
     toolCalls,
-    errorMessage: "",
-    usage: emptyUsage(),
-  };
-}
-
-export async function runAgentLoop({
-  provider,
-  tools,
-  request,
-  maxIterations = 8,
-  maxRetries = 1,
-  signal,
-  onProgress,
-}: AgentLoopOptions): Promise<AgentLoopResult> {
-  let retryCount = 0;
-  let lastIterationCount = 0;
-  let lastToolCalls: AgentLoopToolCallResult[] = [];
-
-  while (retryCount <= maxRetries) {
-    assertNotAborted(signal);
-    try {
-      const result = await runSingleAgentLoopAttempt({
-        provider,
-        tools,
-        request,
-        maxIterations,
-        signal,
-        onProgress,
-      });
-      return { ...result, retryCount };
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      const retryable = isRetryableError(error) && retryCount < maxRetries;
-      if (!retryable) {
-        await emitProgress(
-          { type: "run_failed", summary: errorMessage, errorMessage },
-          onProgress,
-        );
-        return {
-          status: "failed",
-          outputSummary: "",
-          iterationCount: lastIterationCount,
-          toolCalls: lastToolCalls,
-          errorMessage,
-          retryCount,
-          usage: emptyUsage(),
-        };
-      }
-      retryCount += 1;
-      lastIterationCount = 0;
-      lastToolCalls = [];
-      await emitProgress(
-        {
-          type: "model_streamed",
-          summary: `Retrying provider call after transient failure (${retryCount}/${maxRetries}).`,
-        },
-        onProgress,
-      );
-    }
-  }
-
-  return {
-    status: "failed",
-    outputSummary: "",
-    iterationCount: lastIterationCount,
-    toolCalls: lastToolCalls,
-    errorMessage: "Agent retry budget was exhausted",
-    retryCount,
-    usage: emptyUsage(),
+    assistantText: assistantTextChunks.join(""),
+    outputSummary,
   };
 }
