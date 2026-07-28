@@ -1,5 +1,6 @@
 mod agent_runtime;
 mod auth;
+mod campaign_backlog;
 mod metric_refresh;
 mod migrations;
 mod plugins;
@@ -37,6 +38,9 @@ pub fn run() {
             auth::commands::linkgo_linkedin_publish_post,
             auth::commands::linkgo_linkedin_publish_comment,
             agent_runtime::linkgo_agent_provider_stream,
+            campaign_backlog::linkgo_campaign_backlog_create,
+            campaign_backlog::linkgo_campaign_backlog_update,
+            campaign_backlog::linkgo_campaign_backlog_set_status,
             scheduler::linkgo_scheduler_status,
             scheduler::linkgo_scheduler_start,
             scheduler::linkgo_scheduler_stop,

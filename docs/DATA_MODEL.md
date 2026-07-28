@@ -52,6 +52,32 @@ Stores manual/generated/learned keywords for campaign discovery.
 
 Indexes: `idx_campaign_keywords_campaign_id`, `idx_campaign_keywords_keyword`.
 
+### `campaign_backlog_items`
+
+Migrations `24`–`26` store one-off and recurring campaign due work with visible operator responsibility. Migration `25` adds the recurrence IANA zone and deterministically backfills pre-existing recurring rows to `UTC`. Migration `26` adds terminal-history ordering indexes.
+
+| Column                 | Type    | Notes                                                                                       |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| `id`                   | INTEGER | Primary key                                                                                 |
+| `campaign_id`          | INTEGER | Required campaign reference with cascade delete                                             |
+| `recurrence_parent_id` | INTEGER | Nullable completed occurrence reference with `ON DELETE SET NULL`                           |
+| `work_type`            | TEXT    | `research`, `scoring`, `drafting`, `approval`, `scheduling`, `metrics`, `retry`, or `other` |
+| `title`                | TEXT    | Required trimmed operator title, 1–160 characters                                           |
+| `details`              | TEXT    | Optional operator context, maximum 4,000 characters                                         |
+| `owner_type`           | TEXT    | Responsibility label: `operator` or `linkgo`                                                |
+| `status`               | TEXT    | `pending`, `in_progress`, `blocked`, `completed`, or `cancelled`                            |
+| `due_at`               | TEXT    | Required UTC ISO-8601 timestamp with millisecond precision                                  |
+| `recurrence`           | TEXT    | `none`, `daily`, or `weekly`                                                                |
+| `recurrence_timezone`  | TEXT    | IANA zone for daily/weekly wall-clock recurrence; empty only when recurrence is `none`      |
+| `completed_at`         | TEXT    | Nullable immutable completion timestamp                                                     |
+| `cancelled_at`         | TEXT    | Nullable immutable cancellation timestamp                                                   |
+| `created_at`           | TEXT    | UTC ISO-8601 timestamp                                                                      |
+| `updated_at`           | TEXT    | UTC ISO-8601 timestamp                                                                      |
+
+Open-work indexes cover `(campaign_id, status, due_at)`, `(status, due_at)`, and `(owner_type, status, due_at)`; recurrence lookup uses `recurrence_parent_id`. Two partial terminal-history indexes cover `(COALESCE(completed_at, cancelled_at) DESC, id DESC)` globally and with leading `campaign_id`, restricted to `completed` and `cancelled` rows.
+
+Daily and weekly completion creates one future successor in the same transaction. Calendar arithmetic uses `recurrence_timezone`, preserves local wall-clock time across daylight-saving changes, and coalesces missed intervals. Ambiguous local times choose the earlier instant; nonexistent local times shift forward by the daylight-saving gap. Completed and cancelled rows are terminal, cancellation creates no successor, and every mutation rechecks that the campaign is not archived. `linkgo` is a planning label only in Roadmap 3C.
+
 ### `target_posts`
 
 Stores the observed external LinkedIn post source for manual queue intake.
@@ -135,6 +161,31 @@ Constraints: unique `(campaign_id, key_type, key_value)` and checked key type va
 
 Indexes: `idx_dedupe_keys_campaign_id`, `idx_dedupe_keys_key`.
 
+### `candidate_intake_policies`
+
+Stores the optional campaign policy override. A missing row resolves in the data API to the conservative 30-day default.
+
+| Column              | Type    | Notes                                                   |
+| ------------------- | ------- | ------------------------------------------------------- |
+| `campaign_id`       | INTEGER | Primary key; references campaigns with cascade delete   |
+| `max_post_age_days` | INTEGER | Required whole-day limit from 1 through 365; default 30 |
+| `created_at`        | TEXT    | SQLite datetime                                         |
+| `updated_at`        | TEXT    | SQLite datetime                                         |
+
+### `candidate_policy_banned_topics`
+
+Stores up to 25 application-enforced banned terms or phrases per campaign.
+
+| Column             | Type    | Notes                                                      |
+| ------------------ | ------- | ---------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                |
+| `campaign_id`      | INTEGER | References campaigns with cascade delete                   |
+| `topic`            | TEXT    | Trimmed display phrase, 1–80 characters                    |
+| `normalized_topic` | TEXT    | NFKC/case/whitespace-normalized match key, 1–80 characters |
+| `created_at`       | TEXT    | SQLite datetime                                            |
+
+Constraints: unique `(campaign_id, normalized_topic)`. Index: `idx_candidate_policy_banned_topics_campaign_id`.
+
 ### `source_import_batches`
 
 Stores one bounded local source-post import attempt for one campaign.
@@ -169,11 +220,12 @@ Stores the bounded audit input and outcome for each row in a source import batch
 | `status`                 | TEXT    | `pending`, `accepted`, `duplicate`, or `rejected`                                                   |
 | `input_json`             | TEXT    | Valid bounded audit JSON, constrained to 20,000 characters; oversized values use a preview envelope |
 | `candidate_post_id`      | INTEGER | Nullable candidate reference with `ON DELETE SET NULL`                                              |
-| `reason`                 | TEXT    | Bounded validation, duplicate, acceptance, or safe processing explanation                           |
+| `reason`                 | TEXT    | Bounded validation, policy, duplicate, acceptance, or safe processing explanation                   |
+| `policy_rule_key`        | TEXT    | Empty or `source`, `age`, `banned_topic`, `already_contacted`                                       |
 | `created_at`             | TEXT    | SQLite datetime                                                                                     |
 | `updated_at`             | TEXT    | SQLite datetime                                                                                     |
 
-Indexes: `idx_source_import_items_batch_id`, `idx_source_import_items_status`, `idx_source_import_items_candidate_id`.
+Indexes: `idx_source_import_items_batch_id`, `idx_source_import_items_status`, `idx_source_import_items_candidate_id`, and partial `idx_source_import_items_policy_rule_key` for non-empty classifications.
 
 Deleting a candidate preserves its import history and clears only `candidate_post_id`. Deleting a batch or campaign cascades its item rows. The source payload contains only locally supplied post metadata; it never stores OAuth credentials or provider secrets.
 

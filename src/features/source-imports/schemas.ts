@@ -50,6 +50,14 @@ export const sourceImportItemStatusSchema = z.enum([
   "rejected",
 ]);
 
+export const sourceImportPolicyRuleKeySchema = z.enum([
+  "",
+  "source",
+  "age",
+  "banned_topic",
+  "already_contacted",
+]);
+
 export const sourceImportRowSchema = z.strictObject({
   url: z.string().trim().min(1, "LinkedIn post URL is required").max(1000),
   content: z.string().trim().min(1, "Post text is required").max(3000),

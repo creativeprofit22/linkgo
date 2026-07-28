@@ -1,4 +1,10 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 
 import {
   MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH,
@@ -214,6 +220,285 @@ test("preserves valid rows when an invalid scalar exceeds the audit limit", asyn
     originalType: "scalar",
     originalJsonLength: MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH + 5_002,
   });
+});
+
+test("policy rejects unsafe sources and timestamp failures without writing candidate artifacts", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  const valid = sourceRow(
+    "policy-valid",
+    "Safe neighboring post",
+    "Safe Author",
+  );
+  const stale = {
+    ...sourceRow("stale", "Stale post", "Stale"),
+    postedAt: new Date(Date.now() - 31 * 86_400_000).toISOString(),
+  };
+  const future = {
+    ...sourceRow("future", "Future post", "Future"),
+    postedAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+  };
+  const dialog = await openImportDialog(page);
+  await dialog.getByLabel("Source posts JSON").fill(
+    sourceJson([
+      valid,
+      {
+        ...sourceRow("http", "HTTP source", "HTTP"),
+        url: "http://www.linkedin.com/posts/http",
+      },
+      {
+        ...sourceRow("other", "Other host", "Other"),
+        url: "https://example.com/post",
+      },
+      {
+        ...sourceRow("missing", "Missing timestamp", "Missing"),
+        postedAt: null,
+      },
+      {
+        ...sourceRow("invalid-time", "Invalid timestamp", "Invalid"),
+        postedAt: "2026-07-27",
+      },
+      stale,
+      future,
+    ]),
+  );
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+  await expect(
+    dialog.getByText("1 accepted, 0 duplicate, 6 rejected."),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByText("Policy: Source").first()).toBeVisible();
+  await expect(page.getByText("Policy: Age").first()).toBeVisible();
+
+  const state = await getSourceImportState(page);
+  expect(state.items.map((item) => item.policy_rule_key)).toEqual([
+    "",
+    "source",
+    "source",
+    "age",
+    "age",
+    "age",
+    "age",
+  ]);
+  expect(state.counts).toMatchObject({
+    targetPosts: 1,
+    candidatePosts: 1,
+    dedupeKeys: 2,
+  });
+  expect(state.batches[0]).toMatchObject({
+    status: "completed_with_errors",
+    accepted_count: 1,
+    rejected_count: 6,
+  });
+});
+
+test("age policy accepts a post inside the exact configured boundary", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  await setPolicy(page, "1", "");
+  const dialog = await openImportDialog(page);
+  await dialog.getByLabel("Source posts JSON").fill(
+    sourceJson([
+      {
+        ...sourceRow("boundary", "Boundary post", "Boundary"),
+        postedAt: new Date(Date.now() - 86_400_000 + 10_000).toISOString(),
+      },
+    ]),
+  );
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+  await expect(
+    dialog.getByText("1 accepted, 0 duplicate, 0 rejected."),
+  ).toBeVisible();
+});
+
+test("age policy allows five minutes of future clock skew", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  const dialog = await openImportDialog(page);
+  await dialog.getByLabel("Source posts JSON").fill(
+    sourceJson([
+      {
+        ...sourceRow(
+          "future-inside-allowance",
+          "Future post inside clock-skew allowance",
+          "Inside Allowance",
+        ),
+        postedAt: new Date(Date.now() + 4 * 60_000).toISOString(),
+      },
+      {
+        ...sourceRow(
+          "future-beyond-allowance",
+          "Future post beyond clock-skew allowance",
+          "Beyond Allowance",
+        ),
+        postedAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      },
+    ]),
+  );
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+  await expect(
+    dialog.getByText("1 accepted, 0 duplicate, 1 rejected."),
+  ).toBeVisible();
+
+  const state = await getSourceImportState(page);
+  expect(state.items.map((item) => item.status)).toEqual([
+    "accepted",
+    "rejected",
+  ]);
+  expect(state.items.map((item) => item.policy_rule_key)).toEqual(["", "age"]);
+  expect(state.candidates).toHaveLength(1);
+});
+
+test("age policy rejects calendar dates normalized by Date", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  await setPolicy(page, "365", "");
+  const now = new Date();
+  const invalidYear =
+    now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  const dialog = await openImportDialog(page);
+  await dialog.getByLabel("Source posts JSON").fill(
+    sourceJson([
+      {
+        ...sourceRow("invalid-calendar", "Invalid calendar date", "Calendar"),
+        postedAt: `${invalidYear}-02-30T10:00:00Z`,
+      },
+    ]),
+  );
+
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+
+  await expect(
+    dialog.getByText("0 accepted, 0 duplicate, 1 rejected."),
+  ).toBeVisible();
+  const state = await getSourceImportState(page);
+  expect(state.items[0]?.policy_rule_key).toBe("age");
+  expect(state.candidates).toHaveLength(0);
+});
+
+test("banned topics use normalized whole-word and phrase matching", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  await setPolicy(page, "30", "AI\nclimate change");
+  const dialog = await openImportDialog(page);
+  await dialog.getByLabel("Source posts JSON").fill(
+    sourceJson([
+      sourceRow(
+        "substring",
+        "She said the launch went well.",
+        "Substring Safe",
+      ),
+      sourceRow("ai", "Practical AI, governance guidance.", "AI Blocked"),
+      {
+        ...sourceRow("phrase", "A neutral update", "Phrase Blocked"),
+        sourceKeyword: "CLIMATE   CHANGE",
+      },
+    ]),
+  );
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+  await expect(
+    dialog.getByText("1 accepted, 0 duplicate, 2 rejected."),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByText("Policy: Banned topic").first()).toBeVisible();
+  const state = await getSourceImportState(page);
+  expect(state.items.map((item) => item.policy_rule_key)).toEqual([
+    "",
+    "banned_topic",
+    "banned_topic",
+  ]);
+  expect(state.candidates).toHaveLength(1);
+});
+
+test("URL, URN, and normalized profile contacts block while failed and same-name contacts do not", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  await page.evaluate(() => {
+    const state = window as unknown as {
+      __LINKGO_SQL_CREATE_CONTACT_ATTEMPT__?: (
+        campaignId: number,
+        identity: {
+          normalizedUrl: string;
+          platformResourceUrn?: string;
+          authorProfileUrl?: string;
+        },
+        status?: "succeeded" | "failed",
+      ) => void;
+    };
+    state.__LINKGO_SQL_CREATE_CONTACT_ATTEMPT__?.(1, {
+      normalizedUrl: "https://www.linkedin.com/posts/contact-url",
+    });
+    state.__LINKGO_SQL_CREATE_CONTACT_ATTEMPT__?.(1, {
+      normalizedUrl: "https://www.linkedin.com/posts/prior-urn",
+      platformResourceUrn: "urn:li:activity:contact-urn",
+    });
+    state.__LINKGO_SQL_CREATE_CONTACT_ATTEMPT__?.(1, {
+      normalizedUrl: "https://www.linkedin.com/posts/prior-profile",
+      authorProfileUrl:
+        "HTTPS://WWW.LINKEDIN.COM:443/in/contact-profile/?trk=prior#fragment",
+    });
+    state.__LINKGO_SQL_CREATE_CONTACT_ATTEMPT__?.(
+      1,
+      { normalizedUrl: "https://www.linkedin.com/posts/failed-contact" },
+      "failed",
+    );
+  });
+  const before = await getSourceImportState(page);
+  const dialog = await openImportDialog(page);
+  await dialog.getByLabel("Source posts JSON").fill(
+    sourceJson([
+      {
+        ...sourceRow("contact-url", "Same URL", "Different Name"),
+        url: "https://www.linkedin.com/posts/contact-url",
+      },
+      {
+        ...sourceRow("new-urn", "Same URN", "Different Name"),
+        platformResourceUrn: "urn:li:activity:contact-urn",
+      },
+      {
+        ...sourceRow("new-profile", "Same profile", "Different Name"),
+        authorProfileUrl: "https://www.linkedin.com/in/contact-profile",
+      },
+      {
+        ...sourceRow(
+          "failed-contact",
+          "Failed contact can retry",
+          "Prior contact",
+        ),
+        url: "https://www.linkedin.com/posts/failed-contact",
+      },
+      {
+        ...sourceRow("same-name", "Same name alone is safe", "Prior contact"),
+      },
+    ]),
+  );
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+  await expect(
+    dialog.getByText("2 accepted, 0 duplicate, 3 rejected."),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(
+    page.getByText("Policy: Already contacted").first(),
+  ).toBeVisible();
+  const after = await getSourceImportState(page);
+  expect(after.items.map((item) => item.policy_rule_key)).toEqual([
+    "already_contacted",
+    "already_contacted",
+    "already_contacted",
+    "",
+    "",
+  ]);
+  expect(after.counts.candidatePosts - before.counts.candidatePosts).toBe(2);
+  expect(page.getByRole("button", { name: "Add candidate" })).toBeEnabled();
+  await expect(page.getByTestId("candidate-policy-card")).toContainText(
+    "attended override",
+  );
 });
 
 test("rejects invalid JSON and more than 50 rows while preserving input", async ({
@@ -671,6 +956,79 @@ test("keyboard flow returns focus and announces completion", async ({
   await expect(trigger).toBeFocused();
 });
 
+test("keeps source-import controls operable with reduced motion and forced colors", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  const trigger = page.getByRole("button", { name: "Import source posts" });
+  const dialog = await openImportDialog(page);
+  const textarea = dialog.getByLabel("Source posts JSON");
+  const cancel = dialog.getByRole("button", { name: "Cancel" });
+  const submit = dialog.getByRole("button", { name: "Import posts" });
+  const close = dialog.getByRole("button", { name: "Close" });
+
+  expect(
+    await page.evaluate(
+      () => matchMedia("(prefers-reduced-motion: reduce)").matches,
+    ),
+  ).toBe(true);
+
+  await textarea.fill(
+    sourceJson([
+      {
+        ...sourceRow("forced-colors", "Rejected source", "Policy Author"),
+        url: "http://www.linkedin.com/posts/forced-colors",
+      },
+    ]),
+  );
+  await submit.click();
+  await expect(
+    dialog.getByText("0 accepted, 0 duplicate, 1 rejected."),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  const policyLabel = page.getByText("Policy: Source").first();
+  await expect(policyLabel).toBeVisible();
+
+  await page.emulateMedia({
+    reducedMotion: "reduce",
+    forcedColors: "active",
+  });
+  expect(
+    await page.evaluate(() => matchMedia("(forced-colors: active)").matches),
+  ).toBe(true);
+
+  const batchSummary = page.locator("summary").filter({ hasText: "Batch 1" });
+  await expect(batchSummary).toBeVisible();
+  await expectForcedColorsFocusIndicator(batchSummary);
+  await page.keyboard.press("Enter");
+  await expect(policyLabel).toBeHidden();
+  await page.keyboard.press("Enter");
+  await expect(policyLabel).toBeVisible();
+
+  await expectForcedColorsFocusIndicator(trigger);
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeVisible();
+  await textarea.fill(
+    sourceJson([
+      sourceRow("forced-colors-valid", "Visible controls", "Control Author"),
+    ]),
+  );
+
+  for (const control of [close, textarea, cancel, submit]) {
+    await expect(control).toBeVisible();
+    await expect(control).toBeEnabled();
+    await expectForcedColorsFocusIndicator(control);
+  }
+
+  await cancel.click();
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
 async function captureSourceImportVisualEvidence(
   page: Page,
   testInfo: TestInfo,
@@ -714,17 +1072,39 @@ async function captureSourceImportVisualEvidence(
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "";
   });
+}
+async function expectForcedColorsFocusIndicator(
+  locator: Locator,
+): Promise<void> {
+  const unfocused = await locator.evaluate(readFocusIndicatorStyles);
+  await locator.focus();
+  await locator.page().keyboard.press("Shift+Tab");
+  await locator.page().keyboard.press("Tab");
+  await expect(locator).toBeFocused();
+  const focused = await locator.evaluate(readFocusIndicatorStyles);
 
-  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(focused.focusVisible).toBe(true);
   expect(
-    await page.evaluate(
-      () => matchMedia("(prefers-reduced-motion: reduce)").matches,
-    ),
+    focused.hasOutline ||
+      focused.boxShadow !== "none" ||
+      focused.borderColor !== unfocused.borderColor,
   ).toBe(true);
-  await page.emulateMedia({ forcedColors: "active" });
-  expect(
-    await page.evaluate(() => matchMedia("(forced-colors: active)").matches),
-  ).toBe(true);
+}
+
+function readFocusIndicatorStyles(element: Element): {
+  borderColor: string;
+  boxShadow: string;
+  focusVisible: boolean;
+  hasOutline: boolean;
+} {
+  const style = getComputedStyle(element);
+  return {
+    borderColor: style.borderColor,
+    boxShadow: style.boxShadow,
+    focusVisible: element.matches(":focus-visible"),
+    hasOutline:
+      style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0,
+  };
 }
 
 async function expectPageToReflow(page: Page): Promise<void> {
@@ -747,7 +1127,7 @@ function sourceRow(
     content,
     authorName,
     authorProfileUrl: `https://www.linkedin.com/in/${suffix}`,
-    postedAt: "2026-07-27T10:00:00Z",
+    postedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     platformResourceUrn: `urn:li:activity:${suffix}`,
     sourceKeyword: "approved source",
     notes: "Imported by Playwright",
@@ -769,6 +1149,21 @@ async function openQueue(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: "Candidate Queue" }),
   ).toBeVisible();
+}
+
+async function setPolicy(
+  page: Page,
+  age: string,
+  topics: string,
+): Promise<void> {
+  await page.getByRole("button", { name: "Edit policy" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Edit candidate intake policy",
+  });
+  await dialog.getByLabel("Maximum post age in days").fill(age);
+  await dialog.getByLabel("Banned topics").fill(topics);
+  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await expect(dialog).toBeHidden();
 }
 
 async function openImportDialog(page: Page) {

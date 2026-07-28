@@ -1,5 +1,9 @@
 import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type { AgentProviderKey } from "@/agent/provider-catalog";
+import type {
+  CandidatePolicyFinding,
+  CandidatePolicyRuleKey,
+} from "@/features/candidate-policy/types";
 
 export type CandidateStatus = "new" | "shortlisted" | "rejected" | "drafted";
 
@@ -61,6 +65,16 @@ export interface CreateCandidateInput {
   relevanceScore?: number | null;
   scoreReason?: string;
   notes?: string;
+}
+
+export interface CreateCandidateTransactionOptions {
+  enforcePolicy?: boolean;
+}
+
+export interface CandidatePolicyRejection {
+  readonly name: "CandidatePolicyRejectionError";
+  readonly primaryRuleKey: CandidatePolicyRuleKey;
+  readonly findings: CandidatePolicyFinding[];
 }
 
 export interface UpdateCandidateInput {

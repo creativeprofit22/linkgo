@@ -8,6 +8,11 @@ import {
   updateCandidateSchema,
 } from "@/features/candidate-queue/schemas";
 import type { CampaignStatus } from "@/features/campaigns/types";
+import { evaluateCandidateIntakePolicy } from "@/features/candidate-policy/data";
+import type {
+  CandidatePolicyFinding,
+  CandidatePolicyRuleKey,
+} from "@/features/candidate-policy/types";
 import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
 import type {
   CandidateDiscoveryItem,
@@ -16,6 +21,7 @@ import type {
   CandidateStatus,
   CandidateWithTarget,
   CreateCandidateInput,
+  CreateCandidateTransactionOptions,
   DismissDiscoveryItemInput,
   PromoteDiscoveryItemInput,
   RunCandidateDiscoveryInput,
@@ -100,6 +106,35 @@ interface CandidateDiscoveryItemRow {
 
 const DUPLICATE_CANDIDATE_MESSAGE =
   "Candidate already exists for this campaign";
+
+export class CandidatePolicyRejectionError extends Error {
+  override readonly name = "CandidatePolicyRejectionError" as const;
+
+  constructor(
+    readonly primaryRuleKey: CandidatePolicyRuleKey,
+    readonly findings: CandidatePolicyFinding[],
+  ) {
+    super(
+      findings
+        .map((finding) => finding.message)
+        .join(" ")
+        .slice(0, 2000),
+    );
+  }
+}
+
+export function isCandidatePolicyRejectionError(
+  error: unknown,
+): error is CandidatePolicyRejectionError {
+  if (error instanceof CandidatePolicyRejectionError) return true;
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as Partial<CandidatePolicyRejectionError>;
+  return (
+    candidate.name === "CandidatePolicyRejectionError" &&
+    typeof candidate.primaryRuleKey === "string" &&
+    Array.isArray(candidate.findings)
+  );
+}
 
 export function normalizeCandidateUrl(url: string): string {
   const trimmed = url.trim();
@@ -236,14 +271,38 @@ export function isDuplicateCandidateError(error: unknown): boolean {
 export async function createCandidateInTransaction(
   db: LinkgoDatabase,
   input: CreateCandidateInput,
+  options: CreateCandidateTransactionOptions = {},
 ): Promise<number> {
   const parsed = createCandidateSchema.parse(input);
   const normalizedUrl = normalizeCandidateUrl(parsed.url);
   const contentHash = createContentHash(parsed.content);
   const platformResourceUrn =
     parsed.platformResourceUrn?.trim() || resolveLinkedInTargetUrn(parsed.url);
+  const normalizedAuthorProfileUrl = normalizeCandidateUrl(
+    parsed.authorProfileUrl,
+  );
 
   await assertCandidateCampaignCanMutate(db, parsed.campaignId);
+
+  if (options.enforcePolicy === true) {
+    const decision = await evaluateCandidateIntakePolicy(db, {
+      campaignId: parsed.campaignId,
+      url: parsed.url,
+      normalizedUrl,
+      authorProfileUrl: parsed.authorProfileUrl,
+      normalizedAuthorProfileUrl,
+      platformResourceUrn,
+      postedAt: parsed.postedAt,
+      content: parsed.content,
+      sourceKeyword: parsed.sourceKeyword,
+    });
+    if (!decision.accepted && decision.primaryRuleKey !== null) {
+      throw new CandidatePolicyRejectionError(
+        decision.primaryRuleKey,
+        decision.findings,
+      );
+    }
+  }
 
   const existingDedupe = await db.select<DedupeMatchRow[]>(
     `SELECT id FROM dedupe_keys

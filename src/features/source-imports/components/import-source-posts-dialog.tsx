@@ -27,6 +27,7 @@ const SOURCE_IMPORT_EXAMPLE = `[
     "url": "https://www.linkedin.com/posts/example",
     "content": "Post text",
     "authorName": "Jane Doe",
+    "postedAt": "2026-07-20T14:30:00Z",
     "sourceKeyword": "founder content"
   }
 ]`;
@@ -121,13 +122,14 @@ export function ImportSourcePostsDialog({
           <FileInput className="size-4" /> Import source posts
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className="source-import-dialog max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
             <DialogTitle>Import source posts</DialogTitle>
             <DialogDescription>
-              Paste approved source-post data for this campaign. Import stays
-              local and does not scrape or request data from LinkedIn.
+              Paste approved source-post data for this campaign. Every row is
+              checked against the selected campaign policy before candidate data
+              is stored. Import stays local and does not request LinkedIn data.
             </DialogDescription>
           </DialogHeader>
 
@@ -140,7 +142,8 @@ export function ImportSourcePostsDialog({
                   className="text-muted-foreground text-sm"
                 >
                   Use a JSON array with 1–{MAX_SOURCE_IMPORT_ROWS} rows. Each
-                  row requires <code>url</code> and <code>content</code>.
+                  row requires <code>url</code>, <code>content</code>, and an
+                  absolute <code>postedAt</code> timestamp with a timezone.
                   Maximum source size is{" "}
                   {MAX_SOURCE_IMPORT_TEXT_LENGTH.toLocaleString("en-US")}{" "}
                   characters.
@@ -181,8 +184,10 @@ export function ImportSourcePostsDialog({
               </div>
 
               <p className="text-muted-foreground text-xs">
-                Import only creates local Candidate Queue records. It does not
-                call a model, draft, approve, comment, schedule, or publish.
+                Rows that fail source, age, banned-topic, or prior-contact rules
+                are recorded as rejected without candidate artifacts. Import
+                does not call a model, draft, approve, comment, schedule, or
+                publish.
               </p>
             </>
           ) : (

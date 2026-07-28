@@ -111,6 +111,18 @@
   }
 }
 
+@media (forced-colors: active) {
+  .source-import-dialog :is(button, textarea):focus-visible,
+  .source-import-batch-summary:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .source-import-batch-summary:focus-visible {
+    outline-offset: -2px;
+  }
+}
+
 @layer components {
   .linkgo-shell {
     background:

@@ -5,6 +5,10 @@ import { DiscoveryItemCard } from "@/features/candidate-queue/components/discove
 import { RunCandidateDiscoveryDialog } from "@/features/candidate-queue/components/run-candidate-discovery-dialog";
 import { ScoreCandidatesDialog } from "@/features/candidate-queue/components/score-candidates-dialog";
 import { useCandidateQueue } from "@/features/candidate-queue/hooks/use-candidate-queue";
+import {
+  CandidatePolicyCard,
+  useCandidatePolicy,
+} from "@/features/candidate-policy";
 import type {
   CandidateStatus,
   CandidateWithTarget,
@@ -56,6 +60,7 @@ export function CandidateQueueView(): React.ReactNode {
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
   const sourceImports = useSourceImports(selectedCampaignId);
+  const candidatePolicy = useCandidatePolicy(selectedCampaignId);
   const summary = getCandidateSummary(candidates, discoveryItems.length);
   const groupedCandidates = groupCandidatesByStatus(candidates);
 
@@ -166,6 +171,16 @@ export function CandidateQueueView(): React.ReactNode {
               ))}
             </select>
           </div>
+
+          <CandidatePolicyCard
+            policy={candidatePolicy.policy}
+            loading={candidatePolicy.loading}
+            pending={candidatePolicy.pending}
+            error={candidatePolicy.error}
+            archived={selectedCampaignArchived}
+            onRetry={candidatePolicy.loadPolicy}
+            onSave={candidatePolicy.savePolicy}
+          />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard label="Total" value={String(summary.total)} />

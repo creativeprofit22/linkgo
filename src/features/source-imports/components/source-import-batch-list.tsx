@@ -3,6 +3,7 @@ import { AlertCircle, History, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import type { CandidatePolicyRuleKey } from "@/features/candidate-policy";
 import type {
   SourceImportBatchDetail,
   SourceImportBatchStatus,
@@ -28,6 +29,13 @@ const ITEM_STATUS_LABELS: Record<SourceImportItemStatus, string> = {
   accepted: "Accepted",
   duplicate: "Duplicate",
   rejected: "Rejected",
+};
+
+const POLICY_RULE_LABELS: Record<CandidatePolicyRuleKey, string> = {
+  source: "Source",
+  age: "Age",
+  banned_topic: "Banned topic",
+  already_contacted: "Already contacted",
 };
 
 function formatImportTime(value: string): string {
@@ -56,7 +64,7 @@ function BatchDetail({
 }): React.ReactNode {
   return (
     <details open={open} className="group border-b last:border-b-0">
-      <summary className="focus-visible:ring-ring flex cursor-pointer list-none flex-col gap-3 px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset sm:flex-row sm:items-center sm:justify-between">
+      <summary className="source-import-batch-summary focus-visible:ring-ring flex cursor-pointer list-none flex-col gap-3 px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">Batch {batch.id}</span>
@@ -91,7 +99,16 @@ function BatchDetail({
               className="bg-background grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-[auto_auto_1fr] sm:items-start"
             >
               <span className="font-medium">Row {item.row_number}</span>
-              <Badge variant="outline">{ITEM_STATUS_LABELS[item.status]}</Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {ITEM_STATUS_LABELS[item.status]}
+                </Badge>
+                {item.policy_rule_key ? (
+                  <span className="text-xs font-medium">
+                    Policy: {POLICY_RULE_LABELS[item.policy_rule_key]}
+                  </span>
+                ) : null}
+              </div>
               <p className="text-muted-foreground min-w-0 break-words">
                 {item.reason || "Waiting for an outcome."}
               </p>

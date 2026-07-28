@@ -2,11 +2,11 @@
 
 ## Status
 
-Roadmap 3A is implemented as a bounded local source-post import boundary for the existing Candidate Queue. Roadmap 3 remains partial and next: policy guardrails, recurring backlog work, autopilot planning, and a compliant production source connector are still required.
+Roadmaps 3A and 3B are implemented as a bounded local source-post import boundary with campaign policy enforcement. Roadmap 3 remains partial: recurring backlog work, autopilot planning, and a compliant production source connector are still required.
 
 ## Purpose
 
-Source import lets an operator paste approved post metadata into Linkgo without pretending that Linkgo can search or fetch arbitrary LinkedIn posts. Valid rows enter the same candidate normalization and dedupe path as manual intake. Every supplied row receives a durable, reviewable outcome.
+Source import lets an operator paste approved post metadata into Linkgo without pretending that Linkgo can search or fetch arbitrary LinkedIn posts. Rows must pass the selected campaign's source, age, banned-topic, and prior-contact policy before entering the shared candidate normalization and dedupe path. Every supplied row receives a durable, reviewable outcome.
 
 Import is local only. It does not scrape LinkedIn, use browser automation, call a model provider, run discovery, draft content, create approvals, comment, schedule, or publish.
 
@@ -29,16 +29,16 @@ Paste a JSON array with 1–50 objects:
 ]
 ```
 
-Required fields:
+Required for enforced intake:
 
-- `url`: non-empty, at most 1,000 characters.
+- `url`: non-empty, at most 1,000 characters, and an HTTPS LinkedIn URL.
 - `content`: non-empty, at most 3,000 characters.
+- `postedAt`: absolute ISO-8601 timestamp with a timezone, at most 80 characters.
 
 Optional fields reuse Candidate Queue limits:
 
 - `authorName`: 160 characters.
 - `authorProfileUrl`: 1,000 characters.
-- `postedAt`: string or `null`, 80 characters.
 - `platformResourceUrn`: 500 characters.
 - `sourceKeyword`: 80 characters.
 - `notes`: 1,000 characters.
@@ -51,12 +51,14 @@ Unknown fields are rejected and not retained. Source text is capped at 400,000 c
 2. The campaign must exist and must not be archived. This check happens before a batch or candidate is written.
 3. Linkgo creates one `source_import_batches` row and one bounded `source_import_items` row for every supplied row.
 4. Rows are processed sequentially.
-5. Invalid rows become `rejected` with field-specific safe reasons; valid neighboring rows continue.
-6. Valid rows use the Candidate Queue's validated insert helper, normalized URL, content hash, target-post reuse, candidate insert, and both dedupe keys in one row transaction.
-7. Existing URL or content collisions become `duplicate`, not fatal errors.
-8. Any processing or outcome-write failure after the initial commit enters one centralized terminalization path. The current row and every remaining `pending` row become `rejected`, the batch becomes `failed`, and earlier durable outcomes are preserved.
-9. History loading treats a `processing` batch from a previous app session as interrupted because this synchronous slice has no resumable worker. It atomically rejects its remaining `pending` items and marks the batch `failed` before returning history.
-10. An in-memory campaign import is registered before its initial batch commit and unregistered only after completion or terminalization. History loading never applies interrupted-session recovery while that campaign import is active.
+5. Structurally invalid rows become `rejected` with field-specific safe reasons; valid neighboring rows continue.
+6. Structurally valid rows call the shared candidate insert helper with policy enforcement enabled. Source, age, banned-topic, and prior-contact checks run before candidate artifacts are written.
+7. Policy blocks become `rejected`, persist their first `policy_rule_key` plus all bounded finding messages, and do not create target, candidate, or dedupe records.
+8. Accepted policy rows continue through normalized URL, content hash, target-post reuse, candidate insert, and both dedupe keys in one row transaction.
+9. Existing URL or content collisions become `duplicate`, not fatal errors.
+10. Any processing or outcome-write failure after the initial commit enters one centralized terminalization path. The current row and every remaining `pending` row become `rejected`, the batch becomes `failed`, and earlier durable outcomes are preserved.
+11. History loading treats a `processing` batch from a previous app session as interrupted because this synchronous slice has no resumable worker. It atomically rejects its remaining `pending` items and marks the batch `failed` before returning history.
+12. An in-memory campaign import is registered before its initial batch commit and unregistered only after completion or terminalization. History loading never applies interrupted-session recovery while that campaign import is active.
 
 Batch status is truthful:
 
@@ -73,6 +75,8 @@ Migration 22 creates:
 
 - `source_import_batches`
 - `source_import_items`
+
+Migration 23 adds `source_import_items.policy_rule_key` with `source`, `age`, `banned_topic`, and `already_contacted` classifications. Empty means the outcome was not a policy block.
 
 Campaign deletion cascades through batches to items. Candidate deletion uses `ON DELETE SET NULL`, preserving the import audit outcome while clearing its candidate link. Linkgo retains the ten most recent batches in the Queue view; the SQLite records remain local until their campaign is deleted.
 
@@ -101,14 +105,14 @@ The Candidate Queue adds:
 - Preserved input after validation errors.
 - Pending protection against duplicate submission.
 - An `aria-live="polite"` completion summary.
-- Recent batch history with item status and wrapped reasons.
+- Recent batch history with item status, plain-text policy classification, and wrapped exact reasons.
 - Disabled import mutation for archived campaigns while history remains visible.
 
 The existing Radix Dialog primitive manages modal focus, Escape, and trigger focus return. Actions use native buttons and the existing Linkgo Card, Button, Textarea, Badge, Sonner, and Lucide system.
 
 ## Safety and exclusions
 
-Roadmap 3A does not add:
+Roadmaps 3A and 3B do not add:
 
 - LinkedIn post search, arbitrary feed retrieval, scraping, or browser automation.
 - A production remote source connector.
@@ -123,7 +127,7 @@ Remote connectors require separately verified API permissions, terms, and produc
 Run:
 
 ```bash
-bunx playwright test tests/source-imports.spec.ts
+bunx playwright test tests/candidate-policy.spec.ts tests/source-imports.spec.ts tests/candidate-queue.spec.ts
 bun run test:rust
 bun run format:check
 bun run lint

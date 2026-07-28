@@ -1,4 +1,5 @@
 import type { CandidateWithTarget } from "@/features/candidate-queue";
+import type { CandidatePolicyRuleKey } from "@/features/candidate-policy";
 
 export type SourceImportSourceType = "local_json";
 
@@ -36,6 +37,7 @@ export interface SourceImportItem {
   input_json: string;
   candidate_post_id: number | null;
   reason: string;
+  policy_rule_key: CandidatePolicyRuleKey | "";
   created_at: string;
   updated_at: string;
 }

@@ -2,8 +2,10 @@ pub mod agent_approval_resume;
 pub mod agent_runtime;
 pub mod app_settings;
 pub mod approvals;
+pub mod campaign_backlog;
 pub mod campaigns;
 pub mod candidate_discovery;
+pub mod candidate_policy;
 pub mod candidate_queue;
 pub mod comment_publishing;
 pub mod comments;
@@ -45,6 +47,8 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(workflow_artifacts::migrations());
     migrations.extend(agent_approval_resume::migrations());
     migrations.extend(source_imports::migrations());
+    migrations.extend(candidate_policy::migrations());
+    migrations.extend(campaign_backlog::migrations());
     migrations
 }
 
@@ -62,7 +66,7 @@ mod tests {
     fn source_import_migrator_with_prerequisites() -> Migrator {
         let migrations = get_migrations()
             .into_iter()
-            .filter(|migration| matches!(migration.version, 1 | 2 | 22))
+            .filter(|migration| matches!(migration.version, 1 | 2 | 9 | 13 | 22 | 23))
             .filter_map(|migration| match migration.kind {
                 MigrationKind::Up => Some(SqlxMigration::new(
                     migration.version,
@@ -105,12 +109,29 @@ mod tests {
                 .expect("source import migration and prerequisites should execute in order");
 
             let migration_applied: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM _sqlx_migrations WHERE version = 22 AND success = TRUE",
+                "SELECT COUNT(*) FROM _sqlx_migrations WHERE version = 23 AND success = TRUE",
             )
             .fetch_one(&mut connection)
             .await
             .expect("migration history should be queryable");
             assert_eq!(migration_applied, 1);
+
+            let policy_tables: Vec<String> = sqlx::query_scalar(
+                "SELECT name FROM sqlite_master
+                 WHERE type = 'table'
+                   AND name IN ('candidate_intake_policies', 'candidate_policy_banned_topics')
+                 ORDER BY name",
+            )
+            .fetch_all(&mut connection)
+            .await
+            .expect("candidate policy tables should be queryable");
+            assert_eq!(
+                policy_tables,
+                vec![
+                    "candidate_intake_policies".to_owned(),
+                    "candidate_policy_banned_topics".to_owned(),
+                ]
+            );
 
             let tables: Vec<String> = sqlx::query_scalar(
                 "SELECT name FROM sqlite_master
@@ -133,6 +154,56 @@ mod tests {
                 .execute(&mut connection)
                 .await
                 .expect("campaign prerequisite should insert");
+
+            sqlx::query(
+                "INSERT INTO candidate_intake_policies (campaign_id, max_post_age_days)
+                 VALUES (100, 30)",
+            )
+            .execute(&mut connection)
+            .await
+            .expect("valid candidate policy should insert");
+            assert_sql_rejected(
+                &mut connection,
+                "INSERT INTO candidate_intake_policies (campaign_id, max_post_age_days)
+                 VALUES (999, 30)",
+            )
+            .await;
+            assert_sql_rejected(
+                &mut connection,
+                "UPDATE candidate_intake_policies SET max_post_age_days = 0 WHERE campaign_id = 100",
+            )
+            .await;
+            assert_sql_rejected(
+                &mut connection,
+                "UPDATE candidate_intake_policies SET max_post_age_days = 366 WHERE campaign_id = 100",
+            )
+            .await;
+
+            sqlx::query(
+                "INSERT INTO candidate_policy_banned_topics
+                 (campaign_id, topic, normalized_topic) VALUES (100, 'Artificial Intelligence', 'artificial intelligence')",
+            )
+            .execute(&mut connection)
+            .await
+            .expect("valid banned topic should insert");
+            assert_sql_rejected(
+                &mut connection,
+                "INSERT INTO candidate_policy_banned_topics
+                 (campaign_id, topic, normalized_topic) VALUES (100, 'AI', 'artificial intelligence')",
+            )
+            .await;
+            assert_sql_rejected(
+                &mut connection,
+                "INSERT INTO candidate_policy_banned_topics
+                 (campaign_id, topic, normalized_topic) VALUES (100, '   ', 'blank')",
+            )
+            .await;
+            assert_sql_rejected(
+                &mut connection,
+                "INSERT INTO candidate_policy_banned_topics
+                 (campaign_id, topic, normalized_topic) VALUES (100, 'valid', '')",
+            )
+            .await;
 
             assert_sql_rejected(
                 &mut connection,
@@ -226,6 +297,13 @@ mod tests {
                  VALUES (503, 200, 1, 'unknown', '{}')",
             )
             .await;
+            assert_sql_rejected(
+                &mut connection,
+                "INSERT INTO source_import_items
+                 (id, source_import_batch_id, row_number, input_json, policy_rule_key)
+                 VALUES (507, 200, 2, '{}', 'unknown')",
+            )
+            .await;
 
             let long_input = "x".repeat(20_001);
             let long_input_result = sqlx::query(
@@ -290,6 +368,14 @@ mod tests {
                     "idx_source_import_items_candidate_id",
                     vec!["candidate_post_id"],
                 ),
+                (
+                    "idx_candidate_policy_banned_topics_campaign_id",
+                    vec!["campaign_id"],
+                ),
+                (
+                    "idx_source_import_items_policy_rule_key",
+                    vec!["policy_rule_key"],
+                ),
             ] {
                 let indexed_columns: Vec<String> =
                     sqlx::query_scalar("SELECT name FROM pragma_index_info(?1) ORDER BY seqno")
@@ -314,8 +400,20 @@ mod tests {
                     .fetch_one(&mut connection)
                     .await
                     .expect("item count should be queryable");
+            let remaining_policies: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM candidate_intake_policies")
+                    .fetch_one(&mut connection)
+                    .await
+                    .expect("policy count should be queryable");
+            let remaining_topics: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM candidate_policy_banned_topics")
+                    .fetch_one(&mut connection)
+                    .await
+                    .expect("topic count should be queryable");
             assert_eq!(remaining_batches, 0);
             assert_eq!(remaining_items, 0);
+            assert_eq!(remaining_policies, 0);
+            assert_eq!(remaining_topics, 0);
         });
     }
 }

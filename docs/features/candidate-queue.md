@@ -1,13 +1,13 @@
 # Candidate Queue Feature
 
-Candidate Queue turns the Queue tab into a local-first intake and triage surface for approved LinkedIn post candidates. Operators can add one post manually or import a bounded local JSON batch.
+Candidate Queue turns the Queue tab into a local-first intake and triage surface for approved LinkedIn post candidates. Operators can add one attended manual override or import a bounded local JSON batch through the campaign policy gate.
 
 ## Purpose
 
 The queue stores:
 
 - Manually added LinkedIn post URLs and content excerpts.
-- Source posts imported from local JSON arrays of 1–50 rows.
+- Source posts imported from local JSON arrays of 1–50 policy-enforced rows.
 - Optional author/source metadata.
 - Campaign-specific candidate records.
 - Duplicate keys for normalized URL and content hash.
@@ -19,7 +19,7 @@ No LinkedIn scraping, autonomous draft generation, autonomous commenting, publis
 
 ## Schema
 
-Migrations: `src-tauri/src/migrations/candidate_queue.rs`, `src-tauri/src/migrations/candidate_discovery.rs`, and `src-tauri/src/migrations/source_imports.rs`.
+Migrations: `src-tauri/src/migrations/candidate_queue.rs`, `src-tauri/src/migrations/candidate_discovery.rs`, `src-tauri/src/migrations/source_imports.rs`, and `src-tauri/src/migrations/candidate_policy.rs`.
 
 Tables:
 
@@ -29,6 +29,8 @@ Tables:
 - `candidate_discovery_items`
 - `source_import_batches`
 - `source_import_items`
+- `candidate_intake_policies`
+- `candidate_policy_banned_topics`
 
 Duplicate prevention is per campaign:
 
@@ -58,7 +60,7 @@ Data functions live in `src/features/candidate-queue/data.ts`:
 - `promoteDiscoveryItem(input)`
 - `dismissDiscoveryItem(input)`
 
-`createCandidate` validates input, computes normalized URL/content hash, checks `dedupe_keys`, inserts or reuses a target post, creates the candidate, then stores both dedupe keys in one transaction. Source imports call the same transaction-safe insert helper, so manual and batch intake cannot drift in normalization or dedupe behavior.
+`createCandidate` validates input, computes normalized URL/content hash, checks `dedupe_keys`, inserts or reuses a target post, creates the candidate, then stores both dedupe keys in one transaction. It is the attended manual override and omits automatic policy enforcement. Source imports call the same transaction-safe insert helper with `{ enforcePolicy: true }`, so all four policy classes run before target, candidate, or dedupe writes. Future automated connectors must use this enforced option.
 
 `runCandidateDiscovery` creates and starts a researcher agent run. The `research_posts` tool persists up to 25 validated suggestions and attaches agent/workflow provenance.
 
@@ -70,6 +72,7 @@ Data functions live in `src/features/candidate-queue/data.ts`:
 
 - Header and explanation that intake, discovery, and scoring are operator-triggered while external actions remain gated.
 - Campaign selector.
+- Candidate intake policy summary and accessible editor, including archived read-only state and manual-override disclosure.
 - `Run discovery`, `Score candidates`, `Import source posts`, and `Add candidate` actions.
 - Loading and retry states.
 - No-campaign and empty-queue states.
@@ -80,7 +83,7 @@ Data functions live in `src/features/candidate-queue/data.ts`:
 
 `ImportSourcePostsDialog` accepts bounded local JSON, preserves text after validation errors, and reports batch totals without closing immediately. Import mutations are disabled for archived campaigns while history stays visible. See `docs/features/source-imports.md` for the format and lifecycle.
 
-`AddCandidateDialog` captures URL, content, author metadata, posted-at text, source keyword, score, reason, and notes.
+`AddCandidateDialog` captures URL, content, author metadata, posted-at text, source keyword, score, reason, and notes. It remains an explicitly attended override for historical or exceptional material.
 
 `CandidateCard` shows candidate source details and status actions:
 
@@ -95,6 +98,7 @@ Data functions live in `src/features/candidate-queue/data.ts`:
 Run:
 
 ```bash
+bunx playwright test tests/candidate-policy.spec.ts tests/source-imports.spec.ts tests/candidate-queue.spec.ts
 bun run format:check
 bun run lint
 bun run build

@@ -1,6 +1,6 @@
 # Roadmap Mapping
 
-This document maps `roadmap.md` to implementation slices. The roadmap audit dated July 27, 2026 is the source of truth: Roadmaps 1, 9, and 18 are implemented; Roadmap 8 is not started; the remaining items are partial. Roadmap 3 is the current next item and remains partial through slice 3A.
+This document maps `roadmap.md` to implementation slices. The roadmap audit dated July 27, 2026 is the source of truth: Roadmaps 1, 9, 18, and 19 are implemented; Roadmap 8 is not started; the remaining items are partial. Roadmap 3 remains partial through completed slices 3A, 3B, and 3C; slice 3D is active and next.
 
 ## Delivered slices and partial foundations
 
@@ -59,6 +59,44 @@ Delivered in this slice:
 - Campaign-scoped import history with operator-safe reasons.
 
 The import is local only. It does not scrape LinkedIn, fetch target posts, call a model, draft, approve, comment, schedule, or publish. Remote connectors and recurring autopilot planning remain future Roadmap 3 work.
+
+### Roadmap 3B candidate policy guardrails
+
+Roadmap coverage:
+
+- Section 3: one campaign-scoped safety gate before bulk or unattended candidate intake.
+- Section 5: programmatic source, age, banned-topic, already-contacted, and existing dedupe rules.
+- Section 16: conservative defaults, durable classifications, and reviewable rejection reasons.
+
+Delivered in this slice:
+
+- Migration 23 with campaign age policy, normalized banned topics, and source-import policy classifications.
+- Deterministic HTTPS LinkedIn source, absolute timestamp/age, Unicode whole-word topic, and successful-contact identity checks.
+- Policy enforcement at the shared candidate transaction boundary before candidate artifacts are written.
+- Local JSON imports on the enforced path; attended single-candidate entry remains an explicit operator override.
+- Queue policy summary/editor with archived read-only, retry, validation, keyboard, and responsive states.
+- Policy-labeled import history and transaction rollback coverage for mixed batches.
+
+Roadmap 3D autopilot planning and a compliant production connector remain excluded. No scraping, remote lookup, model call, recurring execution, drafting, commenting, scheduling, or publishing was added.
+
+### Roadmap 3C persistent campaign backlog
+
+Roadmap coverage:
+
+- Section 3: campaign-scoped due work and visible Operator/Linkgo responsibility.
+- Section 19: one recurring cross-feature backlog for manual planning.
+- Section 16: immutable terminal history, archived read-only enforcement, and transactional recurrence safety.
+
+Delivered in this slice:
+
+- Migrations 24 and 25 with required due times, explicit IANA recurrence zones, eight work categories, two owner labels, five lifecycle statuses, and one-off/daily/weekly recurrence.
+- Atomic, stored-zone recurring completion with one future successor, daylight-saving wall-clock preservation, and missed-interval coalescing.
+- Manual create, edit, start, block, resume, complete, and confirmed cancel flows.
+- Cross-campaign Backlog tab with summary counts, campaign/owner/open-history filters, grouped due work, bounded history, and archived guidance.
+- Data-boundary transition checks, request-race protection, rollback injection, responsive and accessibility coverage.
+- Roadmap 19 completion through a durable cross-feature backlog complementing workflow, scheduler, approval, metric refresh, and error stores.
+
+Linkgo ownership is a responsibility label only. Roadmap 3D must create and execute planner-owned work from approved connectors. This slice adds no connector, model run, workflow execution, drafting, scheduling, publishing, commenting, background polling, after-quit execution, or notification.
 
 ### Drafting + audit slice
 

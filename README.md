@@ -2,7 +2,7 @@
 
 Linkgo is a local-first Tauri desktop app for LinkedIn growth operations.
 
-Current status: the app shell, Campaigns slice, Candidate Queue slice with bounded local JSON source import, AI-assisted keyword/trend discovery, and operator-triggered relevance scoring, Drafting + Audit slice with operator-triggered save-gated AI draft generation, Approvals slice, Content Calendar slice for approved post planning, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice with opt-in LinkedIn reactions/comments refresh, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, Skills + Playbooks slice, GG AI provider-backed execution behind explicit connected credentials, Safety + Observability slice, and OS launch-on-login toggle are delivered. Roadmap 3 remains partial: local import does not fetch posts, plan recurring work, or execute autopilot. LinkedIn scraping, arbitrary browser automation, member-post impression/click analytics, external telemetry, autonomous external actions, autonomous/background content generation, autonomous commenting, autonomous calendar generation, and running scheduler or metric refresh jobs after Linkgo quits remain intentionally excluded.
+Current status: the app shell, Campaigns slice, persistent Campaign Backlog slice, Candidate Queue slice with campaign-scoped policy-enforced local JSON source import, AI-assisted keyword/trend discovery, and operator-triggered relevance scoring, Drafting + Audit slice with operator-triggered save-gated AI draft generation, Approvals slice, Content Calendar slice for approved post planning, opt-in native background Scheduler slice, OAuth-backed explicit and scheduled LinkedIn post publishing, approval-gated LinkedIn API comment posting, Comment/reply Agent slice, Metrics + Learning slice with opt-in LinkedIn reactions/comments refresh, Durable Workflow Engine slice, Agent Runtime + Tool Schemas slice, Skills + Playbooks slice, GG AI provider-backed execution behind explicit connected credentials, Safety + Observability slice, and OS launch-on-login toggle are delivered. Roadmap 3 remains partial: source intake guardrails and recurring campaign due-work planning are delivered, but Linkgo does not fetch posts or execute autopilot. Roadmap 3D is next. LinkedIn scraping, arbitrary browser automation, member-post impression/click analytics, external telemetry, autonomous external actions, autonomous/background content generation, autonomous commenting, autonomous calendar generation, and running scheduler or metric refresh jobs after Linkgo quits remain intentionally excluded.
 
 ## Stack
 
@@ -47,9 +47,11 @@ workflow artifacts.
 src-tauri/              Tauri lifecycle, plugins, commands, SQL migrations
 src/lib/                Frontend infrastructure and external boundaries
 src/components/         Desktop shell and shared UI primitives
-src/features/campaigns First product slice: data, schemas, hooks, UI
+src/features/campaigns Campaign setup and autopilot intent
+src/features/campaign-backlog Due work, ownership, recurrence, and history
 src/features/candidate-queue Manual candidate intake, dedupe, and triage
-src/features/source-imports Bounded local JSON source intake and batch outcomes
+src/features/candidate-policy Campaign intake rules, editor, and deterministic evaluation
+src/features/source-imports Policy-enforced local JSON intake and batch outcomes
 src/features/drafts    Manual/generated variants and deterministic audit checks
 src/features/approvals Human review, schedule records, and publish attempts
 src/features/content-calendar Approved post planning before scheduling
@@ -79,4 +81,4 @@ Every new roadmap feature lands one slice at a time:
 5. UI components.
 6. Docs and Playwright coverage.
 
-LinkedIn publishing and commenting are OAuth-backed and approval-gated; the scheduler only publishes already-approved scheduled posts while Linkgo is running or hidden to tray. API commenting requires LinkedIn Community Management access and `w_member_social_feed`. Metric refresh is opt-in, runs only while Linkgo is open or hidden to tray, requires approved `r_member_social_feed` read access, and collects LinkedIn reactions/comments only. Source import accepts bounded local post metadata and never makes a LinkedIn, model-provider, scheduler, drafting, approval, commenting, or publishing request.
+LinkedIn publishing and commenting are OAuth-backed and approval-gated; the scheduler only publishes already-approved scheduled posts while Linkgo is running or hidden to tray. API commenting requires LinkedIn Community Management access and `w_member_social_feed`. Metric refresh is opt-in, runs only while Linkgo is open or hidden to tray, requires approved `r_member_social_feed` read access, and collects LinkedIn reactions/comments only. Source import accepts bounded local post metadata, enforces the selected campaign's source, age, banned-topic, and prior-contact rules before candidate writes, and never makes a LinkedIn, model-provider, scheduler, drafting, approval, commenting, or publishing request. Campaign Backlog stores manual due-work responsibility only; Linkgo-owned rows do not execute until the Roadmap 3D autopilot planner is delivered.

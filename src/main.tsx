@@ -4,6 +4,11 @@ import type {
   RecordPublishAttemptInput,
   ScheduleApprovalInput,
 } from "@/features/approvals/types";
+import type {
+  CreateCampaignBacklogItemInput,
+  SetCampaignBacklogItemStatusInput,
+  UpdateCampaignBacklogItemInput,
+} from "@/features/campaign-backlog/types";
 import type { RecordCommentAttemptInput } from "@/features/comments/types";
 import { IS_TAURI } from "@/lib/env";
 import type {
@@ -28,6 +33,24 @@ type ApprovalTestApi = {
   scheduleApproval: (input: ScheduleApprovalInput) => Promise<number>;
 };
 
+type CampaignBacklogTestApi = {
+  getNextCampaignBacklogDueAt: (
+    dueAt: string,
+    recurrence: "daily" | "weekly",
+    recurrenceTimeZone: string,
+    now?: Date,
+  ) => string;
+  createCampaignBacklogItem: (
+    input: CreateCampaignBacklogItemInput,
+  ) => Promise<unknown>;
+  updateCampaignBacklogItem: (
+    input: UpdateCampaignBacklogItemInput,
+  ) => Promise<unknown>;
+  setCampaignBacklogItemStatus: (
+    input: SetCampaignBacklogItemStatusInput,
+  ) => Promise<unknown>;
+};
+
 type CommentTestApi = {
   recordCommentAttempt: (input: RecordCommentAttemptInput) => Promise<number>;
 };
@@ -41,6 +64,25 @@ type WorkflowTestApi = {
 };
 
 if (import.meta.env.VITE_PLAYWRIGHT) {
+  void import("@/features/campaign-backlog/data").then(
+    ({
+      createCampaignBacklogItem,
+      getNextCampaignBacklogDueAt,
+      setCampaignBacklogItemStatus,
+      updateCampaignBacklogItem,
+    }) => {
+      (
+        window as unknown as {
+          __LINKGO_CAMPAIGN_BACKLOG_TEST_API__?: CampaignBacklogTestApi;
+        }
+      ).__LINKGO_CAMPAIGN_BACKLOG_TEST_API__ = {
+        getNextCampaignBacklogDueAt,
+        createCampaignBacklogItem,
+        updateCampaignBacklogItem,
+        setCampaignBacklogItemStatus,
+      };
+    },
+  );
   void import("@/features/approvals/data").then(
     ({ recordPublishAttempt, scheduleApproval }) => {
       (

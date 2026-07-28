@@ -1,7 +1,9 @@
 import {
   createCandidateInTransaction,
+  isCandidatePolicyRejectionError,
   isDuplicateCandidateError,
 } from "@/features/candidate-queue/data";
+import type { CandidatePolicyRuleKey } from "@/features/candidate-policy/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import { parseSourceImportText } from "@/features/source-imports/schemas";
 import type {
@@ -108,8 +110,9 @@ async function createBatchRows(
           input_json,
           candidate_post_id,
           reason,
+          policy_rule_key,
           updated_at
-        ) VALUES ($1, $2, 'pending', $3, NULL, '', datetime('now'))`,
+        ) VALUES ($1, $2, 'pending', $3, NULL, '', '', datetime('now'))`,
         [batchId, row.rowNumber, row.inputJson],
       );
     }
@@ -129,16 +132,18 @@ async function updateItemOutcome(
   status: "accepted" | "duplicate" | "rejected",
   candidatePostId: number | null,
   reason: string,
+  policyRuleKey: CandidatePolicyRuleKey | "" = "",
 ): Promise<void> {
   const result = await db.execute(
     `UPDATE source_import_items
       SET status = $1,
         candidate_post_id = $2,
         reason = $3,
+        policy_rule_key = $4,
         updated_at = datetime('now')
-      WHERE source_import_batch_id = $4
-        AND row_number = $5`,
-    [status, candidatePostId, reason, batchId, rowNumber],
+      WHERE source_import_batch_id = $5
+        AND row_number = $6`,
+    [status, candidatePostId, reason, policyRuleKey, batchId, rowNumber],
   );
   if (result.rowsAffected !== 1) {
     throw new Error("Source import item outcome was not stored");
@@ -219,6 +224,7 @@ async function terminalizeFailedBatch(
       item.status = "rejected";
       item.candidate_post_id = null;
       item.reason = reason;
+      item.policy_rule_key = "";
     }
 
     const counts = countItemOutcomes(items);
@@ -318,10 +324,14 @@ export async function createSourceImportBatch(
 
       await db.execute("BEGIN TRANSACTION");
       try {
-        const candidateId = await createCandidateInTransaction(db, {
-          campaignId: prepared.campaignId,
-          ...row.value,
-        });
+        const candidateId = await createCandidateInTransaction(
+          db,
+          {
+            campaignId: prepared.campaignId,
+            ...row.value,
+          },
+          { enforcePolicy: true },
+        );
         await updateItemOutcome(
           db,
           batchId,
@@ -334,6 +344,23 @@ export async function createSourceImportBatch(
         counts.accepted += 1;
       } catch (error) {
         await rollbackTransaction(db);
+        if (isCandidatePolicyRejectionError(error)) {
+          const reason = error.findings
+            .map((finding) => finding.message)
+            .join(" ")
+            .slice(0, 2000);
+          await updateItemOutcome(
+            db,
+            batchId,
+            row.rowNumber,
+            "rejected",
+            null,
+            reason,
+            error.primaryRuleKey,
+          );
+          counts.rejected += 1;
+          continue;
+        }
         if (!isDuplicateCandidateError(error)) throw error;
 
         await updateItemOutcome(

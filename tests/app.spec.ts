@@ -42,8 +42,15 @@ test("renderer shell does not load GG AI provider code", async ({ page }) => {
   expect(rendererBundle).not.toContain("@kenkaiiii_gg-ai");
 });
 
-test("queue, drafts, approvals, metrics, workflows, and agent runtime render real views", async ({ page }) => {
+test("backlog, queue, drafts, approvals, metrics, workflows, and agent runtime render real views", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await page.getByRole("button", { name: /Backlog/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Campaign Backlog" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: /Queue/ }).click();
   await expect(

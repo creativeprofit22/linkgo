@@ -5,6 +5,7 @@ import {
   CalendarDays,
   KeyRound,
   CheckCircle2,
+  ClipboardList,
   Clock3,
   FileText,
   ListChecks,
@@ -36,6 +37,11 @@ const CampaignsView = lazy(() =>
   import("@/features/campaigns/components/campaigns-view").then(
     ({ CampaignsView }) => ({ default: CampaignsView }),
   ),
+);
+const CampaignBacklogView = lazy(() =>
+  import("@/features/campaign-backlog").then(({ CampaignBacklogView }) => ({
+    default: CampaignBacklogView,
+  })),
 );
 const CandidateQueueView = lazy(() =>
   import("@/features/candidate-queue").then(({ CandidateQueueView }) => ({
@@ -100,6 +106,7 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
 
 type HomeTab =
   | "campaigns"
+  | "backlog"
   | "queue"
   | "drafts"
   | "approvals"
@@ -130,6 +137,14 @@ const tabs: RoadmapTab[] = [
     icon: Target,
     enabled: true,
     docHref: "docs/features/campaigns.md",
+  },
+  {
+    id: "backlog",
+    label: "Backlog",
+    description: "Campaign due work, ownership, and recurring planning.",
+    icon: ClipboardList,
+    enabled: true,
+    docHref: "docs/features/campaign-backlog.md",
   },
   {
     id: "queue",
@@ -299,6 +314,8 @@ export function HomePage(): React.ReactNode {
           <Suspense fallback={featureViewFallback}>
             {activeRoadmapTab.id === "campaigns" ? (
               <CampaignsView />
+            ) : activeRoadmapTab.id === "backlog" ? (
+              <CampaignBacklogView />
             ) : activeRoadmapTab.id === "queue" ? (
               <CandidateQueueView />
             ) : activeRoadmapTab.id === "drafts" ? (

@@ -19,6 +19,37 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       updated_at: string;
     };
 
+    type CampaignBacklogItem = {
+      id: number;
+      campaign_id: number;
+      recurrence_parent_id: number | null;
+      work_type:
+        | "research"
+        | "scoring"
+        | "drafting"
+        | "approval"
+        | "scheduling"
+        | "metrics"
+        | "retry"
+        | "other";
+      title: string;
+      details: string;
+      owner_type: "operator" | "linkgo";
+      status: "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
+      due_at: string;
+      recurrence: "none" | "daily" | "weekly";
+      recurrence_timezone: string;
+      completed_at: string | null;
+      cancelled_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type CampaignBacklogItemDetail = CampaignBacklogItem & {
+      campaign_name: string;
+      campaign_status: Campaign["status"];
+    };
+
     type Keyword = {
       id: number;
       campaign_id: number;
@@ -82,6 +113,27 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type CandidatePolicyRuleKey =
+      | "source"
+      | "age"
+      | "banned_topic"
+      | "already_contacted";
+
+    type CandidateIntakePolicy = {
+      campaign_id: number;
+      max_post_age_days: number;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type CandidatePolicyBannedTopic = {
+      id: number;
+      campaign_id: number;
+      topic: string;
+      normalized_topic: string;
+      created_at: string;
+    };
+
     type SourceImportBatchStatus =
       | "processing"
       | "completed"
@@ -115,6 +167,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       input_json: string;
       candidate_post_id: number | null;
       reason: string;
+      policy_rule_key: CandidatePolicyRuleKey | "";
       created_at: string;
       updated_at: string;
     };
@@ -812,10 +865,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     type TransactionSnapshot = {
       campaigns: Campaign[];
+      campaignBacklogItems: CampaignBacklogItem[];
       keywords: Keyword[];
       targetPosts: TargetPost[];
       candidatePosts: CandidatePost[];
       dedupeKeys: DedupeKey[];
+      candidateIntakePolicies: CandidateIntakePolicy[];
+      candidatePolicyBannedTopics: CandidatePolicyBannedTopic[];
       sourceImportBatches: SourceImportBatch[];
       sourceImportItems: SourceImportItem[];
       candidateDiscoveryItems: CandidateDiscoveryItem[];
@@ -854,10 +910,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       schedulerSettings: SchedulerSettings;
       schedulerEvents: SchedulerEvent[];
       nextCampaignId: number;
+      nextCampaignBacklogItemId: number;
       nextKeywordId: number;
       nextTargetPostId: number;
       nextCandidatePostId: number;
       nextDedupeKeyId: number;
+      nextCandidatePolicyBannedTopicId: number;
       nextSourceImportBatchId: number;
       nextSourceImportItemId: number;
       nextDraftId: number;
@@ -892,10 +950,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     const w = window as unknown as Record<string, unknown>;
     const campaigns: Campaign[] = [];
+    const campaignBacklogItems: CampaignBacklogItem[] = [];
     const keywords: Keyword[] = [];
     const targetPosts: TargetPost[] = [];
     const candidatePosts: CandidatePost[] = [];
     const dedupeKeys: DedupeKey[] = [];
+    const candidateIntakePolicies: CandidateIntakePolicy[] = [];
+    const candidatePolicyBannedTopics: CandidatePolicyBannedTopic[] = [];
     const sourceImportBatches: SourceImportBatch[] = [];
     const sourceImportItems: SourceImportItem[] = [];
     const candidateDiscoveryItems: CandidateDiscoveryItem[] = [];
@@ -964,10 +1025,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let schedulerRunning = false;
     let metricRefreshRunning = false;
     let nextCampaignId = 1;
+    let nextCampaignBacklogItemId = 1;
     let nextKeywordId = 1;
     let nextTargetPostId = 1;
     let nextCandidatePostId = 1;
     let nextDedupeKeyId = 1;
+    let nextCandidatePolicyBannedTopicId = 1;
     let nextSourceImportBatchId = 1;
     let nextSourceImportItemId = 1;
     let nextCandidateDiscoveryItemId = 1;
@@ -1005,6 +1068,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       number,
       { promise: Promise<void>; release: () => void; pending: number }
     >();
+    const backlogSelectGates = new Map<
+      string,
+      { promise: Promise<void>; release: () => void; pending: number }
+    >();
+    let backlogMutationGate: {
+      promise: Promise<void>;
+      release: () => void;
+      pending: number;
+    } | null = null;
     const reloadSnapshotKey = "linkgo:test:sql-snapshot";
     let persistedReloadSnapshot: string | null = null;
     try {
@@ -1075,10 +1147,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function createTransactionSnapshot(): TransactionSnapshot {
       return {
         campaigns: cloneRows(campaigns),
+        campaignBacklogItems: cloneRows(campaignBacklogItems),
         keywords: cloneRows(keywords),
         targetPosts: cloneRows(targetPosts),
         candidatePosts: cloneRows(candidatePosts),
         dedupeKeys: cloneRows(dedupeKeys),
+        candidateIntakePolicies: cloneRows(candidateIntakePolicies),
+        candidatePolicyBannedTopics: cloneRows(candidatePolicyBannedTopics),
         sourceImportBatches: cloneRows(sourceImportBatches),
         sourceImportItems: cloneRows(sourceImportItems),
         candidateDiscoveryItems: cloneRows(candidateDiscoveryItems),
@@ -1117,10 +1192,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         schedulerSettings: { ...schedulerSettings },
         schedulerEvents: cloneRows(schedulerEvents),
         nextCampaignId,
+        nextCampaignBacklogItemId,
         nextKeywordId,
         nextTargetPostId,
         nextCandidatePostId,
         nextDedupeKeyId,
+        nextCandidatePolicyBannedTopicId,
         nextSourceImportBatchId,
         nextSourceImportItemId,
         nextCandidateDiscoveryItemId,
@@ -1171,12 +1248,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       rows.splice(0, rows.length, ...cloneRows(snapshotRows));
     }
 
-    function restoreTransactionSnapshot(snapshot: TransactionSnapshot): void {
+    function restoreTransactionSnapshot(
+      snapshot: TransactionSnapshot,
+      restoreCampaignBacklog = true,
+    ): void {
       restoreRows(campaigns, snapshot.campaigns);
+      if (restoreCampaignBacklog) {
+        restoreRows(campaignBacklogItems, snapshot.campaignBacklogItems ?? []);
+      }
       restoreRows(keywords, snapshot.keywords);
       restoreRows(targetPosts, snapshot.targetPosts);
       restoreRows(candidatePosts, snapshot.candidatePosts);
       restoreRows(dedupeKeys, snapshot.dedupeKeys);
+      restoreRows(
+        candidateIntakePolicies,
+        snapshot.candidateIntakePolicies ?? [],
+      );
+      restoreRows(
+        candidatePolicyBannedTopics,
+        snapshot.candidatePolicyBannedTopics ?? [],
+      );
       restoreRows(sourceImportBatches, snapshot.sourceImportBatches ?? []);
       restoreRows(sourceImportItems, snapshot.sourceImportItems ?? []);
       restoreRows(candidateDiscoveryItems, snapshot.candidateDiscoveryItems);
@@ -1229,10 +1320,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       schedulerSettings.updated_at = snapshot.schedulerSettings.updated_at;
       restoreRows(schedulerEvents, snapshot.schedulerEvents);
       nextCampaignId = snapshot.nextCampaignId;
+      if (restoreCampaignBacklog) {
+        nextCampaignBacklogItemId = snapshot.nextCampaignBacklogItemId ?? 1;
+      }
       nextKeywordId = snapshot.nextKeywordId;
       nextTargetPostId = snapshot.nextTargetPostId;
       nextCandidatePostId = snapshot.nextCandidatePostId;
       nextDedupeKeyId = snapshot.nextDedupeKeyId;
+      nextCandidatePolicyBannedTopicId =
+        snapshot.nextCandidatePolicyBannedTopicId ?? 1;
       nextSourceImportBatchId = snapshot.nextSourceImportBatchId ?? 1;
       nextSourceImportItemId = snapshot.nextSourceImportItemId ?? 1;
       nextCandidateDiscoveryItemId = snapshot.nextCandidateDiscoveryItemId;
@@ -2742,8 +2838,125 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         .filter(Boolean);
     }
 
+    function getCampaignBacklogDetail(
+      item: CampaignBacklogItem,
+    ): CampaignBacklogItemDetail | null {
+      const campaign = campaigns.find((row) => row.id === item.campaign_id);
+      if (!campaign) return null;
+      return {
+        ...item,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+      };
+    }
+
+    function getCampaignBacklogFilters(values: unknown[]): {
+      campaignId: number | null;
+      owner: "operator" | "linkgo" | null;
+    } {
+      const campaignValue = values.find(
+        (value): value is number => typeof value === "number",
+      );
+      const ownerValue = values.find(
+        (value): value is "operator" | "linkgo" =>
+          value === "operator" || value === "linkgo",
+      );
+      return {
+        campaignId: campaignValue ?? null,
+        owner: ownerValue ?? null,
+      };
+    }
+
+    function selectCampaignBacklog(
+      query: string,
+      values: unknown[],
+    ): unknown[] {
+      if (w.__LINKGO_FAIL_BACKLOG_SELECT__ === true) {
+        throw new Error("Injected backlog load failure");
+      }
+      if (query.includes("COUNT(*) AS total_items")) {
+        return [{ total_items: campaignBacklogItems.length }];
+      }
+      if (query.includes("WHERE cbi.id =")) {
+        const item = campaignBacklogItems.find(
+          (candidate) => candidate.id === Number(values[0] ?? 0),
+        );
+        const detail = item ? getCampaignBacklogDetail(item) : null;
+        return detail ? [detail] : [];
+      }
+
+      const { campaignId, owner } = getCampaignBacklogFilters(values);
+      const matchesFilter = (item: CampaignBacklogItem): boolean =>
+        (campaignId === null || item.campaign_id === campaignId) &&
+        (owner === null || item.owner_type === owner);
+      const openItems = campaignBacklogItems.filter(
+        (item) =>
+          ["pending", "in_progress", "blocked"].includes(item.status) &&
+          matchesFilter(item),
+      );
+      if (query.includes("AS due_now")) {
+        const now = getNow();
+        return [
+          {
+            due_now: openItems.filter((item) => item.due_at <= now).length,
+            in_progress: openItems.filter(
+              (item) => item.status === "in_progress",
+            ).length,
+            blocked: openItems.filter((item) => item.status === "blocked")
+              .length,
+            linkgo_owned: openItems.filter(
+              (item) => item.owner_type === "linkgo",
+            ).length,
+          },
+        ];
+      }
+
+      const history = query.includes(
+        "cbi.status IN ('completed', 'cancelled')",
+      );
+      const rows = campaignBacklogItems
+        .filter((item) =>
+          history
+            ? ["completed", "cancelled"].includes(item.status) &&
+              matchesFilter(item)
+            : ["pending", "in_progress", "blocked"].includes(item.status) &&
+              matchesFilter(item),
+        )
+        .map(getCampaignBacklogDetail)
+        .filter((row): row is Record<string, unknown> => row !== null)
+        .sort((left, right) => {
+          if (!history) {
+            const dueDelta = String(left.due_at).localeCompare(
+              String(right.due_at),
+            );
+            return dueDelta !== 0
+              ? dueDelta
+              : Number(left.id) - Number(right.id);
+          }
+          const leftTerminal = String(
+            left.completed_at ?? left.cancelled_at ?? "",
+          );
+          const rightTerminal = String(
+            right.completed_at ?? right.cancelled_at ?? "",
+          );
+          const terminalDelta = rightTerminal.localeCompare(leftTerminal);
+          return terminalDelta !== 0
+            ? terminalDelta
+            : Number(right.id) - Number(left.id);
+        });
+      return history ? rows.slice(0, 100) : rows;
+    }
+
+    function getBacklogSelectKey(values: unknown[]): string {
+      const { campaignId, owner } = getCampaignBacklogFilters(values);
+      return `${campaignId ?? "all"}:${owner ?? "all"}`;
+    }
+
     function selectSql(args?: unknown): unknown[] {
       const { query, values } = readSqlArgs(args);
+      if (query.includes("campaign_backlog_items")) {
+        return selectCampaignBacklog(query, values);
+      }
       if (query.includes("COUNT(*) AS selected_count")) {
         const draftId = Number(values[0] ?? 0);
         return [
@@ -2868,6 +3081,43 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (query.includes("FROM rate_limit_events")) {
         return selectRateLimitEvents(values);
+      }
+      if (
+        query.includes("tp.normalized_url") &&
+        query.includes("FROM comment_attempts ca") &&
+        !query.includes("COUNT(*)")
+      ) {
+        const normalizedUrl = String(values[0] ?? "");
+        const platformResourceUrn = String(values[1] ?? "");
+        const normalizedProfile = String(values[2] ?? "");
+        return commentAttempts.flatMap((attempt) => {
+          if (attempt.status !== "succeeded") return [];
+          const thread = commentThreads.find(
+            (row) => row.id === attempt.comment_thread_id,
+          );
+          const candidate = thread
+            ? candidatePosts.find((row) => row.id === thread.candidate_post_id)
+            : undefined;
+          const target = candidate
+            ? targetPosts.find((row) => row.id === candidate.target_post_id)
+            : undefined;
+          if (target === undefined) return [];
+          const matchesSqlFilter =
+            target.normalized_url === normalizedUrl ||
+            (platformResourceUrn !== "" &&
+              target.platform_resource_urn === platformResourceUrn) ||
+            (normalizedProfile !== "" &&
+              target.author_profile_url.trim() !== "");
+          return matchesSqlFilter
+            ? [
+                {
+                  normalized_url: target.normalized_url,
+                  platform_resource_urn: target.platform_resource_urn,
+                  author_profile_url: target.author_profile_url,
+                },
+              ]
+            : [];
+        });
       }
       if (query.includes("FROM comment_threads ct")) {
         if (query.includes("WHERE ct.id = $1"))
@@ -3438,6 +3688,25 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             return right.id - left.id;
           });
       }
+      if (query.includes("FROM candidate_intake_policies")) {
+        if (
+          w.__LINKGO_FAIL_CANDIDATE_POLICY_POST_COMMIT_LOAD__ === true &&
+          transactionSnapshot === null
+        ) {
+          w.__LINKGO_FAIL_CANDIDATE_POLICY_POST_COMMIT_LOAD__ = undefined;
+          throw new Error("Injected post-commit policy load failure");
+        }
+        const campaignId = Number(values[0] ?? 0);
+        return candidateIntakePolicies.filter(
+          (policy) => policy.campaign_id === campaignId,
+        );
+      }
+      if (query.includes("FROM candidate_policy_banned_topics")) {
+        const campaignId = Number(values[0] ?? 0);
+        return candidatePolicyBannedTopics
+          .filter((topic) => topic.campaign_id === campaignId)
+          .sort((left, right) => left.id - right.id);
+      }
       if (query.includes("FROM source_import_batches")) {
         const campaignId = Number(values[0] ?? 0);
         const batches = sourceImportBatches.filter(
@@ -3551,7 +3820,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         query.includes("FROM candidate_discovery_items") &&
         query.includes("ORDER BY status = 'promoted'");
       const isSourceImportList = query.includes("FROM source_import_batches");
-      if (!isCandidateList && !isDiscoveryList && !isSourceImportList) {
+      const isCandidatePolicyList =
+        query.includes("FROM candidate_intake_policies") ||
+        query.includes("FROM candidate_policy_banned_topics");
+      if (
+        !isCandidateList &&
+        !isDiscoveryList &&
+        !isSourceImportList &&
+        !isCandidatePolicyList
+      ) {
         return null;
       }
 
@@ -3561,15 +3838,300 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function selectSqlWithCampaignDelay(args?: unknown): Promise<unknown[]> {
       const result = selectSql(args);
+      const { query, values } = readSqlArgs(args);
+      const backlogGate = query.includes("campaign_backlog_items")
+        ? backlogSelectGates.get(getBacklogSelectKey(values))
+        : undefined;
       const campaignId = getDelayedSelectCampaignId(args);
-      const gate =
+      const campaignGate =
         campaignId === null ? undefined : campaignSelectGates.get(campaignId);
+      const gate = backlogGate ?? campaignGate;
       if (gate === undefined) return Promise.resolve(result);
 
       gate.pending += 1;
       return gate.promise.then(() => {
         gate.pending -= 1;
         return result;
+      });
+    }
+
+    function readCampaignBacklogCommandInput<T>(args?: unknown): T {
+      return ((args as { input?: T } | undefined)?.input ?? {}) as T;
+    }
+
+    function mutateCampaignBacklogAtomically<T>(mutation: () => T): T {
+      const itemsSnapshot = cloneRows(campaignBacklogItems);
+      const nextIdSnapshot = nextCampaignBacklogItemId;
+      try {
+        const result = mutation();
+        persistReloadSnapshot();
+        return result;
+      } catch (error) {
+        restoreRows(campaignBacklogItems, itemsSnapshot);
+        nextCampaignBacklogItemId = nextIdSnapshot;
+        throw error;
+      }
+    }
+
+    function runCampaignBacklogCommand<T>(command: () => T): Promise<T> {
+      const gate = backlogMutationGate;
+      if (gate === null) return Promise.resolve(command());
+
+      gate.pending += 1;
+      return gate.promise.then(() => {
+        gate.pending -= 1;
+        return command();
+      });
+    }
+
+    function requireMutableBacklogCampaign(campaignId: number): Campaign {
+      const campaign = campaigns.find(
+        (candidate) => candidate.id === campaignId,
+      );
+      if (campaign === undefined) throw new Error("Campaign was not found");
+      if (campaign.status === "archived") {
+        throw new Error("Archived campaigns are read-only");
+      }
+      return campaign;
+    }
+
+    function getNextMockBacklogDueAt(
+      dueAt: string,
+      recurrence: "daily" | "weekly",
+      recurrenceTimeZone: string,
+      now: Date,
+    ): string {
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: recurrenceTimeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      });
+      const partsAt = (instant: number): number[] => {
+        const values = new Map(
+          formatter
+            .formatToParts(new Date(instant))
+            .map((part) => [part.type, part.value]),
+        );
+        return [
+          Number(values.get("year")),
+          Number(values.get("month")),
+          Number(values.get("day")),
+          Number(values.get("hour")),
+          Number(values.get("minute")),
+        ];
+      };
+      const localAsUtcAt = (instant: number): number => {
+        const [year, month, day, hour, minute] = partsAt(instant);
+        return Date.UTC(year, month - 1, day, hour, minute);
+      };
+      const offsetAt = (instant: number): number =>
+        localAsUtcAt(instant) - Math.floor(instant / 60_000) * 60_000;
+      const resolveLocal = (localAsUtc: number): number => {
+        const twoDays = 2 * 86_400_000;
+        const offsets = new Set([
+          offsetAt(localAsUtc - twoDays),
+          offsetAt(localAsUtc),
+          offsetAt(localAsUtc + twoDays),
+        ]);
+        const matches = [...offsets]
+          .map((offset) => localAsUtc - offset)
+          .filter((instant) => localAsUtcAt(instant) === localAsUtc)
+          .sort((left, right) => left - right);
+        if (matches[0] !== undefined) return matches[0];
+
+        const forwardGap =
+          offsetAt(localAsUtc + twoDays) - offsetAt(localAsUtc - twoDays);
+        if (forwardGap > 0) {
+          const shiftedLocal = localAsUtc + forwardGap;
+          const shifted = [...offsets]
+            .map((offset) => shiftedLocal - offset)
+            .filter((instant) => localAsUtcAt(instant) === shiftedLocal)
+            .sort((left, right) => left - right);
+          if (shifted[0] !== undefined) return shifted[0];
+        }
+        throw new Error("The next recurring due time could not be calculated");
+      };
+
+      const dueInstant = Date.parse(dueAt);
+      if (Number.isNaN(dueInstant)) throw new Error("Due time is invalid");
+      const dueParts = partsAt(dueInstant);
+      const localCursor = new Date(
+        Date.UTC(
+          dueParts[0],
+          dueParts[1] - 1,
+          dueParts[2],
+          dueParts[3],
+          dueParts[4],
+        ),
+      );
+      const days = recurrence === "daily" ? 1 : 7;
+      for (let interval = 0; interval < 10_000; interval += 1) {
+        localCursor.setUTCDate(localCursor.getUTCDate() + days);
+        const next = resolveLocal(localCursor.getTime());
+        if (next > now.getTime()) return new Date(next).toISOString();
+      }
+      throw new Error("The next recurring due time could not be calculated");
+    }
+
+    function createCampaignBacklogCommand(args?: unknown): {
+      item: CampaignBacklogItemDetail;
+    } {
+      const input = readCampaignBacklogCommandInput<{
+        campaignId: number;
+        workType: CampaignBacklogItem["work_type"];
+        title: string;
+        details: string;
+        ownerType: CampaignBacklogItem["owner_type"];
+        dueAt: string;
+        recurrence: CampaignBacklogItem["recurrence"];
+        recurrenceTimeZone: string;
+      }>(args);
+      return mutateCampaignBacklogAtomically(() => {
+        requireMutableBacklogCampaign(Number(input.campaignId ?? 0));
+        if (w.__LINKGO_FAIL_BACKLOG_INSERT__ === true) {
+          w.__LINKGO_FAIL_BACKLOG_INSERT__ = undefined;
+          throw new Error("Injected backlog insert failure");
+        }
+        const now = getNow();
+        const item: CampaignBacklogItem = {
+          id: nextCampaignBacklogItemId,
+          campaign_id: Number(input.campaignId ?? 0),
+          recurrence_parent_id: null,
+          work_type: input.workType,
+          title: String(input.title ?? ""),
+          details: String(input.details ?? ""),
+          owner_type: input.ownerType,
+          status: "pending",
+          due_at: String(input.dueAt ?? ""),
+          recurrence: input.recurrence,
+          recurrence_timezone: String(input.recurrenceTimeZone ?? ""),
+          completed_at: null,
+          cancelled_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        campaignBacklogItems.push(item);
+        nextCampaignBacklogItemId += 1;
+        const detail = getCampaignBacklogDetail(item);
+        if (detail === null) throw new Error("Campaign was not found");
+        return { item: detail };
+      });
+    }
+
+    function updateCampaignBacklogCommand(args?: unknown): {
+      item: CampaignBacklogItemDetail;
+    } {
+      const input = readCampaignBacklogCommandInput<{
+        id: number;
+        workType: CampaignBacklogItem["work_type"];
+        title: string;
+        details: string;
+        ownerType: CampaignBacklogItem["owner_type"];
+        dueAt: string;
+        recurrence: CampaignBacklogItem["recurrence"];
+        recurrenceTimeZone: string;
+      }>(args);
+      return mutateCampaignBacklogAtomically(() => {
+        const item = campaignBacklogItems.find(
+          (candidate) => candidate.id === Number(input.id ?? 0),
+        );
+        if (item === undefined) throw new Error("Backlog item was not found");
+        requireMutableBacklogCampaign(item.campaign_id);
+        if (["completed", "cancelled"].includes(item.status)) {
+          throw new Error(
+            "Completed and cancelled backlog items cannot be edited",
+          );
+        }
+        if (w.__LINKGO_FAIL_BACKLOG_UPDATE__ === true) {
+          w.__LINKGO_FAIL_BACKLOG_UPDATE__ = undefined;
+          throw new Error("Injected backlog update failure");
+        }
+        item.work_type = input.workType;
+        item.title = String(input.title ?? "");
+        item.details = String(input.details ?? "");
+        item.owner_type = input.ownerType;
+        item.due_at = String(input.dueAt ?? "");
+        item.recurrence = input.recurrence;
+        item.recurrence_timezone = String(input.recurrenceTimeZone ?? "");
+        item.updated_at = getNow();
+        const detail = getCampaignBacklogDetail(item);
+        if (detail === null) throw new Error("Campaign was not found");
+        return { item: detail };
+      });
+    }
+
+    function setCampaignBacklogStatusCommand(args?: unknown): {
+      item: CampaignBacklogItemDetail;
+      successor: CampaignBacklogItemDetail | null;
+    } {
+      const input = readCampaignBacklogCommandInput<{
+        id: number;
+        status: CampaignBacklogItem["status"];
+      }>(args);
+      return mutateCampaignBacklogAtomically(() => {
+        const item = campaignBacklogItems.find(
+          (candidate) => candidate.id === Number(input.id ?? 0),
+        );
+        if (item === undefined) throw new Error("Backlog item was not found");
+        requireMutableBacklogCampaign(item.campaign_id);
+        const currentStatus = item.status;
+        if (currentStatus === "completed" || currentStatus === "cancelled") {
+          throw new Error("Completed and cancelled backlog items are final");
+        }
+        const allowedTransitions: Record<
+          "pending" | "in_progress" | "blocked",
+          CampaignBacklogItem["status"][]
+        > = {
+          pending: ["in_progress", "blocked", "completed", "cancelled"],
+          in_progress: ["pending", "blocked", "completed", "cancelled"],
+          blocked: ["pending", "in_progress", "completed", "cancelled"],
+        };
+        if (!allowedTransitions[currentStatus].includes(input.status)) {
+          throw new Error(
+            `Backlog item cannot move from ${currentStatus} to ${input.status}`,
+          );
+        }
+
+        const now = getNow();
+        item.status = input.status;
+        item.completed_at = input.status === "completed" ? now : null;
+        item.cancelled_at = input.status === "cancelled" ? now : null;
+        item.updated_at = now;
+
+        let successor: CampaignBacklogItemDetail | null = null;
+        if (input.status === "completed" && item.recurrence !== "none") {
+          if (w.__LINKGO_FAIL_BACKLOG_SUCCESSOR__ === true) {
+            w.__LINKGO_FAIL_BACKLOG_SUCCESSOR__ = undefined;
+            throw new Error("Injected recurring successor failure");
+          }
+          const successorItem: CampaignBacklogItem = {
+            ...item,
+            id: nextCampaignBacklogItemId,
+            recurrence_parent_id: item.id,
+            status: "pending",
+            due_at: getNextMockBacklogDueAt(
+              item.due_at,
+              item.recurrence,
+              item.recurrence_timezone,
+              new Date(now),
+            ),
+            completed_at: null,
+            cancelled_at: null,
+            created_at: now,
+            updated_at: now,
+          };
+          campaignBacklogItems.push(successorItem);
+          nextCampaignBacklogItemId += 1;
+          successor = getCampaignBacklogDetail(successorItem);
+          if (successor === null) throw new Error("Campaign was not found");
+        }
+        const detail = getCampaignBacklogDetail(item);
+        if (detail === null) throw new Error("Campaign was not found");
+        return { item: detail, successor };
       });
     }
 
@@ -3603,7 +4165,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       if (normalizedQuery === "ROLLBACK") {
         if (transactionSnapshot !== null) {
-          restoreTransactionSnapshot(transactionSnapshot);
+          restoreTransactionSnapshot(transactionSnapshot, false);
           transactionSnapshot = null;
         }
         return { lastInsertId: 0, rowsAffected: 0 };
@@ -3731,6 +4293,103 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: item.id, rowsAffected: 1 };
       }
 
+      if (query.includes("INSERT INTO campaign_backlog_items")) {
+        const successor = query.includes("recurrence_parent_id");
+        if (successor && w.__LINKGO_FAIL_BACKLOG_SUCCESSOR__ === true) {
+          w.__LINKGO_FAIL_BACKLOG_SUCCESSOR__ = undefined;
+          throw new Error("Injected recurring successor failure");
+        }
+        if (!successor && w.__LINKGO_FAIL_BACKLOG_INSERT__ === true) {
+          w.__LINKGO_FAIL_BACKLOG_INSERT__ = undefined;
+          throw new Error("Injected backlog insert failure");
+        }
+        const campaignId = Number(values[0] ?? 0);
+        if (!campaigns.some((campaign) => campaign.id === campaignId)) {
+          throw new Error("FOREIGN KEY constraint failed");
+        }
+        const item: CampaignBacklogItem = successor
+          ? {
+              id: nextCampaignBacklogItemId,
+              campaign_id: campaignId,
+              recurrence_parent_id: Number(values[1] ?? 0),
+              work_type: values[2] as CampaignBacklogItem["work_type"],
+              title: String(values[3] ?? ""),
+              details: String(values[4] ?? ""),
+              owner_type: values[5] as CampaignBacklogItem["owner_type"],
+              status: "pending",
+              due_at: String(values[6] ?? ""),
+              recurrence: values[7] as CampaignBacklogItem["recurrence"],
+              recurrence_timezone: String(values[8] ?? ""),
+              completed_at: null,
+              cancelled_at: null,
+              created_at: now,
+              updated_at: now,
+            }
+          : {
+              id: nextCampaignBacklogItemId,
+              campaign_id: campaignId,
+              recurrence_parent_id: null,
+              work_type: values[1] as CampaignBacklogItem["work_type"],
+              title: String(values[2] ?? ""),
+              details: String(values[3] ?? ""),
+              owner_type: values[4] as CampaignBacklogItem["owner_type"],
+              status: "pending",
+              due_at: String(values[5] ?? ""),
+              recurrence: values[6] as CampaignBacklogItem["recurrence"],
+              recurrence_timezone: String(values[7] ?? ""),
+              completed_at: null,
+              cancelled_at: null,
+              created_at: now,
+              updated_at: now,
+            };
+        campaignBacklogItems.push(item);
+        nextCampaignBacklogItemId += 1;
+        return { lastInsertId: item.id, rowsAffected: 1 };
+      }
+
+      if (
+        query.includes("UPDATE campaign_backlog_items") &&
+        query.includes("SET work_type")
+      ) {
+        if (w.__LINKGO_FAIL_BACKLOG_UPDATE__ === true) {
+          w.__LINKGO_FAIL_BACKLOG_UPDATE__ = undefined;
+          throw new Error("Injected backlog update failure");
+        }
+        const item = campaignBacklogItems.find(
+          (candidate) => candidate.id === Number(values[7] ?? 0),
+        );
+        if (!item || ["completed", "cancelled"].includes(item.status)) {
+          return { lastInsertId: 0, rowsAffected: 0 };
+        }
+        item.work_type = values[0] as CampaignBacklogItem["work_type"];
+        item.title = String(values[1] ?? "");
+        item.details = String(values[2] ?? "");
+        item.owner_type = values[3] as CampaignBacklogItem["owner_type"];
+        item.due_at = String(values[4] ?? "");
+        item.recurrence = values[5] as CampaignBacklogItem["recurrence"];
+        item.recurrence_timezone = String(values[6] ?? "");
+        item.updated_at = now;
+        return { lastInsertId: item.id, rowsAffected: 1 };
+      }
+
+      if (
+        query.includes("UPDATE campaign_backlog_items") &&
+        query.includes("SET status")
+      ) {
+        const id = Number(values[3] ?? 0);
+        const currentStatus = String(values[4] ?? "");
+        const item = campaignBacklogItems.find(
+          (candidate) =>
+            candidate.id === id && candidate.status === currentStatus,
+        );
+        if (!item) return { lastInsertId: 0, rowsAffected: 0 };
+        item.status = values[0] as CampaignBacklogItem["status"];
+        item.completed_at = values[1] === null ? null : String(values[1]);
+        item.cancelled_at = values[2] === null ? null : String(values[2]);
+        item.updated_at = now;
+        return { lastInsertId: item.id, rowsAffected: 1 };
+      }
+
       if (query.includes("INSERT INTO campaigns")) {
         const campaign: Campaign = {
           id: nextCampaignId,
@@ -3769,6 +4428,88 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           nextKeywordId += 1;
         }
         return { lastInsertId: nextKeywordId - 1, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO candidate_intake_policies")) {
+        if (w.__LINKGO_FAIL_CANDIDATE_POLICY_SAVE__ === true) {
+          w.__LINKGO_FAIL_CANDIDATE_POLICY_SAVE__ = undefined;
+          throw new Error("Injected candidate policy save failure");
+        }
+        const campaignId = Number(values[0] ?? 0);
+        const maxPostAgeDays = Number(values[1] ?? 0);
+        if (!campaigns.some((campaign) => campaign.id === campaignId)) {
+          throw new Error("FOREIGN KEY constraint failed");
+        }
+        if (
+          !Number.isInteger(maxPostAgeDays) ||
+          maxPostAgeDays < 1 ||
+          maxPostAgeDays > 365
+        ) {
+          throw new Error("CHECK constraint failed: max_post_age_days");
+        }
+        const existing = candidateIntakePolicies.find(
+          (policy) => policy.campaign_id === campaignId,
+        );
+        if (existing) {
+          existing.max_post_age_days = maxPostAgeDays;
+          existing.updated_at = now;
+          return { lastInsertId: campaignId, rowsAffected: 1 };
+        }
+        candidateIntakePolicies.push({
+          campaign_id: campaignId,
+          max_post_age_days: maxPostAgeDays,
+          created_at: now,
+          updated_at: now,
+        });
+        return { lastInsertId: campaignId, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO candidate_policy_banned_topics")) {
+        const campaignId = Number(values[0] ?? 0);
+        const topic = String(values[1] ?? "");
+        const normalizedTopic = String(values[2] ?? "");
+        if (!campaigns.some((campaign) => campaign.id === campaignId))
+          throw new Error("FOREIGN KEY constraint failed");
+        if (
+          topic.trim().length < 1 ||
+          topic.trim().length > 80 ||
+          normalizedTopic.length < 1 ||
+          normalizedTopic.length > 80
+        ) {
+          throw new Error(
+            "CHECK constraint failed: candidate_policy_banned_topics",
+          );
+        }
+        if (
+          candidatePolicyBannedTopics.filter(
+            (row) => row.campaign_id === campaignId,
+          ).length >= 25
+        ) {
+          throw new Error(
+            "Candidate policy allows no more than 25 banned topics",
+          );
+        }
+        if (
+          candidatePolicyBannedTopics.some(
+            (row) =>
+              row.campaign_id === campaignId &&
+              row.normalized_topic === normalizedTopic,
+          )
+        ) {
+          throw new Error(
+            "UNIQUE constraint failed: candidate_policy_banned_topics.campaign_id, candidate_policy_banned_topics.normalized_topic",
+          );
+        }
+        const row: CandidatePolicyBannedTopic = {
+          id: nextCandidatePolicyBannedTopicId,
+          campaign_id: campaignId,
+          topic,
+          normalized_topic: normalizedTopic,
+          created_at: now,
+        };
+        candidatePolicyBannedTopics.push(row);
+        nextCandidatePolicyBannedTopicId += 1;
+        return { lastInsertId: row.id, rowsAffected: 1 };
       }
 
       if (query.includes("INSERT INTO source_import_batches")) {
@@ -3832,6 +4573,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           input_json: inputJson,
           candidate_post_id: null,
           reason: "",
+          policy_rule_key: "",
           created_at: now,
           updated_at: now,
         };
@@ -4933,11 +5675,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const candidatePostId =
           values[1] === null ? null : Number(values[1] ?? 0);
         const reason = String(values[2] ?? "");
-        const batchId = Number(values[3] ?? 0);
-        const rowNumber = Number(values[4] ?? 0);
+        const policyRuleKey = String(values[3] ?? "") as
+          | CandidatePolicyRuleKey
+          | "";
+        const batchId = Number(values[4] ?? 0);
+        const rowNumber = Number(values[5] ?? 0);
         if (
           !["accepted", "duplicate", "rejected"].includes(status) ||
-          reason.length > 2000
+          reason.length > 2000 ||
+          !["", "source", "age", "banned_topic", "already_contacted"].includes(
+            policyRuleKey,
+          )
         ) {
           throw new Error("CHECK constraint failed: source_import_items");
         }
@@ -4956,6 +5704,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         item.status = status;
         item.candidate_post_id = candidatePostId;
         item.reason = reason;
+        item.policy_rule_key = policyRuleKey;
         item.updated_at = now;
         if (transactionSnapshot === null) persistReloadSnapshot();
         return { lastInsertId: item.id, rowsAffected: 1 };
@@ -5350,6 +6099,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: 0, rowsAffected };
       }
 
+      if (query.includes("DELETE FROM candidate_policy_banned_topics")) {
+        const campaignId = Number(values[0] ?? 0);
+        const rowsAffected = removeRows(
+          candidatePolicyBannedTopics,
+          (row) => row.campaign_id === campaignId,
+        );
+        return { lastInsertId: 0, rowsAffected };
+      }
+
       if (query.includes("DELETE FROM campaign_keywords")) {
         const campaignId = Number(values[0] ?? 0);
         const rowsAffected = removeRows(
@@ -5372,6 +6130,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           .filter((approval) => approval.campaign_id === id)
           .map((approval) => approval.id);
         removeRows(keywords, (keyword) => keyword.campaign_id === id);
+        removeRows(
+          candidateIntakePolicies,
+          (policy) => policy.campaign_id === id,
+        );
+        removeRows(
+          candidatePolicyBannedTopics,
+          (topic) => topic.campaign_id === id,
+        );
         removeRows(candidatePosts, (candidate) => candidate.campaign_id === id);
         removeRows(dedupeKeys, (key) => key.campaign_id === id);
         const removedSourceBatchIds = sourceImportBatches
@@ -5923,6 +6689,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);
     w.__LINKGO_SQL_CANDIDATE_POSTS__ = () => cloneRows(candidatePosts);
+    w.__LINKGO_SQL_CANDIDATE_POLICIES__ = () =>
+      cloneRows(candidateIntakePolicies);
+    w.__LINKGO_SQL_CANDIDATE_POLICY_TOPICS__ = () =>
+      cloneRows(candidatePolicyBannedTopics);
     w.__LINKGO_SQL_SOURCE_IMPORT_BATCHES__ = () =>
       cloneRows(sourceImportBatches);
     w.__LINKGO_SQL_SOURCE_IMPORT_ITEMS__ = () => cloneRows(sourceImportItems);
@@ -5943,6 +6713,74 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_SCHEDULER_SETTINGS__ = () => ({ ...schedulerSettings });
     w.__LINKGO_SQL_SCHEDULER_EVENTS__ = () => cloneRows(schedulerEvents);
     w.__LINKGO_SQL_APP_SETTINGS__ = () => ({ ...appSettings });
+    w.__LINKGO_SQL_BACKLOG_ITEMS__ = () => cloneRows(campaignBacklogItems);
+    w.__LINKGO_SQL_SEED_BACKLOG_ITEM__ = (
+      input: Partial<CampaignBacklogItem> &
+        Pick<CampaignBacklogItem, "campaign_id" | "title">,
+    ) => {
+      const now = getNow();
+      const item: CampaignBacklogItem = {
+        id: nextCampaignBacklogItemId,
+        campaign_id: input.campaign_id,
+        recurrence_parent_id: input.recurrence_parent_id ?? null,
+        work_type: input.work_type ?? "other",
+        title: input.title,
+        details: input.details ?? "",
+        owner_type: input.owner_type ?? "operator",
+        status: input.status ?? "pending",
+        due_at: input.due_at ?? new Date(Date.now() + 3_600_000).toISOString(),
+        recurrence: input.recurrence ?? "none",
+        recurrence_timezone:
+          input.recurrence_timezone ??
+          (input.recurrence === "daily" || input.recurrence === "weekly"
+            ? "UTC"
+            : ""),
+        completed_at: input.completed_at ?? null,
+        cancelled_at: input.cancelled_at ?? null,
+        created_at: input.created_at ?? now,
+        updated_at: input.updated_at ?? now,
+      };
+      campaignBacklogItems.push(item);
+      nextCampaignBacklogItemId += 1;
+      persistReloadSnapshot();
+      return item.id;
+    };
+    w.__LINKGO_SQL_DELAY_BACKLOG_SELECTS__ = (
+      campaignId: number | null,
+      owner: "all" | "operator" | "linkgo" = "all",
+    ) => {
+      const key = `${campaignId ?? "all"}:${owner}`;
+      backlogSelectGates.get(key)?.release();
+      let release = (): void => {};
+      const promise = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      backlogSelectGates.set(key, { promise, release, pending: 0 });
+    };
+    w.__LINKGO_SQL_RELEASE_BACKLOG_SELECTS__ = (
+      campaignId: number | null,
+      owner: "all" | "operator" | "linkgo" = "all",
+    ) => {
+      backlogSelectGates.get(`${campaignId ?? "all"}:${owner}`)?.release();
+    };
+    w.__LINKGO_SQL_DELAYED_BACKLOG_SELECT_COUNT__ = (
+      campaignId: number | null,
+      owner: "all" | "operator" | "linkgo" = "all",
+    ) =>
+      backlogSelectGates.get(`${campaignId ?? "all"}:${owner}`)?.pending ?? 0;
+    w.__LINKGO_DELAY_BACKLOG_MUTATIONS__ = () => {
+      backlogMutationGate?.release();
+      let release = (): void => {};
+      const promise = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      backlogMutationGate = { promise, release, pending: 0 };
+    };
+    w.__LINKGO_RELEASE_BACKLOG_MUTATIONS__ = () => {
+      backlogMutationGate?.release();
+    };
+    w.__LINKGO_DELAYED_BACKLOG_MUTATION_COUNT__ = () =>
+      backlogMutationGate?.pending ?? 0;
     w.__LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__ = (campaignId: number) => {
       campaignSelectGates.get(campaignId)?.release();
       let release = (): void => {};
@@ -5964,6 +6802,78 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (!campaign) return;
       campaign.status = status;
       campaign.updated_at = getNow();
+      persistReloadSnapshot();
+    };
+    w.__LINKGO_SQL_CREATE_CONTACT_ATTEMPT__ = (
+      campaignId: number,
+      identity: {
+        normalizedUrl: string;
+        platformResourceUrn?: string;
+        authorProfileUrl?: string;
+      },
+      status: CommentAttemptStatus = "succeeded",
+    ) => {
+      if (!campaigns.some((campaign) => campaign.id === campaignId)) {
+        throw new Error("Campaign was not found");
+      }
+      const now = getNow();
+      const targetId = nextTargetPostId;
+      targetPosts.push({
+        id: targetId,
+        platform: "linkedin",
+        url: identity.normalizedUrl,
+        normalized_url: identity.normalizedUrl,
+        platform_resource_urn: identity.platformResourceUrn ?? "",
+        author_name: "Prior contact",
+        author_profile_url: identity.authorProfileUrl ?? "",
+        posted_at: now,
+        content: `Prior contacted target ${targetId}`,
+        content_hash: `prior-contact-${targetId}`,
+        created_at: now,
+        updated_at: now,
+      });
+      nextTargetPostId += 1;
+      const candidateId = nextCandidatePostId;
+      candidatePosts.push({
+        id: candidateId,
+        campaign_id: campaignId,
+        target_post_id: targetId,
+        source_keyword: "",
+        status: "shortlisted",
+        relevance_score: null,
+        score_reason: "",
+        notes: "",
+        created_at: now,
+        updated_at: now,
+      });
+      nextCandidatePostId += 1;
+      const threadId = nextCommentThreadId;
+      commentThreads.push({
+        id: threadId,
+        campaign_id: campaignId,
+        candidate_post_id: candidateId,
+        status: status === "succeeded" ? "posted" : "approved",
+        operator_notes: "",
+        reviewer_notes: "",
+        approved_at: now,
+        rejected_at: null,
+        posted_at: status === "succeeded" ? now : null,
+        created_at: now,
+        updated_at: now,
+      });
+      nextCommentThreadId += 1;
+      commentAttempts.push({
+        id: nextCommentAttemptId,
+        comment_thread_id: threadId,
+        platform: "linkedin",
+        status,
+        external_comment_url: "",
+        platform_comment_id: "",
+        idempotency_key: `contact-attempt-${nextCommentAttemptId}`,
+        error_message: status === "failed" ? "Injected failure" : "",
+        created_at: now,
+      });
+      nextCommentAttemptId += 1;
       persistReloadSnapshot();
     };
     w.__LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__ = () => {
@@ -6006,6 +6916,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           }),
           candidate_post_id: null,
           reason: "",
+          policy_rule_key: "",
           created_at: now,
           updated_at: now,
         });
@@ -6017,10 +6928,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
       campaigns: campaigns.length,
+      campaignBacklogItems: campaignBacklogItems.length,
       keywords: keywords.length,
       targetPosts: targetPosts.length,
       candidatePosts: candidatePosts.length,
       dedupeKeys: dedupeKeys.length,
+      candidateIntakePolicies: candidateIntakePolicies.length,
+      candidatePolicyBannedTopics: candidatePolicyBannedTopics.length,
       sourceImportBatches: sourceImportBatches.length,
       sourceImportItems: sourceImportItems.length,
       candidateDiscoveryItems: candidateDiscoveryItems.length,
@@ -6164,6 +7078,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     w.__TAURI_INTERNALS__ = {
       invoke: (cmd: string, args?: unknown) => {
+        if (cmd === "linkgo_campaign_backlog_create") {
+          return runCampaignBacklogCommand(() =>
+            createCampaignBacklogCommand(args),
+          );
+        }
+        if (cmd === "linkgo_campaign_backlog_update") {
+          return runCampaignBacklogCommand(() =>
+            updateCampaignBacklogCommand(args),
+          );
+        }
+        if (cmd === "linkgo_campaign_backlog_set_status") {
+          return runCampaignBacklogCommand(() =>
+            setCampaignBacklogStatusCommand(args),
+          );
+        }
         if (cmd === "plugin:sql|select")
           return selectSqlWithCampaignDelay(args);
         if (cmd === "plugin:sql|execute")
