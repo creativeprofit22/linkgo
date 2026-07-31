@@ -39,6 +39,8 @@ interface CampaignStatusRow {
 interface WorkflowRunRow extends WorkflowRun {
   campaign_name: string;
   campaign_status: CampaignStatus;
+  autopilot_plan_id: number | null;
+  source_import_batch_id: number | null;
 }
 
 interface WorkflowRunValidationRow extends WorkflowRun {
@@ -121,6 +123,8 @@ function mapRunWithDetails(
     completed_at: row.completed_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    autopilot_plan_id: row.autopilot_plan_id,
+    source_import_batch_id: row.source_import_batch_id,
     campaign: {
       id: row.campaign_id,
       name: row.campaign_name,
@@ -444,9 +448,12 @@ export async function listWorkflowRuns(
     `SELECT
       wr.*,
       c.name AS campaign_name,
-      c.status AS campaign_status
+      c.status AS campaign_status,
+      ap.id AS autopilot_plan_id,
+      ap.source_import_batch_id
     FROM workflow_runs wr
     INNER JOIN campaigns c ON c.id = wr.campaign_id
+    LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
     ${whereClause}
     ORDER BY CASE wr.status
       WHEN 'running' THEN 1

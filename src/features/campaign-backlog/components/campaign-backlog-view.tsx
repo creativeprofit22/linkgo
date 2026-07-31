@@ -162,8 +162,9 @@ export function CampaignBacklogView(): React.ReactNode {
                 Backlog scope
               </h3>
               <p className="text-muted-foreground mt-1 text-xs">
-                Linkgo ownership is a responsibility label. Automatic execution
-                arrives with the autopilot planner.
+                Manually created Linkgo rows are responsibility labels.
+                Planner-linked rows identify their approved source batch and
+                queued workflow; neither runs external actions.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">

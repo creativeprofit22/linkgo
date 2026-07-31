@@ -2,13 +2,13 @@
 
 ## Status
 
-Roadmaps 3A and 3B are implemented as a bounded local source-post import boundary with campaign policy enforcement. Roadmap 3 remains partial: recurring backlog work, autopilot planning, and a compliant production source connector are still required.
+Roadmaps 3A, 3B, and the Roadmap 3D planner boundary are implemented. Source Imports is the bounded, policy-enforced connector intake boundary. Roadmap 3 remains partial and blocked only on one compliant production source connector.
 
 ## Purpose
 
 Source import lets an operator paste approved post metadata into Linkgo without pretending that Linkgo can search or fetch arbitrary LinkedIn posts. Rows must pass the selected campaign's source, age, banned-topic, and prior-contact policy before entering the shared candidate normalization and dedupe path. Every supplied row receives a durable, reviewable outcome.
 
-Import is local only. It does not scrape LinkedIn, use browser automation, call a model provider, run discovery, draft content, create approvals, comment, schedule, or publish.
+Import is local only. It does not scrape LinkedIn, use browser automation, call a model provider, run discovery, draft content, create approvals, comment, schedule, or publish. A completed batch can later be consumed by the opt-in local planner, which creates only linked backlog/workflow records.
 
 ## JSON format
 
@@ -91,7 +91,7 @@ See `docs/DATA_MODEL.md` for column constraints and indexes.
 - `createSourceImportBatch(input)`
 - `listSourceImportBatches(campaignId)`
 
-`createSourceImportBatch` parses the bounded source text, checks campaign eligibility, persists the batch/items, and returns accepted, duplicate, and rejected totals. It makes no external request.
+`createSourceImportBatch` parses the bounded local text into the `local_json` connector contract, then passes the normalized connector key and rows to one internal policy-enforced batch writer. It checks campaign eligibility, persists batch/items, and returns accepted, duplicate, and rejected totals. Public behavior is unchanged and it makes no external request.
 
 `listSourceImportBatches` first terminalizes every interrupted `processing` batch for the campaign when no in-memory import owns that campaign, then returns up to ten recent batches with item outcomes ordered by row number. Recovery is transactional and retryable: if recovery storage fails, the history request fails instead of presenting stale processing as live work.
 
@@ -112,15 +112,15 @@ The existing Radix Dialog primitive manages modal focus, Escape, and trigger foc
 
 ## Safety and exclusions
 
-Roadmaps 3A and 3B do not add:
+The source boundary and local planner do not add:
 
 - LinkedIn post search, arbitrary feed retrieval, scraping, or browser automation.
 - A production remote source connector.
-- Recurring campaign planning, cron behavior, or autopilot execution.
-- Provider calls, workflow runs, draft generation, approvals, comments, schedules, or publishing.
+- Provider calls, workflow executor runs, draft generation, approvals, comments, schedules, or publishing.
 - Credentials, OAuth data, CSV parsing, or file-system import.
+- After-quit planner work.
 
-Remote connectors require separately verified API permissions, terms, and product access. Publishing and commenting remain human approval-gated regardless of candidate source.
+`src/features/source-imports/connectors.ts` registers only `local_json`, labels it local/operator-supplied, and marks external fetching as forbidden. The planner consumes terminal batches by connector key rather than connector-specific code. Remote connectors require separately verified API permissions, terms, product access, and a migration expanding the database constraint. Publishing and commenting remain human approval-gated regardless of candidate source.
 
 ## Verification
 

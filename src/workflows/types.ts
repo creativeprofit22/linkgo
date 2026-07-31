@@ -172,6 +172,8 @@ export interface WorkflowRunDerivedValues {
 
 export type WorkflowRunWithDetails = WorkflowRun &
   WorkflowRunDerivedValues & {
+    autopilot_plan_id: number | null;
+    source_import_batch_id: number | null;
     campaign: WorkflowCampaignSnapshot;
     steps: WorkflowStep[];
     events: WorkflowEvent[];

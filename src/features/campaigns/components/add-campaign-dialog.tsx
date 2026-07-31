@@ -302,17 +302,19 @@ function CampaignForm({
         </Field>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border p-3">
-        <div>
-          <Label htmlFor="campaign-autopilot">Autopilot intent</Label>
+      <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+        <div className="min-w-0">
+          <Label htmlFor="campaign-autopilot">Local autopilot planner</Label>
           <p className="text-muted-foreground text-xs">
-            Queue automation later; publishing stays approval-gated.
+            Makes active campaigns eligible for source-to-work planning after
+            you start the planner. No external action starts.
           </p>
         </div>
         <Switch
           id="campaign-autopilot"
           checked={form.autoPilot}
           onCheckedChange={(checked) => updateField("autoPilot", checked)}
+          className="shrink-0"
         />
       </div>
 

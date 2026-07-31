@@ -202,6 +202,7 @@ async fn set_enabled(pool: &SqlitePool, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn insert_scheduler_event(
     pool: &SqlitePool,
     campaign_id: Option<i64>,
@@ -236,6 +237,7 @@ async fn insert_scheduler_event(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn insert_safety_audit_event(
     pool: &SqlitePool,
     campaign_id: i64,

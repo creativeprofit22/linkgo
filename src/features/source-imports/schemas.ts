@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { normalizedSourceConnectorBatchInputSchema } from "@/features/source-imports/connectors";
 import type { PreparedSourceImportBatchInput } from "@/features/source-imports/types";
 
 export const MAX_SOURCE_IMPORT_ROWS = 50;
@@ -69,13 +70,16 @@ export const sourceImportRowSchema = z.strictObject({
   notes: z.string().trim().max(1000).optional().default(""),
 });
 
-export const createSourceImportBatchSchema = z.object({
-  campaignId: z.number().int().positive(),
-  rows: z
-    .array(z.unknown())
-    .min(1, "Include at least one source post")
-    .max(MAX_SOURCE_IMPORT_ROWS, `Import up to ${MAX_SOURCE_IMPORT_ROWS} rows`),
-});
+export const createSourceImportBatchSchema =
+  normalizedSourceConnectorBatchInputSchema.extend({
+    rows: z
+      .array(z.unknown())
+      .min(1, "Include at least one source post")
+      .max(
+        MAX_SOURCE_IMPORT_ROWS,
+        `Import up to ${MAX_SOURCE_IMPORT_ROWS} rows`,
+      ),
+  });
 
 function formatRowValidationError(
   issues: readonly { path: PropertyKey[]; message: string }[],
@@ -196,6 +200,7 @@ export function parseSourceImportText(
 
   const batchResult = createSourceImportBatchSchema.safeParse({
     campaignId,
+    connectorKey: "local_json",
     rows: parsedJson,
   });
   if (!batchResult.success) {
@@ -206,6 +211,7 @@ export function parseSourceImportText(
 
   return {
     campaignId: batchResult.data.campaignId,
+    connectorKey: batchResult.data.connectorKey,
     rows: batchResult.data.rows.map((rawRow, index) => {
       const rowResult = sourceImportRowSchema.safeParse(rawRow);
       return {

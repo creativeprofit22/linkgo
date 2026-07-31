@@ -56,7 +56,7 @@ export function CampaignCard({
               <CardTitle className="truncate">{campaign.name}</CardTitle>
               <CampaignStatusBadge status={campaign.status} />
               <span className="border-border text-muted-foreground rounded-md border px-2 py-0.5 text-xs">
-                {isAutoPilot ? "Autopilot intent on" : "Manual mode"}
+                {isAutoPilot ? "Local planner eligible" : "Manual planning"}
               </span>
             </div>
             <p className="text-muted-foreground line-clamp-2 text-sm">

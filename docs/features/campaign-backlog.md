@@ -2,11 +2,11 @@
 
 ## Status and purpose
 
-Roadmap 3C is implemented. Campaign Backlog is one local-first, campaign-scoped work list for recurring and one-off operator planning.
+Roadmaps 3C and 3D are implemented. Campaign Backlog is one local-first, campaign-scoped work list for recurring, one-off, manually owned, and planner-linked work.
 
-The surface answers three questions: what is due, which campaign owns it, and whether the Operator or Linkgo is responsible. `linkgo` is a planning responsibility label only. It does not run an agent, workflow, draft, approval, schedule, publish action, comment, metric refresh, or connector.
+The surface answers three questions: what is due, which campaign owns it, and whether the Operator or Linkgo is responsible. Manually created `linkgo` rows remain responsibility labels. Roadmap 3D can create one planner-linked Linkgo scoring row from an approved terminal source batch. Neither kind runs an agent, workflow executor, draft, approval, schedule, publish action, comment, metric refresh, or connector.
 
-Roadmap 3D is next and will create Linkgo-owned work from approved source connectors for campaigns with autopilot intent. External publishing and commenting remain human approval-gated.
+Planner-linked projections expose the autopilot plan, source batch, and queued workflow IDs/states. External publishing and commenting remain human approval-gated.
 
 ## Persistence
 
@@ -24,7 +24,7 @@ Each row stores:
 - an explicit IANA `recurrence_timezone` for daily/weekly items, or an empty neutral value for one-off items;
 - terminal, created, and updated timestamps.
 
-Campaign deletion cascades backlog rows. Deleting a recurrence parent clears `recurrence_parent_id` on its successor so later history remains readable.
+Campaign deletion cascades backlog rows. Deleting a recurrence parent clears `recurrence_parent_id` on its successor so later history remains readable. `autopilot_plans.campaign_backlog_item_id` is a unique optional reverse link; deleting a planner-created backlog row clears that plan link without reopening the source batch.
 
 ## Data contracts
 
@@ -64,20 +64,19 @@ The Backlog tab sits between Campaigns and Queue.
 
 The first scan shows due-now, in-progress, blocked, and Linkgo-owned counts. Filters scope campaign, owner, and open/history view. Open work is grouped under Overdue, Due next, and Later. History is ordered by terminal time and limited to 100 rows. Global and campaign-scoped history use terminal-only expression indexes matching that ordering, so SQLite can stop at the limit without a temporary sort.
 
-Cards expose campaign, due time, owner, recurrence, work type, status, details, and legal actions. Recurring due times are formatted in and labeled with their persisted schedule zone, so the device zone is not implied to control recurrence. Archived campaigns automatically open history when selected and display read-only guidance. Linkgo-owned cards state that automatic execution arrives with the autopilot planner.
+Cards expose campaign, due time, owner, recurrence, work type, status, details, and legal actions. Recurring due times are formatted in and labeled with their persisted schedule zone, so the device zone is not implied to control recurrence. Archived campaigns automatically open history when selected and display read-only guidance. Manually created Linkgo cards identify the responsibility label; planner-linked cards identify their plan, source batch, and queued workflow and state that execution remains manual or approval-gated.
 
 The form keeps persistent labels and entered values across validation or storage errors. Cancellation explains recurrence consequences. Radix dialogs provide Escape behavior, focus containment, and focus return. Native selects reserve trailing indicator space and reflow to one column in a narrow window.
 
 ## Explicit exclusions
 
-Roadmap 3C does not:
+Campaign Backlog and its Roadmap 3D linkage do not:
 
 - fetch, scrape, or search LinkedIn;
-- add a source connector;
-- infer tasks from `auto_pilot`;
-- execute an agent, workflow, draft, approval, schedule, publish action, comment, or metric refresh;
-- poll in the background, run after quit, or send notifications;
-- add accounts, arbitrary owner identities, or domain-artifact links.
+- enable a remote source connector;
+- execute an agent, workflow executor, draft, approval, schedule, publish action, comment, or metric refresh;
+- run after quit or send notifications;
+- add accounts or arbitrary owner identities.
 
 ## Verification
 

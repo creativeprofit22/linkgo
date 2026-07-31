@@ -2,6 +2,7 @@ pub mod agent_approval_resume;
 pub mod agent_runtime;
 pub mod app_settings;
 pub mod approvals;
+pub mod autopilot_planner;
 pub mod campaign_backlog;
 pub mod campaigns;
 pub mod candidate_discovery;
@@ -49,6 +50,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(source_imports::migrations());
     migrations.extend(candidate_policy::migrations());
     migrations.extend(campaign_backlog::migrations());
+    migrations.extend(autopilot_planner::migrations());
     migrations
 }
 

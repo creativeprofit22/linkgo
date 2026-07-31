@@ -4,7 +4,9 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ## Audit status
 
-**Audited:** July 27, 2026
+**Audited:** July 31, 2026
+
+**Verification:** Formatting, lint, production builds, all 191 Playwright tests, and all 110 Rust tests pass after Roadmap 3D. Desktop and 320-pixel planner screenshots were reviewed.
 
 - **Implemented:** Every core acceptance statement in the numbered item exists.
 - **Partial:** A usable foundation exists, but one or more explicit roadmap outcomes are missing.
@@ -12,39 +14,40 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 - **Blocked:** Implementation requires product, legal, platform-access, or architecture approval.
 - **Next:** The partial item currently receiving implementation work.
 
-| Roadmap                               | Status             | Evidence and remaining work                                                                                                                                                                   |
-| ------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 Agent runtime                       | **Implemented**    | The provider/model loop and all six Zod tool contracts exist.                                                                                                                                 |
-| 2 Streaming + model layer             | **Partial**        | Provider-neutral execution and event streaming exist; roadmap-specific lifecycle progress and full side-effect integration remain incomplete.                                                 |
-| 3 Campaign + autopilot queue          | **Next / Partial** | Campaigns, manual intake, bounded local imports, enforced intake policy, and a recurring campaign backlog exist. Roadmap 3D autopilot planning and one compliant production connector remain. |
-| 4 Keyword + trend discovery           | **Partial**        | Structured operator-triggered suggestions exist; expansion from real posts and competitor/source imports does not.                                                                            |
-| 5 Relevance filtering                 | **Partial**        | Source, age, banned-topic, already-contacted, dedupe, scoring, rationale, and optional low-score rejection exist; automated scoring/intake orchestration remains.                             |
-| 6 Draft generation                    | **Partial**        | Save-gated provider variants exist; default 3–5 enforcement and event/launch/idea/community routing do not.                                                                                   |
-| 7 Humanizer + audit                   | **Partial**        | Deterministic blockers and warnings exist; AI humanizer checks and enforced believable first-person specifics do not.                                                                         |
-| 8 Quality scoring loop                | **Not started**    | No persisted category scorecard, threshold rewrite, or automatic re-score loop exists. Manual edit and re-audit is only a foundation.                                                         |
-| 9 Content calendar                    | **Implemented**    | Purpose, angle, format, visual direction, CTA, and the approval bridge exist.                                                                                                                 |
-| 10 Approval gate                      | **Partial**        | Durable human approvals and runtime continuation exist; shareable review links and wait URLs do not.                                                                                          |
-| 11 Durable workflow engine            | **Partial**        | Typed resumable steps, events, executions, and agent-run artifacts exist; domain artifact flow and owned background jobs do not.                                                              |
-| 12 Publishing + scheduling            | **Partial**        | Native LinkedIn scheduling, retries, idempotency, and platform IDs exist; a destination abstraction and additional providers do not.                                                          |
-| 13 Comment/reply agent                | **Partial**        | Approval-gated manual variants and API posting exist; provider-generated comments and background work do not.                                                                                 |
-| 14 LinkedIn API formatting            | **Partial**        | LittleText escaping and text limits exist; unified media/link preflight is incomplete.                                                                                                        |
-| 15 Metrics + learning loop            | **Partial**        | Manual metrics, reaction/comment refresh, memory, and events exist; automatic winner/loser learning injection is incomplete.                                                                  |
-| 16 Safety, rate limits, observability | **Partial**        | Kill switch, daily caps, retry backoff, local audit history, and the error queue exist; cooldowns, per-account policy, and external telemetry do not.                                         |
-| 17 Multi-agent workers                | **Partial**        | Role-specific runs exist; parallel research and drafting lanes do not.                                                                                                                        |
-| 18 Skills + playbooks                 | **Implemented**    | Modular built-ins, overrides, compatibility filtering, and runtime prompt composition exist.                                                                                                  |
-| 19 Persistent task backlog            | **Implemented**    | One campaign-scoped cross-feature backlog now adds recurring due work, owner labels, lifecycle transitions, atomic successors, and bounded history to the durable feature stores.             |
-| 20 Error queue                        | **Partial**        | A fixable queue and transitions exist; rejected-draft and low-performance automatic items do not.                                                                                             |
+| Roadmap                               | Status                | Evidence and remaining work                                                                                                                                                                                              |
+| ------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1 Agent runtime                       | **Implemented**       | The provider/model loop and all six Zod tool contracts exist.                                                                                                                                                            |
+| 2 Streaming + model layer             | **Partial**           | Provider-neutral execution and event streaming exist; roadmap-specific lifecycle progress and full side-effect integration remain incomplete.                                                                            |
+| 3 Campaign + autopilot queue          | **Partial / Blocked** | Campaigns, guarded connector-neutral local intake, recurring backlog planning, and the bounded idempotent Roadmap 3D local planner exist. One compliant production connector is the sole remaining access/terms blocker. |
+| 4 Keyword + trend discovery           | **Partial**           | Structured operator-triggered suggestions exist; expansion from real posts and competitor/source imports does not.                                                                                                       |
+| 5 Relevance filtering                 | **Partial**           | Source, age, banned-topic, already-contacted, dedupe, scoring, rationale, and optional low-score rejection exist; automated scoring/intake orchestration remains.                                                        |
+| 6 Draft generation                    | **Partial**           | Save-gated provider variants exist; default 3–5 enforcement and event/launch/idea/community routing do not.                                                                                                              |
+| 7 Humanizer + audit                   | **Partial**           | Deterministic blockers and warnings exist; AI humanizer checks and enforced believable first-person specifics do not.                                                                                                    |
+| 8 Quality scoring loop                | **Not started**       | No persisted category scorecard, threshold rewrite, or automatic re-score loop exists. Manual edit and re-audit is only a foundation.                                                                                    |
+| 9 Content calendar                    | **Implemented**       | Purpose, angle, format, visual direction, CTA, and the approval bridge exist.                                                                                                                                            |
+| 10 Approval gate                      | **Partial**           | Durable human approvals and runtime continuation exist; shareable review links and wait URLs do not.                                                                                                                     |
+| 11 Durable workflow engine            | **Partial**           | Typed resumable steps, events, executions, and agent-run artifacts exist; domain artifact flow and owned background jobs do not.                                                                                         |
+| 12 Publishing + scheduling            | **Partial**           | Native LinkedIn scheduling, retries, idempotency, and platform IDs exist; a destination abstraction and additional providers do not.                                                                                     |
+| 13 Comment/reply agent                | **Partial**           | Approval-gated manual variants and API posting exist; provider-generated comments and background work do not.                                                                                                            |
+| 14 LinkedIn API formatting            | **Partial**           | LittleText escaping and text limits exist; unified media/link preflight is incomplete.                                                                                                                                   |
+| 15 Metrics + learning loop            | **Partial**           | Manual metrics, reaction/comment refresh, memory, and events exist; automatic winner/loser learning injection is incomplete.                                                                                             |
+| 16 Safety, rate limits, observability | **Partial**           | Kill switch, daily caps, retry backoff, local audit history, and the error queue exist; cooldowns, per-account policy, and external telemetry do not.                                                                    |
+| 17 Multi-agent workers                | **Partial**           | Role-specific runs exist; parallel research and drafting lanes do not.                                                                                                                                                   |
+| 18 Skills + playbooks                 | **Implemented**       | Modular built-ins, overrides, compatibility filtering, and runtime prompt composition exist.                                                                                                                             |
+| 19 Persistent task backlog            | **Implemented**       | One campaign-scoped cross-feature backlog now adds recurring due work, owner labels, lifecycle transitions, atomic successors, and bounded history to the durable feature stores.                                        |
+| 20 Error queue                        | **Partial**           | A fixable queue and transitions exist; rejected-draft and low-performance automatic items do not.                                                                                                                        |
 
 ## Current delivery sequence: Roadmap 3
 
-Roadmap 3 remains **Next / Partial** until all four slices and one compliant production source connector exist.
+Roadmap 3 remains **Partial / Blocked** until one compliant production source connector exists. Roadmap 3D's bounded, idempotent local planning slice is complete.
 
 1. **3A — Local source import foundation (complete):** Bounded JSON import, per-row validation, shared candidate dedupe, durable batch outcomes, and reviewable rejection reasons.
 2. **3B — Candidate policy guardrails (complete):** Age, source, banned-topic, and already-contacted rules run before enforced intake can write candidate artifacts.
 3. **3C — Persistent campaign backlog (complete):** Campaign due work, Operator/Linkgo responsibility, daily/weekly recurrence, immutable history, and atomic future successors.
-4. **3D — Autopilot planner (active/next):** Active `auto_pilot` campaigns create due backlog/workflow tasks from approved source connectors; publishing and commenting remain human approval-gated.
+4. **3D — Autopilot planner (complete):** Connector-neutral local source contracts and a bounded, idempotent native planner create linked scoring backlog/workflow work for active `auto_pilot` campaigns. Research is complete, score is pending, and publishing/commenting remain human approval-gated.
+5. **Production connector (blocked):** Complete Roadmap 3 with one remote source connector only after its API access, terms, permissions, and permitted use are verified.
 
-Remote source connectors remain blocked until their API access and permitted use are verified. The safe default is local structured source import; arbitrary LinkedIn feed search, scraping, and browser automation are excluded.
+The safe default remains local structured source import. Arbitrary LinkedIn feed search, scraping, browser automation, and autonomous external actions are excluded.
 
 ## 1. Agent runtime — Implemented
 
@@ -64,15 +67,15 @@ Remote source connectors remain blocked until their API access and permitted use
 
 **Remaining:** Complete the roadmap-specific lifecycle vocabulary and connect every side-effecting path to the streamed execution layer.
 
-## 3. Campaign + autopilot queue — Next / Partial
+## 3. Campaign + autopilot queue — Partial / Blocked
 
 - Store campaigns with `autoPilot`, keywords, platform prefs, voice, tone, product, audience.
 - Pattern: `cameronking4/ReplyGuy-clone/app/api/cron/campaign/post/route.ts`.
 - Cron finds active campaigns, fetches recent target posts, batches work, stores candidates.
 
-**Evidence:** Campaign storage, deduped attended manual candidate intake, Roadmap 3A bounded local source-post ingestion, Roadmap 3B enforced intake policy, and Roadmap 3C persistent recurring backlog are implemented.
+**Evidence:** Campaign storage, attended candidate intake, Roadmap 3A bounded local source ingestion, Roadmap 3B enforced intake policy, Roadmap 3C recurring backlog, and Roadmap 3D local Autopilot Planner are implemented. The closed connector registry exposes only non-fetching `local_json`; active opted-in campaigns can convert terminal approved batches into exactly one linked Linkgo scoring item and one queued score-first workflow through a bounded, kill-switch-gated, idempotent native transaction.
 
-**Remaining:** Complete Roadmap 3D autopilot planning and batching plus one compliant production source connector. `auto_pilot` is currently persisted and rendered but does not execute work.
+**Remaining:** Complete Roadmap 3 with one compliant production connector after API-access, terms, permissions, and permitted-use approval. No remote connector is currently enabled.
 
 ## 4. Keyword + trend discovery — Partial
 
@@ -92,7 +95,7 @@ Remote source connectors remain blocked until their API access and permitted use
 
 **Evidence:** Programmatic source, age, URL/content dedupe, Unicode whole-word banned-topic, and successful prior-contact identity rules run before enforced intake writes candidate artifacts. Relevance scoring, rationale, and optional low-score rejection also exist.
 
-**Remaining:** Connect policy-enforced intake and scoring to the Roadmap 3D planner and one compliant production source connector.
+**Remaining:** Add automated relevance-scoring orchestration after planner intake and one compliant production source connector.
 
 ## 6. Draft generation — Partial
 

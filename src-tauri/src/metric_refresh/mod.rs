@@ -250,6 +250,7 @@ async fn set_enabled(pool: &SqlitePool, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn insert_refresh_event(
     pool: &SqlitePool,
     campaign_id: Option<i64>,

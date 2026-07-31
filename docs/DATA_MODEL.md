@@ -19,7 +19,7 @@ Source of truth: Tauri autostart plugin `isEnabled()` when available. The table 
 
 ### `campaigns`
 
-Stores local campaign context and automation intent.
+Stores local campaign context and opt-in local planner eligibility. `auto_pilot = 1` does not authorize publishing, commenting, or model execution.
 
 | Column                | Type    | Notes                                                     |
 | --------------------- | ------- | --------------------------------------------------------- |
@@ -76,7 +76,7 @@ Migrations `24`–`26` store one-off and recurring campaign due work with visibl
 
 Open-work indexes cover `(campaign_id, status, due_at)`, `(status, due_at)`, and `(owner_type, status, due_at)`; recurrence lookup uses `recurrence_parent_id`. Two partial terminal-history indexes cover `(COALESCE(completed_at, cancelled_at) DESC, id DESC)` globally and with leading `campaign_id`, restricted to `completed` and `cancelled` rows.
 
-Daily and weekly completion creates one future successor in the same transaction. Calendar arithmetic uses `recurrence_timezone`, preserves local wall-clock time across daylight-saving changes, and coalesces missed intervals. Ambiguous local times choose the earlier instant; nonexistent local times shift forward by the daylight-saving gap. Completed and cancelled rows are terminal, cancellation creates no successor, and every mutation rechecks that the campaign is not archived. `linkgo` is a planning label only in Roadmap 3C.
+Daily and weekly completion creates one future successor in the same transaction. Calendar arithmetic uses `recurrence_timezone`, preserves local wall-clock time across daylight-saving changes, and coalesces missed intervals. Ambiguous local times choose the earlier instant; nonexistent local times shift forward by the daylight-saving gap. Completed and cancelled rows are terminal, cancellation creates no successor, and every mutation rechecks that the campaign is not archived. Manually created `linkgo` rows remain responsibility labels. Migration 27 can link one planner-created Linkgo scoring row through `autopilot_plans.campaign_backlog_item_id`; neither kind runs an external action.
 
 ### `target_posts`
 
@@ -194,7 +194,7 @@ Stores one bounded local source-post import attempt for one campaign.
 | ----------------- | ------- | --------------------------------------------------------------- |
 | `id`              | INTEGER | Primary key                                                     |
 | `campaign_id`     | INTEGER | References `campaigns(id)` with cascade delete                  |
-| `source_type`     | TEXT    | Constrained to `local_json` for Roadmap 3A                      |
+| `source_type`     | TEXT    | Constrained to the only approved connector, `local_json`        |
 | `status`          | TEXT    | `processing`, `completed`, `completed_with_errors`, or `failed` |
 | `total_count`     | INTEGER | Non-negative supplied row count                                 |
 | `accepted_count`  | INTEGER | Non-negative rows that created candidates                       |
@@ -204,7 +204,7 @@ Stores one bounded local source-post import attempt for one campaign.
 | `created_at`      | TEXT    | SQLite datetime                                                 |
 | `updated_at`      | TEXT    | SQLite datetime                                                 |
 
-Indexes: `idx_source_import_batches_campaign_id`, `idx_source_import_batches_status`, `idx_source_import_batches_created_at`.
+Indexes: `idx_source_import_batches_campaign_id`, `idx_source_import_batches_status`, `idx_source_import_batches_created_at`, plus migration 27's `(status, campaign_id, created_at, id)` planner eligibility index.
 
 Campaign deletion cascades to its import batches and items. Normal history is retained locally with the campaign; Roadmap 3A does not add automatic retention cleanup.
 
@@ -228,6 +228,58 @@ Stores the bounded audit input and outcome for each row in a source import batch
 Indexes: `idx_source_import_items_batch_id`, `idx_source_import_items_status`, `idx_source_import_items_candidate_id`, and partial `idx_source_import_items_policy_rule_key` for non-empty classifications.
 
 Deleting a candidate preserves its import history and clears only `candidate_post_id`. Deleting a batch or campaign cascades its item rows. The source payload contains only locally supplied post metadata; it never stores OAuth credentials or provider secrets.
+
+### `autopilot_planner_settings`
+
+Migration 27 stores the singleton opt-in planner worker configuration.
+
+| Column                  | Type    | Notes                                          |
+| ----------------------- | ------- | ---------------------------------------------- |
+| `id`                    | INTEGER | Primary key constrained to singleton value `1` |
+| `enabled`               | INTEGER | Boolean-like persisted operator preference     |
+| `poll_interval_minutes` | INTEGER | `5` through `1440`; default `60`               |
+| `max_batches_per_tick`  | INTEGER | `1` through `20`; default `3`                  |
+| `updated_at`            | TEXT    | UTC ISO-8601 timestamp                         |
+
+The migration seeds `id = 1`. Enabled state does not restart a worker after the Linkgo process quits; an operator starts the while-open worker through the native command.
+
+### `autopilot_plans`
+
+Stores the durable, idempotent source-batch-to-local-work ownership record.
+
+| Column                     | Type    | Notes                                                   |
+| -------------------------- | ------- | ------------------------------------------------------- |
+| `id`                       | INTEGER | Primary key                                             |
+| `campaign_id`              | INTEGER | Required campaign reference with cascade delete         |
+| `source_import_batch_id`   | INTEGER | Required unique batch reference with cascade delete     |
+| `source_type`              | TEXT    | Immutable copied connector key for audit display        |
+| `status`                   | TEXT    | `planned` or `skipped`                                  |
+| `campaign_backlog_item_id` | INTEGER | Nullable unique backlog link with `ON DELETE SET NULL`  |
+| `workflow_run_id`          | INTEGER | Nullable unique workflow link with `ON DELETE SET NULL` |
+| `candidate_count`          | INTEGER | Positive for planned rows; zero for skipped rows        |
+| `summary`                  | TEXT    | Bounded local outcome summary, maximum 1,000 characters |
+| `created_at`               | TEXT    | UTC ISO-8601 timestamp                                  |
+| `updated_at`               | TEXT    | UTC ISO-8601 timestamp                                  |
+
+A planned insert requires both local-work links and a positive candidate count. A skipped row requires zero candidates and null links. Later deletion can clear either linked ID without reopening the unique source batch. Campaign/source-batch and status/recency indexes support anti-join eligibility and bounded dashboards.
+
+### `autopilot_planner_events`
+
+Stores append-only local planner observability.
+
+| Column                   | Type    | Notes                                                         |
+| ------------------------ | ------- | ------------------------------------------------------------- |
+| `id`                     | INTEGER | Primary key                                                   |
+| `campaign_id`            | INTEGER | Nullable campaign reference with `ON DELETE SET NULL`         |
+| `source_import_batch_id` | INTEGER | Nullable batch reference with `ON DELETE SET NULL`            |
+| `autopilot_plan_id`      | INTEGER | Nullable plan reference with `ON DELETE SET NULL`             |
+| `event_type`             | TEXT    | Start, stop, tick, planned, skipped, failed, or blocked event |
+| `severity`               | TEXT    | `info`, `warning`, or `error`                                 |
+| `summary`                | TEXT    | Required bounded safe summary                                 |
+| `metadata_json`          | TEXT    | Valid bounded JSON IDs/counts, maximum 4,000 characters       |
+| `created_at`             | TEXT    | UTC ISO-8601 timestamp                                        |
+
+Indexes cover campaign/recency, batch, plan, event-type/recency, and global recency scans.
 
 ### `drafts`
 
@@ -804,4 +856,4 @@ Stores append-only non-secret auth event summaries for the same provider key cat
 
 ## Reserved future tables
 
-Future slices will add their own migrations for additional external automation tables.
+Future approved connectors and external automation slices add their own migrations. Migration 27 deliberately adds no remote connector, credential, notification, or external-action table.

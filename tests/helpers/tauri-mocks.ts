@@ -48,6 +48,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     type CampaignBacklogItemDetail = CampaignBacklogItem & {
       campaign_name: string;
       campaign_status: Campaign["status"];
+      autopilot_plan_id: number | null;
+      source_import_batch_id: number | null;
+      workflow_run_id: number | null;
     };
 
     type Keyword = {
@@ -169,6 +172,51 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       reason: string;
       policy_rule_key: CandidatePolicyRuleKey | "";
       created_at: string;
+      updated_at: string;
+    };
+
+    type AutopilotPlan = {
+      id: number;
+      campaign_id: number;
+      source_import_batch_id: number;
+      source_type: "local_json";
+      status: "planned" | "skipped";
+      campaign_backlog_item_id: number | null;
+      workflow_run_id: number | null;
+      candidate_count: number;
+      summary: string;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type AutopilotPlannerEventType =
+      | "planner_started"
+      | "planner_stopped"
+      | "tick_started"
+      | "tick_completed"
+      | "tick_failed"
+      | "batch_planned"
+      | "batch_skipped"
+      | "batch_failed"
+      | "planner_blocked";
+
+    type AutopilotPlannerEvent = {
+      id: number;
+      campaign_id: number | null;
+      source_import_batch_id: number | null;
+      autopilot_plan_id: number | null;
+      event_type: AutopilotPlannerEventType;
+      severity: "info" | "warning" | "error";
+      summary: string;
+      metadata_json: string;
+      created_at: string;
+    };
+
+    type AutopilotPlannerSettings = {
+      id: 1;
+      enabled: number;
+      poll_interval_minutes: number;
+      max_batches_per_tick: number;
       updated_at: string;
     };
 
@@ -874,6 +922,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       candidatePolicyBannedTopics: CandidatePolicyBannedTopic[];
       sourceImportBatches: SourceImportBatch[];
       sourceImportItems: SourceImportItem[];
+      autopilotPlans: AutopilotPlan[];
+      autopilotPlannerEvents: AutopilotPlannerEvent[];
+      autopilotPlannerSettings: AutopilotPlannerSettings;
       candidateDiscoveryItems: CandidateDiscoveryItem[];
       drafts: Draft[];
       draftVariants: DraftVariant[];
@@ -918,6 +969,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextCandidatePolicyBannedTopicId: number;
       nextSourceImportBatchId: number;
       nextSourceImportItemId: number;
+      nextAutopilotPlanId: number;
+      nextAutopilotPlannerEventId: number;
       nextDraftId: number;
       nextDraftVariantId: number;
       nextDraftAuditId: number;
@@ -959,6 +1012,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const candidatePolicyBannedTopics: CandidatePolicyBannedTopic[] = [];
     const sourceImportBatches: SourceImportBatch[] = [];
     const sourceImportItems: SourceImportItem[] = [];
+    const autopilotPlans: AutopilotPlan[] = [];
+    const autopilotPlannerEvents: AutopilotPlannerEvent[] = [];
+    const autopilotPlannerSettings: AutopilotPlannerSettings = {
+      id: 1,
+      enabled: 0,
+      poll_interval_minutes: 60,
+      max_batches_per_tick: 3,
+      updated_at: new Date().toISOString(),
+    };
+    let autopilotPlannerRunning = false;
     const candidateDiscoveryItems: CandidateDiscoveryItem[] = [];
     const drafts: Draft[] = [];
     const draftVariants: DraftVariant[] = [];
@@ -1033,6 +1096,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextCandidatePolicyBannedTopicId = 1;
     let nextSourceImportBatchId = 1;
     let nextSourceImportItemId = 1;
+    let nextAutopilotPlanId = 1;
+    let nextAutopilotPlannerEventId = 1;
     let nextCandidateDiscoveryItemId = 1;
     let nextDraftId = 1;
     let nextDraftVariantId = 1;
@@ -1156,6 +1221,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         candidatePolicyBannedTopics: cloneRows(candidatePolicyBannedTopics),
         sourceImportBatches: cloneRows(sourceImportBatches),
         sourceImportItems: cloneRows(sourceImportItems),
+        autopilotPlans: cloneRows(autopilotPlans),
+        autopilotPlannerEvents: cloneRows(autopilotPlannerEvents),
+        autopilotPlannerSettings: { ...autopilotPlannerSettings },
         candidateDiscoveryItems: cloneRows(candidateDiscoveryItems),
         drafts: cloneRows(drafts),
         draftVariants: cloneRows(draftVariants),
@@ -1200,6 +1268,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextCandidatePolicyBannedTopicId,
         nextSourceImportBatchId,
         nextSourceImportItemId,
+        nextAutopilotPlanId,
+        nextAutopilotPlannerEventId,
         nextCandidateDiscoveryItemId,
         nextDraftId,
         nextDraftVariantId,
@@ -1270,6 +1340,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
       restoreRows(sourceImportBatches, snapshot.sourceImportBatches ?? []);
       restoreRows(sourceImportItems, snapshot.sourceImportItems ?? []);
+      restoreRows(autopilotPlans, snapshot.autopilotPlans ?? []);
+      restoreRows(
+        autopilotPlannerEvents,
+        snapshot.autopilotPlannerEvents ?? [],
+      );
+      Object.assign(
+        autopilotPlannerSettings,
+        snapshot.autopilotPlannerSettings ?? autopilotPlannerSettings,
+      );
       restoreRows(candidateDiscoveryItems, snapshot.candidateDiscoveryItems);
       restoreRows(drafts, snapshot.drafts);
       restoreRows(draftVariants, snapshot.draftVariants);
@@ -1331,6 +1410,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         snapshot.nextCandidatePolicyBannedTopicId ?? 1;
       nextSourceImportBatchId = snapshot.nextSourceImportBatchId ?? 1;
       nextSourceImportItemId = snapshot.nextSourceImportItemId ?? 1;
+      nextAutopilotPlanId = snapshot.nextAutopilotPlanId ?? 1;
+      nextAutopilotPlannerEventId = snapshot.nextAutopilotPlannerEventId ?? 1;
       nextCandidateDiscoveryItemId = snapshot.nextCandidateDiscoveryItemId;
       nextDraftId = snapshot.nextDraftId;
       nextDraftVariantId = snapshot.nextDraftVariantId;
@@ -2162,10 +2243,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     ): Record<string, unknown> | null {
       const campaign = campaigns.find((row) => row.id === run.campaign_id);
       if (!campaign) return null;
+      const plan = autopilotPlans.find(
+        (candidate) => candidate.workflow_run_id === run.id,
+      );
       return {
         ...run,
         campaign_name: campaign.name,
         campaign_status: campaign.status,
+        autopilot_plan_id: plan?.id ?? null,
+        source_import_batch_id: plan?.source_import_batch_id ?? null,
       };
     }
 
@@ -2843,10 +2929,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     ): CampaignBacklogItemDetail | null {
       const campaign = campaigns.find((row) => row.id === item.campaign_id);
       if (!campaign) return null;
+      const plan = autopilotPlans.find(
+        (candidate) => candidate.campaign_backlog_item_id === item.id,
+      );
       return {
         ...item,
         campaign_name: campaign.name,
         campaign_status: campaign.status,
+        autopilot_plan_id: plan?.id ?? null,
+        source_import_batch_id: plan?.source_import_batch_id ?? null,
+        workflow_run_id: plan?.workflow_run_id ?? null,
       };
     }
 
@@ -2947,6 +3039,148 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return history ? rows.slice(0, 100) : rows;
     }
 
+    function currentAutopilotCandidateCount(batchId: number): number {
+      return sourceImportItems.filter(
+        (item) =>
+          item.source_import_batch_id === batchId &&
+          item.status === "accepted" &&
+          item.candidate_post_id !== null &&
+          candidatePosts.some(
+            (candidate) => candidate.id === item.candidate_post_id,
+          ),
+      ).length;
+    }
+
+    function isEligibleAutopilotBatch(batch: SourceImportBatch): boolean {
+      const campaign = campaigns.find((row) => row.id === batch.campaign_id);
+      return (
+        campaign?.status === "active" &&
+        campaign.auto_pilot === 1 &&
+        ["completed", "completed_with_errors"].includes(batch.status) &&
+        batch.accepted_count > 0 &&
+        !autopilotPlans.some((plan) => plan.source_import_batch_id === batch.id)
+      );
+    }
+
+    function selectAutopilotPlanner(
+      query: string,
+      values: unknown[],
+    ): unknown[] {
+      if (w.__LINKGO_FAIL_AUTOPILOT_SELECT__ === true) {
+        throw new Error("Injected autopilot planner load failure");
+      }
+      const campaignId = typeof values[0] === "number" ? values[0] : null;
+      if (
+        query.includes("FROM source_import_batches sib") &&
+        query.includes("autopilot_plans")
+      ) {
+        return [
+          {
+            count: sourceImportBatches.filter(
+              (batch) =>
+                (campaignId === null || batch.campaign_id === campaignId) &&
+                isEligibleAutopilotBatch(batch),
+            ).length,
+          },
+        ];
+      }
+      if (query.includes("FROM autopilot_planner_events")) {
+        const events = autopilotPlannerEvents.filter(
+          (event) => campaignId === null || event.campaign_id === campaignId,
+        );
+        if (query.includes("COUNT(*) AS count")) {
+          return [
+            {
+              count: events.filter(
+                (event) => event.event_type === "batch_failed",
+              ).length,
+            },
+          ];
+        }
+        return events
+          .map((event) => {
+            const campaign =
+              event.campaign_id === null
+                ? undefined
+                : campaigns.find((row) => row.id === event.campaign_id);
+            return {
+              ...event,
+              campaign_name: campaign?.name ?? null,
+              campaign_status: campaign?.status ?? null,
+            };
+          })
+          .sort((left, right) => {
+            const createdDelta = right.created_at.localeCompare(
+              left.created_at,
+            );
+            return createdDelta !== 0 ? createdDelta : right.id - left.id;
+          })
+          .slice(0, 50);
+      }
+      if (query.includes("FROM autopilot_plans ap")) {
+        const plans = autopilotPlans.filter(
+          (plan) => campaignId === null || plan.campaign_id === campaignId,
+        );
+        if (query.includes("COUNT(*) AS count")) {
+          const status = query.includes("ap.status = 'skipped'")
+            ? "skipped"
+            : "planned";
+          return [
+            { count: plans.filter((plan) => plan.status === status).length },
+          ];
+        }
+        return plans
+          .map((plan) => {
+            const campaign = campaigns.find(
+              (row) => row.id === plan.campaign_id,
+            );
+            const batch = sourceImportBatches.find(
+              (row) => row.id === plan.source_import_batch_id,
+            );
+            const backlog = campaignBacklogItems.find(
+              (row) => row.id === plan.campaign_backlog_item_id,
+            );
+            const workflow = workflowRuns.find(
+              (row) => row.id === plan.workflow_run_id,
+            );
+            return {
+              ...plan,
+              campaign_name: campaign?.name ?? "Campaign removed",
+              campaign_status: campaign?.status ?? "archived",
+              source_batch_status: batch?.status ?? null,
+              source_total_count: batch?.total_count ?? null,
+              source_accepted_count: batch?.accepted_count ?? null,
+              current_candidate_count: currentAutopilotCandidateCount(
+                plan.source_import_batch_id,
+              ),
+              backlog_title: backlog?.title ?? null,
+              backlog_status: backlog?.status ?? null,
+              backlog_work_type: backlog?.work_type ?? null,
+              workflow_title: workflow?.title ?? null,
+              workflow_status: workflow?.status ?? null,
+              workflow_current_step_key: workflow?.current_step_key ?? null,
+            };
+          })
+          .sort((left, right) => {
+            const createdDelta = right.created_at.localeCompare(
+              left.created_at,
+            );
+            return createdDelta !== 0 ? createdDelta : right.id - left.id;
+          })
+          .slice(0, 30);
+      }
+      return [];
+    }
+
+    function isAutopilotPlannerQuery(query: string): boolean {
+      return (
+        query.includes("FROM autopilot_plans ap") ||
+        query.includes("FROM autopilot_planner_events ape") ||
+        (query.includes("FROM source_import_batches sib") &&
+          query.includes("LEFT JOIN autopilot_plans"))
+      );
+    }
+
     function getBacklogSelectKey(values: unknown[]): string {
       const { campaignId, owner } = getCampaignBacklogFilters(values);
       return `${campaignId ?? "all"}:${owner ?? "all"}`;
@@ -2954,6 +3188,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function selectSql(args?: unknown): unknown[] {
       const { query, values } = readSqlArgs(args);
+      if (isAutopilotPlannerQuery(query)) {
+        return selectAutopilotPlanner(query, values);
+      }
       if (query.includes("campaign_backlog_items")) {
         return selectCampaignBacklog(query, values);
       }
@@ -3823,11 +4060,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const isCandidatePolicyList =
         query.includes("FROM candidate_intake_policies") ||
         query.includes("FROM candidate_policy_banned_topics");
+      const isAutopilotList = isAutopilotPlannerQuery(query);
       if (
         !isCandidateList &&
         !isDiscoveryList &&
         !isSourceImportList &&
-        !isCandidatePolicyList
+        !isCandidatePolicyList &&
+        !isAutopilotList
       ) {
         return null;
       }
@@ -4514,9 +4753,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
       if (query.includes("INSERT INTO source_import_batches")) {
         const campaignId = Number(values[0] ?? 0);
-        const totalCount = Number(values[1] ?? 0);
+        const sourceType = String(values[1] ?? "");
+        const totalCount = Number(values[2] ?? 0);
         if (!campaigns.some((campaign) => campaign.id === campaignId)) {
           throw new Error("FOREIGN KEY constraint failed");
+        }
+        if (sourceType !== "local_json") {
+          throw new Error("CHECK constraint failed: source_type");
         }
         if (!Number.isInteger(totalCount) || totalCount < 0) {
           throw new Error("CHECK constraint failed: total_count >= 0");
@@ -6469,6 +6712,355 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return activity ? `urn:li:activity:${activity}` : "";
     }
 
+    function recordAutopilotPlannerEvent(
+      eventType: AutopilotPlannerEventType,
+      summary: string,
+      options: {
+        campaignId?: number | null;
+        sourceImportBatchId?: number | null;
+        autopilotPlanId?: number | null;
+        severity?: AutopilotPlannerEvent["severity"];
+        metadata?: Record<string, unknown>;
+      } = {},
+    ): void {
+      autopilotPlannerEvents.push({
+        id: nextAutopilotPlannerEventId,
+        campaign_id: options.campaignId ?? null,
+        source_import_batch_id: options.sourceImportBatchId ?? null,
+        autopilot_plan_id: options.autopilotPlanId ?? null,
+        event_type: eventType,
+        severity: options.severity ?? "info",
+        summary,
+        metadata_json: JSON.stringify(options.metadata ?? {}),
+        created_at: getNow(),
+      });
+      nextAutopilotPlannerEventId += 1;
+    }
+
+    function autopilotPlannerStatusPayload(): Record<string, unknown> {
+      return {
+        enabled: autopilotPlannerSettings.enabled === 1,
+        running: autopilotPlannerRunning,
+        runnerId: autopilotPlannerRunning ? "mock-autopilot" : null,
+        settings: {
+          enabled: autopilotPlannerSettings.enabled === 1,
+          pollIntervalMinutes: autopilotPlannerSettings.poll_interval_minutes,
+          maxBatchesPerTick: autopilotPlannerSettings.max_batches_per_tick,
+          updatedAt: autopilotPlannerSettings.updated_at,
+        },
+      };
+    }
+
+    function runAutopilotPlannerTickMock(): Record<string, number> {
+      const result = {
+        claimed: 0,
+        planned: 0,
+        skipped: 0,
+        failed: 0,
+        blocked: 0,
+      };
+      recordAutopilotPlannerEvent(
+        "tick_started",
+        "Autopilot planner tick started.",
+        { metadata: { runnerId: "mock-autopilot" } },
+      );
+      if (safetySettings.global_kill_switch === 1) {
+        result.blocked = 1;
+        recordAutopilotPlannerEvent(
+          "planner_blocked",
+          "Autopilot planner tick blocked by the global kill switch.",
+          {
+            severity: "warning",
+            metadata: { reason: safetySettings.kill_switch_reason },
+          },
+        );
+        recordAutopilotPlannerEvent(
+          "tick_completed",
+          "Autopilot planner tick completed without creating work.",
+          { metadata: result },
+        );
+        return result;
+      }
+
+      const eligibleBatches = sourceImportBatches
+        .filter(isEligibleAutopilotBatch)
+        .sort((left, right) => {
+          const createdDelta = left.created_at.localeCompare(right.created_at);
+          return createdDelta !== 0 ? createdDelta : left.id - right.id;
+        })
+        .slice(0, autopilotPlannerSettings.max_batches_per_tick);
+
+      for (const batch of eligibleBatches) {
+        if (
+          autopilotPlans.some(
+            (plan) => plan.source_import_batch_id === batch.id,
+          )
+        ) {
+          continue;
+        }
+        const plansSnapshot = cloneRows(autopilotPlans);
+        const eventsSnapshot = cloneRows(autopilotPlannerEvents);
+        const backlogSnapshot = cloneRows(campaignBacklogItems);
+        const runsSnapshot = cloneRows(workflowRuns);
+        const stepsSnapshot = cloneRows(workflowSteps);
+        const workflowEventsSnapshot = cloneRows(workflowEvents);
+        const idSnapshot = {
+          plan: nextAutopilotPlanId,
+          plannerEvent: nextAutopilotPlannerEventId,
+          backlog: nextCampaignBacklogItemId,
+          run: nextWorkflowRunId,
+          step: nextWorkflowStepId,
+          workflowEvent: nextWorkflowEventId,
+        };
+        if (safetySettings.global_kill_switch === 1) {
+          const reason = safetySettings.kill_switch_reason.trim()
+            ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason.trim()}`
+            : "Global kill switch is enabled";
+          result.blocked += 1;
+          recordAutopilotPlannerEvent(
+            "planner_blocked",
+            "Source batch materialization blocked by the global kill switch.",
+            {
+              sourceImportBatchId: batch.id,
+              severity: "warning",
+              metadata: { reason },
+            },
+          );
+          break;
+        }
+        try {
+          if (w.__LINKGO_FAIL_AUTOPILOT_PLAN__ === true) {
+            w.__LINKGO_FAIL_AUTOPILOT_PLAN__ = undefined;
+            throw new Error("Injected autopilot planner failure");
+          }
+          const candidateCount = currentAutopilotCandidateCount(batch.id);
+          const now = getNow();
+          if (candidateCount === 0) {
+            const plan: AutopilotPlan = {
+              id: nextAutopilotPlanId,
+              campaign_id: batch.campaign_id,
+              source_import_batch_id: batch.id,
+              source_type: batch.source_type,
+              status: "skipped",
+              campaign_backlog_item_id: null,
+              workflow_run_id: null,
+              candidate_count: 0,
+              summary: `No current accepted candidates remain for source batch #${batch.id}.`,
+              created_at: now,
+              updated_at: now,
+            };
+            autopilotPlans.push(plan);
+            nextAutopilotPlanId += 1;
+            recordAutopilotPlannerEvent(
+              "batch_skipped",
+              "Source batch skipped because no current accepted candidates remain.",
+              {
+                campaignId: batch.campaign_id,
+                sourceImportBatchId: batch.id,
+                autopilotPlanId: plan.id,
+                severity: "warning",
+                metadata: { candidateCount: 0 },
+              },
+            );
+            result.claimed += 1;
+            result.skipped += 1;
+            continue;
+          }
+
+          const workflowRunId = nextWorkflowRunId;
+          workflowRuns.push({
+            id: workflowRunId,
+            campaign_id: batch.campaign_id,
+            workflow_type: "content_pipeline",
+            title: `Autopilot scoring for source batch #${batch.id}`,
+            status: "queued",
+            current_step_key: "score",
+            context_summary: `Policy-enforced local_json source batch #${batch.id} has ${candidateCount} current accepted candidate(s). Research is complete; scoring awaits operator execution.`,
+            started_at: null,
+            completed_at: null,
+            created_at: now,
+            updated_at: now,
+          });
+          nextWorkflowRunId += 1;
+          const canonicalSteps: Array<{
+            key: WorkflowStepKey;
+            title: string;
+            description: string;
+          }> = [
+            {
+              key: "research",
+              title: "Research",
+              description: "Research source posts and campaign context.",
+            },
+            {
+              key: "score",
+              title: "Score relevance",
+              description: "Dedupe and score candidate relevance.",
+            },
+            {
+              key: "draft",
+              title: "Draft variants",
+              description: "Create draft variants.",
+            },
+            {
+              key: "audit",
+              title: "Audit drafts",
+              description: "Run deterministic/AI audit checks.",
+            },
+            {
+              key: "approve",
+              title: "Approve",
+              description: "Wait for human review.",
+            },
+            {
+              key: "schedule",
+              title: "Schedule",
+              description: "Schedule approved content.",
+            },
+            {
+              key: "measure",
+              title: "Measure",
+              description: "Record metrics and learning.",
+            },
+          ];
+          let researchStepId: number | null = null;
+          canonicalSteps.forEach((stepDefinition, index) => {
+            const research = stepDefinition.key === "research";
+            const step: WorkflowStep = {
+              id: nextWorkflowStepId,
+              workflow_run_id: workflowRunId,
+              step_key: stepDefinition.key,
+              title: stepDefinition.title,
+              description: stepDefinition.description,
+              sort_order: index + 1,
+              status: research ? "completed" : "pending",
+              output_summary: research
+                ? `Research completed from policy-enforced source batch #${batch.id} with ${candidateCount} current accepted candidate(s).`
+                : "",
+              error_message: "",
+              started_at: research ? now : null,
+              completed_at: research ? now : null,
+              created_at: now,
+              updated_at: now,
+            };
+            workflowSteps.push(step);
+            if (research) researchStepId = step.id;
+            nextWorkflowStepId += 1;
+          });
+          workflowEvents.push(
+            {
+              id: nextWorkflowEventId,
+              workflow_run_id: workflowRunId,
+              workflow_step_id: null,
+              event_type: "run_created",
+              summary: "Workflow run created",
+              created_at: now,
+            },
+            {
+              id: nextWorkflowEventId + 1,
+              workflow_run_id: workflowRunId,
+              workflow_step_id: researchStepId,
+              event_type: "step_completed",
+              summary: "Research completed from source batch",
+              created_at: now,
+            },
+          );
+          nextWorkflowEventId += 2;
+
+          const backlogId = nextCampaignBacklogItemId;
+          campaignBacklogItems.push({
+            id: backlogId,
+            campaign_id: batch.campaign_id,
+            recurrence_parent_id: null,
+            work_type: "scoring",
+            title: `Score source batch #${batch.id}`,
+            details: `Score ${candidateCount} current accepted candidate(s) from source batch #${batch.id}. Queued workflow #${workflowRunId}; no model or external action has started.`,
+            owner_type: "linkgo",
+            status: "pending",
+            due_at: now,
+            recurrence: "none",
+            recurrence_timezone: "",
+            completed_at: null,
+            cancelled_at: null,
+            created_at: now,
+            updated_at: now,
+          });
+          nextCampaignBacklogItemId += 1;
+
+          const plan: AutopilotPlan = {
+            id: nextAutopilotPlanId,
+            campaign_id: batch.campaign_id,
+            source_import_batch_id: batch.id,
+            source_type: batch.source_type,
+            status: "planned",
+            campaign_backlog_item_id: backlogId,
+            workflow_run_id: workflowRunId,
+            candidate_count: candidateCount,
+            summary: `Created backlog item #${backlogId} and queued workflow #${workflowRunId} from ${candidateCount} current accepted candidate(s).`,
+            created_at: now,
+            updated_at: now,
+          };
+          autopilotPlans.push(plan);
+          nextAutopilotPlanId += 1;
+          recordAutopilotPlannerEvent(
+            "batch_planned",
+            "Source batch converted into a Linkgo backlog item and queued workflow.",
+            {
+              campaignId: batch.campaign_id,
+              sourceImportBatchId: batch.id,
+              autopilotPlanId: plan.id,
+              metadata: {
+                candidateCount,
+                campaignBacklogItemId: backlogId,
+                workflowRunId,
+              },
+            },
+          );
+          result.claimed += 1;
+          result.planned += 1;
+          const killSwitchReason =
+            w.__LINKGO_ENABLE_KILL_SWITCH_AFTER_AUTOPILOT_PLAN__;
+          if (typeof killSwitchReason === "string") {
+            safetySettings.global_kill_switch = 1;
+            safetySettings.kill_switch_reason = killSwitchReason;
+            safetySettings.updated_at = getNow();
+            w.__LINKGO_ENABLE_KILL_SWITCH_AFTER_AUTOPILOT_PLAN__ = undefined;
+          }
+        } catch {
+          restoreRows(autopilotPlans, plansSnapshot);
+          restoreRows(autopilotPlannerEvents, eventsSnapshot);
+          restoreRows(campaignBacklogItems, backlogSnapshot);
+          restoreRows(workflowRuns, runsSnapshot);
+          restoreRows(workflowSteps, stepsSnapshot);
+          restoreRows(workflowEvents, workflowEventsSnapshot);
+          nextAutopilotPlanId = idSnapshot.plan;
+          nextAutopilotPlannerEventId = idSnapshot.plannerEvent;
+          nextCampaignBacklogItemId = idSnapshot.backlog;
+          nextWorkflowRunId = idSnapshot.run;
+          nextWorkflowStepId = idSnapshot.step;
+          nextWorkflowEventId = idSnapshot.workflowEvent;
+          result.claimed += 1;
+          result.failed += 1;
+          recordAutopilotPlannerEvent(
+            "batch_failed",
+            `Source batch #${batch.id} could not be planned due to a local database error.`,
+            {
+              campaignId: batch.campaign_id,
+              sourceImportBatchId: batch.id,
+              severity: "error",
+            },
+          );
+        }
+      }
+      recordAutopilotPlannerEvent(
+        "tick_completed",
+        "Autopilot planner tick completed.",
+        { metadata: result },
+      );
+      persistReloadSnapshot();
+      return result;
+    }
+
     function recordMetricRefreshEvent(
       event_type: MetricRefreshEvent["event_type"],
       summary: string,
@@ -6696,6 +7288,91 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_SOURCE_IMPORT_BATCHES__ = () =>
       cloneRows(sourceImportBatches);
     w.__LINKGO_SQL_SOURCE_IMPORT_ITEMS__ = () => cloneRows(sourceImportItems);
+    w.__LINKGO_SQL_AUTOPILOT_PLANS__ = () => cloneRows(autopilotPlans);
+    w.__LINKGO_SQL_AUTOPILOT_EVENTS__ = () => cloneRows(autopilotPlannerEvents);
+    w.__LINKGO_SQL_AUTOPILOT_SETTINGS__ = () => ({
+      ...autopilotPlannerSettings,
+      running: autopilotPlannerRunning,
+    });
+    w.__LINKGO_SQL_SEED_AUTOPILOT_BATCH__ = (
+      campaignId: number,
+      options: {
+        status?: SourceImportBatchStatus;
+        currentCandidate?: boolean;
+        acceptedCount?: number;
+        createdAt?: string;
+      } = {},
+    ) => {
+      const campaign = campaigns.find((row) => row.id === campaignId);
+      if (!campaign) throw new Error("Campaign was not found");
+      const now = options.createdAt ?? getNow();
+      const acceptedCount = options.acceptedCount ?? 1;
+      const batchId = nextSourceImportBatchId;
+      sourceImportBatches.push({
+        id: batchId,
+        campaign_id: campaignId,
+        source_type: "local_json",
+        status: options.status ?? "completed",
+        total_count: Math.max(1, acceptedCount),
+        accepted_count: acceptedCount,
+        duplicate_count: 0,
+        rejected_count: acceptedCount === 0 ? 1 : 0,
+        error_message: "",
+        created_at: now,
+        updated_at: now,
+      });
+      nextSourceImportBatchId += 1;
+      if (acceptedCount > 0) {
+        let candidateId: number | null = null;
+        if (options.currentCandidate !== false) {
+          const targetId = nextTargetPostId;
+          targetPosts.push({
+            id: targetId,
+            platform: "linkedin",
+            url: `https://www.linkedin.com/posts/autopilot-${batchId}`,
+            normalized_url: `https://www.linkedin.com/posts/autopilot-${batchId}`,
+            platform_resource_urn: "",
+            author_name: "Planner source",
+            author_profile_url: "",
+            posted_at: now,
+            content: `Autopilot source ${batchId}`,
+            content_hash: `autopilot-source-${batchId}`,
+            created_at: now,
+            updated_at: now,
+          });
+          nextTargetPostId += 1;
+          candidateId = nextCandidatePostId;
+          candidatePosts.push({
+            id: candidateId,
+            campaign_id: campaignId,
+            target_post_id: targetId,
+            source_keyword: "autopilot",
+            status: "new",
+            relevance_score: null,
+            score_reason: "",
+            notes: "",
+            created_at: now,
+            updated_at: now,
+          });
+          nextCandidatePostId += 1;
+        }
+        sourceImportItems.push({
+          id: nextSourceImportItemId,
+          source_import_batch_id: batchId,
+          row_number: 1,
+          status: "accepted",
+          input_json: "{}",
+          candidate_post_id: candidateId,
+          reason: "Accepted",
+          policy_rule_key: "",
+          created_at: now,
+          updated_at: now,
+        });
+        nextSourceImportItemId += 1;
+      }
+      persistReloadSnapshot();
+      return batchId;
+    };
     w.__LINKGO_SQL_CANDIDATE_DISCOVERY_ITEMS__ = () =>
       cloneRows(candidateDiscoveryItems);
     w.__LINKGO_SQL_CONTENT_CALENDAR_SLOTS__ = () =>
@@ -6705,6 +7382,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_COMMENT_AUDITS__ = () => cloneRows(commentAudits);
     w.__LINKGO_SQL_COMMENT_ATTEMPTS__ = () => cloneRows(commentAttempts);
     w.__LINKGO_SQL_SAFETY_SETTINGS__ = () => ({ ...safetySettings });
+    w.__LINKGO_SQL_SET_KILL_SWITCH__ = (enabled: boolean, reason = "") => {
+      safetySettings.global_kill_switch = enabled ? 1 : 0;
+      safetySettings.kill_switch_reason = enabled ? reason : "";
+      safetySettings.updated_at = getNow();
+      persistReloadSnapshot();
+    };
     w.__LINKGO_SQL_SAFETY_AUDIT_EVENTS__ = () => cloneRows(safetyAuditEvents);
     w.__LINKGO_SQL_RATE_LIMIT_EVENTS__ = () => cloneRows(rateLimitEvents);
     w.__LINKGO_SQL_ERROR_QUEUE_ITEMS__ = () => cloneRows(errorQueueItems);
@@ -6937,6 +7620,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       candidatePolicyBannedTopics: candidatePolicyBannedTopics.length,
       sourceImportBatches: sourceImportBatches.length,
       sourceImportItems: sourceImportItems.length,
+      autopilotPlans: autopilotPlans.length,
+      autopilotPlannerEvents: autopilotPlannerEvents.length,
       candidateDiscoveryItems: candidateDiscoveryItems.length,
       drafts: drafts.length,
       draftVariants: draftVariants.length,
@@ -7290,6 +7975,54 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             throw new Error("Provider command test API is not configured");
           }
           return Promise.resolve(testApi.execute(args));
+        }
+        if (cmd === "linkgo_autopilot_planner_status") {
+          const override = w.__LINKGO_AUTOPILOT_STATUS_RESULT__;
+          return Promise.resolve(
+            override === undefined ? autopilotPlannerStatusPayload() : override,
+          );
+        }
+        if (cmd === "linkgo_autopilot_planner_start") {
+          if (safetySettings.global_kill_switch === 1) {
+            recordAutopilotPlannerEvent(
+              "planner_blocked",
+              "Autopilot planner start blocked by the global kill switch.",
+              { severity: "warning" },
+            );
+            throw new Error(
+              safetySettings.kill_switch_reason.trim()
+                ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
+                : "Global kill switch is enabled",
+            );
+          }
+          autopilotPlannerSettings.enabled = 1;
+          autopilotPlannerSettings.updated_at = getNow();
+          autopilotPlannerRunning = true;
+          recordAutopilotPlannerEvent(
+            "planner_started",
+            "Background autopilot planner started.",
+            { metadata: { runnerId: "mock-autopilot" } },
+          );
+          queueMicrotask(() => runAutopilotPlannerTickMock());
+          return Promise.resolve(autopilotPlannerStatusPayload());
+        }
+        if (cmd === "linkgo_autopilot_planner_stop") {
+          autopilotPlannerSettings.enabled = 0;
+          autopilotPlannerSettings.updated_at = getNow();
+          autopilotPlannerRunning = false;
+          recordAutopilotPlannerEvent(
+            "planner_stopped",
+            "Background autopilot planner stopped.",
+            { metadata: { runnerId: "mock-autopilot" } },
+          );
+          return Promise.resolve(autopilotPlannerStatusPayload());
+        }
+        if (cmd === "linkgo_autopilot_planner_tick") {
+          const error = w.__LINKGO_AUTOPILOT_TICK_ERROR__;
+          if (typeof error === "string" && error.trim() !== "") {
+            throw new Error(error);
+          }
+          return Promise.resolve(runAutopilotPlannerTickMock());
         }
         if (cmd === "linkgo_scheduler_status") {
           return Promise.resolve(schedulerStatusPayload());

@@ -63,7 +63,9 @@ test("creates Operator and Linkgo work and filters the visible owner", async ({
   await expect(
     page.getByRole("heading", { name: "Prepare launch scoring" }),
   ).toBeVisible();
-  await expect(page.getByText("planning responsibility only")).toBeVisible();
+  await expect(
+    page.getByText(/Manually created Linkgo responsibility label/u),
+  ).toBeVisible();
 });
 
 test("enforces lifecycle transitions through UI and the direct data boundary", async ({

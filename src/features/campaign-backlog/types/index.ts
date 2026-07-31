@@ -103,6 +103,9 @@ export interface CampaignBacklogItem {
 export interface CampaignBacklogItemDetail extends CampaignBacklogItem {
   campaign_name: string;
   campaign_status: CampaignStatus;
+  autopilot_plan_id?: number | null;
+  source_import_batch_id?: number | null;
+  workflow_run_id?: number | null;
 }
 
 export interface CampaignBacklogSummary {

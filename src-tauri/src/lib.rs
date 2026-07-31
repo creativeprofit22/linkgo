@@ -1,5 +1,6 @@
 mod agent_runtime;
 mod auth;
+mod autopilot_planner;
 mod campaign_backlog;
 mod metric_refresh;
 mod migrations;
@@ -26,6 +27,13 @@ pub fn run() {
                 .build(),
         )
         .plugin(plugins::system_tray::init())
+        .setup(|app| {
+            let pool =
+                autopilot_planner::managed_pool(app.handle()).map_err(std::io::Error::other)?;
+            app.manage(pool);
+            app.manage(autopilot_planner::AutopilotPlannerWorkerState::default());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
             auth::commands::linkgo_auth_status,
@@ -41,6 +49,10 @@ pub fn run() {
             campaign_backlog::linkgo_campaign_backlog_create,
             campaign_backlog::linkgo_campaign_backlog_update,
             campaign_backlog::linkgo_campaign_backlog_set_status,
+            autopilot_planner::linkgo_autopilot_planner_status,
+            autopilot_planner::linkgo_autopilot_planner_start,
+            autopilot_planner::linkgo_autopilot_planner_stop,
+            autopilot_planner::linkgo_autopilot_planner_tick,
             scheduler::linkgo_scheduler_status,
             scheduler::linkgo_scheduler_start,
             scheduler::linkgo_scheduler_stop,

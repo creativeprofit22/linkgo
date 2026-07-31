@@ -728,7 +728,6 @@ mod tests {
                 .with_timezone(&Utc);
 
             let run_mutation = |pool: SqlitePool| {
-                let now = now;
                 tauri::async_runtime::spawn(async move {
                     let mut connection = pool
                         .acquire()

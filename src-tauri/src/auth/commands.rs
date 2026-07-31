@@ -158,7 +158,7 @@ fn ensure_api_key_input(input: &SaveApiKeyInput) -> Result<(), String> {
         && input
             .base_url
             .as_ref()
-            .map_or(true, |base_url| base_url.trim().is_empty())
+            .is_none_or(|base_url| base_url.trim().is_empty())
     {
         return Err("Custom provider requires a Base URL override".to_string());
     }

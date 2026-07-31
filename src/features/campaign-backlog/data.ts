@@ -89,9 +89,16 @@ export async function getCampaignBacklogDashboard(
 
   const [items, summaryRows, totalRows] = await Promise.all([
     db.select<CampaignBacklogItemDetail[]>(
-      `SELECT cbi.*, c.name AS campaign_name, c.status AS campaign_status
+      `SELECT
+          cbi.*,
+          c.name AS campaign_name,
+          c.status AS campaign_status,
+          ap.id AS autopilot_plan_id,
+          ap.source_import_batch_id,
+          ap.workflow_run_id
        FROM campaign_backlog_items AS cbi ${historyIndexClause}
        INNER JOIN campaigns c ON c.id = cbi.campaign_id
+       LEFT JOIN autopilot_plans ap ON ap.campaign_backlog_item_id = cbi.id
        WHERE ${statusClause} ${sharedWhere}
        ORDER BY ${orderClause}
        ${limitClause}`,

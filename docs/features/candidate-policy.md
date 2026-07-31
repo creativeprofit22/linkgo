@@ -49,7 +49,7 @@ A successful Linkgo comment attempt blocks intake when its target has the same n
 
 ## Manual and enforced paths
 
-`createCandidateInTransaction(db, input, { enforcePolicy: true })` is the required path for local source imports and future Roadmap 3D planners/connectors. Policy evaluation happens before target, candidate, or dedupe writes.
+`createCandidateInTransaction(db, input, { enforcePolicy: true })` is the required path for local source imports and every connector that feeds the Roadmap 3D planner boundary. Policy evaluation happens before target, candidate, or dedupe writes.
 
 `createCandidate(input)` intentionally omits enforcement. `Add candidate` is an attended override for an operator deliberately capturing historical or exceptional material. It is not an autopilot-safe path.
 

@@ -11,6 +11,7 @@ import {
   ListChecks,
   MessageCircle,
   NotebookTabs,
+  Route,
   ShieldAlert,
   Target,
   Workflow,
@@ -37,6 +38,11 @@ const CampaignsView = lazy(() =>
   import("@/features/campaigns/components/campaigns-view").then(
     ({ CampaignsView }) => ({ default: CampaignsView }),
   ),
+);
+const AutopilotPlannerView = lazy(() =>
+  import("@/features/autopilot-planner").then(({ AutopilotPlannerView }) => ({
+    default: AutopilotPlannerView,
+  })),
 );
 const CampaignBacklogView = lazy(() =>
   import("@/features/campaign-backlog").then(({ CampaignBacklogView }) => ({
@@ -106,6 +112,7 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
 
 type HomeTab =
   | "campaigns"
+  | "autopilot"
   | "backlog"
   | "queue"
   | "drafts"
@@ -133,10 +140,18 @@ const tabs: RoadmapTab[] = [
   {
     id: "campaigns",
     label: "Campaigns",
-    description: "Local campaign setup and autopilot intent.",
+    description: "Local campaign setup and planner eligibility.",
     icon: Target,
     enabled: true,
     docHref: "docs/features/campaigns.md",
+  },
+  {
+    id: "autopilot",
+    label: "Autopilot",
+    description: "Opt-in local source-to-work planning and history.",
+    icon: Route,
+    enabled: true,
+    docHref: "docs/features/autopilot-planner.md",
   },
   {
     id: "backlog",
@@ -314,6 +329,8 @@ export function HomePage(): React.ReactNode {
           <Suspense fallback={featureViewFallback}>
             {activeRoadmapTab.id === "campaigns" ? (
               <CampaignsView />
+            ) : activeRoadmapTab.id === "autopilot" ? (
+              <AutopilotPlannerView />
             ) : activeRoadmapTab.id === "backlog" ? (
               <CampaignBacklogView />
             ) : activeRoadmapTab.id === "queue" ? (

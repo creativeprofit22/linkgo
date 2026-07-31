@@ -21,6 +21,8 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Executor-created `agent_run` artifacts auto-linked to workflow runs and steps.
 - Artifact chips in workflow run cards for executor-created agent runs.
 - Campaign filtering and archived-campaign mutation blocking.
+- Roadmap 3D origin projections for planner-created runs: `Autopilot plan #… · source batch #…`.
+- Planner-created runs start queued with research complete and score pending; no executor starts automatically.
 - Local SQLite persistence through Tauri migrations.
 
 ## Intentionally not implemented
@@ -28,9 +30,9 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Background autonomous execution.
 - Autonomous LinkedIn posting/commenting.
 - Scraping or LinkedIn API calls.
-- Background workers, cron, or automatic scheduler execution.
+- Background workflow execution, cron, or automatic scheduler execution.
 - Manual artifact pickers.
-- Automatic links to candidates, drafts, approvals, schedules, or metrics.
+- Automatic links to drafts, approvals, schedules, or metrics. Planner origin links cover only the source batch and plan.
 - Non-`agent_run` artifact UI or attachment flows.
 - Generic arbitrary workflow builder.
 - Safety/error queue tables.
@@ -39,7 +41,7 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 
 ### `workflow_runs`
 
-Stores one resumable workflow instance for one campaign, including run status, current step key, context summary, and timestamps.
+Stores one resumable workflow instance for one campaign, including run status, current step key, context summary, and timestamps. Migration 27 does not add origin columns here; `autopilot_plans.workflow_run_id` is the unique optional reverse link, projected with a left join.
 
 ### `workflow_steps`
 
@@ -67,6 +69,14 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 6. The executor stops at `approve` and approval-gated `schedule_post` calls.
 7. Resume executor continues from failed or blocked steps.
 
+## Planner-created lifecycle
+
+1. The local planner creates the run, all seven steps, and two workflow events in the same transaction as its backlog item and plan linkage.
+2. `research` is completed from the policy-enforced source batch.
+3. The run stays `queued` with `current_step_key = 'score'`.
+4. The operator can inspect the plan/source origin before starting or executing the workflow.
+5. Existing executor and approval behavior is unchanged.
+
 ## Manual lifecycle
 
 1. Create a run for a non-archived campaign.
@@ -79,7 +89,7 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 
 ## Safety and approval notes
 
-Workflow state is local-first and operator-driven.
+Workflow state is local-first and operator-driven. The Autopilot Planner creates resumable state only; it never invokes the executor or a model.
 
 The `approve` step is a visible human-review checkpoint, but this slice does not publish anything.
 
@@ -96,5 +106,6 @@ Playwright covers:
 - Archived-campaign mutation blocking.
 - Executor-created agent run artifact chips.
 - Workflows tab rendering in the app shell.
+- Planner-created run origin markers and score-first state through `tests/autopilot-planner.spec.ts`.
 
 Rust migration tests assert workflow tables, artifact table shape, constraints, event types, step keys, unique constraints, and indexes.

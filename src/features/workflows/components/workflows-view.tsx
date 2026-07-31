@@ -42,8 +42,8 @@ export function WorkflowsView(): React.ReactNode {
                 Workflows
               </h2>
               <p className="text-muted-foreground text-sm">
-                Resumable content pipeline runs, manual step progress, and local
-                event history.
+                Resumable content pipeline runs, planner origins, manual
+                executor controls, and local event history.
               </p>
             </div>
           </div>
@@ -87,18 +87,24 @@ export function WorkflowsView(): React.ReactNode {
         <>
           <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">Selected campaign</p>
+              <label
+                htmlFor="workflow-campaign-filter"
+                className="text-sm font-medium"
+              >
+                Selected campaign
+              </label>
               <p className="text-muted-foreground text-xs">
                 Workflow runs and event history are stored locally.
               </p>
             </div>
             <select
+              id="workflow-campaign-filter"
               value={selectedCampaignId ?? ""}
               onChange={(event) => {
                 const nextId = Number(event.target.value);
                 selectCampaign(Number.isFinite(nextId) ? nextId : null);
               }}
-              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 min-w-60 rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full min-w-0 rounded-md border py-1 ps-3 pe-10 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:w-auto sm:min-w-60 forced-colors:border"
             >
               {campaigns.map((campaign) => (
                 <option key={campaign.id} value={campaign.id}>

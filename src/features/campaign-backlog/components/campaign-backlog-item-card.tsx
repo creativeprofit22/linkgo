@@ -78,6 +78,10 @@ export function CampaignBacklogItemCard({
   const archived = item.campaign_status === "archived";
   const mutationDisabled = pending || archived || terminal;
   const overdue = !terminal && Date.parse(item.due_at) <= Date.parse(asOf);
+  const plannerLinked = item.autopilot_plan_id != null;
+  const plannerOrigin = plannerLinked
+    ? `Autopilot plan #${item.autopilot_plan_id} · source batch #${item.source_import_batch_id} · queued workflow #${item.workflow_run_id}.`
+    : "";
 
   return (
     <Card className="bg-card/82 overflow-hidden">
@@ -125,10 +129,15 @@ export function CampaignBacklogItemCard({
           />
         </dl>
 
-        {item.owner_type === "linkgo" && !terminal ? (
+        {plannerLinked ? (
+          <p className="text-muted-foreground mt-4 border-s-2 ps-3 text-xs leading-relaxed break-words">
+            {plannerOrigin} This is linked local work; workflow execution and
+            every external action remain manual or approval-gated.
+          </p>
+        ) : item.owner_type === "linkgo" ? (
           <p className="text-muted-foreground mt-4 border-s-2 ps-3 text-xs leading-relaxed">
-            Linkgo owns the planning responsibility only. No automatic work runs
-            until the autopilot planner is delivered.
+            Manually created Linkgo responsibility label. It is not
+            planner-linked and runs no external action.
           </p>
         ) : null}
         {item.recurrence !== "none" && !terminal ? (

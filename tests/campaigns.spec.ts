@@ -12,9 +12,11 @@ test("new campaign dialog opens and creates a campaign", async ({ page }) => {
 
   const campaignInsertCount = await page.evaluate(() => {
     const calls =
-      (window as unknown as {
-        __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
-      }).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
+      (
+        window as unknown as {
+          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+        }
+      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
     return calls.filter((call) => call.query.includes("INSERT INTO campaigns"))
       .length;
   });
@@ -29,7 +31,7 @@ test("new campaign dialog opens and creates a campaign", async ({ page }) => {
   await expect(
     page.getByText("Solo founders and technical operators"),
   ).toBeVisible();
-  await expect(page.getByText("Autopilot intent on")).toBeVisible();
+  await expect(page.getByText("Local planner eligible")).toBeVisible();
   await expect(
     page.getByText("LinkedIn growth", { exact: true }),
   ).toBeVisible();
@@ -48,7 +50,9 @@ test("campaign card edit action updates campaign context", async ({ page }) => {
     page.getByRole("dialog", { name: "Edit Founder-led growth" }),
   ).toBeVisible();
 
-  await page.getByLabel("Product").fill("An AI assisted LinkedIn command center");
+  await page
+    .getByLabel("Product")
+    .fill("An AI assisted LinkedIn command center");
   await page.getByLabel("Audience").fill("B2B founders and revenue operators");
   await page
     .getByLabel("Manual keywords")
@@ -58,9 +62,11 @@ test("campaign card edit action updates campaign context", async ({ page }) => {
 
   const campaignUpdateCount = await page.evaluate(() => {
     const calls =
-      (window as unknown as {
-        __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
-      }).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
+      (
+        window as unknown as {
+          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+        }
+      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
     return calls.filter(
       (call) =>
         call.query.includes("UPDATE campaigns SET") &&
@@ -104,9 +110,14 @@ test("campaign card status actions activate pause archive and restore", async ({
 
   const statusUpdates = await page.evaluate(() => {
     const calls =
-      (window as unknown as {
-        __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string; values: unknown[] }>;
-      }).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
+      (
+        window as unknown as {
+          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{
+            query: string;
+            values: unknown[];
+          }>;
+        }
+      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
     return calls
       .filter((call) => call.query.includes("UPDATE campaigns SET status"))
       .map((call) => call.values[0]);
@@ -124,11 +135,17 @@ async function expectCampaignStatus(
 
 async function createCampaign(page: Page): Promise<void> {
   await page.getByRole("button", { name: "New campaign" }).first().click();
-  await expect(page.getByRole("dialog", { name: "New campaign" })).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "New campaign" }),
+  ).toBeVisible();
 
   await page.getByLabel("Name").fill("Founder-led growth");
-  await page.getByLabel("Product").fill("A local-first LinkedIn operations cockpit");
-  await page.getByLabel("Audience").fill("Solo founders and technical operators");
+  await page
+    .getByLabel("Product")
+    .fill("A local-first LinkedIn operations cockpit");
+  await page
+    .getByLabel("Audience")
+    .fill("Solo founders and technical operators");
   await page.getByLabel("Voice").fill("Concrete, concise, practical");
   await page.getByLabel("Tone").fill("Helpful operator");
   await page
@@ -136,7 +153,7 @@ async function createCampaign(page: Page): Promise<void> {
     .fill("LinkedIn growth, founder content, outbound");
   await page.getByLabel("Daily post limit").fill("2");
   await page.getByLabel("Daily comment limit").fill("7");
-  await page.getByLabel("Autopilot intent").click();
+  await page.getByLabel("Local autopilot planner").click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await dialog.getByRole("button", { name: "Create campaign" }).click();
   await expect(dialog).toBeHidden();

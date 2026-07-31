@@ -96,8 +96,8 @@ async function createBatchRows(
         rejected_count,
         error_message,
         updated_at
-      ) VALUES ($1, 'local_json', 'processing', $2, 0, 0, 0, '', datetime('now'))`,
-      [prepared.campaignId, prepared.rows.length],
+      ) VALUES ($1, $2, 'processing', $3, 0, 0, 0, '', datetime('now'))`,
+      [prepared.campaignId, prepared.connectorKey, prepared.rows.length],
     );
     const batchId = batchResult.lastInsertId;
 
@@ -289,11 +289,10 @@ async function recoverInterruptedBatches(
   }
 }
 
-export async function createSourceImportBatch(
-  input: CreateSourceImportBatchInput,
+async function writePolicyEnforcedSourceBatch(
+  db: LinkgoDatabase,
+  prepared: PreparedSourceImportBatchInput,
 ): Promise<SourceImportBatchResult> {
-  const prepared = parseSourceImportText(input.campaignId, input.sourceText);
-  const db = await getDb();
   await assertCampaignCanImport(db, prepared.campaignId);
 
   startCampaignImport(prepared.campaignId);
@@ -405,6 +404,14 @@ export async function createSourceImportBatch(
   } finally {
     finishCampaignImport(prepared.campaignId);
   }
+}
+
+export async function createSourceImportBatch(
+  input: CreateSourceImportBatchInput,
+): Promise<SourceImportBatchResult> {
+  const prepared = parseSourceImportText(input.campaignId, input.sourceText);
+  const db = await getDb();
+  return writePolicyEnforcedSourceBatch(db, prepared);
 }
 
 export async function listSourceImportBatches(

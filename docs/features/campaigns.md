@@ -1,6 +1,6 @@
 # Campaigns Feature
 
-Campaigns define the local context Linkgo will use for future queueing, drafting, approvals, and metrics.
+Campaigns define the local context Linkgo uses for guarded source intake, local planning, drafting, approvals, and metrics.
 
 ## Purpose
 
@@ -10,10 +10,10 @@ A campaign stores:
 - Audience definition.
 - Voice and tone guidance.
 - Manual keywords.
-- Autopilot intent.
+- Opt-in local Autopilot Planner eligibility.
 - Conservative daily post/comment limits.
 
-No LinkedIn scraping, generation, commenting, or publishing happens in this slice.
+`auto_pilot = 1` only makes an `active` campaign eligible for the opt-in local planner. It does not start the worker, call a model, execute a workflow, comment, schedule, or publish. Draft, paused, archived, and non-autopilot campaigns are rejected by planner revalidation.
 
 ## Schema
 
@@ -51,7 +51,7 @@ Data functions live in `src/features/campaigns/data.ts`:
 - Header and explanation.
 - `New campaign` action.
 - Empty state.
-- Campaign cards with status, autopilot flag, product, audience, keywords, and limits.
+- Campaign cards with status, explicit local-planner eligibility, product, audience, keywords, and limits.
 - Status actions for active, paused, draft restore, and archive.
 
 ## Verification

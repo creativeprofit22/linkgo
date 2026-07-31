@@ -253,9 +253,9 @@ export function UpsertCampaignBacklogItemDialog({
               {editing ? "Edit backlog item" : "Create backlog item"}
             </DialogTitle>
             <DialogDescription>
-              Plan who is responsible and when the work is due. Linkgo ownership
-              is a planning label only; automatic execution arrives with the
-              autopilot planner.
+              Plan who is responsible and when work is due. A manually created
+              Linkgo owner is a responsibility label; planner linkage is created
+              only from an approved source batch. Neither runs external actions.
             </DialogDescription>
           </DialogHeader>
 

@@ -1,7 +1,8 @@
 import type { CandidateWithTarget } from "@/features/candidate-queue";
 import type { CandidatePolicyRuleKey } from "@/features/candidate-policy";
+import type { SourceConnectorKey } from "@/features/source-imports/connectors";
 
-export type SourceImportSourceType = "local_json";
+export type SourceImportSourceType = SourceConnectorKey;
 
 export type SourceImportBatchStatus =
   | "processing"
@@ -79,6 +80,7 @@ export interface PreparedSourceImportRow {
 
 export interface PreparedSourceImportBatchInput {
   campaignId: number;
+  connectorKey: SourceConnectorKey;
   rows: PreparedSourceImportRow[];
 }
 

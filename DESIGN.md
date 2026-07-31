@@ -89,3 +89,80 @@ Final rubric score: **22/24**.
 - Visual distinctiveness 1 because the recurrence-consequence copy is product-specific, while the broader card language intentionally remains shared with adjacent Linkgo operations pages.
 
 No criterion required by the quality floor scored zero. The production contract passes for implemented semantics, forms, keyboard/focus, state recovery, narrow reflow, text resize, reduced motion, forced colors, trust copy, and performance bounds. Automated axe output, RTL, non-Chromium engines, and field performance remain explicitly unverified.
+
+## Autopilot Planner design read
+
+- **Surface:** Desktop-native application dashboard with data-dense operational history.
+- **Audience:** A knowledgeable local operator managing LinkedIn growth workflows with high sensitivity to accidental automation.
+- **Single job:** Confirm exactly which approved source batches became local backlog/workflow work, then start or inspect bounded planning safely.
+- **Task and risk:** Repeated, low-volume operational review. Planning is reversible local work, but unclear scope could falsely imply autonomous publishing or commenting.
+- **Content:** Long campaign names, source and plan IDs, original/current candidate counts, planned/skipped outcomes, missing linked records, archived/paused campaigns, and bounded event history.
+- **Platform:** Resizable Tauri desktop window with pointer and keyboard, horizontal navigation at narrow widths, light/dark themes, 200% text, 320 CSS-pixel reflow, reduced motion, and forced colors.
+- **Constraints:** Preserve the shared `max-w-6xl` rail, existing page heading anatomy, Cards, Buttons, native selects, focus treatment, type scale, and Lucide icons. Add no design dependency.
+
+## Autopilot evidence and thesis
+
+Application UI leads because controls and state recognition dominate; dashboard guidance supports bounded history and filtering. Local Scheduler, Campaign Backlog, Workflows, and Candidate Queue surfaces are the primary evidence and override generic external patterns. `linear.app` and `sentry` are conditional structural observations for predictable actions and operational scanning. `miro` is the contrast because freeform spatial composition would weaken auditability.
+
+**Thesis:** Keep planner state and its primary start/stop action first, four decision-changing counts second, then explicit source-to-backlog-to-workflow records and append-only events. Stable bordered geometry and repeated local-only scope language make the automation boundary visible. The product-specific signature is the three-ID source/plan/work linkage paired with imported/current/planned candidate counts.
+
+First glance: local-only scope, worker state, Start/Stop, Plan now, and kill-switch state.
+
+Second glance: eligible/planned/skipped/failure counts, campaign scope, source batch outcome, current candidates, local-work links, and safe event history.
+
+## Autopilot reuse map and craft decisions
+
+- Navigation order, responsive shell, content rail, and lazy feature loading: `src/pages/home.tsx`.
+- Status/control precedent: Scheduler status/start/stop/tick controls.
+- Summary/filter/card rhythm: Campaign Backlog.
+- Workflow state wording: Workflows.
+- Source counts and safe outcomes: Source Imports.
+- UI primitives: shared Card and Button; native labeled select with `pe-10`; Lucide only.
+- Feedback: Sonner plus a polite live result summary; duplicate actions are guarded before async invocation.
+
+The existing heading icon tile is retained because it is the shell's repeated navigation/category grammar. Four summary cards belong because each count changes an operator decision and is derived from SQLite. No gradient, glass, hover lift, ambient motion, fake log, decorative chart, or new badge/pill family is added.
+
+## Autopilot state and responsive contract
+
+- Loading preserves the page header/action location and announces status.
+- First use distinguishes no campaigns, no active opted-in campaign, and no approved source batch.
+- Filtered empty is distinct from global first use.
+- Error state retains scope, explains failure, and provides Retry.
+- Pending state disables duplicate start/stop/tick/refresh actions while the campaign filter remains usable for stale-response recovery.
+- Kill-switch state uses explicit text, disables Start, and lets a manual tick return an auditable blocked result.
+- Planned, skipped, deleted-link, archived, paused/draft, recent-failure, and success states use text rather than color alone.
+- Plan cards wrap long values and collapse linkage columns at narrow widths.
+- At 320 pixels, header actions use a two-column grid with Start/Stop spanning both columns; summaries stay two columns; every other module uses one column.
+- At 200% text, content-bearing regions have no fixed height and actions wrap.
+- Shared button motion names properties and respects reduced motion. Forced-colors utility borders preserve card/control boundaries.
+- Keyboard order follows DOM order. Native buttons and select provide names, focus, and operation without custom composite widgets.
+
+## Autopilot production checks
+
+The implemented Playwright contract covers local-only/first-use, linked success, durable skip, kill-switch block, rollback/retry, start/stop, duplicate action guard, invalid-native-response recovery, stale campaign response, keyboard focus, 320-pixel reflow, reduced motion, and forced colors. Rust tests cover real SQLite constraints, eligibility exclusions, bounds, repeat/concurrent idempotency, rollback, deleted candidates, and kill-switch behavior.
+
+### Release evidence
+
+- Full Playwright gate: **191/191 passed** on configured Chromium with two workers. After the final action-grid revision, the affected desktop linkage and narrow reflow tests passed again.
+- Full Rust gate: **110/110 passed**, including 11 planner/migration tests against real SQLite.
+- `bun run format:check`, `bun run lint`, production TypeScript/Vite build, and `git diff --check` passed.
+- Desktop and 320-pixel captures: `.gg/screenshots/autopilot-planner-desktop.png` and `.gg/screenshots/autopilot-planner-narrow.png`.
+- Keyboard focus, named controls, native select semantics, polite result status, duplicate-action guard, 320-pixel layout, 200% root text descendant bounds, reduced motion, forced colors, long campaign content, loading, empty, filtered-empty, error/retry, blocked, skipped, rollback/recovery, success, and stale-response behavior passed available Playwright checks.
+- Build evidence after the final UI revision: Vite completed in **788 ms**; the lazy Autopilot chunk was **20.79 kB raw / 5.64 kB gzip**. Field performance is unverified because this local Tauri view has no field telemetry.
+- Browser/device matrix: configured Playwright Chromium desktop plus 320-pixel adaptive webview. RTL, non-Chromium engines, native screen readers, and field devices remain unverified.
+- Accessibility tooling is limited to Playwright assertions and rendered/manual semantics review; no axe dependency is installed.
+
+### Rendered critique and revision
+
+The first desktop capture showed stable rail alignment, direct source-to-work evidence, and clear local-only scope, but its header action group wrapped the primary Start action onto a separate desktop row. The first narrow capture kept the primary actions visible, but the empty-state database icon repeated the section's existing icon language without adding meaning.
+
+The revision removed that unnecessary empty-state icon and changed the action grid to auto-fit: two columns at normal 320-pixel text, one column when 200% root text requires it, and three aligned columns from the small breakpoint. The second desktop capture keeps Refresh, Plan now, and Start planner on one line; the second narrow capture preserves two compact actions plus a full-width primary Start action.
+
+Final rubric score: **22/24**.
+
+- Brief specificity 2, information hierarchy 2, composition 2, consistency/flow 2.
+- Typography 1 because the feature intentionally reuses the product type stack without adding a distinct data face.
+- Material/surface logic 2, state completeness 2, responsive behavior 2, accessibility 2, motion 2, content authenticity 2.
+- Visual distinctiveness 1 because source/plan/backlog/workflow linkage is product-specific while the broader card language intentionally stays consistent with Linkgo.
+
+No quality-floor criterion scores zero. The production contract passes for implemented semantics, keyboard/focus, state recovery, trust copy, target sizes, native select anatomy, adaptive layout, 200% text descendant bounds, reduced motion, forced colors, bounded data, and measured build output. Axe, RTL, non-Chromium engines, native assistive technology, field performance, and offline network simulation remain explicitly unverified; network-offline behavior is not applicable to planner materialization because it performs no network request.

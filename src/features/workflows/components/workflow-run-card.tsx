@@ -53,6 +53,10 @@ export function WorkflowRunCard({
   const canExecute = ["queued", "running"].includes(run.status);
   const canResume = ["blocked", "failed"].includes(run.status);
   const canCancel = !terminalStatuses.includes(run.status);
+  const autopilotOrigin =
+    run.autopilot_plan_id == null
+      ? null
+      : `Autopilot plan #${run.autopilot_plan_id} · source batch #${run.source_import_batch_id}.`;
 
   async function handleAddNote(): Promise<void> {
     const trimmed = note.trim();
@@ -78,6 +82,13 @@ export function WorkflowRunCard({
             <p className="text-muted-foreground text-sm">
               {run.campaign.name} · {run.campaign.status} campaign
             </p>
+            {autopilotOrigin ? (
+              <p className="text-muted-foreground max-w-3xl border-s-2 ps-3 text-xs leading-relaxed break-words">
+                {autopilotOrigin} The local planner created this run; executor
+                work and external actions remain operator-triggered or
+                approval-gated.
+              </p>
+            ) : null}
             <p className="text-sm">
               Current step: {run.currentStep?.title ?? run.current_step_key}
             </p>

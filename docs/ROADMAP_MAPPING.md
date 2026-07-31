@@ -1,6 +1,6 @@
 # Roadmap Mapping
 
-This document maps `roadmap.md` to implementation slices. The roadmap audit dated July 27, 2026 is the source of truth: Roadmaps 1, 9, 18, and 19 are implemented; Roadmap 8 is not started; the remaining items are partial. Roadmap 3 remains partial through completed slices 3A, 3B, and 3C; slice 3D is active and next.
+This document maps `roadmap.md` to implementation slices. The roadmap audit dated July 31, 2026 is the source of truth: Roadmaps 1, 9, 18, and 19 are implemented; Roadmap 8 is not started; the remaining items are partial. Roadmap 3 remains partial and blocked after completed slices 3A, 3B, 3C, and 3D; one compliant production source connector is the sole remaining gate.
 
 ## Delivered slices and partial foundations
 
@@ -17,9 +17,9 @@ Delivered in this slice:
 - Campaign tables and keyword table.
 - Campaign CRUD/listing data access.
 - Campaign hook and UI.
-- Autopilot intent flag only.
+- Opt-in local planner eligibility flag.
 
-Automation is not implemented in this slice.
+The campaign slice stores eligibility only. Roadmap 3D consumes it through a separately started local worker; it does not authorize external actions.
 
 ### Candidate queue slice
 
@@ -58,7 +58,7 @@ Delivered in this slice:
 - Shared Candidate Queue normalization, target-post reuse, and dedupe behavior.
 - Campaign-scoped import history with operator-safe reasons.
 
-The import is local only. It does not scrape LinkedIn, fetch target posts, call a model, draft, approve, comment, schedule, or publish. Remote connectors and recurring autopilot planning remain future Roadmap 3 work.
+The import is local only. It does not scrape LinkedIn, fetch target posts, call a model, draft, approve, comment, schedule, or publish. Roadmap 3D now consumes terminal batches through the connector-neutral boundary; a compliant production connector remains blocked.
 
 ### Roadmap 3B candidate policy guardrails
 
@@ -77,7 +77,7 @@ Delivered in this slice:
 - Queue policy summary/editor with archived read-only, retry, validation, keyboard, and responsive states.
 - Policy-labeled import history and transaction rollback coverage for mixed batches.
 
-Roadmap 3D autopilot planning and a compliant production connector remain excluded. No scraping, remote lookup, model call, recurring execution, drafting, commenting, scheduling, or publishing was added.
+Roadmap 3D now consumes this policy-enforced boundary. A compliant production connector remains excluded. No scraping, remote lookup, model call, drafting, commenting, scheduling, or publishing was added.
 
 ### Roadmap 3C persistent campaign backlog
 
@@ -89,14 +89,37 @@ Roadmap coverage:
 
 Delivered in this slice:
 
-- Migrations 24 and 25 with required due times, explicit IANA recurrence zones, eight work categories, two owner labels, five lifecycle statuses, and one-off/daily/weekly recurrence.
+- Migrations 24 through 26 with required due times, explicit IANA recurrence zones, eight work categories, two owner labels, five lifecycle statuses, one-off/daily/weekly recurrence, and bounded history indexes.
 - Atomic, stored-zone recurring completion with one future successor, daylight-saving wall-clock preservation, and missed-interval coalescing.
 - Manual create, edit, start, block, resume, complete, and confirmed cancel flows.
 - Cross-campaign Backlog tab with summary counts, campaign/owner/open-history filters, grouped due work, bounded history, and archived guidance.
 - Data-boundary transition checks, request-race protection, rollback injection, responsive and accessibility coverage.
 - Roadmap 19 completion through a durable cross-feature backlog complementing workflow, scheduler, approval, metric refresh, and error stores.
 
-Linkgo ownership is a responsibility label only. Roadmap 3D must create and execute planner-owned work from approved connectors. This slice adds no connector, model run, workflow execution, drafting, scheduling, publishing, commenting, background polling, after-quit execution, or notification.
+Manually created Linkgo ownership remains a responsibility label. Roadmap 3D adds explicit linkage only for planner-created scoring rows. Roadmap 3C itself adds no connector, model run, workflow execution, drafting, scheduling, publishing, commenting, background polling, after-quit execution, or notification.
+
+### Roadmap 3D local Autopilot Planner
+
+Roadmap coverage:
+
+- Section 3: active autopilot campaigns convert completed approved source batches into bounded local work.
+- Section 11: one queued seven-step workflow per eligible source batch, with research complete and score pending.
+- Section 16: global kill-switch gating, idempotent transactions, bounded worker ticks, and append-only local events.
+- Section 19: explicit source-to-backlog-to-workflow linkage.
+
+Delivered in this slice:
+
+- Migration 27 with singleton planner settings, unique source-batch plans, planner events, constraints, and eligibility/history indexes.
+- Closed connector-neutral source registry with `local_json` as the only available non-fetching connector.
+- Native status/start/stop/tick commands and a while-open, disabled-by-default worker.
+- Oldest-first bounded selection and in-transaction revalidation.
+- Atomic creation of a Linkgo scoring backlog item, queued score-first workflow, seven canonical steps, workflow events, plan linkage, and planner event.
+- Durable skipped plans for batches whose accepted candidates were later deleted.
+- Autopilot dashboard with controls, filtering, counts, source-to-work cards, event history, failure recovery, and explicit local-only scope.
+- Backlog and Workflow origin projections without changing executor or external-action behavior.
+- Real-SQLite Rust tests and Playwright coverage for bounds, exclusions, idempotency, races, rollback, kill switch, stale responses, accessibility, and narrow reflow.
+
+Roadmap 3D calls no model, LinkedIn API, remote connector, scraper, browser automation, scheduler publish command, or comment command. Roadmap 3 remains partial and blocked only until one production connector passes API-access, terms, permissions, and permitted-use review.
 
 ### Drafting + audit slice
 
