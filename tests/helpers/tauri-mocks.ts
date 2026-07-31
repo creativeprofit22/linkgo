@@ -51,6 +51,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       autopilot_plan_id: number | null;
       source_import_batch_id: number | null;
       workflow_run_id: number | null;
+      linked_workflow_status: WorkflowRunStatus | null;
+      linked_score_step_status: WorkflowStepStatus | null;
     };
 
     type Keyword = {
@@ -631,7 +633,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       id: number;
       workflow_run_id: number;
       workflow_step_id: number | null;
-      artifact_type: "agent_run";
+      artifact_type: "agent_run" | "candidate_post";
       artifact_id: number;
       summary: string;
       created_at: string;
@@ -737,6 +739,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       playbook_key: AgentPlaybookKey | "";
       status: AgentRunStatus;
       input_summary: string;
+      input_context_json: string;
       output_summary: string;
       error_message: string;
       iteration_count: number;
@@ -2377,16 +2380,24 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           artifact.artifact_type === "agent_run" &&
           run.id === artifact.artifact_id,
       );
+      const candidate = candidatePosts.find(
+        (row) =>
+          artifact.artifact_type === "candidate_post" &&
+          row.id === artifact.artifact_id,
+      );
       return {
         ...artifact,
         agent_role: agentRun?.agent_role ?? null,
         agent_status: agentRun?.status ?? null,
+        candidate_id: candidate?.id ?? null,
+        candidate_status: candidate?.status ?? null,
+        candidate_relevance_score: candidate?.relevance_score ?? null,
       };
     }
 
     function selectAgentRunArtifactOwnership(values: unknown[]): unknown[] {
       const id = Number(values[0] ?? 0);
-      const artifactType = String(values[1] ?? "");
+      const artifactType = String(values[1] ?? "agent_run");
       if (artifactType !== "agent_run") return [];
       const run = agentRuns.find((row) => row.id === id);
       return run
@@ -2939,6 +2950,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         autopilot_plan_id: plan?.id ?? null,
         source_import_batch_id: plan?.source_import_batch_id ?? null,
         workflow_run_id: plan?.workflow_run_id ?? null,
+        linked_workflow_status: plan
+          ? (workflowRuns.find((run) => run.id === plan.workflow_run_id)
+              ?.status ?? null)
+          : null,
+        linked_score_step_status: plan
+          ? (workflowSteps.find(
+              (step) =>
+                step.workflow_run_id === plan.workflow_run_id &&
+                step.step_key === "score",
+            )?.status ?? null)
+          : null,
       };
     }
 
@@ -3159,6 +3181,38 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               workflow_title: workflow?.title ?? null,
               workflow_status: workflow?.status ?? null,
               workflow_current_step_key: workflow?.current_step_key ?? null,
+              score_step_status:
+                workflowSteps.find(
+                  (step) =>
+                    step.workflow_run_id === workflow?.id &&
+                    step.step_key === "score",
+                )?.status ?? null,
+              latest_scorer_run_status:
+                agentRuns
+                  .filter(
+                    (run) =>
+                      run.workflow_run_id === workflow?.id &&
+                      run.agent_role === "scorer",
+                  )
+                  .sort((left, right) => right.id - left.id)[0]?.status ?? null,
+              latest_scorer_provider_key:
+                agentRuns
+                  .filter(
+                    (run) =>
+                      run.workflow_run_id === workflow?.id &&
+                      run.agent_role === "scorer",
+                  )
+                  .sort((left, right) => right.id - left.id)[0]?.provider_key ??
+                null,
+              latest_scorer_model_name:
+                agentRuns
+                  .filter(
+                    (run) =>
+                      run.workflow_run_id === workflow?.id &&
+                      run.agent_role === "scorer",
+                  )
+                  .sort((left, right) => right.id - left.id)[0]?.model_name ??
+                null,
             };
           })
           .sort((left, right) => {
@@ -3667,6 +3721,110 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("FROM agent_playbook_overrides")) {
         return selectAgentPlaybookOverrides(values);
       }
+      if (
+        query.includes("ws.status AS score_step_status") &&
+        query.includes("INNER JOIN autopilot_plans ap")
+      ) {
+        const workflowRunId = Number(values[0] ?? 0);
+        const run = workflowRuns.find((row) => row.id === workflowRunId);
+        const campaign = run
+          ? campaigns.find((row) => row.id === run.campaign_id)
+          : undefined;
+        const step = workflowSteps.find(
+          (row) =>
+            row.workflow_run_id === workflowRunId && row.step_key === "score",
+        );
+        const plan = autopilotPlans.find(
+          (row) => row.workflow_run_id === workflowRunId,
+        );
+        const batch = plan
+          ? sourceImportBatches.find(
+              (row) => row.id === plan.source_import_batch_id,
+            )
+          : undefined;
+        if (!run || !campaign || !step || !plan || !batch) return [];
+        return [
+          {
+            workflow_run_id: run.id,
+            workflow_status: run.status,
+            current_step_key: run.current_step_key,
+            workflow_step_id: step.id,
+            score_step_status: step.status,
+            campaign_id: campaign.id,
+            campaign_name: campaign.name,
+            campaign_product: campaign.product,
+            campaign_audience: campaign.audience,
+            campaign_voice: campaign.voice,
+            campaign_tone: campaign.tone,
+            campaign_status: campaign.status,
+            autopilot_plan_id: plan.id,
+            plan_status: plan.status,
+            source_import_batch_id: plan.source_import_batch_id,
+            source_campaign_id: batch.campaign_id,
+          },
+        ];
+      }
+      if (
+        query.includes("wa.id AS artifact_order") &&
+        query.includes("tp.content")
+      ) {
+        const workflowRunId = Number(values[0] ?? 0);
+        return workflowArtifacts
+          .filter(
+            (artifact) =>
+              artifact.workflow_run_id === workflowRunId &&
+              artifact.artifact_type === "candidate_post",
+          )
+          .map((artifact) => {
+            const candidate = candidatePosts.find(
+              (row) => row.id === artifact.artifact_id,
+            );
+            const target = candidate
+              ? targetPosts.find((row) => row.id === candidate.target_post_id)
+              : undefined;
+            return {
+              artifact_id: artifact.artifact_id,
+              artifact_order: artifact.id,
+              workflow_step_id: artifact.workflow_step_id,
+              candidate_id: candidate?.id ?? null,
+              candidate_campaign_id: candidate?.campaign_id ?? null,
+              candidate_status: candidate?.status ?? null,
+              relevance_score: candidate?.relevance_score ?? null,
+              source_keyword: candidate?.source_keyword ?? null,
+              author_name: target?.author_name ?? null,
+              author_profile_url: target?.author_profile_url ?? null,
+              posted_at: target?.posted_at ?? null,
+              source_url: target?.url ?? null,
+              content: target?.content ?? null,
+            };
+          });
+      }
+      if (query.includes("FROM workflow_step_executions")) {
+        const workflowStepId = Number(values[0] ?? 0);
+        if (query.includes("next_attempt")) {
+          return [
+            {
+              next_attempt:
+                Math.max(
+                  0,
+                  ...workflowStepExecutions
+                    .filter((row) => row.workflow_step_id === workflowStepId)
+                    .map((row) => row.attempt_count),
+                ) + 1,
+            },
+          ];
+        }
+        return workflowStepExecutions
+          .filter(
+            (row) =>
+              row.workflow_step_id === workflowStepId &&
+              (!query.includes("status IN") ||
+                ["claimed", "running", "waiting_approval"].includes(
+                  row.status,
+                )),
+          )
+          .slice(0, query.includes("LIMIT 1") ? 1 : undefined);
+      }
       if (query.includes("FROM workflow_runs WHERE id")) {
         return selectWorkflowRunById(values);
       }
@@ -3981,7 +4139,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             (candidate) =>
               candidate.campaign_id === campaignId && ids.has(candidate.id),
           )
-          .map((candidate) => ({ id: candidate.id, status: candidate.status }));
+          .map((candidate) => ({
+            id: candidate.id,
+            status: candidate.status,
+            relevance_score: candidate.relevance_score,
+          }));
       }
       if (
         query.includes("FROM candidate_posts") &&
@@ -4611,6 +4773,44 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return { lastInsertId: item.id, rowsAffected: 1 };
       }
 
+      if (
+        query.includes("UPDATE campaign_backlog_items") &&
+        query.includes("SELECT ap.campaign_backlog_item_id")
+      ) {
+        const status = values[0] as CampaignBacklogItem["status"];
+        const workflowRunId = Number(values[1] ?? 0);
+        const scoreStepStatus = String(values[2] ?? "");
+        const plan = autopilotPlans.find(
+          (row) => row.workflow_run_id === workflowRunId,
+        );
+        const scoreStep = workflowSteps.find(
+          (row) =>
+            row.workflow_run_id === workflowRunId &&
+            row.step_key === "score" &&
+            row.status === scoreStepStatus,
+        );
+        const item = campaignBacklogItems.find(
+          (row) => row.id === plan?.campaign_backlog_item_id,
+        );
+        if (
+          !plan ||
+          !scoreStep ||
+          !item ||
+          item.owner_type !== "linkgo" ||
+          item.work_type !== "scoring" ||
+          item.recurrence !== "none" ||
+          ["completed", "cancelled"].includes(item.status)
+        ) {
+          return { lastInsertId: 0, rowsAffected: 0 };
+        }
+        item.status = status;
+        item.completed_at =
+          status === "completed" ? (item.completed_at ?? now) : null;
+        item.cancelled_at =
+          status === "cancelled" ? (item.cancelled_at ?? now) : null;
+        item.updated_at = now;
+        return { lastInsertId: item.id, rowsAffected: 1 };
+      }
       if (
         query.includes("UPDATE campaign_backlog_items") &&
         query.includes("SET status")
@@ -5288,6 +5488,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           playbook_key: playbookKey,
           status: "queued",
           input_summary: String(values[7] ?? ""),
+          input_context_json: String(values[8] ?? "{}"),
           output_summary: "",
           error_message: "",
           iteration_count: 0,
@@ -5394,12 +5595,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               )
               .map((execution) => execution.attempt_count),
           ) + 1;
+        const plannerScoringClaim = query.includes("VALUES ($1, 'scorer'");
         const execution: WorkflowStepExecution = {
           id: nextWorkflowStepExecutionId,
           workflow_step_id: workflowStepId,
-          agent_run_id: values[1] === null ? null : Number(values[1] ?? 0),
-          executor_role: values[2] as AgentRole,
-          attempt_count: attemptCount,
+          agent_run_id: plannerScoringClaim
+            ? null
+            : values[1] === null
+              ? null
+              : Number(values[1] ?? 0),
+          executor_role: plannerScoringClaim
+            ? "scorer"
+            : (values[2] as AgentRole),
+          attempt_count: plannerScoringClaim
+            ? Number(values[1] ?? attemptCount)
+            : attemptCount,
           status: "claimed",
           error_summary: "",
           started_at: now,
@@ -5453,12 +5663,24 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
 
       if (query.includes("INSERT INTO workflow_events")) {
+        const literalEventType = query.includes("'step_completed'")
+          ? "step_completed"
+          : query.includes("'step_blocked'")
+            ? "step_blocked"
+            : query.includes("'step_started'")
+              ? "step_started"
+              : null;
         const event: WorkflowEvent = {
           id: nextWorkflowEventId,
           workflow_run_id: Number(values[0] ?? 0),
           workflow_step_id: values[1] === null ? null : Number(values[1] ?? 0),
-          event_type: values[2] as WorkflowEventType,
-          summary: String(values[3] ?? ""),
+          event_type: literalEventType ?? (values[2] as WorkflowEventType),
+          summary:
+            literalEventType === "step_started"
+              ? "Draft variants started"
+              : literalEventType === null
+                ? String(values[3] ?? "")
+                : String(values[2] ?? ""),
           created_at: now,
         };
         workflowEvents.push(event);
@@ -5484,7 +5706,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           id: nextWorkflowArtifactId,
           workflow_run_id: Number(values[0] ?? 0),
           workflow_step_id: values[1] === null ? null : Number(values[1] ?? 0),
-          artifact_type: values[2] as "agent_run",
+          artifact_type: values[2] as "agent_run" | "candidate_post",
           artifact_id: Number(values[3] ?? 0),
           summary: String(values[4] ?? ""),
           created_at: now,
@@ -5606,6 +5828,41 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
       }
 
+      if (
+        query.includes("UPDATE workflow_step_executions") &&
+        query.includes("status = 'running'") &&
+        query.includes("status = 'claimed'")
+      ) {
+        const agentRunId = Number(values[0] ?? 0);
+        const executionId = Number(values[1] ?? 0);
+        const workflowStepId = Number(values[2] ?? 0);
+        const execution = workflowStepExecutions.find(
+          (row) =>
+            row.id === executionId &&
+            row.workflow_step_id === workflowStepId &&
+            row.status === "claimed",
+        );
+        if (!execution) return { lastInsertId: 0, rowsAffected: 0 };
+        execution.agent_run_id = agentRunId;
+        execution.status = "running";
+        execution.updated_at = now;
+        return { lastInsertId: execution.id, rowsAffected: 1 };
+      }
+      if (
+        query.includes("UPDATE workflow_step_executions") &&
+        query.includes("status = 'failed'") &&
+        query.includes("WHERE id = $2")
+      ) {
+        const execution = workflowStepExecutions.find(
+          (row) => row.id === Number(values[1] ?? 0),
+        );
+        if (!execution) return { lastInsertId: 0, rowsAffected: 0 };
+        execution.status = "failed";
+        execution.error_summary = String(values[0] ?? "");
+        execution.completed_at = now;
+        execution.updated_at = now;
+        return { lastInsertId: execution.id, rowsAffected: 1 };
+      }
       if (query.includes("UPDATE workflow_step_executions")) {
         const reconcilesAgentRun = query.includes("WHERE agent_run_id = $3");
         const execution = reconcilesAgentRun
@@ -5650,6 +5907,20 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (query.includes("status = 'running'")) {
             run.status = "running";
             run.started_at = run.started_at ?? now;
+            if (query.includes("current_step_key = 'score'")) {
+              run.current_step_key = "score";
+            }
+            if (query.includes("current_step_key = 'draft'")) {
+              run.current_step_key = "draft";
+            }
+          } else if (query.includes("status = 'failed'")) {
+            run.status = "failed";
+            run.current_step_key = "score";
+            run.completed_at = null;
+          } else if (query.includes("status = 'blocked'")) {
+            run.status = "blocked";
+            run.current_step_key = "score";
+            run.completed_at = null;
           } else if (query.includes("status = 'cancelled'")) {
             run.status = "cancelled";
             run.completed_at = now;
@@ -5667,6 +5938,30 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
       }
 
+      if (
+        query.includes("UPDATE workflow_steps") &&
+        query.includes("WHERE id = $2") &&
+        (query.includes("status = 'failed'") ||
+          query.includes("status = 'blocked'") ||
+          query.includes("status = 'completed'"))
+      ) {
+        const step = workflowSteps.find(
+          (row) => row.id === Number(values[1] ?? 0),
+        );
+        if (!step) return { lastInsertId: 0, rowsAffected: 0 };
+        if (query.includes("status = 'failed'")) step.status = "failed";
+        if (query.includes("status = 'blocked'")) step.status = "blocked";
+        if (query.includes("status = 'completed'")) {
+          step.status = "completed";
+          step.output_summary = String(values[0] ?? "");
+          step.completed_at = now;
+        } else {
+          step.error_message = String(values[0] ?? "");
+          step.completed_at = null;
+        }
+        step.updated_at = now;
+        return { lastInsertId: step.id, rowsAffected: 1 };
+      }
       if (query.includes("UPDATE workflow_steps")) {
         const literalRunning = query.includes("status = 'running'");
         const id = literalRunning
@@ -6804,6 +7099,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const runsSnapshot = cloneRows(workflowRuns);
         const stepsSnapshot = cloneRows(workflowSteps);
         const workflowEventsSnapshot = cloneRows(workflowEvents);
+        const workflowArtifactsSnapshot = cloneRows(workflowArtifacts);
         const idSnapshot = {
           plan: nextAutopilotPlanId,
           plannerEvent: nextAutopilotPlannerEventId,
@@ -6811,6 +7107,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           run: nextWorkflowRunId,
           step: nextWorkflowStepId,
           workflowEvent: nextWorkflowEventId,
+          workflowArtifact: nextWorkflowArtifactId,
         };
         if (safetySettings.global_kill_switch === 1) {
           const reason = safetySettings.kill_switch_reason.trim()
@@ -6924,6 +7221,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             },
           ];
           let researchStepId: number | null = null;
+          let scoreStepId: number | null = null;
           canonicalSteps.forEach((stepDefinition, index) => {
             const research = stepDefinition.key === "research";
             const step: WorkflowStep = {
@@ -6945,8 +7243,37 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             };
             workflowSteps.push(step);
             if (research) researchStepId = step.id;
+            if (stepDefinition.key === "score") scoreStepId = step.id;
             nextWorkflowStepId += 1;
           });
+          if (scoreStepId === null) {
+            throw new Error("Planner score step was not created");
+          }
+          sourceImportItems
+            .filter(
+              (item) =>
+                item.source_import_batch_id === batch.id &&
+                item.status === "accepted" &&
+                item.candidate_post_id !== null &&
+                candidatePosts.some(
+                  (candidate) =>
+                    candidate.id === item.candidate_post_id &&
+                    candidate.campaign_id === batch.campaign_id,
+                ),
+            )
+            .forEach((item) => {
+              workflowArtifacts.push({
+                id: nextWorkflowArtifactId,
+                workflow_run_id: workflowRunId,
+                workflow_step_id: scoreStepId,
+                artifact_type: "candidate_post",
+                artifact_id: item.candidate_post_id as number,
+                summary: `Planner scoring candidate from source batch #${batch.id}`,
+                created_at: now,
+                updated_at: now,
+              });
+              nextWorkflowArtifactId += 1;
+            });
           workflowEvents.push(
             {
               id: nextWorkflowEventId,
@@ -7033,12 +7360,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           restoreRows(workflowRuns, runsSnapshot);
           restoreRows(workflowSteps, stepsSnapshot);
           restoreRows(workflowEvents, workflowEventsSnapshot);
+          restoreRows(workflowArtifacts, workflowArtifactsSnapshot);
           nextAutopilotPlanId = idSnapshot.plan;
           nextAutopilotPlannerEventId = idSnapshot.plannerEvent;
           nextCampaignBacklogItemId = idSnapshot.backlog;
           nextWorkflowRunId = idSnapshot.run;
           nextWorkflowStepId = idSnapshot.step;
           nextWorkflowEventId = idSnapshot.workflowEvent;
+          nextWorkflowArtifactId = idSnapshot.workflowArtifact;
           result.claimed += 1;
           result.failed += 1;
           recordAutopilotPlannerEvent(
@@ -7281,6 +7610,24 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);
     w.__LINKGO_SQL_CANDIDATE_POSTS__ = () => cloneRows(candidatePosts);
+    w.__LINKGO_SQL_MUTATE_CANDIDATE__ = (
+      id: number,
+      patch: Partial<{
+        campaign_id: number;
+        status: CandidateStatus;
+        relevance_score: number | null;
+      }>,
+    ) => {
+      const candidate = candidatePosts.find((row) => row.id === id);
+      if (!candidate) throw new Error("Candidate was not found");
+      if (patch.campaign_id !== undefined)
+        candidate.campaign_id = patch.campaign_id;
+      if (patch.status !== undefined) candidate.status = patch.status;
+      if (patch.relevance_score !== undefined) {
+        candidate.relevance_score = patch.relevance_score;
+      }
+      candidate.updated_at = getNow();
+    };
     w.__LINKGO_SQL_CANDIDATE_POLICIES__ = () =>
       cloneRows(candidateIntakePolicies);
     w.__LINKGO_SQL_CANDIDATE_POLICY_TOPICS__ = () =>
@@ -7301,6 +7648,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         currentCandidate?: boolean;
         acceptedCount?: number;
         createdAt?: string;
+        candidateContent?: string;
       } = {},
     ) => {
       const campaign = campaigns.find((row) => row.id === campaignId);
@@ -7335,7 +7683,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             author_name: "Planner source",
             author_profile_url: "",
             posted_at: now,
-            content: `Autopilot source ${batchId}`,
+            content: options.candidateContent ?? `Autopilot source ${batchId}`,
             content_hash: `autopilot-source-${batchId}`,
             created_at: now,
             updated_at: now,
@@ -7736,6 +8084,771 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (secret !== undefined) delete secret.baseUrl;
     };
 
+    function nativeScoringInput<T>(args?: unknown): T {
+      return ((args as { input?: T } | undefined)?.input ?? {}) as T;
+    }
+
+    const KILL_SWITCH_SCORE_ERROR_PREFIX =
+      "Global kill switch is enabled; candidate score application was blocked";
+
+    class CommittedNativeScoringError extends Error {}
+
+    function runNativeScoringMutation<T>(mutation: () => T): Promise<T> {
+      const snapshot = createTransactionSnapshot();
+      try {
+        const result = mutation();
+        persistReloadSnapshot();
+        return Promise.resolve(result);
+      } catch (error) {
+        if (error instanceof CommittedNativeScoringError) {
+          persistReloadSnapshot();
+          return Promise.reject(new Error(error.message));
+        }
+        restoreTransactionSnapshot(snapshot, false);
+        return Promise.reject(error);
+      }
+    }
+
+    function plannerScoringScope(workflowRunId: number) {
+      const run = workflowRuns.find((row) => row.id === workflowRunId);
+      const campaign = run
+        ? campaigns.find((row) => row.id === run.campaign_id)
+        : undefined;
+      const step = workflowSteps.find(
+        (row) =>
+          row.workflow_run_id === workflowRunId && row.step_key === "score",
+      );
+      const plan = autopilotPlans.find(
+        (row) => row.workflow_run_id === workflowRunId,
+      );
+      if (!run || !campaign || !step || !plan) {
+        throw new Error("Planner scoring workflow scope was not found");
+      }
+      if (plan.status !== "planned") {
+        throw new Error("Autopilot plan is not available for scoring");
+      }
+      if (campaign.status === "archived")
+        throw new Error("Campaign is archived");
+      if (run.status === "cancelled") throw new Error("Workflow is cancelled");
+      const artifacts = workflowArtifacts.filter(
+        (artifact) =>
+          artifact.workflow_run_id === workflowRunId &&
+          artifact.artifact_type === "candidate_post",
+      );
+      if (artifacts.length === 0) {
+        throw new Error("No candidate scope is attached to this score step");
+      }
+      const current = artifacts.flatMap((artifact) => {
+        if (artifact.workflow_step_id !== step.id) {
+          throw new Error(
+            "Candidate scope is attached to a different workflow step",
+          );
+        }
+        const candidate = candidatePosts.find(
+          (row) => row.id === artifact.artifact_id,
+        );
+        if (!candidate) return [];
+        if (candidate.campaign_id !== campaign.id) {
+          throw new Error("Candidate scope contains a cross-campaign artifact");
+        }
+        return [candidate];
+      });
+      return {
+        run,
+        campaign,
+        step,
+        plan,
+        artifacts,
+        current,
+        unscored: current.filter(
+          (candidate) =>
+            candidate.status === "new" && candidate.relevance_score === null,
+        ),
+      };
+    }
+
+    function syncNativeScoringBacklog(
+      workflowRunId: number,
+      stepStatus: WorkflowStepStatus,
+    ): void {
+      const plan = autopilotPlans.find(
+        (row) => row.workflow_run_id === workflowRunId,
+      );
+      const item = campaignBacklogItems.find(
+        (row) => row.id === plan?.campaign_backlog_item_id,
+      );
+      if (!item || ["completed", "cancelled"].includes(item.status)) return;
+      const now = getNow();
+      item.status =
+        stepStatus === "running" || stepStatus === "waiting_approval"
+          ? "in_progress"
+          : stepStatus === "completed"
+            ? "completed"
+            : stepStatus === "skipped"
+              ? "cancelled"
+              : stepStatus === "pending"
+                ? "pending"
+                : "blocked";
+      item.completed_at = item.status === "completed" ? now : null;
+      item.cancelled_at = item.status === "cancelled" ? now : null;
+      item.updated_at = now;
+    }
+
+    function addNativeWorkflowEvent(
+      workflowRunId: number,
+      workflowStepId: number,
+      eventType: WorkflowEventType,
+      summary: string,
+    ): void {
+      workflowEvents.push({
+        id: nextWorkflowEventId,
+        workflow_run_id: workflowRunId,
+        workflow_step_id: workflowStepId,
+        event_type: eventType,
+        summary,
+        created_at: getNow(),
+      });
+      nextWorkflowEventId += 1;
+    }
+
+    function failNativeScoringExecution(
+      execution: WorkflowStepExecution,
+      errorSummary: string,
+    ): void {
+      if (
+        !["claimed", "running", "waiting_approval"].includes(execution.status)
+      ) {
+        return;
+      }
+      const now = getNow();
+      const step = workflowSteps.find(
+        (row) => row.id === execution.workflow_step_id,
+      );
+      const run = step
+        ? workflowRuns.find((row) => row.id === step.workflow_run_id)
+        : undefined;
+      if (!step || !run)
+        throw new Error("Workflow score execution was not found");
+      execution.status = "failed";
+      execution.error_summary = errorSummary;
+      execution.completed_at = now;
+      execution.updated_at = now;
+      const agentRun = agentRuns.find(
+        (row) => row.id === execution.agent_run_id,
+      );
+      if (
+        agentRun &&
+        ["queued", "running", "waiting_approval"].includes(agentRun.status)
+      ) {
+        agentRun.status = "failed";
+        agentRun.error_message = errorSummary;
+        agentRun.completed_at = now;
+        agentRun.updated_at = now;
+      }
+      step.status = "failed";
+      step.error_message = errorSummary;
+      step.completed_at = null;
+      step.updated_at = now;
+      run.status = "failed";
+      run.current_step_key = "score";
+      run.completed_at = null;
+      run.updated_at = now;
+      syncNativeScoringBacklog(run.id, "failed");
+      addNativeWorkflowEvent(run.id, step.id, "step_failed", errorSummary);
+    }
+
+    function blockNativeScoringForKillSwitch(
+      agentRun: AgentRun,
+      reason: string,
+    ): never {
+      const compactReason = reason.trim().replace(/\s+/gu, " ");
+      const errorSummary = (
+        compactReason
+          ? `${KILL_SWITCH_SCORE_ERROR_PREFIX}: ${compactReason}`
+          : KILL_SWITCH_SCORE_ERROR_PREFIX
+      ).slice(0, 1000);
+      const execution = workflowStepExecutions.find(
+        (row) => row.agent_run_id === agentRun.id,
+      );
+      const step = workflowSteps.find(
+        (row) => row.id === agentRun.workflow_step_id,
+      );
+      const run = workflowRuns.find(
+        (row) => row.id === agentRun.workflow_run_id,
+      );
+      if (!execution || !step || !run) {
+        throw new Error("Planner scorer run was not found");
+      }
+
+      const now = getNow();
+      agentRun.status = "failed";
+      agentRun.output_summary = "";
+      agentRun.error_message = errorSummary;
+      agentRun.completed_at = now;
+      agentRun.updated_at = now;
+      execution.status = "blocked";
+      execution.error_summary = errorSummary;
+      execution.completed_at = now;
+      execution.updated_at = now;
+      step.status = "blocked";
+      step.output_summary = "";
+      step.error_message = errorSummary;
+      step.completed_at = null;
+      step.updated_at = now;
+      run.status = "blocked";
+      run.current_step_key = "score";
+      run.completed_at = null;
+      run.updated_at = now;
+      syncNativeScoringBacklog(run.id, "blocked");
+      addNativeWorkflowEvent(run.id, step.id, "step_blocked", errorSummary);
+      agentRunEvents.push({
+        id: nextAgentRunEventId,
+        agent_run_id: agentRun.id,
+        event_type: "run_failed",
+        summary: errorSummary,
+        created_at: now,
+      });
+      nextAgentRunEventId += 1;
+      safetyAuditEvents.push({
+        id: nextSafetyAuditEventId,
+        campaign_id: agentRun.campaign_id,
+        subject_type: "agent_run",
+        subject_id: agentRun.id,
+        event_type: "agent_run_failed",
+        severity: "block",
+        summary: errorSummary,
+        metadata_json: JSON.stringify({
+          boundary: "relevance_score_application",
+          reason: reason.slice(0, 1000),
+        }),
+        created_at: now,
+      });
+      nextSafetyAuditEventId += 1;
+      throw new CommittedNativeScoringError(errorSummary);
+    }
+
+    function claimNativeScoringCommand(args?: unknown): Promise<unknown> {
+      return runNativeScoringMutation(() => {
+        const input = nativeScoringInput<{
+          workflowRunId: number;
+          providerKey: AgentProviderKey;
+          modelName: string;
+          playbookKey: AgentPlaybookKey | "";
+          inputSummary: string;
+          inputContext: {
+            campaign: { id: number };
+            sourceBatchId: number;
+            autopilotPlanId: number;
+            workflowRunId: number;
+            workflowStepId: number;
+            candidates: Array<{ id: number }>;
+          };
+        }>(args);
+        const scope = plannerScoringScope(input.workflowRunId);
+        if (scope.unscored.length === 0) {
+          throw new Error("No unscored candidates remain to claim");
+        }
+        if (!["pending", "blocked", "failed"].includes(scope.step.status)) {
+          throw new Error("Workflow score step is already active or complete");
+        }
+        if (
+          workflowStepExecutions.some(
+            (execution) =>
+              execution.workflow_step_id === scope.step.id &&
+              ["claimed", "running", "waiting_approval"].includes(
+                execution.status,
+              ),
+          )
+        ) {
+          throw new Error("Workflow score execution is already active");
+        }
+        const expectedIds = scope.unscored.map((candidate) => candidate.id);
+        const contextIds = input.inputContext.candidates.map(
+          (candidate) => candidate.id,
+        );
+        if (
+          input.inputContext.campaign.id !== scope.campaign.id ||
+          input.inputContext.sourceBatchId !==
+            scope.plan.source_import_batch_id ||
+          input.inputContext.autopilotPlanId !== scope.plan.id ||
+          input.inputContext.workflowRunId !== scope.run.id ||
+          input.inputContext.workflowStepId !== scope.step.id ||
+          expectedIds.length !== new Set(contextIds).size ||
+          expectedIds.some((id) => !contextIds.includes(id))
+        ) {
+          throw new Error(
+            "Scorer context does not match the current planner scope",
+          );
+        }
+        const now = getNow();
+        const previousStepStatus = scope.step.status;
+        scope.step.status = "running";
+        scope.step.error_message = "";
+        scope.step.completed_at = null;
+        scope.step.started_at = scope.step.started_at ?? now;
+        scope.step.updated_at = now;
+        scope.run.status = "running";
+        scope.run.current_step_key = "score";
+        scope.run.completed_at = null;
+        scope.run.started_at = scope.run.started_at ?? now;
+        scope.run.updated_at = now;
+        const attemptCount =
+          Math.max(
+            0,
+            ...workflowStepExecutions
+              .filter((row) => row.workflow_step_id === scope.step.id)
+              .map((row) => row.attempt_count),
+          ) + 1;
+        const execution: WorkflowStepExecution = {
+          id: nextWorkflowStepExecutionId,
+          workflow_step_id: scope.step.id,
+          agent_run_id: nextAgentRunId,
+          executor_role: "scorer",
+          attempt_count: attemptCount,
+          status: "claimed",
+          error_summary: "",
+          started_at: now,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        workflowStepExecutions.push(execution);
+        nextWorkflowStepExecutionId += 1;
+        const agentRun: AgentRun = {
+          id: nextAgentRunId,
+          campaign_id: scope.campaign.id,
+          workflow_run_id: scope.run.id,
+          workflow_step_id: scope.step.id,
+          agent_role: "scorer",
+          provider_key: input.providerKey,
+          model_name: input.modelName,
+          playbook_key: input.playbookKey,
+          status: "queued",
+          input_summary: input.inputSummary,
+          input_context_json: JSON.stringify(input.inputContext),
+          output_summary: "",
+          error_message: "",
+          iteration_count: 0,
+          started_at: null,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        agentRuns.push(agentRun);
+        nextAgentRunId += 1;
+        agentRunEvents.push({
+          id: nextAgentRunEventId,
+          agent_run_id: agentRun.id,
+          event_type: "run_created",
+          summary: "Agent run created for scorer.",
+          created_at: now,
+        });
+        nextAgentRunEventId += 1;
+        workflowArtifacts.push({
+          id: nextWorkflowArtifactId,
+          workflow_run_id: scope.run.id,
+          workflow_step_id: scope.step.id,
+          artifact_type: "agent_run",
+          artifact_id: agentRun.id,
+          summary: `Scorer run for ${expectedIds.length} attached candidates`,
+          created_at: now,
+          updated_at: now,
+        });
+        nextWorkflowArtifactId += 1;
+        addNativeWorkflowEvent(
+          scope.run.id,
+          scope.step.id,
+          previousStepStatus === "pending" ? "step_started" : "step_resumed",
+          previousStepStatus === "pending"
+            ? "Score relevance started"
+            : "Score relevance resumed",
+        );
+        syncNativeScoringBacklog(scope.run.id, "running");
+        return {
+          executionId: execution.id,
+          agentRunId: agentRun.id,
+          workflowRunId: scope.run.id,
+          workflowStepId: scope.step.id,
+        };
+      });
+    }
+
+    function startNativeScoringCommand(args?: unknown): Promise<unknown> {
+      return runNativeScoringMutation(() => {
+        const { agentRunId } = nativeScoringInput<{ agentRunId: number }>(args);
+        const run = agentRuns.find((row) => row.id === agentRunId);
+        const execution = workflowStepExecutions.find(
+          (row) => row.agent_run_id === agentRunId,
+        );
+        if (!run || run.agent_role !== "scorer" || !execution) {
+          throw new Error("Planner scorer run was not found");
+        }
+        if (run.status !== "queued") {
+          throw new Error("Planner scorer run could not be claimed for start");
+        }
+        if (safetySettings.global_kill_switch === 1) {
+          throw new Error("Global kill switch is enabled");
+        }
+        const now = getNow();
+        run.status = "running";
+        run.started_at = run.started_at ?? now;
+        run.completed_at = null;
+        run.error_message = "";
+        run.updated_at = now;
+        execution.status = "running";
+        execution.updated_at = now;
+        return undefined;
+      });
+    }
+
+    function applyNativeScoresCommand(args?: unknown): Promise<unknown> {
+      return runNativeScoringMutation(() => {
+        const input = nativeScoringInput<{
+          agentRunId: number;
+          campaignId: number;
+          candidatePostIds: number[];
+          minimumScore: number;
+          autoRejectBelowMinimum: boolean;
+          scores: Array<{
+            candidatePostId: number;
+            score: number;
+            rationale: string;
+          }>;
+        }>(args);
+        const run = agentRuns.find((row) => row.id === input.agentRunId);
+        const campaign = campaigns.find((row) => row.id === input.campaignId);
+        if (
+          !run ||
+          run.agent_role !== "scorer" ||
+          run.status !== "running" ||
+          run.campaign_id !== input.campaignId
+        ) {
+          throw new Error("Score request belongs to a different campaign");
+        }
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        if (safetySettings.global_kill_switch === 1) {
+          blockNativeScoringForKillSwitch(
+            run,
+            safetySettings.kill_switch_reason,
+          );
+        }
+        const scoreIds = input.scores.map((score) => score.candidatePostId);
+        if (
+          input.candidatePostIds.length !== new Set(scoreIds).size ||
+          input.candidatePostIds.some((id) => !scoreIds.includes(id))
+        ) {
+          throw new Error(
+            "Score entries must match the requested candidate post IDs exactly",
+          );
+        }
+        const context = JSON.parse(run.input_context_json) as {
+          workflowRunId?: number;
+          workflowStepId?: number;
+          minimumScore?: number;
+          autoRejectBelowMinimum?: boolean;
+          candidates?: Array<{ id: number }>;
+        };
+        const plannerLinked = autopilotPlans.some(
+          (plan) =>
+            plan.workflow_run_id === run.workflow_run_id &&
+            plan.status === "planned",
+        );
+        if (plannerLinked && !Array.isArray(context.candidates)) {
+          throw new Error("Stored planner scorer context is invalid");
+        }
+        if (Array.isArray(context.candidates)) {
+          const expectedIds = context.candidates.map(
+            (candidate) => candidate.id,
+          );
+          if (
+            context.workflowRunId !== run.workflow_run_id ||
+            context.workflowStepId !== run.workflow_step_id ||
+            context.minimumScore !== input.minimumScore ||
+            context.autoRejectBelowMinimum !== input.autoRejectBelowMinimum ||
+            expectedIds.length !== new Set(input.candidatePostIds).size ||
+            expectedIds.some((id) => !input.candidatePostIds.includes(id))
+          ) {
+            throw new Error(
+              "Score request does not match the attached workflow scope",
+            );
+          }
+        }
+        const owned = input.candidatePostIds.map((id) =>
+          candidatePosts.find((candidate) => candidate.id === id),
+        );
+        if (
+          owned.some(
+            (candidate) =>
+              !candidate || candidate.campaign_id !== input.campaignId,
+          )
+        ) {
+          throw new Error(
+            "Scoring scope contains a missing or foreign candidate",
+          );
+        }
+        for (const candidate of owned) {
+          if (
+            candidate?.status !== "new" ||
+            candidate.relevance_score !== null
+          ) {
+            throw new Error(
+              `Candidate #${candidate?.id ?? 0} changed before scores were committed`,
+            );
+          }
+        }
+        const now = getNow();
+        return input.scores.map((score) => {
+          const candidate = candidatePosts.find(
+            (row) => row.id === score.candidatePostId,
+          );
+          if (!candidate) throw new Error("Scoring candidate disappeared");
+          const rationale = score.rationale
+            .trim()
+            .replace(/\s+/gu, " ")
+            .slice(0, 500);
+          candidate.relevance_score = score.score;
+          candidate.score_reason = rationale;
+          if (
+            input.autoRejectBelowMinimum &&
+            score.score < input.minimumScore
+          ) {
+            candidate.status = "rejected";
+          }
+          candidate.updated_at = now;
+          return { ...score, rationale };
+        });
+      });
+    }
+
+    function settleNativeScoringCommand(args?: unknown): Promise<unknown> {
+      return runNativeScoringMutation(() => {
+        const input = nativeScoringInput<{
+          workflowRunId: number;
+          outcome: "completed" | "blocked";
+          summary: string;
+        }>(args);
+        const scope = plannerScoringScope(input.workflowRunId);
+        if (input.outcome === "completed" && scope.unscored.length > 0) {
+          throw new Error(
+            "Unscored candidates appeared before no-work completion",
+          );
+        }
+        const now = getNow();
+        if (input.outcome === "blocked") {
+          scope.step.status = "blocked";
+          scope.step.error_message = input.summary;
+          scope.step.completed_at = null;
+          scope.run.status = "blocked";
+          scope.run.current_step_key = "score";
+          scope.run.completed_at = null;
+          addNativeWorkflowEvent(
+            scope.run.id,
+            scope.step.id,
+            "step_blocked",
+            input.summary,
+          );
+        } else {
+          scope.step.status = "completed";
+          scope.step.output_summary = input.summary;
+          scope.step.error_message = "";
+          scope.step.started_at = scope.step.started_at ?? now;
+          scope.step.completed_at = scope.step.completed_at ?? now;
+          addNativeWorkflowEvent(
+            scope.run.id,
+            scope.step.id,
+            "step_completed",
+            input.summary,
+          );
+          const draft = workflowSteps.find(
+            (step) =>
+              step.workflow_run_id === scope.run.id &&
+              step.step_key === "draft" &&
+              step.status === "pending",
+          );
+          if (draft) {
+            draft.status = "running";
+            draft.started_at = draft.started_at ?? now;
+            draft.updated_at = now;
+            scope.run.status = "running";
+            scope.run.current_step_key = "draft";
+            addNativeWorkflowEvent(
+              scope.run.id,
+              draft.id,
+              "step_started",
+              "Draft variants started",
+            );
+          }
+        }
+        scope.step.updated_at = now;
+        scope.run.updated_at = now;
+        syncNativeScoringBacklog(scope.run.id, input.outcome);
+        return undefined;
+      });
+    }
+
+    function failNativeScoringCommand(args?: unknown): Promise<unknown> {
+      return runNativeScoringMutation(() => {
+        const input = nativeScoringInput<{
+          executionId: number;
+          workflowRunId: number;
+          workflowStepId: number;
+          errorSummary: string;
+        }>(args);
+        const execution = workflowStepExecutions.find(
+          (row) =>
+            row.id === input.executionId &&
+            row.workflow_step_id === input.workflowStepId,
+        );
+        const step = workflowSteps.find(
+          (row) => row.id === input.workflowStepId,
+        );
+        if (!execution || step?.workflow_run_id !== input.workflowRunId) {
+          throw new Error("Workflow score execution claim was not found");
+        }
+        failNativeScoringExecution(execution, input.errorSummary);
+        return undefined;
+      });
+    }
+
+    function reconcileNativeScoringCommand(args?: unknown): Promise<unknown> {
+      return runNativeScoringMutation(() => {
+        const input = nativeScoringInput<{
+          agentRunId: number;
+          status: "completed" | "failed" | "waiting_approval";
+          outputSummary: string;
+          errorMessage: string;
+          iterationCount: number;
+          toolCalls: Array<{
+            providerToolCallId: string;
+            toolName: AgentToolName;
+            status: AgentToolCallStatus;
+            requiresApproval: boolean;
+            input: unknown;
+            output: unknown;
+            errorMessage: string;
+          }>;
+        }>(args);
+        if (!["completed", "failed"].includes(input.status)) {
+          throw new Error("Planner scorer result must be completed or failed");
+        }
+        const agentRun = agentRuns.find((row) => row.id === input.agentRunId);
+        const execution = workflowStepExecutions.find(
+          (row) => row.agent_run_id === input.agentRunId,
+        );
+        if (!agentRun || !execution) {
+          throw new Error("Planner scorer run is no longer active");
+        }
+        if (agentRun.status !== "running") {
+          if (
+            agentRun.status === "failed" &&
+            input.status === "failed" &&
+            agentRun.error_message.startsWith(KILL_SWITCH_SCORE_ERROR_PREFIX)
+          ) {
+            return undefined;
+          }
+          throw new Error("Planner scorer run is no longer active");
+        }
+        const scope = plannerScoringScope(agentRun.workflow_run_id ?? 0);
+        if (input.status === "completed" && scope.unscored.length > 0) {
+          throw new Error("Unscored candidates remain after scorer completion");
+        }
+        const now = getNow();
+        for (const toolCall of input.toolCalls) {
+          agentToolCalls.push({
+            id: nextAgentToolCallId,
+            agent_run_id: agentRun.id,
+            provider_tool_call_id: toolCall.providerToolCallId,
+            tool_name: toolCall.toolName,
+            status: toolCall.status,
+            requires_approval: toolCall.requiresApproval ? 1 : 0,
+            input_json: JSON.stringify(toolCall.input),
+            output_json: JSON.stringify(toolCall.output),
+            error_message: toolCall.errorMessage,
+            started_at: now,
+            completed_at: ["completed", "failed", "rejected"].includes(
+              toolCall.status,
+            )
+              ? now
+              : null,
+            created_at: now,
+          });
+          nextAgentToolCallId += 1;
+        }
+        agentRun.status = input.status;
+        agentRun.output_summary = input.outputSummary;
+        agentRun.error_message =
+          input.status === "failed" ? input.errorMessage : "";
+        agentRun.iteration_count = input.iterationCount;
+        agentRun.completed_at = now;
+        agentRun.updated_at = now;
+        execution.status = input.status;
+        execution.error_summary =
+          input.status === "failed" ? input.errorMessage : "";
+        execution.completed_at = now;
+        execution.updated_at = now;
+        scope.step.status = input.status;
+        scope.step.output_summary =
+          input.status === "completed" ? input.outputSummary : "";
+        scope.step.error_message =
+          input.status === "failed" ? input.errorMessage : "";
+        scope.step.completed_at = input.status === "completed" ? now : null;
+        scope.step.updated_at = now;
+        addNativeWorkflowEvent(
+          scope.run.id,
+          scope.step.id,
+          input.status === "completed" ? "step_completed" : "step_failed",
+          input.status === "completed"
+            ? input.outputSummary
+            : input.errorMessage,
+        );
+        if (input.status === "completed") {
+          const draft = workflowSteps.find(
+            (step) =>
+              step.workflow_run_id === scope.run.id &&
+              step.step_key === "draft" &&
+              step.status === "pending",
+          );
+          if (draft) {
+            draft.status = "running";
+            draft.started_at = draft.started_at ?? now;
+            draft.updated_at = now;
+            addNativeWorkflowEvent(
+              scope.run.id,
+              draft.id,
+              "step_started",
+              "Draft variants started",
+            );
+          }
+          scope.run.status = "running";
+          scope.run.current_step_key = "draft";
+          syncNativeScoringBacklog(scope.run.id, "completed");
+        } else {
+          scope.run.status = "failed";
+          scope.run.current_step_key = "score";
+          syncNativeScoringBacklog(scope.run.id, "failed");
+        }
+        scope.run.completed_at = null;
+        scope.run.updated_at = now;
+        return undefined;
+      });
+    }
+
+    function failNativeScoringAgentCommand(args?: unknown): Promise<unknown> {
+      return runNativeScoringMutation(() => {
+        const input = nativeScoringInput<{
+          agentRunId: number;
+          errorSummary: string;
+        }>(args);
+        const execution = workflowStepExecutions.find(
+          (row) => row.agent_run_id === input.agentRunId,
+        );
+        if (!execution) throw new Error("Planner scorer run was not found");
+        failNativeScoringExecution(execution, input.errorSummary);
+        return undefined;
+      });
+    }
+
     const mockWindow = {
       show: () => Promise.resolve(),
       hide: () => Promise.resolve(),
@@ -7777,6 +8890,27 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           return runCampaignBacklogCommand(() =>
             setCampaignBacklogStatusCommand(args),
           );
+        }
+        if (cmd === "linkgo_relevance_scoring_claim") {
+          return claimNativeScoringCommand(args);
+        }
+        if (cmd === "linkgo_relevance_scoring_start") {
+          return startNativeScoringCommand(args);
+        }
+        if (cmd === "linkgo_relevance_scoring_apply_scores") {
+          return applyNativeScoresCommand(args);
+        }
+        if (cmd === "linkgo_relevance_scoring_settle") {
+          return settleNativeScoringCommand(args);
+        }
+        if (cmd === "linkgo_relevance_scoring_fail") {
+          return failNativeScoringCommand(args);
+        }
+        if (cmd === "linkgo_relevance_scoring_reconcile") {
+          return reconcileNativeScoringCommand(args);
+        }
+        if (cmd === "linkgo_relevance_scoring_fail_agent") {
+          return failNativeScoringAgentCommand(args);
         }
         if (cmd === "plugin:sql|select")
           return selectSqlWithCampaignDelay(args);

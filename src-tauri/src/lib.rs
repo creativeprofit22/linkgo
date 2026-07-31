@@ -5,6 +5,7 @@ mod campaign_backlog;
 mod metric_refresh;
 mod migrations;
 mod plugins;
+mod relevance_scoring;
 mod scheduler;
 
 use tauri::Manager;
@@ -53,6 +54,13 @@ pub fn run() {
             autopilot_planner::linkgo_autopilot_planner_start,
             autopilot_planner::linkgo_autopilot_planner_stop,
             autopilot_planner::linkgo_autopilot_planner_tick,
+            relevance_scoring::linkgo_relevance_scoring_claim,
+            relevance_scoring::linkgo_relevance_scoring_start,
+            relevance_scoring::linkgo_relevance_scoring_apply_scores,
+            relevance_scoring::linkgo_relevance_scoring_settle,
+            relevance_scoring::linkgo_relevance_scoring_fail,
+            relevance_scoring::linkgo_relevance_scoring_reconcile,
+            relevance_scoring::linkgo_relevance_scoring_fail_agent,
             scheduler::linkgo_scheduler_status,
             scheduler::linkgo_scheduler_start,
             scheduler::linkgo_scheduler_stop,

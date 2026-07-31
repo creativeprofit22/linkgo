@@ -184,12 +184,48 @@ export const researchPostsOutputSchema = z
 export const scoreRelevanceInputSchema = z
   .object({
     campaignId: positiveIdSchema,
-    candidatePostIds: z.array(positiveIdSchema).max(50).default([]),
+    candidatePostIds: z.array(positiveIdSchema).min(1).max(50),
     minimumScore: z.number().int().min(0).max(100).default(60),
-    scores: z.array(scoreToolEvaluationSchema).max(50).optional().default([]),
+    scores: z.array(scoreToolEvaluationSchema).min(1).max(50),
     autoRejectBelowMinimum: z.boolean().optional().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    const candidateIds = new Set<number>();
+    for (const [index, candidatePostId] of input.candidatePostIds.entries()) {
+      if (candidateIds.has(candidatePostId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["candidatePostIds", index],
+          message: "Candidate post IDs must be unique",
+        });
+      }
+      candidateIds.add(candidatePostId);
+    }
+
+    const scoreIds = new Set<number>();
+    for (const [index, score] of input.scores.entries()) {
+      if (scoreIds.has(score.candidatePostId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["scores", index, "candidatePostId"],
+          message: "Each candidate must have exactly one score",
+        });
+      }
+      scoreIds.add(score.candidatePostId);
+    }
+
+    const missingIds = [...candidateIds].filter((id) => !scoreIds.has(id));
+    const foreignIds = [...scoreIds].filter((id) => !candidateIds.has(id));
+    if (missingIds.length > 0 || foreignIds.length > 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["scores"],
+        message:
+          "Score entries must match the requested candidate post IDs exactly",
+      });
+    }
+  });
 
 export const scoreRelevanceOutputSchema = z
   .object({

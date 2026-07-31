@@ -9,6 +9,69 @@ export const candidateStatusSchema = z.enum([
 
 export const candidatePlatformSchema = z.enum(["linkedin"]);
 
+export const MAX_RELEVANCE_SCORING_CONTEXT_LENGTH = 48_000;
+export const MAX_RELEVANCE_CANDIDATE_EXCERPT_LENGTH = 1_200;
+
+export const relevanceScoringContextSchema = z
+  .object({
+    campaign: z
+      .object({
+        id: z.number().int().positive(),
+        name: z.string().trim().min(1).max(160),
+        product: z.string().trim().max(500),
+        audience: z.string().trim().max(500),
+        voice: z.string().trim().max(500),
+        tone: z.string().trim().max(500),
+        keywords: z.array(z.string().trim().min(1).max(80)).max(12),
+      })
+      .strict(),
+    sourceBatchId: z.number().int().positive(),
+    autopilotPlanId: z.number().int().positive(),
+    workflowRunId: z.number().int().positive(),
+    workflowStepId: z.number().int().positive(),
+    minimumScore: z.number().int().min(0).max(100),
+    autoRejectBelowMinimum: z.boolean(),
+    candidates: z
+      .array(
+        z
+          .object({
+            id: z.number().int().positive(),
+            sourceKeyword: z.string().trim().max(80),
+            authorName: z.string().trim().max(160),
+            authorProfileUrl: z.string().trim().max(1_000),
+            postedAt: z.string().trim().max(80).nullable(),
+            sourceUrl: z.string().trim().min(1).max(1_000),
+            contentExcerpt: z
+              .string()
+              .trim()
+              .min(1)
+              .max(MAX_RELEVANCE_CANDIDATE_EXCERPT_LENGTH),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(50),
+  })
+  .strict()
+  .superRefine((context, issueContext) => {
+    if (
+      new Set(context.candidates.map((candidate) => candidate.id)).size !==
+      context.candidates.length
+    ) {
+      issueContext.addIssue({
+        code: "custom",
+        path: ["candidates"],
+        message: "Relevance scoring candidates must be unique",
+      });
+    }
+    if (JSON.stringify(context).length > MAX_RELEVANCE_SCORING_CONTEXT_LENGTH) {
+      issueContext.addIssue({
+        code: "custom",
+        message: `Relevance scoring context cannot exceed ${MAX_RELEVANCE_SCORING_CONTEXT_LENGTH} characters`,
+      });
+    }
+  });
+
 export const dedupeKeyTypeSchema = z.enum(["normalized_url", "content_hash"]);
 
 export const candidateDiscoveryKindSchema = z.enum([

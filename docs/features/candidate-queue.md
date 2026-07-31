@@ -64,7 +64,9 @@ Data functions live in `src/features/candidate-queue/data.ts`:
 
 `runCandidateDiscovery` creates and starts a researcher agent run. The `research_posts` tool persists up to 25 validated suggestions and attaches agent/workflow provenance.
 
-`scoreCandidates` creates and starts a scorer agent run. The `score_relevance` tool applies only validated scores for candidates in the selected campaign, and optional auto-reject only changes candidates still in `new`.
+`scoreCandidates` creates and starts an attended scorer agent run. The `score_relevance` contract requires 1–50 unique candidate IDs and exactly one bounded score/rationale for every requested ID. Missing, duplicate, extra, or foreign score IDs fail before writes; no synthetic fallback score is fabricated.
+
+`applyRelevanceScoresFromTool` calls a restricted native scoring command. That command pins `BEGIN IMMEDIATE` to one SQLx connection, rechecks campaign ownership plus `new`/unscored state for every candidate, and requires every update to affect one row. Scores and optional below-threshold rejection commit as one set or roll back completely. Planner-linked runs additionally require the tool IDs and policy to match the persisted approved context; see `docs/features/relevance-scoring.md`.
 
 ## UI
 

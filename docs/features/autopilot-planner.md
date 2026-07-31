@@ -35,7 +35,8 @@ A planned transaction creates:
 4. `run_created` and research `step_completed` workflow events;
 5. one due-now, one-off, Linkgo-owned `scoring` backlog item;
 6. one `planned` source/backlog/workflow linkage; and
-7. one `batch_planned` planner event.
+7. one `candidate_post` workflow artifact per surviving accepted candidate, attached to the score step; and
+8. one `batch_planned` planner event.
 
 Any insertion failure rolls back all workflow, step, workflow-event, backlog, and plan records. A safe `batch_failed` event is then recorded with the source batch's campaign and batch IDs, but without imported source content. This attribution keeps campaign-filtered failure counts and event history complete. Other bounded batches continue.
 
@@ -75,11 +76,11 @@ The Autopilot tab sits between Campaigns and Backlog. It provides:
 - processable (labeled **Eligible now**), planned, skipped, and campaign-attributed seven-day batch-failure counts;
 - first-use guidance for campaign eligibility and approved source import;
 - source-to-plan cards with imported/current/planned candidate counts;
-- linked backlog and workflow IDs/states;
+- linked backlog and workflow IDs/states, score-step state, and latest scorer provider/status;
 - paused, draft, archived, empty, filtered-empty, loading, error/retry, pending, blocked, skipped, failure, and success states; and
 - bounded recent planner events with explicit severity text.
 
-Backlog cards distinguish manually created Linkgo responsibility labels from planner-linked rows. Workflow cards show `Autopilot plan #… · source batch #…` origins. Neither surface starts external actions automatically.
+Backlog cards distinguish manually created Linkgo responsibility labels from planner-linked rows. Live planner-linked scoring items are read-only projections of the score step and direct recovery to Workflows. Workflow cards show `Autopilot plan #… · source batch #…` origins and aggregate current/unscored/scored/removed candidate artifacts. Autopilot and Backlog never start the model.
 
 The hook guards duplicate actions and uses monotonically increasing request IDs so an older campaign-filter response cannot overwrite the latest selection. Native responses are parsed with Zod. Controls fail clearly outside the Tauri desktop runtime.
 
@@ -95,7 +96,7 @@ The planner only creates local records. It does not:
 - run after Linkgo quits;
 - send notifications or external telemetry.
 
-Publishing and commenting remain human approval-gated. Workflow execution remains operator-triggered.
+Publishing and commenting remain human approval-gated. Roadmap 5A adds a separate attended `Score batch` action in Workflows for the exact artifacts. The native planner remains model-free; see `docs/features/relevance-scoring.md`.
 
 ## Verification
 

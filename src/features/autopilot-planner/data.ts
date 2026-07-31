@@ -180,12 +180,27 @@ export async function listAutopilotPlannerDashboard(
           cbi.work_type AS backlog_work_type,
           wr.title AS workflow_title,
           wr.status AS workflow_status,
-          wr.current_step_key AS workflow_current_step_key
+          wr.current_step_key AS workflow_current_step_key,
+          score_step.status AS score_step_status,
+          scorer.status AS latest_scorer_run_status,
+          scorer.provider_key AS latest_scorer_provider_key,
+          scorer.model_name AS latest_scorer_model_name
         FROM autopilot_plans ap
         INNER JOIN campaigns c ON c.id = ap.campaign_id
         INNER JOIN source_import_batches sib ON sib.id = ap.source_import_batch_id
         LEFT JOIN campaign_backlog_items cbi ON cbi.id = ap.campaign_backlog_item_id
         LEFT JOIN workflow_runs wr ON wr.id = ap.workflow_run_id
+        LEFT JOIN workflow_steps score_step
+          ON score_step.workflow_run_id = wr.id
+         AND score_step.step_key = 'score'
+        LEFT JOIN agent_runs scorer ON scorer.id = (
+          SELECT ar.id FROM agent_runs ar
+          WHERE ar.workflow_run_id = wr.id
+            AND ar.workflow_step_id = score_step.id
+            AND ar.agent_role = 'scorer'
+          ORDER BY ar.id DESC
+          LIMIT 1
+        )
         WHERE 1 = 1 ${planCampaignFilter}
         ORDER BY datetime(ap.created_at) DESC, ap.id DESC
         LIMIT 30`,

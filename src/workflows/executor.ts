@@ -12,8 +12,17 @@ import {
   startWorkflowRun,
   updateWorkflowStepExecution,
 } from "@/workflows/data";
+import {
+  buildRelevanceScoringContext,
+  claimPlannerScoringExecution,
+  failPlannerScoringClaim,
+  loadPlannerScoringScope,
+  settlePlannerScoringWithoutModel,
+} from "@/workflows/relevance-scoring";
 import type {
+  ExecuteWorkflowRunInput,
   WorkflowRunWithDetails,
+  WorkflowScoringInput,
   WorkflowStep,
   WorkflowStepStatus,
 } from "@/workflows/types";
@@ -44,13 +53,122 @@ function statusFromAgentRun(status: string): WorkflowStepStatus {
   return "blocked";
 }
 
-export async function runContentPipelineExecutor(
-  workflowRunId: number,
+async function runPlannerScoringExecutor(
+  run: WorkflowRunWithDetails,
+  scoring: WorkflowScoringInput | undefined,
 ): Promise<WorkflowExecutorResult> {
+  let scope;
+  try {
+    scope = await loadPlannerScoringScope(run.id);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "No candidate scope is attached to this score step"
+    ) {
+      throw error;
+    }
+    throw error;
+  }
+
+  if (scope.currentCandidates.length === 0) {
+    const summary = `Scoring blocked: all ${scope.artifactCount} attached candidates were removed.`;
+    await settlePlannerScoringWithoutModel(run.id, "blocked", summary);
+    return {
+      workflowRunId: run.id,
+      status: "blocked",
+      summary,
+      agentRunId: null,
+    };
+  }
+  if (scope.unscoredCandidates.length === 0) {
+    const summary = `Scoring completed without a model call: ${scope.alreadyScoredCandidates.length} candidates were already scored and ${scope.ineligibleCandidates.length} were no longer new.`;
+    await settlePlannerScoringWithoutModel(run.id, "completed", summary);
+    return {
+      workflowRunId: run.id,
+      status: "running",
+      summary,
+      agentRunId: null,
+    };
+  }
+  if (scoring === undefined) {
+    throw new Error(
+      "Scoring provider confirmation is required for this workflow",
+    );
+  }
+
+  let context;
+  try {
+    context = buildRelevanceScoringContext(scope, {
+      minimumScore: scoring.minimumScore ?? 60,
+      autoRejectBelowMinimum: scoring.autoRejectBelowMinimum ?? false,
+    });
+  } catch (error) {
+    const summary =
+      error instanceof Error ? error.message : "Scoring context is invalid";
+    await settlePlannerScoringWithoutModel(run.id, "blocked", summary);
+    throw error;
+  }
+
+  const candidateIds = scope.unscoredCandidates.map(
+    (candidate) => candidate.id,
+  );
+  const claim = await claimPlannerScoringExecution(run.id, {
+    providerKey: scoring.providerKey,
+    modelName: scoring.modelName,
+    playbookKey: "",
+    inputSummary: `Planner scoring for source batch #${scope.sourceImportBatchId}. Candidate IDs: ${candidateIds.join(", ")}. Minimum score: ${scoring.minimumScore ?? 60}. Auto-reject: ${scoring.autoRejectBelowMinimum === true}.`,
+    inputContext: context,
+  });
+  const agentRunId = claim.agentRunId;
+  try {
+    await startAgentRun({ id: agentRunId });
+  } catch (error) {
+    await failPlannerScoringClaim(claim, error);
+    throw error;
+  }
+
+  const agentRun = (await listAgentRuns(scope.campaignId)).find(
+    (candidate) => candidate.id === agentRunId,
+  );
+  if (agentRun === undefined) {
+    const error = new Error("Executor scorer run was not found");
+    await failPlannerScoringClaim(claim, error);
+    throw error;
+  }
+  if (agentRun.status === "failed" || agentRun.status === "cancelled") {
+    throw new Error(agentRun.error_message || "Workflow scoring failed");
+  }
+  return {
+    workflowRunId: run.id,
+    status:
+      agentRun.status === "waiting_approval" ? "waiting_approval" : "running",
+    summary:
+      agentRun.output_summary ||
+      `Scored ${scope.unscoredCandidates.length} candidates.`,
+    agentRunId,
+  };
+}
+
+export async function runContentPipelineExecutor(
+  input: ExecuteWorkflowRunInput,
+): Promise<WorkflowExecutorResult> {
+  const workflowRunId = input.id;
   let run = (await listWorkflowRuns()).find(
     (candidate) => candidate.id === workflowRunId,
   );
   if (run === undefined) throw new Error("Workflow run was not found");
+  const initialStep = getRunnableStep(run);
+  if (initialStep?.step_key === "score" && run.autopilot_plan_id !== null) {
+    return runPlannerScoringExecutor(run, input.scoring);
+  }
+  if (
+    initialStep?.step_key === "score" &&
+    run.artifacts.every(
+      (artifact) => artifact.artifact_type !== "candidate_post",
+    )
+  ) {
+    throw new Error("No candidate scope is attached to this score step");
+  }
   if (
     run.status === "queued" ||
     run.status === "failed" ||

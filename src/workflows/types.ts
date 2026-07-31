@@ -1,3 +1,4 @@
+import type { AgentProviderKey } from "@/agent/provider-catalog";
 import type { CampaignStatus } from "@/features/campaigns/types";
 
 export const WORKFLOW_TYPES = ["content_pipeline"] as const;
@@ -47,7 +48,7 @@ export const WORKFLOW_EVENT_TYPES = [
   "note_added",
 ] as const;
 
-export const WORKFLOW_ARTIFACT_TYPES = ["agent_run"] as const;
+export const WORKFLOW_ARTIFACT_TYPES = ["agent_run", "candidate_post"] as const;
 
 export const CONTENT_PIPELINE_STEPS = [
   {
@@ -154,6 +155,9 @@ export interface WorkflowArtifact {
 export interface WorkflowArtifactWithDetails extends WorkflowArtifact {
   agent_role: string | null;
   agent_status: string | null;
+  candidate_status: string | null;
+  candidate_relevance_score: number | null;
+  candidate_removed: boolean;
 }
 
 export interface WorkflowCampaignSnapshot {
@@ -162,12 +166,22 @@ export interface WorkflowCampaignSnapshot {
   status: CampaignStatus;
 }
 
+export interface WorkflowCandidateScopeSummary {
+  total: number;
+  current: number;
+  unscored: number;
+  alreadyScored: number;
+  ineligible: number;
+  removed: number;
+}
+
 export interface WorkflowRunDerivedValues {
   completedStepCount: number;
   totalStepCount: number;
   progressPercent: number;
   currentStep: WorkflowStep | null;
   latestEvent: WorkflowEvent | null;
+  candidateScope: WorkflowCandidateScopeSummary | null;
 }
 
 export type WorkflowRunWithDetails = WorkflowRun &
@@ -188,6 +202,18 @@ export interface CreateWorkflowRunInput {
 
 export interface StartWorkflowRunInput {
   id: number;
+}
+
+export interface WorkflowScoringInput {
+  providerKey: Exclude<AgentProviderKey, "dry_run">;
+  modelName: string;
+  minimumScore?: number;
+  autoRejectBelowMinimum?: boolean;
+}
+
+export interface ExecuteWorkflowRunInput {
+  id: number;
+  scoring?: WorkflowScoringInput;
 }
 
 export interface SetWorkflowStepStatusInput {

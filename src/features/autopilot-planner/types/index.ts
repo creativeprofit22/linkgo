@@ -1,9 +1,14 @@
+import type { AgentProviderKey, AgentRunStatus } from "@/agent/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import type {
   SourceImportBatchStatus,
   SourceImportSourceType,
 } from "@/features/source-imports/types";
-import type { WorkflowRunStatus, WorkflowStepKey } from "@/workflows/types";
+import type {
+  WorkflowRunStatus,
+  WorkflowStepKey,
+  WorkflowStepStatus,
+} from "@/workflows/types";
 
 export interface AutopilotPlannerSettings {
   id: 1;
@@ -64,6 +69,10 @@ export interface AutopilotPlanDashboardItem extends AutopilotPlan {
   workflow_title: string | null;
   workflow_status: WorkflowRunStatus | null;
   workflow_current_step_key: WorkflowStepKey | null;
+  score_step_status: WorkflowStepStatus | null;
+  latest_scorer_run_status: AgentRunStatus | null;
+  latest_scorer_provider_key: AgentProviderKey | null;
+  latest_scorer_model_name: string | null;
 }
 
 export type AutopilotPlannerEventType =

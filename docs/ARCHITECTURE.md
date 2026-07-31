@@ -17,7 +17,7 @@ Rust code should only handle work that needs OS integration, app lifecycle, plug
 
 The scheduler lives in `src-tauri/src/scheduler` because due-job execution must continue while the webview is hidden to tray and must reuse native LinkedIn OAuth credentials without exposing tokens to React.
 
-Frontend feature code talks to SQLite through `src/lib/db.ts`, which wraps `@tauri-apps/plugin-sql` and provides browser/test fallbacks. Frontend scheduler controls call native `linkgo_scheduler_*` commands for start, stop, status, and bounded manual ticks.
+Frontend feature code uses `src/lib/db.ts` for independent SQLite reads and single-statement writes. Multi-statement mutations that require connection affinity use restricted native commands backed by the managed SQLx pool; renderer code does not issue `BEGIN`/`COMMIT` through `@tauri-apps/plugin-sql` for those capabilities. Frontend scheduler controls call native `linkgo_scheduler_*` commands for start, stop, status, and bounded manual ticks.
 
 The local Autopilot Planner lives in `src-tauri/src/autopilot_planner.rs`. Native `linkgo_autopilot_planner_*` commands own status, start, stop, and bounded tick behavior because the worker must continue while the webview is hidden to tray, coordinate concurrent ticks with SQLite, and obey the process lifecycle. The worker stops when Linkgo quits. Every source-batch materialization runs in one `BEGIN IMMEDIATE` SQLite transaction with no network or model call inside it.
 
@@ -32,9 +32,19 @@ Local JSON parsing feeds one internal policy-enforced source-batch writer carryi
 An eligible planner batch belongs to an active campaign with `auto_pilot = 1`, has terminal import status and at least one originally accepted row, and has no existing `autopilot_plans` owner. The native transaction revalidates campaign state, batch state, current candidate links, and source ownership. It then creates either:
 
 - one durable `skipped` plan when accepted candidates were deleted; or
-- one queued score-first workflow, seven canonical steps with research complete, two workflow events, one due-now Linkgo scoring backlog item, one `planned` linkage, and one planner event.
+- one queued score-first workflow, seven canonical steps with research complete, two workflow events, one `candidate_post` artifact per surviving accepted candidate, one due-now Linkgo scoring backlog item, one `planned` linkage, and one planner event.
 
 The unique source-batch plan key and immediate transaction make worker/manual overlap idempotent. The global kill switch blocks worker start and tick materialization. Planner events contain bounded summaries and IDs, not imported source content. React reads bounded plan/event projections and parses every native status/tick response with Zod.
+
+## Planner-linked scoring boundary
+
+`src/workflows/relevance-scoring.ts` owns the foreground scope/context handoff, while `src-tauri/src/relevance_scoring.rs` owns every atomic scoring mutation. Workflows resolves and classifies the plan, source batch, campaign, score step, and candidate artifacts; native capability-specific commands then claim/create the scorer, apply exact scores, settle no-work/failure, and reconcile scorer results on one pinned SQLx connection per mutation.
+
+The claim transaction commits before any provider request. Credentials stay inside the existing Tauri provider command. The model receives only the labeled message context, never credentials, planner event metadata, unrelated candidates, or raw source-import audit JSON.
+
+`score_relevance` validates exact candidate/score set equality. The native score command rechecks ownership and stale state, then writes every score and optional rejection in one immediate transaction. Native workflow reconciliation projects the score step into the linked one-off backlog item without reopening terminal legacy rows or creating recurrence successors.
+
+All-scored scope advances without a provider call. All-removed scope blocks without a provider call. Provider failures leave a durable failed attempt and a visible attended retry. The native planner never imports or calls this model orchestration.
 
 ## Feature slice contract
 

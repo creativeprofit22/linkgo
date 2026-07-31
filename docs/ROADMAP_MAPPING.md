@@ -121,6 +121,28 @@ Delivered in this slice:
 
 Roadmap 3D calls no model, LinkedIn API, remote connector, scraper, browser automation, scheduler publish command, or comment command. Roadmap 3 remains partial and blocked only until one production connector passes API-access, terms, permissions, and permitted-use review.
 
+### Roadmap 5A planner-linked relevance scoring
+
+Roadmap coverage:
+
+- Section 5: attended scoring of the exact planner candidate batch with rationale and optional low-score rejection.
+- Section 11: durable `candidate_post` artifact flow, race-safe attempts, and workflow reconciliation.
+- Section 16: connected-provider confirmation, bounded context, global kill-switch gating, and atomic rollback.
+- Section 19: workflow-owned lifecycle projection into the linked one-off scoring backlog item.
+
+Delivered in this slice:
+
+- Migration 29 with bounded `agent_runs.input_context_json`, expanded workflow artifacts, preservation, and existing-plan candidate backfill.
+- One candidate artifact per surviving accepted planner candidate in the native materialization transaction.
+- Strict relevance context and exact score-set contracts; synthetic score fabrication is removed.
+- `BEGIN IMMEDIATE` claim and score-write transactions with duplicate-attempt and stale/cross-campaign protection.
+- Connected-provider `Score batch` confirmation in Workflows with visible scope, model, threshold, and conservative rejection default.
+- No-provider, no-artifact, all-removed, all-scored, archived, kill-switch, provider-failure, retry, and atomic-validation states.
+- Autopilot scorer provenance and workflow-owned read-only Backlog projections.
+- Rust migration/planner tests and Playwright coverage across scope, context, success, rollback, retries, concurrency, responsive behavior, and accessibility.
+
+Roadmap 5 remains partial because unattended/background scoring ownership and the production connector are not delivered. Roadmap 11 gains candidate artifact flow but remains partial. The native planner stays model-free and never invokes this attended executor path.
+
 ### Drafting + audit slice
 
 Roadmap coverage:

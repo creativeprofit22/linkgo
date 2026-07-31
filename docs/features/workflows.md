@@ -19,10 +19,12 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Append-only workflow events for run and step progress.
 - Operator notes in workflow history.
 - Executor-created `agent_run` artifacts auto-linked to workflow runs and steps.
-- Artifact chips in workflow run cards for executor-created agent runs.
+- Agent-run artifact chips plus one aggregate current/unscored/scored/removed candidate-scope summary.
 - Campaign filtering and archived-campaign mutation blocking.
 - Roadmap 3D origin projections for planner-created runs: `Autopilot plan #… · source batch #…`.
-- Planner-created runs start queued with research complete and score pending; no executor starts automatically.
+- Planner-created runs start queued with research complete, score pending, and exact durable candidate artifacts; no executor starts automatically.
+- Attended connected-provider **Score batch** confirmation with exact scope, provider/model, threshold, and unchecked low-score rejection.
+- Race-safe score attempts, all-scored advance, all-removed block, provider retry, and linked Backlog reconciliation.
 - Local SQLite persistence through Tauri migrations.
 
 ## Intentionally not implemented
@@ -30,10 +32,10 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Background autonomous execution.
 - Autonomous LinkedIn posting/commenting.
 - Scraping or LinkedIn API calls.
-- Background workflow execution, cron, or automatic scheduler execution.
+- Background workflow/model execution, cron, or unattended scoring.
 - Manual artifact pickers.
-- Automatic links to drafts, approvals, schedules, or metrics. Planner origin links cover only the source batch and plan.
-- Non-`agent_run` artifact UI or attachment flows.
+- Automatic links to drafts, approvals, schedules, or metrics. Planner origin links cover the source batch, plan, backlog item, and candidate scope.
+- Candidate artifact pickers or source-content rendering; planner candidate artifacts are created natively and aggregated.
 - Generic arbitrary workflow builder.
 - Safety/error queue tables.
 
@@ -53,7 +55,7 @@ Stores append-only lifecycle events for run creation, start/resume, step changes
 
 ### `workflow_artifacts`
 
-Links workflow runs and optional workflow steps to artifacts. This slice only creates `agent_run` rows from the foreground executor; the table shape leaves room for future artifact types without exposing manual pickers.
+Links workflow runs and optional workflow steps to artifacts. Migration 29 allows `agent_run` and `candidate_post`. The planner creates candidate artifacts in its materialization transaction; the foreground executor creates agent artifacts. Candidate deletion leaves a visibly removed provenance artifact.
 
 ### `workflow_step_executions`
 
@@ -71,11 +73,12 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 
 ## Planner-created lifecycle
 
-1. The local planner creates the run, all seven steps, and two workflow events in the same transaction as its backlog item and plan linkage.
-2. `research` is completed from the policy-enforced source batch.
-3. The run stays `queued` with `current_step_key = 'score'`.
-4. The operator can inspect the plan/source origin before starting or executing the workflow.
-5. Existing executor and approval behavior is unchanged.
+1. The local planner creates the run, seven steps, candidate artifacts, workflow events, backlog item, and plan linkage in one transaction.
+2. `research` is completed from the policy-enforced source batch; `score` stays pending.
+3. The operator opens **Score batch**, reviews exact scope/provider/context destination, and confirms policy.
+4. A restricted native command claims the attempt, creates the scorer run/artifact, and projects workflow/backlog state in one pinned `BEGIN IMMEDIATE` transaction; the provider call starts only after commit.
+5. The model must return exactly one score/rationale per attached unscored candidate. A native immediate transaction commits the complete set or nothing.
+6. Native result reconciliation completes the execution/score step, starts `draft`, and completes the linked backlog atomically. Failure blocks linked work and exposes retry. All-scored advances and all-removed blocks through native no-work settlement without a provider call.
 
 ## Manual lifecycle
 
@@ -89,7 +92,7 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 
 ## Safety and approval notes
 
-Workflow state is local-first and operator-driven. The Autopilot Planner creates resumable state only; it never invokes the executor or a model.
+Workflow state is local-first and operator-driven. The Autopilot Planner creates resumable state only; it never invokes the executor or a model. Workflows is the sole attended scoring authority and excludes `dry_run` for planner-linked execution.
 
 The `approve` step is a visible human-review checkpoint, but this slice does not publish anything.
 
@@ -106,6 +109,6 @@ Playwright covers:
 - Archived-campaign mutation blocking.
 - Executor-created agent run artifact chips.
 - Workflows tab rendering in the app shell.
-- Planner-created run origin markers and score-first state through `tests/autopilot-planner.spec.ts`.
+- Planner candidate artifact linkage, bounded provider context, exact/atomic scoring, optional rejection, stale/cross-campaign rollback, provider retry, duplicate actions, all-scored/all-removed paths, provider/archive/kill-switch gates, cross-surface reconciliation, and dialog accessibility.
 
-Rust migration tests assert workflow tables, artifact table shape, constraints, event types, step keys, unique constraints, and indexes.
+Rust tests assert migrations plus two-connection claim exclusion, complete score rollback, stale/cross-campaign zero-write behavior, and workflow/execution/backlog reconciliation.

@@ -1,0 +1,59 @@
+{
+  "type": "object",
+  "properties": {
+    "campaignId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "candidatePostIds": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+      }
+    },
+    "minimumScore": {
+      "default": 60,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "scores": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidatePostId": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": ["candidatePostId", "score", "rationale"],
+        "additionalProperties": false
+      }
+    },
+    "autoRejectBelowMinimum": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "required": ["campaignId", "candidatePostIds", "scores"],
+  "additionalProperties": false
+}

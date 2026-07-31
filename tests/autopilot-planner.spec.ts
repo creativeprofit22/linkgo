@@ -69,7 +69,7 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
   await expect(page.getByText("Plan #1 · Planner launch")).toBeVisible();
   await expect(page.getByText("Item #1 · pending")).toBeVisible();
   await expect(page.getByText("Run #1 · queued")).toBeVisible();
-  await expect(page.getByText("Next step: score")).toBeVisible();
+  await expect(page.getByText("Current step: score")).toBeVisible();
   await expectMetric(page, "Planned", "1");
   await capturePlannerScreenshot(
     page,
@@ -82,6 +82,9 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
   expect(state.backlog).toHaveLength(1);
   expect(state.runs).toHaveLength(1);
   expect(state.steps).toHaveLength(7);
+  expect(state.artifacts).toHaveLength(1);
+  expect(state.artifacts[0]?.artifact_type).toBe("candidate_post");
+  expect(state.artifacts[0]?.artifact_id).toBe(1);
   expect(state.steps.find((step) => step.step_key === "research")?.status).toBe(
     "completed",
   );
@@ -601,6 +604,7 @@ async function getPlannerState(page: Page): Promise<{
   backlog: Array<{ id: number }>;
   runs: Array<{ current_step_key: string }>;
   steps: Array<{ step_key: string; status: string }>;
+  artifacts: Array<{ artifact_type: string; artifact_id: number }>;
   events: Array<{
     campaign_id: number | null;
     event_type: string;
@@ -617,6 +621,10 @@ async function getPlannerState(page: Page): Promise<{
         step_key: string;
         status: string;
       }>;
+      __LINKGO_SQL_WORKFLOW_ARTIFACTS__?: () => Array<{
+        artifact_type: string;
+        artifact_id: number;
+      }>;
       __LINKGO_SQL_AUTOPILOT_EVENTS__?: () => Array<{
         campaign_id: number | null;
         event_type: string;
@@ -629,6 +637,7 @@ async function getPlannerState(page: Page): Promise<{
       backlog: testWindow.__LINKGO_SQL_BACKLOG_ITEMS__?.() ?? [],
       runs: testWindow.__LINKGO_SQL_WORKFLOW_RUNS__?.() ?? [],
       steps: testWindow.__LINKGO_SQL_WORKFLOW_STEPS__?.() ?? [],
+      artifacts: testWindow.__LINKGO_SQL_WORKFLOW_ARTIFACTS__?.() ?? [],
       events: testWindow.__LINKGO_SQL_AUTOPILOT_EVENTS__?.() ?? [],
     };
   });

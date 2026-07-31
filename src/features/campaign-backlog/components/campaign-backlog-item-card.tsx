@@ -76,9 +76,15 @@ export function CampaignBacklogItemCard({
 }: CampaignBacklogItemCardProps): React.ReactNode {
   const terminal = item.status === "completed" || item.status === "cancelled";
   const archived = item.campaign_status === "archived";
-  const mutationDisabled = pending || archived || terminal;
   const overdue = !terminal && Date.parse(item.due_at) <= Date.parse(asOf);
   const plannerLinked = item.autopilot_plan_id != null;
+  const workflowControlled =
+    plannerLinked &&
+    item.workflow_run_id != null &&
+    item.linked_workflow_status != null &&
+    item.linked_score_step_status != null;
+  const mutationDisabled =
+    pending || archived || terminal || workflowControlled;
   const plannerOrigin = plannerLinked
     ? `Autopilot plan #${item.autopilot_plan_id} · source batch #${item.source_import_batch_id} · queued workflow #${item.workflow_run_id}.`
     : "";
@@ -129,10 +135,25 @@ export function CampaignBacklogItemCard({
           />
         </dl>
 
-        {plannerLinked ? (
+        {workflowControlled ? (
+          <div className="text-muted-foreground mt-4 space-y-1 border-s-2 ps-3 text-xs leading-relaxed break-words">
+            <p>{plannerOrigin}</p>
+            <p>
+              Status follows the Workflows score step:{" "}
+              {item.linked_score_step_status?.replace(/_/gu, " ")} (
+              {item.linked_workflow_status?.replace(/_/gu, " ")} workflow).
+            </p>
+            <p>
+              {item.linked_score_step_status === "blocked" ||
+              item.linked_score_step_status === "failed"
+                ? "Open Workflows to retry scoring."
+                : "Open Workflows to manage scoring."}
+            </p>
+          </div>
+        ) : plannerLinked ? (
           <p className="text-muted-foreground mt-4 border-s-2 ps-3 text-xs leading-relaxed break-words">
-            {plannerOrigin} This is linked local work; workflow execution and
-            every external action remain manual or approval-gated.
+            {plannerOrigin} The linked workflow is unavailable, so this legacy
+            item remains manually recoverable.
           </p>
         ) : item.owner_type === "linkgo" ? (
           <p className="text-muted-foreground mt-4 border-s-2 ps-3 text-xs leading-relaxed">
@@ -153,7 +174,7 @@ export function CampaignBacklogItemCard({
         ) : null}
       </CardContent>
 
-      {!terminal ? (
+      {!terminal && !workflowControlled ? (
         <CardFooter className="flex flex-wrap gap-2 border-t pt-4">
           {item.status === "pending" ? (
             <Button

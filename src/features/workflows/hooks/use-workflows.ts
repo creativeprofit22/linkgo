@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
+import { getAuthStatus } from "@/features/integrations/data";
+import type { ConnectedAccount } from "@/features/integrations/types";
+import { getSafetySettings } from "@/features/safety/data";
 import {
   addWorkflowNote,
   cancelWorkflowRun,
@@ -16,6 +19,7 @@ import type {
   AddWorkflowNoteInput,
   CancelWorkflowRunInput,
   CreateWorkflowRunInput,
+  ExecuteWorkflowRunInput,
   SetWorkflowStepStatusInput,
   StartWorkflowRunInput,
   WorkflowRunWithDetails,
@@ -27,11 +31,14 @@ interface UseWorkflowsState {
   runs: WorkflowRunWithDetails[];
   loading: boolean;
   error: string | null;
+  connectedAccounts: ConnectedAccount[];
+  activeRunId: number | null;
+  killSwitchEnabled: boolean;
   loadWorkflows: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
   createRun: (input: CreateWorkflowRunInput) => Promise<number>;
   startRun: (input: StartWorkflowRunInput) => Promise<void>;
-  executeRun: (input: StartWorkflowRunInput) => Promise<void>;
+  executeRun: (input: ExecuteWorkflowRunInput) => Promise<void>;
   resumeRun: (input: StartWorkflowRunInput) => Promise<void>;
   setStepStatus: (input: SetWorkflowStepStatusInput) => Promise<void>;
   cancelRun: (input: CancelWorkflowRunInput) => Promise<void>;
@@ -60,6 +67,12 @@ export function useWorkflows(): UseWorkflowsState {
   const [runs, setRuns] = useState<WorkflowRunWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [connectedAccounts, setConnectedAccounts] = useState<
+    ConnectedAccount[]
+  >([]);
+  const [activeRunId, setActiveRunId] = useState<number | null>(null);
+  const [killSwitchEnabled, setKillSwitchEnabled] = useState(false);
+  const activeActionRunIds = useRef(new Set<number>());
 
   const loadRunsForCampaign = useCallback(async (campaignId: number | null) => {
     if (campaignId === null) {
@@ -73,8 +86,14 @@ export function useWorkflows(): UseWorkflowsState {
     setLoading(true);
     setError(null);
     try {
-      const loadedCampaigns = await listCampaigns();
+      const [loadedCampaigns, authStatus, safetySettings] = await Promise.all([
+        listCampaigns(),
+        getAuthStatus(),
+        getSafetySettings(),
+      ]);
       setCampaigns(loadedCampaigns);
+      setConnectedAccounts(authStatus.accounts);
+      setKillSwitchEnabled(safetySettings.global_kill_switch === 1);
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === selectedCampaignId,
       );
@@ -135,15 +154,30 @@ export function useWorkflows(): UseWorkflowsState {
   );
 
   const executeRun = useCallback(
-    async (input: StartWorkflowRunInput) => {
+    async (input: ExecuteWorkflowRunInput) => {
+      if (activeActionRunIds.current.has(input.id)) {
+        throw new Error("Workflow action is already running");
+      }
+      activeActionRunIds.current.add(input.id);
+      setActiveRunId(input.id);
       try {
         await executeWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
+        if (input.scoring !== undefined) {
+          toast.success("Workflow scoring updated", {
+            description:
+              "The attached batch and linked workflow state were refreshed.",
+          });
+        }
       } catch (caught) {
         toast.error("Workflow executor failed", {
           description: getErrorMessage(caught),
         });
+        await loadRunsForCampaign(selectedCampaignId).catch(() => undefined);
         throw caught;
+      } finally {
+        activeActionRunIds.current.delete(input.id);
+        setActiveRunId((current) => (current === input.id ? null : current));
       }
     },
     [loadRunsForCampaign, selectedCampaignId],
@@ -151,6 +185,11 @@ export function useWorkflows(): UseWorkflowsState {
 
   const resumeRun = useCallback(
     async (input: StartWorkflowRunInput) => {
+      if (activeActionRunIds.current.has(input.id)) {
+        throw new Error("Workflow action is already running");
+      }
+      activeActionRunIds.current.add(input.id);
+      setActiveRunId(input.id);
       try {
         await resumeWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
@@ -159,6 +198,9 @@ export function useWorkflows(): UseWorkflowsState {
           description: getErrorMessage(caught),
         });
         throw caught;
+      } finally {
+        activeActionRunIds.current.delete(input.id);
+        setActiveRunId((current) => (current === input.id ? null : current));
       }
     },
     [loadRunsForCampaign, selectedCampaignId],
@@ -216,6 +258,9 @@ export function useWorkflows(): UseWorkflowsState {
       runs,
       loading,
       error,
+      connectedAccounts,
+      activeRunId,
+      killSwitchEnabled,
       loadWorkflows,
       selectCampaign,
       createRun,
@@ -232,6 +277,9 @@ export function useWorkflows(): UseWorkflowsState {
       runs,
       loading,
       error,
+      connectedAccounts,
+      activeRunId,
+      killSwitchEnabled,
       loadWorkflows,
       selectCampaign,
       createRun,

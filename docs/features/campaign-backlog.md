@@ -4,7 +4,7 @@
 
 Roadmaps 3C and 3D are implemented. Campaign Backlog is one local-first, campaign-scoped work list for recurring, one-off, manually owned, and planner-linked work.
 
-The surface answers three questions: what is due, which campaign owns it, and whether the Operator or Linkgo is responsible. Manually created `linkgo` rows remain responsibility labels. Roadmap 3D can create one planner-linked Linkgo scoring row from an approved terminal source batch. Neither kind runs an agent, workflow executor, draft, approval, schedule, publish action, comment, metric refresh, or connector.
+The surface answers three questions: what is due, which campaign owns it, and whether the Operator or Linkgo is responsible. Manually created `linkgo` rows remain responsibility labels. Roadmap 3D can create one planner-linked Linkgo scoring row from an approved terminal source batch. Manual rows run no agent or external action. A live planner-linked scoring row is a read-only responsibility projection: its linked Workflows score step can run an attended scorer, while Backlog itself never invokes the agent, executor, connector, draft, approval, schedule, publish, comment, or metric path.
 
 Planner-linked projections expose the autopilot plan, source batch, and queued workflow IDs/states. External publishing and commenting remain human approval-gated.
 
@@ -48,6 +48,8 @@ Allowed transitions are:
 
 Completed and cancelled rows are immutable history. They cannot be edited or reopened.
 
+For the one-off Linkgo scoring row linked through `autopilot_plans`, the workflow score step is authoritative: pending projects to pending; running/waiting approval to in progress; blocked/failed to blocked; completed to completed; and skipped to cancelled. Projection mutates only non-terminal rows and never creates a recurrence successor.
+
 Cancellation is explicit and final. Cancelling recurring work creates no successor.
 
 ## Recurrence policy
@@ -64,7 +66,7 @@ The Backlog tab sits between Campaigns and Queue.
 
 The first scan shows due-now, in-progress, blocked, and Linkgo-owned counts. Filters scope campaign, owner, and open/history view. Open work is grouped under Overdue, Due next, and Later. History is ordered by terminal time and limited to 100 rows. Global and campaign-scoped history use terminal-only expression indexes matching that ordering, so SQLite can stop at the limit without a temporary sort.
 
-Cards expose campaign, due time, owner, recurrence, work type, status, details, and legal actions. Recurring due times are formatted in and labeled with their persisted schedule zone, so the device zone is not implied to control recurrence. Archived campaigns automatically open history when selected and display read-only guidance. Manually created Linkgo cards identify the responsibility label; planner-linked cards identify their plan, source batch, and queued workflow and state that execution remains manual or approval-gated.
+Cards expose campaign, due time, owner, recurrence, work type, status, details, and legal actions. Recurring due times are formatted in and labeled with their persisted schedule zone, so the device zone is not implied to control recurrence. Archived campaigns automatically open history when selected and display read-only guidance. Manually created Linkgo cards identify the responsibility label. Live planner-linked cards show workflow/score state, hide status/edit/cancel controls, and direct blocked recovery to Workflows. Clearly orphaned legacy rows remain manually recoverable.
 
 The form keeps persistent labels and entered values across validation or storage errors. Cancellation explains recurrence consequences. Radix dialogs provide Escape behavior, focus containment, and focus return. Native selects reserve trailing indicator space and reflow to one column in a narrow window.
 
@@ -74,7 +76,7 @@ Campaign Backlog and its Roadmap 3D linkage do not:
 
 - fetch, scrape, or search LinkedIn;
 - enable a remote source connector;
-- execute an agent, workflow executor, draft, approval, schedule, publish action, comment, or metric refresh;
+- invoke an agent or workflow executor from Backlog itself, or run a draft, approval, schedule, publish action, comment, or metric refresh;
 - run after quit or send notifications;
 - add accounts or arbitrary owner identities.
 

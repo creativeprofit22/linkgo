@@ -121,6 +121,7 @@ export interface AgentModelRequest {
   playbookKey?: AgentPlaybookKey;
   playbookLabel?: string;
   inputSummary: string;
+  inputContext?: Record<string, unknown>;
   messages: AgentMessage[];
 }
 

@@ -3,6 +3,7 @@ import {
   createCandidateSchema,
   dismissDiscoveryItemSchema,
   promoteDiscoveryItemSchema,
+  relevanceScoringContextSchema,
   runCandidateDiscoverySchema,
   scoreCandidatesSchema,
   updateCandidateSchema,
@@ -29,14 +30,16 @@ import type {
   TargetPost,
   UpdateCandidateInput,
 } from "@/features/candidate-queue/types";
-import type {
-  ResearchPostsInput,
-  ResearchPostsOutput,
-  ScoreRelevanceInput,
-  ScoreRelevanceOutput,
+import {
+  scoreRelevanceInputSchema,
+  type ResearchPostsInput,
+  type ResearchPostsOutput,
+  type ScoreRelevanceInput,
+  type ScoreRelevanceOutput,
 } from "@/agent/schemas";
 import type { AgentToolExecutionContext } from "@/agent/types";
 import { DEFAULT_AGENT_MODELS } from "@/agent/provider-catalog";
+import { applyNativeRelevanceScores } from "@/workflows/relevance-scoring-commands";
 
 interface TargetPostRow {
   id: number;
@@ -681,17 +684,6 @@ function compactText(value: string | undefined, maxLength: number): string {
   return (value ?? "").trim().replace(/\s+/gu, " ").slice(0, maxLength);
 }
 
-function getScoreInputs(
-  input: ScoreRelevanceInput,
-): ScoreRelevanceOutput["scores"] {
-  if (input.scores.length > 0) return input.scores.slice(0, 50);
-  return input.candidatePostIds.slice(0, 50).map((candidatePostId, index) => ({
-    candidatePostId,
-    score: Math.min(100, Math.max(input.minimumScore, 72 + index)),
-    rationale: "Dry-run score based on bounded local contract inputs.",
-  }));
-}
-
 export async function insertDiscoveryItemsFromTool(
   input: ResearchPostsInput,
   context: AgentToolExecutionContext,
@@ -768,83 +760,45 @@ export async function insertDiscoveryItemsFromTool(
   return persistedItems.map(toToolDiscoveryItem);
 }
 
-interface CandidateScoreOwnershipRow {
-  id: number;
-  status: CandidateStatus;
-}
-
 export async function applyRelevanceScoresFromTool(
   input: ScoreRelevanceInput,
-  _context: AgentToolExecutionContext,
+  context: AgentToolExecutionContext,
 ): Promise<ScoreRelevanceOutput["scores"]> {
-  const db = await getDb();
-  await assertCandidateCampaignCanMutate(db, input.campaignId);
-
-  const requestedScores = getScoreInputs(input);
-  if (requestedScores.length === 0) return [];
-
-  const uniqueRequestedScores = new Map<
-    number,
-    (typeof requestedScores)[number]
-  >();
-  for (const score of requestedScores) {
-    if (!uniqueRequestedScores.has(score.candidatePostId)) {
-      uniqueRequestedScores.set(score.candidatePostId, score);
+  const parsed = scoreRelevanceInputSchema.parse(input);
+  if (context.request.campaignId !== parsed.campaignId) {
+    throw new Error("Score request belongs to a different campaign");
+  }
+  const plannerContext = relevanceScoringContextSchema.safeParse(
+    context.request.inputContext,
+  );
+  if (plannerContext.success) {
+    const expectedIds = plannerContext.data.candidates.map(
+      (candidate) => candidate.id,
+    );
+    const requestedIds = new Set(parsed.candidatePostIds);
+    if (
+      expectedIds.length !== requestedIds.size ||
+      expectedIds.some((id) => !requestedIds.has(id))
+    ) {
+      throw new Error(
+        "Score request does not match the attached workflow scope",
+      );
+    }
+    if (
+      parsed.minimumScore !== plannerContext.data.minimumScore ||
+      parsed.autoRejectBelowMinimum !==
+        plannerContext.data.autoRejectBelowMinimum
+    ) {
+      throw new Error("Score policy does not match the operator confirmation");
     }
   }
-  const dedupedScores = Array.from(uniqueRequestedScores.values()).slice(0, 50);
-  const allowedInputIds = new Set(input.candidatePostIds);
-  const candidateIds = Array.from(
-    new Set(
-      dedupedScores
-        .map((score) => score.candidatePostId)
-        .filter((id) => allowedInputIds.size === 0 || allowedInputIds.has(id)),
-    ),
-  ).slice(0, 50);
-  if (candidateIds.length === 0) return [];
 
-  const placeholders = candidateIds
-    .map((_, index) => `$${index + 2}`)
-    .join(", ");
-  const ownedRows = await db.select<CandidateScoreOwnershipRow[]>(
-    `SELECT id, status FROM candidate_posts
-    WHERE campaign_id = $1
-      AND id IN (${placeholders})`,
-    [input.campaignId, ...candidateIds],
-  );
-  const ownedIds = new Set(ownedRows.map((row) => row.id));
-  const appliedScores: ScoreRelevanceOutput["scores"] = [];
-
-  for (const score of dedupedScores) {
-    if (!ownedIds.has(score.candidatePostId)) continue;
-    const rationale = compactText(score.rationale, 500);
-    await db.execute(
-      `UPDATE candidate_posts
-      SET relevance_score = $1,
-        score_reason = $2,
-        status = CASE
-          WHEN $3 = 1 AND status = 'new' AND $1 < $4 THEN 'rejected'
-          ELSE status
-        END,
-        updated_at = datetime('now')
-      WHERE id = $5
-        AND campaign_id = $6`,
-      [
-        score.score,
-        rationale,
-        input.autoRejectBelowMinimum ? 1 : 0,
-        input.minimumScore,
-        score.candidatePostId,
-        input.campaignId,
-      ],
-    );
-    appliedScores.push({
-      candidatePostId: score.candidatePostId,
-      score: score.score,
-      rationale,
-    });
-    if (appliedScores.length >= 50) break;
-  }
-
-  return appliedScores;
+  return applyNativeRelevanceScores({
+    agentRunId: context.request.runId,
+    campaignId: parsed.campaignId,
+    candidatePostIds: parsed.candidatePostIds,
+    minimumScore: parsed.minimumScore,
+    autoRejectBelowMinimum: parsed.autoRejectBelowMinimum,
+    scores: parsed.scores,
+  });
 }

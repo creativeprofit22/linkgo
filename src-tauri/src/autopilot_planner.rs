@@ -458,6 +458,7 @@ async fn insert_planned_work(
     let workflow_run_id = workflow_result.last_insert_rowid();
 
     let mut research_step_id = None;
+    let mut score_step_id = None;
     for (step_key, title, description, sort_order) in CANONICAL_WORKFLOW_STEPS {
         let is_research = step_key == "research";
         let output_summary = if is_research {
@@ -497,7 +498,38 @@ async fn insert_planned_work(
         .map_err(|_| "Could not create autopilot workflow steps".to_string())?;
         if is_research {
             research_step_id = Some(step_result.last_insert_rowid());
+        } else if step_key == "score" {
+            score_step_id = Some(step_result.last_insert_rowid());
         }
+    }
+
+    let score_step_id = score_step_id
+        .ok_or_else(|| "Could not resolve the autopilot workflow scoring step".to_string())?;
+    let artifact_result = sqlx::query(
+        "INSERT INTO workflow_artifacts (
+            workflow_run_id, workflow_step_id, artifact_type, artifact_id, summary
+         )
+         SELECT
+            ?1, ?2, 'candidate_post', sii.candidate_post_id,
+            'Planner scoring candidate from source batch #' || ?3
+         FROM source_import_items sii
+         INNER JOIN candidate_posts cp
+            ON cp.id = sii.candidate_post_id
+           AND cp.campaign_id = ?4
+         WHERE sii.source_import_batch_id = ?3
+           AND sii.status = 'accepted'
+           AND sii.candidate_post_id IS NOT NULL
+         ORDER BY sii.id ASC",
+    )
+    .bind(workflow_run_id)
+    .bind(score_step_id)
+    .bind(batch.id)
+    .bind(batch.campaign_id)
+    .execute(&mut *connection)
+    .await
+    .map_err(|_| "Could not attach autopilot candidate scope".to_string())?;
+    if artifact_result.rows_affected() != batch.candidate_count as u64 {
+        return Err("Autopilot candidate scope changed during materialization".to_string());
     }
 
     sqlx::query(
@@ -1227,7 +1259,7 @@ mod tests {
                 matches!(migration.kind, MigrationKind::Up)
                     && matches!(
                         migration.version,
-                        1 | 2 | 6 | 8 | 22 | 23 | 24 | 25 | 26 | 27 | 28
+                        1 | 2 | 6 | 7 | 8 | 20 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29
                     )
             })
         {
@@ -1373,6 +1405,19 @@ mod tests {
             assert_eq!(table_count(&pool, "campaign_backlog_items").await, 1);
             assert_eq!(table_count(&pool, "workflow_runs").await, 1);
             assert_eq!(table_count(&pool, "workflow_steps").await, 7);
+            assert_eq!(table_count(&pool, "workflow_artifacts").await, 1);
+
+            let artifact = sqlx::query(
+                "SELECT wa.artifact_type, wa.artifact_id, ws.step_key
+                   FROM workflow_artifacts wa
+                   INNER JOIN workflow_steps ws ON ws.id = wa.workflow_step_id",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("candidate scoring artifact should be readable");
+            assert_eq!(artifact.get::<String, _>("artifact_type"), "candidate_post");
+            assert_eq!(artifact.get::<i64, _>("artifact_id"), 100);
+            assert_eq!(artifact.get::<String, _>("step_key"), "score");
 
             let run = sqlx::query("SELECT status, current_step_key FROM workflow_runs LIMIT 1")
                 .fetch_one(&pool)

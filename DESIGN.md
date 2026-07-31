@@ -166,3 +166,55 @@ Final rubric score: **22/24**.
 - Visual distinctiveness 1 because source/plan/backlog/workflow linkage is product-specific while the broader card language intentionally stays consistent with Linkgo.
 
 No quality-floor criterion scores zero. The production contract passes for implemented semantics, keyboard/focus, state recovery, trust copy, target sizes, native select anatomy, adaptive layout, 200% text descendant bounds, reduced motion, forced colors, bounded data, and measured build output. Axe, RTL, non-Chromium engines, native assistive technology, field performance, and offline network simulation remain explicitly unverified; network-offline behavior is not applicable to planner materialization because it performs no network request.
+
+## Roadmap 5A planner-linked relevance scoring design read
+
+- **Surface:** Resizable desktop operations dashboard; Workflows is the execution authority, while Autopilot and Backlog are synchronized status views.
+- **Audience:** A Linkgo operator reviewing approved local source material and controlling provider spend and candidate rejection policy.
+- **Single job:** Score the exact candidates attached by one planner source batch and see one consistent outcome everywhere.
+- **Task and risk:** Medium-to-high decision cost because scores and optional rejection affect downstream drafting.
+- **Content:** 1–50 candidate artifacts, removed/stale states, long provider/model/campaign values, campaign context, threshold, provider failures, and retries.
+- **Platform:** Tauri webview with pointer and keyboard, light/dark themes, 320 CSS-pixel reflow, 200% text, reduced motion, and forced colors.
+- **Constraints:** Reuse the shared content rail, Card/Dialog/Button/Input/Label primitives, type scale, borders, focus treatment, toast/live-region behavior, and Lucide family. Add no design dependency.
+
+### Evidence, thesis, and reuse
+
+The established Workflows card/dialog language is the strongest evidence. Agent Runtime supplies provider readiness and model defaults; Candidate Queue supplies score/threshold language; Autopilot and Backlog supply provenance and synchronized status patterns.
+
+**Thesis:** Put one explicit **Score batch** action on the durable score-first workflow. First show exact scope, then provider/model and threshold policy, then one concrete context-destination disclosure before commitment. Keep Autopilot model-free and Backlog read-only so no competing execution authority appears.
+
+The product-specific signature is the compact current/unscored/already-scored/removed scope ledger paired with provider destination and conservative rejection consent. Candidate source text stays out of cards.
+
+Reuse map:
+
+- Modal semantics, Escape, containment, and focus return: shared Radix Dialog.
+- Provider readiness and defaults: Agent Runtime provider catalog/readiness helpers.
+- Form geometry: shared Input/Label/Button plus native select with `ps-3 pe-10`.
+- Status and artifacts: existing outline Badge and workflow event/status components.
+- Async feedback: Sonner plus inline `role=alert` recovery that preserves values.
+- Icons: Lucide only; no new icon or component library.
+
+### State and responsive contract
+
+The complete path covers loading auth/scope, no provider, no artifact, all removed, all scored, mixed scope, pending, provider failure, atomic validation failure, retry, success, archive, and kill switch. Duplicate actions are blocked in both the hook and durable attempt claim.
+
+At desktop width, the dialog keeps a four-column scope ledger and one-column decision form. At 320 pixels, the ledger becomes two columns, all fields remain full width, and the dialog scrolls within `100dvh` without horizontal document overflow. Decision order remains scope, provider, model, threshold, optional rejection, destination disclosure, and actions.
+
+Keyboard opening focuses the provider select; Escape/cancel returns focus to **Score batch**. The final shared close control has a 32-pixel target, logical inline placement, and `focus-visible` treatment. The provider select reserves trailing indicator space. Reduced motion removes shared transitions; forced colors retain borders. Planner toasts are dismissed when the consequential dialog opens so they do not obscure narrow or desktop actions.
+
+### Rendered critique and revision
+
+The first desktop and 320-pixel captures showed clear scope/provider hierarchy and stable two-column narrow reflow. The weakest quality-floor criterion was accessibility/state completeness: the preceding planner-success toast overlapped the confirmation region on desktop and covered lower decision content at 320 pixels. The revision dismisses stale toasts when the score dialog opens and expands the shared dialog close target while replacing pointer-sticky `focus` styling with `focus-visible`. The recapture keeps controls unobscured and preserves keyboard focus return.
+
+One unnecessary decorative direction was rejected: candidate artifacts are not rendered as up to 50 individual badges. One compact factual scope ledger carries the decision instead.
+
+Final rubric score: **23/24**.
+
+- Brief specificity 2, information hierarchy 2, composition 2, consistency/flow 2.
+- Typography 2 because the established interface/utility roles remain legible under long values and 200% text.
+- Material/surface logic 2, state completeness 2, responsive behavior 2, accessibility 2, motion 2, content authenticity 2.
+- Visual distinctiveness 1 because the scope/provider/provenance signature is product-specific while the broader card/dialog language intentionally remains shared with Linkgo.
+
+Production checks pass for native form/dialog semantics, keyboard completion, focus return, duplicate prevention, values retained after failure, status announcements, exact data-use disclosure, 320-pixel reflow, 200% text, long model values, reduced motion, forced colors, and dark/light token use. Axe, RTL, non-Chromium engines, native screen readers, real provider latency/offline behavior, and field performance remain explicitly unverified. Provider failure recovery is covered with mocked native command errors; credentials are never rendered or captured.
+
+Representative captures: `.gg/screenshots/relevance-scoring-desktop.png` and `.gg/screenshots/relevance-scoring-320.png`.

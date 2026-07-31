@@ -12,6 +12,8 @@ import type { ApprovalStatus } from "@/features/approvals/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
 
+export type AgentInputContext = Record<string, unknown>;
+
 export interface AgentRun {
   id: number;
   campaign_id: number;
@@ -23,6 +25,7 @@ export interface AgentRun {
   playbook_key: AgentPlaybookKey | "";
   status: AgentRunStatus;
   input_summary: string;
+  input_context_json: string;
   output_summary: string;
   error_message: string;
   iteration_count: number;
@@ -90,6 +93,7 @@ export type AgentRunWithDetails = AgentRun & {
   campaign: AgentCampaignSnapshot;
   workflowRun: WorkflowRunWithDetails | null;
   checkpoint: AgentRunApprovalCheckpoint | null;
+  inputContext: AgentInputContext;
   toolCalls: AgentToolCallWithJson[];
   events: AgentRunEvent[];
 };
@@ -103,6 +107,7 @@ export interface CreateAgentRunInput {
   modelName?: string;
   playbookKey?: AgentPlaybookKey | "";
   inputSummary?: string;
+  inputContext?: AgentInputContext;
 }
 
 export interface StartAgentRunInput {

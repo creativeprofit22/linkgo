@@ -13,6 +13,9 @@ export function WorkflowsView(): React.ReactNode {
     runs,
     loading,
     error,
+    connectedAccounts,
+    activeRunId,
+    killSwitchEnabled,
     loadWorkflows,
     selectCampaign,
     createRun,
@@ -149,6 +152,9 @@ export function WorkflowsView(): React.ReactNode {
                   key={run.id}
                   run={run}
                   selectedCampaignArchived={selectedCampaignArchived}
+                  connectedAccounts={connectedAccounts}
+                  activeRunId={activeRunId}
+                  killSwitchEnabled={killSwitchEnabled}
                   onStartRun={startRun}
                   onExecuteRun={executeRun}
                   onResumeRun={resumeRun}

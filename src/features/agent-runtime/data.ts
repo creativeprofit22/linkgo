@@ -19,6 +19,7 @@ import {
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import { IS_TEST } from "@/lib/env";
 import type { CampaignStatus } from "@/features/campaigns/types";
+import { relevanceScoringContextSchema } from "@/features/candidate-queue/schemas";
 import {
   assertSafetyKillSwitchOff,
   recordSafetyAuditEvent,
@@ -28,6 +29,7 @@ import { getPlaybookPromptForRuntime } from "@/features/playbooks/data";
 import { getAuthStatus } from "@/features/integrations/data";
 import { isAgentProviderReady } from "@/features/agent-runtime/provider-readiness";
 import {
+  agentInputContextSchema,
   agentRunApprovalCheckpointSchema,
   cancelAgentRunSchema,
   createAgentRunSchema,
@@ -57,6 +59,11 @@ import {
   reconcileWorkflowAgentRunInTransaction,
 } from "@/workflows/data";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
+import {
+  failNativeRelevanceScorerAgent,
+  reconcileNativeRelevanceScorer,
+  startNativeRelevanceScorer,
+} from "@/workflows/relevance-scoring-commands";
 
 interface CampaignStatusRow {
   id: number;
@@ -111,6 +118,11 @@ function parseToolCallJson(call: AgentToolCall): AgentToolCallWithJson {
   return { ...call, input, output };
 }
 
+function parseAgentInputContext(inputContextJson: string | undefined) {
+  const rawContext = JSON.parse(inputContextJson ?? "{}");
+  return agentInputContextSchema.parse(rawContext);
+}
+
 function parseApprovalCheckpoint(
   row: AgentRunApprovalCheckpointRow,
 ): AgentRunApprovalCheckpoint {
@@ -138,6 +150,7 @@ function mapRunWithDetails(
     playbook_key: row.playbook_key,
     status: row.status,
     input_summary: row.input_summary,
+    input_context_json: row.input_context_json ?? "{}",
     output_summary: row.output_summary,
     error_message: row.error_message,
     iteration_count: row.iteration_count,
@@ -152,6 +165,7 @@ function mapRunWithDetails(
     },
     workflowRun,
     checkpoint,
+    inputContext: parseAgentInputContext(row.input_context_json),
     toolCalls: toolCalls.map(parseToolCallJson),
     events,
   };
@@ -456,8 +470,9 @@ export async function createAgentRun(
         playbook_key,
         status,
         input_summary,
+        input_context_json,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, datetime('now'))`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, $9, datetime('now'))`,
       [
         parsed.campaignId,
         workflow.workflowRunId,
@@ -467,6 +482,7 @@ export async function createAgentRun(
         parsed.modelName,
         playbookKey,
         parsed.inputSummary,
+        JSON.stringify(parsed.inputContext),
       ],
     );
 
@@ -744,38 +760,45 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     run.model_name || undefined,
   );
   const runtimePlaybook = await getPlaybookPromptForRuntime(run.playbook_key);
+  const inputContext = parseAgentInputContext(run.input_context_json);
+  const isPlannerScorer =
+    run.agent_role === "scorer" &&
+    relevanceScoringContextSchema.safeParse(inputContext).success;
 
-  await db.execute("BEGIN IMMEDIATE");
-  try {
-    const claimResult = await db.execute(
-      `UPDATE agent_runs
-      SET status = 'running',
-        started_at = COALESCE(started_at, datetime('now')),
-        completed_at = NULL,
-        error_message = '',
-        updated_at = datetime('now')
-      WHERE id = $1
-        AND status IN ('queued', 'failed')`,
-      [parsed.id],
-    );
-    if (claimResult.rowsAffected !== 1) {
-      throw new Error("Agent run could not be claimed for start");
+  if (isPlannerScorer) {
+    await startNativeRelevanceScorer(run.id);
+  } else {
+    await db.execute("BEGIN IMMEDIATE");
+    try {
+      const claimResult = await db.execute(
+        `UPDATE agent_runs
+        SET status = 'running',
+          started_at = COALESCE(started_at, datetime('now')),
+          completed_at = NULL,
+          error_message = '',
+          updated_at = datetime('now')
+        WHERE id = $1
+          AND status IN ('queued', 'failed')`,
+        [parsed.id],
+      );
+      if (claimResult.rowsAffected !== 1) {
+        throw new Error("Agent run could not be claimed for start");
+      }
+      await recordSafetyAuditEvent(db, {
+        campaignId: run.campaign_id,
+        subjectType: "agent_run",
+        subjectId: run.id,
+        eventType: "agent_run_started",
+        severity: "info",
+        summary: "Agent run started",
+        metadata: { agentRole: run.agent_role, providerKey: run.provider_key },
+      });
+      await db.execute("COMMIT");
+    } catch (error) {
+      await rollbackAgentRuntimeTransaction(db);
+      throw error;
     }
-    await recordSafetyAuditEvent(db, {
-      campaignId: run.campaign_id,
-      subjectType: "agent_run",
-      subjectId: run.id,
-      eventType: "agent_run_started",
-      severity: "info",
-      summary: "Agent run started",
-      metadata: { agentRole: run.agent_role, providerKey: run.provider_key },
-    });
-    await db.execute("COMMIT");
-  } catch (error) {
-    await rollbackAgentRuntimeTransaction(db);
-    throw error;
   }
-
   const request: AgentModelRequest = {
     runId: run.id,
     campaignId: run.campaign_id,
@@ -783,8 +806,10 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     workflowStepId: run.workflow_step_id,
     agentRole: run.agent_role,
     inputSummary: run.input_summary,
+    inputContext,
     messages: buildAgentMessages(run.agent_role, {
       inputSummary: run.input_summary || "Validate runtime contracts locally.",
+      inputContext,
       playbook: runtimePlaybook?.definition ?? null,
       customPlaybookInstructions: runtimePlaybook?.customInstructions ?? "",
     }),
@@ -805,16 +830,25 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
     onProgress: (event) => recordProgressEvent(db, run.id, event),
   });
 
-  await db.execute("BEGIN IMMEDIATE");
-  try {
-    await persistAgentLoopResult(db, run, result, {
-      allowContinuationRecovery: false,
-    });
-    await db.execute("COMMIT");
-  } catch (error) {
-    await rollbackAgentRuntimeTransaction(db);
-    await failAgentRunAfterPersistenceError(db, run.id, error);
-    throw error;
+  if (isPlannerScorer) {
+    try {
+      await reconcileNativeRelevanceScorer(run.id, result);
+    } catch (error) {
+      await failNativeRelevanceScorerAgent(run.id, error);
+      throw error;
+    }
+  } else {
+    await db.execute("BEGIN IMMEDIATE");
+    try {
+      await persistAgentLoopResult(db, run, result, {
+        allowContinuationRecovery: false,
+      });
+      await db.execute("COMMIT");
+    } catch (error) {
+      await rollbackAgentRuntimeTransaction(db);
+      await failAgentRunAfterPersistenceError(db, run.id, error);
+      throw error;
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import { Link2, Workflow } from "lucide-react";
+import { AGENT_PROVIDER_LABELS } from "@/agent";
 
 import { Card, CardContent } from "@/components/ui/card";
 import type { AutopilotPlanDashboardItem } from "@/features/autopilot-planner/types";
@@ -36,6 +37,14 @@ export function AutopilotPlanCard({
       : plan.workflow_status === null
         ? `Run #${plan.workflow_run_id} removed`
         : `Run #${plan.workflow_run_id} · ${formatStatus(plan.workflow_status)}`;
+  const scoringState =
+    plan.score_step_status === null
+      ? "Scoring state unavailable"
+      : `Scoring is ${formatStatus(plan.score_step_status)} in Workflows`;
+  const scorerState =
+    plan.latest_scorer_provider_key === null
+      ? "No scorer run has started"
+      : `${AGENT_PROVIDER_LABELS[plan.latest_scorer_provider_key]} · ${formatStatus(plan.latest_scorer_run_status ?? "unknown")}`;
 
   return (
     <Card className="bg-card/70 forced-colors:border">
@@ -101,9 +110,13 @@ export function AutopilotPlanCard({
               <p className="text-muted-foreground break-words">
                 {workflowLink}
               </p>
+              <p className="text-muted-foreground break-words">
+                {scoringState}
+              </p>
+              <p className="text-muted-foreground break-words">{scorerState}</p>
               {plan.workflow_current_step_key ? (
                 <p className="text-muted-foreground break-words">
-                  Next step: {formatStatus(plan.workflow_current_step_key)}
+                  Current step: {formatStatus(plan.workflow_current_step_key)}
                 </p>
               ) : null}
             </div>

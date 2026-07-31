@@ -151,6 +151,14 @@ fn tool_payloads(tools: &[AgentProviderToolDefinitionInput]) -> Vec<Value> {
         .collect()
 }
 
+const SCORE_RELEVANCE_INPUT_SCHEMA_JSON: &str =
+    include_str!("../schemas/score_relevance.input.schema.json");
+
+fn score_relevance_input_schema() -> Value {
+    serde_json::from_str(SCORE_RELEVANCE_INPUT_SCHEMA_JSON)
+        .expect("bundled score_relevance input schema should be valid JSON")
+}
+
 fn native_agent_tool_definitions() -> Vec<AgentProviderToolDefinitionInput> {
     vec![
         AgentProviderToolDefinitionInput {
@@ -177,21 +185,7 @@ fn native_agent_tool_definitions() -> Vec<AgentProviderToolDefinitionInput> {
         AgentProviderToolDefinitionInput {
             name: "score_relevance".to_string(),
             description: "Scores candidate IDs against campaign fit using validated local inputs and rationale output.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                    "campaignId": { "type": "integer", "minimum": 1 },
-                    "candidatePostIds": {
-                        "type": "array",
-                        "items": { "type": "integer", "minimum": 1 },
-                        "minItems": 1,
-                        "maxItems": 50
-                    },
-                    "minimumScore": { "type": "integer", "minimum": 0, "maximum": 100, "default": 60 }
-                },
-                "required": ["campaignId", "candidatePostIds"]
-            }),
+            input_schema: score_relevance_input_schema(),
         },
         AgentProviderToolDefinitionInput {
             name: "draft_post".to_string(),
@@ -990,6 +984,47 @@ mod tests {
         assert_eq!(payloads[0]["type"], "function");
         assert_eq!(payloads[0]["function"]["name"], "draft_post");
         assert_eq!(payloads[0]["function"]["parameters"]["type"], "object");
+    }
+
+    #[test]
+    fn native_score_relevance_schema_covers_the_frontend_contract() {
+        let tools = native_agent_tool_definitions();
+        let score_tool = tools
+            .iter()
+            .find(|tool| tool.name == "score_relevance")
+            .expect("score_relevance should stay native-allowlisted");
+        let schema = &score_tool.input_schema;
+        let score_items = &schema["properties"]["scores"]["items"];
+
+        assert_eq!(
+            schema["required"],
+            json!(["campaignId", "candidatePostIds", "scores"])
+        );
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(schema["properties"]["minimumScore"]["default"], 60);
+        assert_eq!(
+            schema["properties"]["autoRejectBelowMinimum"]["default"],
+            false
+        );
+        assert_eq!(schema["properties"]["scores"]["minItems"], 1);
+        assert_eq!(schema["properties"]["scores"]["maxItems"], 50);
+        assert_eq!(score_items["additionalProperties"], false);
+        assert_eq!(
+            score_items["required"],
+            json!(["candidatePostId", "score", "rationale"])
+        );
+        assert_eq!(
+            score_items["properties"]["candidatePostId"]["type"],
+            "integer"
+        );
+        assert_eq!(
+            score_items["properties"]["candidatePostId"]["exclusiveMinimum"],
+            0
+        );
+        assert_eq!(score_items["properties"]["score"]["minimum"], 0);
+        assert_eq!(score_items["properties"]["score"]["maximum"], 100);
+        assert_eq!(score_items["properties"]["rationale"]["minLength"], 1);
+        assert_eq!(score_items["properties"]["rationale"]["maxLength"], 500);
     }
 
     #[test]

@@ -95,10 +95,16 @@ export async function getCampaignBacklogDashboard(
           c.status AS campaign_status,
           ap.id AS autopilot_plan_id,
           ap.source_import_batch_id,
-          ap.workflow_run_id
+          ap.workflow_run_id,
+          wr.status AS linked_workflow_status,
+          score_step.status AS linked_score_step_status
        FROM campaign_backlog_items AS cbi ${historyIndexClause}
        INNER JOIN campaigns c ON c.id = cbi.campaign_id
        LEFT JOIN autopilot_plans ap ON ap.campaign_backlog_item_id = cbi.id
+       LEFT JOIN workflow_runs wr ON wr.id = ap.workflow_run_id
+       LEFT JOIN workflow_steps score_step
+         ON score_step.workflow_run_id = wr.id
+        AND score_step.step_key = 'score'
        WHERE ${statusClause} ${sharedWhere}
        ORDER BY ${orderClause}
        ${limitClause}`,

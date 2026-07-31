@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentProviderKeySchema } from "@/agent/schemas";
 import {
   WORKFLOW_ARTIFACT_TYPES,
   WORKFLOW_EVENT_TYPES,
@@ -27,6 +28,26 @@ export const createWorkflowRunSchema = z.object({
 export const startWorkflowRunSchema = z.object({
   id: positiveIdSchema,
 });
+
+const connectedScoringProviderSchema = agentProviderKeySchema.refine(
+  (providerKey) => providerKey !== "dry_run",
+  "Planner scoring requires a connected model provider",
+);
+
+export const executeWorkflowRunSchema = z
+  .object({
+    id: positiveIdSchema,
+    scoring: z
+      .object({
+        providerKey: connectedScoringProviderSchema,
+        modelName: z.string().trim().min(1).max(120),
+        minimumScore: z.number().int().min(0).max(100).default(60),
+        autoRejectBelowMinimum: z.boolean().default(false),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 
 export const setWorkflowStepStatusSchema = z.object({
   stepId: positiveIdSchema,

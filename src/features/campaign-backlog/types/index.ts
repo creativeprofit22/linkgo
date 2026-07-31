@@ -1,4 +1,5 @@
 import type { CampaignStatus } from "@/features/campaigns/types";
+import type { WorkflowRunStatus, WorkflowStepStatus } from "@/workflows/types";
 
 export const CAMPAIGN_BACKLOG_WORK_TYPES = [
   "research",
@@ -106,6 +107,8 @@ export interface CampaignBacklogItemDetail extends CampaignBacklogItem {
   autopilot_plan_id?: number | null;
   source_import_batch_id?: number | null;
   workflow_run_id?: number | null;
+  linked_workflow_status?: WorkflowRunStatus | null;
+  linked_score_step_status?: WorkflowStepStatus | null;
 }
 
 export interface CampaignBacklogSummary {

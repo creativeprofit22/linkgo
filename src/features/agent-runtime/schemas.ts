@@ -11,6 +11,41 @@ import {
 
 const positiveIdSchema = z.number().int().positive();
 const optionalSummarySchema = z.string().trim().max(1000).default("");
+export const MAX_AGENT_INPUT_CONTEXT_LENGTH = 50_000;
+
+export const agentInputContextSchema = z
+  .record(z.string().trim().min(1).max(120), z.unknown())
+  .superRefine((context, issueContext) => {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(context);
+    } catch {
+      issueContext.addIssue({
+        code: "custom",
+        message: "Agent input context must be JSON serializable",
+      });
+      return;
+    }
+    if (serialized.length > MAX_AGENT_INPUT_CONTEXT_LENGTH) {
+      issueContext.addIssue({
+        code: "custom",
+        message: `Agent input context cannot exceed ${MAX_AGENT_INPUT_CONTEXT_LENGTH} characters`,
+      });
+    }
+    try {
+      if (JSON.stringify(JSON.parse(serialized)) !== serialized) {
+        issueContext.addIssue({
+          code: "custom",
+          message: "Agent input context must contain JSON values only",
+        });
+      }
+    } catch {
+      issueContext.addIssue({
+        code: "custom",
+        message: "Agent input context must contain JSON values only",
+      });
+    }
+  });
 
 export const createAgentRunSchema = z.object({
   campaignId: positiveIdSchema,
@@ -21,6 +56,7 @@ export const createAgentRunSchema = z.object({
   modelName: z.string().trim().max(120).default("dry-run-local"),
   playbookKey: playbookKeySchema.or(z.literal("")).optional(),
   inputSummary: optionalSummarySchema,
+  inputContext: agentInputContextSchema.optional().default({}),
 });
 
 export const startAgentRunSchema = z.object({

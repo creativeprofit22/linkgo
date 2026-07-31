@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkflowEventList } from "@/features/workflows/components/workflow-event-list";
+import { ScoreWorkflowDialog } from "@/features/workflows/components/score-workflow-dialog";
 import { WorkflowRunStatusBadge } from "@/features/workflows/components/workflow-status-badge";
 import { WorkflowStepList } from "@/features/workflows/components/workflow-step-list";
+import type { ConnectedAccount } from "@/features/integrations/types";
 import type {
   AddWorkflowNoteInput,
   CancelWorkflowRunInput,
+  ExecuteWorkflowRunInput,
   SetWorkflowStepStatusInput,
   StartWorkflowRunInput,
   WorkflowRunWithDetails,
@@ -17,8 +20,11 @@ import type {
 interface WorkflowRunCardProps {
   run: WorkflowRunWithDetails;
   selectedCampaignArchived: boolean;
+  connectedAccounts: ConnectedAccount[];
+  activeRunId: number | null;
+  killSwitchEnabled: boolean;
   onStartRun: (input: StartWorkflowRunInput) => Promise<void>;
-  onExecuteRun: (input: StartWorkflowRunInput) => Promise<void>;
+  onExecuteRun: (input: ExecuteWorkflowRunInput) => Promise<void>;
   onResumeRun: (input: StartWorkflowRunInput) => Promise<void>;
   onCancelRun: (input: CancelWorkflowRunInput) => Promise<void>;
   onSetStepStatus: (input: SetWorkflowStepStatusInput) => Promise<void>;
@@ -40,6 +46,9 @@ function getArtifactChipLabel(
 export function WorkflowRunCard({
   run,
   selectedCampaignArchived,
+  connectedAccounts,
+  activeRunId,
+  killSwitchEnabled,
   onStartRun,
   onExecuteRun,
   onResumeRun,
@@ -53,6 +62,17 @@ export function WorkflowRunCard({
   const canExecute = ["queued", "running"].includes(run.status);
   const canResume = ["blocked", "failed"].includes(run.status);
   const canCancel = !terminalStatuses.includes(run.status);
+  const actionPending = activeRunId === run.id;
+  const plannerScoreStep =
+    run.autopilot_plan_id !== null &&
+    run.candidateScope !== null &&
+    run.currentStep?.step_key === "score" &&
+    !terminalStatuses.includes(run.status);
+  const unscopedScoreStep =
+    run.currentStep?.step_key === "score" && run.candidateScope === null;
+  const agentArtifacts = run.artifacts.filter(
+    (artifact) => artifact.artifact_type === "agent_run",
+  );
   const autopilotOrigin =
     run.autopilot_plan_id == null
       ? null
@@ -92,6 +112,11 @@ export function WorkflowRunCard({
             <p className="text-sm">
               Current step: {run.currentStep?.title ?? run.current_step_key}
             </p>
+            {unscopedScoreStep ? (
+              <p className="text-muted-foreground text-xs">
+                Scoring is disabled because no candidate scope is attached.
+              </p>
+            ) : null}
             <p className="text-muted-foreground text-sm">
               {run.completedStepCount}/{run.totalStepCount} steps complete ·{" "}
               {run.progressPercent}%
@@ -101,55 +126,83 @@ export function WorkflowRunCard({
                 {run.context_summary}
               </p>
             )}
-            {run.artifacts.length > 0 && (
+            {run.candidateScope !== null || agentArtifacts.length > 0 ? (
               <div
                 className="flex max-w-3xl flex-wrap gap-2"
                 aria-label="Workflow artifacts"
               >
-                {run.artifacts.map((artifact) => (
+                {run.candidateScope !== null ? (
+                  <Badge variant="outline">
+                    Candidate scope: {run.candidateScope.current} current,{" "}
+                    {run.candidateScope.unscored} unscored,{" "}
+                    {run.candidateScope.removed} removed
+                  </Badge>
+                ) : null}
+                {agentArtifacts.map((artifact) => (
                   <Badge key={artifact.id} variant="outline">
                     {getArtifactChipLabel(artifact)}
                   </Badge>
                 ))}
               </div>
-            )}
+            ) : null}
           </div>
           {!selectedCampaignArchived && (
             <div className="flex shrink-0 flex-wrap gap-2">
-              {canStart && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => void onStartRun({ id: run.id })}
-                >
-                  Start run
+              {plannerScoreStep ? (
+                <ScoreWorkflowDialog
+                  run={run}
+                  connectedAccounts={connectedAccounts}
+                  pending={actionPending}
+                  disabled={selectedCampaignArchived}
+                  killSwitchEnabled={killSwitchEnabled}
+                  onExecute={onExecuteRun}
+                />
+              ) : unscopedScoreStep ? (
+                <Button type="button" size="sm" disabled>
+                  No candidate scope
                 </Button>
-              )}
-              {canExecute && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => void onExecuteRun({ id: run.id })}
-                >
-                  Run executor
-                </Button>
-              )}
-              {canResume && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => void onResumeRun({ id: run.id })}
-                >
-                  Resume executor
-                </Button>
+              ) : (
+                <>
+                  {canStart ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={actionPending}
+                      onClick={() => void onStartRun({ id: run.id })}
+                    >
+                      Start run
+                    </Button>
+                  ) : null}
+                  {canExecute ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={actionPending}
+                      onClick={() => void onExecuteRun({ id: run.id })}
+                    >
+                      {actionPending ? "Running executor…" : "Run executor"}
+                    </Button>
+                  ) : null}
+                  {canResume ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={actionPending}
+                      onClick={() => void onResumeRun({ id: run.id })}
+                    >
+                      {actionPending ? "Resuming…" : "Resume executor"}
+                    </Button>
+                  ) : null}
+                </>
               )}
               {canCancel && (
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
+                  disabled={actionPending}
                   onClick={() => void onCancelRun({ id: run.id })}
                 >
                   Cancel run

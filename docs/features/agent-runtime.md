@@ -26,6 +26,7 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 - Explicit **Resume approved run** and restart-safe **Recover continuation** controls in Agent Runtime.
 - Agent run, tool call, runtime event, and active approval checkpoint tables.
 - Selected playbook persistence on `agent_runs.playbook_key`.
+- Bounded structured `agent_runs.input_context_json` persistence and one clearly labeled JSON context block in the user message.
 - Agent Runtime tab with campaign filtering, summary cards, tool contracts, compatible playbook selection, run cards, tool payloads, and event history.
 - Archived-campaign mutation blocking in UI and data API.
 
@@ -43,7 +44,7 @@ It makes the automation layer visible and testable: typed tool contracts, provid
 2. Select an enabled playbook compatible with the agent role, or run with base role instructions.
 3. Start the run; the global kill switch is checked first.
 4. For provider-backed runs, Linkgo fetches the stored API key/base URL only for that explicit start.
-5. The run is claimed in a short SQLite transaction, then the model stream executes outside that transaction.
+5. The run is claimed in a short SQLite transaction, then the model stream executes outside that transaction. Planner-linked scorer runs use restricted native claim/start/result commands so each scorer mutation stays on one SQLx connection.
 6. Prompt assembly layers compatible playbook instructions and custom override text before locked safety lines.
 7. The loop validates each role-appropriate tool request. A provider turn containing `schedule_post` must contain exactly that one tool call; mixed approval/non-approval turns fail before any tool executes.
 8. Non-approval tools execute locally and persist completed tool calls.
@@ -61,7 +62,7 @@ Secrets stay out of SQLite and rendered UI.
 
 Provider secrets stay inside the native Tauri command boundary during explicit operator-triggered agent runs.
 
-`dry_run` remains executable with no credentials.
+`dry_run` remains executable with no credentials for attended runtime/Queue contract use. Planner-linked scoring explicitly excludes it and requires a connected provider.
 
 `schedule_post` is approval-gated and metadata-only. Waiting, approval, resume, and recovery do not create `schedule_jobs` or `publish_attempts` and do not call LinkedIn.
 
@@ -74,6 +75,8 @@ Migration 21 fails pre-checkpoint `waiting_approval` runs closed because their e
 Playbooks shape prompts only. Disabling a playbook hides it from new runtime creation while historical runs remain readable.
 
 Archived campaigns keep runtime history visible while create/start/cancel mutations are blocked.
+
+Planner-linked scorer runs retain their exact approved campaign/candidate context for failure and retry audit. Context excludes credentials, OAuth data, planner event metadata, raw source-import audit JSON, and unrelated candidates. Provider adapters remain unchanged because they already receive the assembled message list through the native credential boundary.
 
 ## Test coverage
 
@@ -92,5 +95,6 @@ Playwright covers:
 - Reload recovery, double-resume idempotency, and one-time approved tool execution.
 - Invalid approval-state/campaign/missing-link rejection with zero schedule, publish-attempt, or LinkedIn writes.
 - Archived-campaign mutation blocking in UI and data API.
+- Planner scorer context persistence/transmission, connected-provider execution, exact score tool coverage, and failure/retry reconciliation through `tests/workflows.spec.ts`.
 
 Rust migration tests assert agent runtime and approval-checkpoint tables, constraints, foreign keys, indexes, legacy fail-closed upgrade behavior, and provider parity expansion.

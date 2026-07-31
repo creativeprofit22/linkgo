@@ -1,4 +1,6 @@
+import type { z } from "zod";
 import type { AgentPlaybookKey } from "@/agent/playbooks";
+import type { relevanceScoringContextSchema } from "@/features/candidate-queue/schemas";
 import type { AgentProviderKey } from "@/agent/provider-catalog";
 import type {
   CandidatePolicyFinding,
@@ -6,6 +8,9 @@ import type {
 } from "@/features/candidate-policy/types";
 
 export type CandidateStatus = "new" | "shortlisted" | "rejected" | "drafted";
+export type RelevanceScoringContext = z.infer<
+  typeof relevanceScoringContextSchema
+>;
 
 export type CandidatePlatform = "linkedin";
 

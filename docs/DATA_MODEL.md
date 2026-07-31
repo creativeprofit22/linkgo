@@ -76,7 +76,7 @@ Migrations `24`–`26` store one-off and recurring campaign due work with visibl
 
 Open-work indexes cover `(campaign_id, status, due_at)`, `(status, due_at)`, and `(owner_type, status, due_at)`; recurrence lookup uses `recurrence_parent_id`. Two partial terminal-history indexes cover `(COALESCE(completed_at, cancelled_at) DESC, id DESC)` globally and with leading `campaign_id`, restricted to `completed` and `cancelled` rows.
 
-Daily and weekly completion creates one future successor in the same transaction. Calendar arithmetic uses `recurrence_timezone`, preserves local wall-clock time across daylight-saving changes, and coalesces missed intervals. Ambiguous local times choose the earlier instant; nonexistent local times shift forward by the daylight-saving gap. Completed and cancelled rows are terminal, cancellation creates no successor, and every mutation rechecks that the campaign is not archived. Manually created `linkgo` rows remain responsibility labels. Migration 27 can link one planner-created Linkgo scoring row through `autopilot_plans.campaign_backlog_item_id`; neither kind runs an external action.
+Daily and weekly completion creates one future successor in the same transaction. Calendar arithmetic uses `recurrence_timezone`, preserves local wall-clock time across daylight-saving changes, and coalesces missed intervals. Ambiguous local times choose the earlier instant; nonexistent local times shift forward by the daylight-saving gap. Completed and cancelled rows are terminal, cancellation creates no successor, and every mutation rechecks that the campaign is not archived. Manually created `linkgo` rows remain responsibility labels. Migration 27 can link one planner-created Linkgo scoring row through `autopilot_plans.campaign_backlog_item_id`. Migration 29 makes the linked workflow score step authoritative for that one-off item: pending/running/failed/completed/skipped project to pending/in-progress/blocked/completed/cancelled without creating a recurrence successor or reopening a terminal legacy row.
 
 ### `target_posts`
 
@@ -261,7 +261,7 @@ Stores the durable, idempotent source-batch-to-local-work ownership record.
 | `created_at`               | TEXT    | UTC ISO-8601 timestamp                                  |
 | `updated_at`               | TEXT    | UTC ISO-8601 timestamp                                  |
 
-A planned insert requires both local-work links and a positive candidate count. A skipped row requires zero candidates and null links. Later deletion can clear either linked ID without reopening the unique source batch. Campaign/source-batch and status/recency indexes support anti-join eligibility and bounded dashboards.
+A planned insert requires both local-work links and a positive candidate count. A skipped row requires zero candidates and null links. Later deletion can clear either linked ID without reopening the unique source batch. Migration 29 backfills each planned workflow's surviving accepted candidates as score-step `candidate_post` artifacts. Campaign/source-batch and status/recency indexes support anti-join eligibility and bounded dashboards.
 
 ### `autopilot_planner_events`
 
@@ -684,29 +684,53 @@ Stores append-only workflow lifecycle events.
 
 Indexes: `idx_workflow_events_run_id`, `idx_workflow_events_step_id`, `idx_workflow_events_event_type`, `idx_workflow_events_created_at`.
 
+### `workflow_artifacts`
+
+Links a workflow and optional step to durable execution/domain provenance.
+
+| Column             | Type    | Notes                                                               |
+| ------------------ | ------- | ------------------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                         |
+| `workflow_run_id`  | INTEGER | References `workflow_runs(id)` with cascade delete                  |
+| `workflow_step_id` | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL` |
+| `artifact_type`    | TEXT    | Migration 29 allows `agent_run` or `candidate_post`                 |
+| `artifact_id`      | INTEGER | Positive polymorphic identifier                                     |
+| `summary`          | TEXT    | Compact provenance summary                                          |
+| `created_at`       | TEXT    | SQLite datetime                                                     |
+| `updated_at`       | TEXT    | SQLite datetime                                                     |
+
+The unique key is `(workflow_run_id, artifact_type, artifact_id)`. Migration 29 rebuilds the table, preserves existing agent artifacts and indexes, then backfills planned score workflows from surviving accepted `source_import_items.candidate_post_id` values with campaign ownership checks.
+
+`candidate_post` is intentionally polymorphic and has no candidate foreign key. Candidate deletion therefore does not delete provenance; scope reads left-join the candidate and report a removed artifact without exposing old source text.
+
+### `workflow_step_executions`
+
+Stores executor attempt history, linked agent run, role, attempt count, active/terminal status, errors, and timestamps. Planner scoring uses `BEGIN IMMEDIATE`, re-reads the score step, and rejects another `claimed`, `running`, or `waiting_approval` attempt before insertion. Retries append the next attempt rather than overwriting history.
+
 ### `agent_runs`
 
 Stores one local agent execution attempt for one campaign, optionally tied to a workflow run or step.
 
-| Column             | Type    | Notes                                                                                                                                                                                                           |
-| ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`               | INTEGER | Primary key                                                                                                                                                                                                     |
-| `campaign_id`      | INTEGER | References `campaigns(id)` cascade delete                                                                                                                                                                       |
-| `workflow_run_id`  | INTEGER | Nullable, references `workflow_runs(id)` with `ON DELETE SET NULL`                                                                                                                                              |
-| `workflow_step_id` | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL`                                                                                                                                             |
-| `agent_role`       | TEXT    | `researcher`, `scorer`, `drafter`, `auditor`, `scheduler`, or `analyst`                                                                                                                                         |
-| `provider_key`     | TEXT    | `dry_run`, GG AI provider keys (`anthropic`, `xiaomi`, `openai`, `gemini`, `glm`, `moonshot`, `deepseek`, `openrouter`, `sakana`, `minimax`), or Linkgo-only `custom`; legacy `google` rows migrate to `gemini` |
-| `model_name`       | TEXT    | Provider model label                                                                                                                                                                                            |
-| `playbook_key`     | TEXT    | Selected built-in playbook key for this run, default empty string for base role instructions                                                                                                                    |
-| `status`           | TEXT    | `queued`, `running`, `waiting_approval`, `completed`, `failed`, or `cancelled`                                                                                                                                  |
-| `input_summary`    | TEXT    | Compact operator/runtime input                                                                                                                                                                                  |
-| `output_summary`   | TEXT    | Compact runtime result                                                                                                                                                                                          |
-| `error_message`    | TEXT    | Failure reason, default empty string                                                                                                                                                                            |
-| `iteration_count`  | INTEGER | Bounded `0` through `20`                                                                                                                                                                                        |
-| `started_at`       | TEXT    | Nullable start timestamp                                                                                                                                                                                        |
-| `completed_at`     | TEXT    | Nullable terminal timestamp                                                                                                                                                                                     |
-| `created_at`       | TEXT    | SQLite datetime                                                                                                                                                                                                 |
-| `updated_at`       | TEXT    | SQLite datetime                                                                                                                                                                                                 |
+| Column               | Type    | Notes                                                                                                                                                                                                           |
+| -------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | INTEGER | Primary key                                                                                                                                                                                                     |
+| `campaign_id`        | INTEGER | References `campaigns(id)` cascade delete                                                                                                                                                                       |
+| `workflow_run_id`    | INTEGER | Nullable, references `workflow_runs(id)` with `ON DELETE SET NULL`                                                                                                                                              |
+| `workflow_step_id`   | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL`                                                                                                                                             |
+| `agent_role`         | TEXT    | `researcher`, `scorer`, `drafter`, `auditor`, `scheduler`, or `analyst`                                                                                                                                         |
+| `provider_key`       | TEXT    | `dry_run`, GG AI provider keys (`anthropic`, `xiaomi`, `openai`, `gemini`, `glm`, `moonshot`, `deepseek`, `openrouter`, `sakana`, `minimax`), or Linkgo-only `custom`; legacy `google` rows migrate to `gemini` |
+| `model_name`         | TEXT    | Provider model label                                                                                                                                                                                            |
+| `playbook_key`       | TEXT    | Selected built-in playbook key for this run, default empty string for base role instructions                                                                                                                    |
+| `status`             | TEXT    | `queued`, `running`, `waiting_approval`, `completed`, `failed`, or `cancelled`                                                                                                                                  |
+| `input_summary`      | TEXT    | Compact operator/runtime input                                                                                                                                                                                  |
+| `input_context_json` | TEXT    | Migration 29 valid JSON context, default `{}`, maximum 50,000 characters; planner scoring stores bounded approved campaign/candidate context                                                                    |
+| `output_summary`     | TEXT    | Compact runtime result                                                                                                                                                                                          |
+| `error_message`      | TEXT    | Failure reason, default empty string                                                                                                                                                                            |
+| `iteration_count`    | INTEGER | Bounded `0` through `20`                                                                                                                                                                                        |
+| `started_at`         | TEXT    | Nullable start timestamp                                                                                                                                                                                        |
+| `completed_at`       | TEXT    | Nullable terminal timestamp                                                                                                                                                                                     |
+| `created_at`         | TEXT    | SQLite datetime                                                                                                                                                                                                 |
+| `updated_at`         | TEXT    | SQLite datetime                                                                                                                                                                                                 |
 
 Indexes: `idx_agent_runs_campaign_id`, `idx_agent_runs_workflow_run_id`, `idx_agent_runs_workflow_step_id`, `idx_agent_runs_status`, `idx_agent_runs_agent_role`, `idx_agent_runs_playbook_key`, `idx_agent_runs_updated_at`.
 

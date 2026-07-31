@@ -7,6 +7,7 @@ import {
   cancelWorkflowRunSchema,
   createWorkflowArtifactSchema,
   createWorkflowRunSchema,
+  executeWorkflowRunSchema,
   setWorkflowStepStatusSchema,
   startWorkflowRunSchema,
 } from "@/workflows/schemas";
@@ -16,6 +17,7 @@ import {
   type CancelWorkflowRunInput,
   type CreateWorkflowArtifactInput,
   type CreateWorkflowRunInput,
+  type ExecuteWorkflowRunInput,
   type StartWorkflowRunInput,
   type SetWorkflowStepStatusInput,
   type WorkflowArtifact,
@@ -56,6 +58,9 @@ interface WorkflowStepValidationRow extends WorkflowStep {
 interface WorkflowArtifactRow extends WorkflowArtifact {
   agent_role: string | null;
   agent_status: string | null;
+  candidate_id: number | null;
+  candidate_status: string | null;
+  candidate_relevance_score: number | null;
 }
 
 interface WorkflowArtifactOwnershipRow {
@@ -111,6 +116,35 @@ function mapRunWithDetails(
   const totalStepCount = steps.length;
   const currentStep =
     steps.find((step) => step.step_key === row.current_step_key) ?? null;
+  const candidateArtifacts = artifacts.filter(
+    (artifact) => artifact.artifact_type === "candidate_post",
+  );
+  const currentCandidateArtifacts = candidateArtifacts.filter(
+    (artifact) => !artifact.candidate_removed,
+  );
+  const candidateScope =
+    candidateArtifacts.length === 0
+      ? null
+      : {
+          total: candidateArtifacts.length,
+          current: currentCandidateArtifacts.length,
+          unscored: currentCandidateArtifacts.filter(
+            (artifact) =>
+              artifact.candidate_status === "new" &&
+              artifact.candidate_relevance_score === null,
+          ).length,
+          alreadyScored: currentCandidateArtifacts.filter(
+            (artifact) => artifact.candidate_relevance_score !== null,
+          ).length,
+          ineligible: currentCandidateArtifacts.filter(
+            (artifact) =>
+              artifact.candidate_status !== "new" &&
+              artifact.candidate_relevance_score === null,
+          ).length,
+          removed: candidateArtifacts.filter(
+            (artifact) => artifact.candidate_removed,
+          ).length,
+        };
   return {
     id: row.id,
     campaign_id: row.campaign_id,
@@ -141,6 +175,7 @@ function mapRunWithDetails(
         : Math.round((completedStepCount / totalStepCount) * 100),
     currentStep,
     latestEvent: events[0] ?? null,
+    candidateScope,
   };
 }
 
@@ -281,6 +316,52 @@ async function updateRunFromSteps(
       "Workflow run completed",
     );
   }
+}
+
+export async function syncPlannerScoringBacklogInTransaction(
+  db: LinkgoDatabase,
+  workflowRunId: number,
+  scoreStepStatus: WorkflowStepStatus,
+): Promise<void> {
+  const backlogStatus =
+    scoreStepStatus === "pending"
+      ? "pending"
+      : scoreStepStatus === "running" || scoreStepStatus === "waiting_approval"
+        ? "in_progress"
+        : scoreStepStatus === "completed"
+          ? "completed"
+          : scoreStepStatus === "skipped"
+            ? "cancelled"
+            : "blocked";
+  await db.execute(
+    `UPDATE campaign_backlog_items
+      SET status = $1,
+        completed_at = CASE
+          WHEN $1 = 'completed' THEN COALESCE(completed_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+          ELSE NULL
+        END,
+        cancelled_at = CASE
+          WHEN $1 = 'cancelled' THEN COALESCE(cancelled_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+          ELSE NULL
+        END,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE id = (
+        SELECT ap.campaign_backlog_item_id
+        FROM autopilot_plans ap
+        INNER JOIN workflow_steps ws
+          ON ws.workflow_run_id = ap.workflow_run_id
+         AND ws.step_key = 'score'
+        WHERE ap.workflow_run_id = $2
+          AND ap.status = 'planned'
+          AND ws.status = $3
+        LIMIT 1
+      )
+        AND owner_type = 'linkgo'
+        AND work_type = 'scoring'
+        AND recurrence = 'none'
+        AND status NOT IN ('completed', 'cancelled')`,
+    [backlogStatus, workflowRunId, scoreStepStatus],
+  );
 }
 
 async function startNextPendingWorkflowStep(
@@ -432,6 +513,13 @@ export async function reconcileWorkflowAgentRunInTransaction(
   }
 
   await updateRunFromSteps(db, step.workflow_run_id, step.run_status);
+  if (step.step_key === "score") {
+    await syncPlannerScoringBacklogInTransaction(
+      db,
+      step.workflow_run_id,
+      projection.stepStatus,
+    );
+  }
   return true;
 }
 
@@ -489,11 +577,17 @@ export async function listWorkflowRuns(
       `SELECT
         wa.*,
         ar.agent_role,
-        ar.status AS agent_status
+        ar.status AS agent_status,
+        cp.id AS candidate_id,
+        cp.status AS candidate_status,
+        cp.relevance_score AS candidate_relevance_score
       FROM workflow_artifacts wa
       LEFT JOIN agent_runs ar
         ON wa.artifact_type = 'agent_run'
         AND ar.id = wa.artifact_id
+      LEFT JOIN candidate_posts cp
+        ON wa.artifact_type = 'candidate_post'
+        AND cp.id = wa.artifact_id
       WHERE wa.workflow_run_id IN (${placeholders})
       ORDER BY wa.workflow_run_id ASC, wa.id ASC`,
       runIds,
@@ -517,7 +611,12 @@ export async function listWorkflowRuns(
   const artifactsByRunId = new Map<number, WorkflowArtifactWithDetails[]>();
   for (const artifact of artifactRows) {
     const artifacts = artifactsByRunId.get(artifact.workflow_run_id) ?? [];
-    artifacts.push(artifact);
+    artifacts.push({
+      ...artifact,
+      candidate_removed:
+        artifact.artifact_type === "candidate_post" &&
+        artifact.candidate_id === null,
+    });
     artifactsByRunId.set(artifact.workflow_run_id, artifacts);
   }
 
@@ -688,6 +787,17 @@ export async function startWorkflowRun(
       }
     }
 
+    const scoreStatusRows = await db.select<
+      Array<{ status: WorkflowStepStatus }>
+    >(
+      `SELECT status FROM workflow_steps
+        WHERE workflow_run_id = $1 AND step_key = 'score' LIMIT 1`,
+      [parsed.id],
+    );
+    const scoreStatus = scoreStatusRows[0]?.status;
+    if (scoreStatus !== undefined) {
+      await syncPlannerScoringBacklogInTransaction(db, parsed.id, scoreStatus);
+    }
     await db.execute("COMMIT");
   } catch (error) {
     await rollbackWorkflowTransaction(db);
@@ -728,20 +838,31 @@ async function getWorkflowArtifactOwnership(
     }
   }
 
-  const artifactRows = await db.select<WorkflowArtifactOwnershipRow[]>(
-    `SELECT
-      campaign_id,
-      workflow_run_id,
-      workflow_step_id
-    FROM agent_runs
-    WHERE id = $1
-      AND $2 = 'agent_run'
-    LIMIT 1`,
-    [artifactId, artifactType],
-  );
+  const artifactRows =
+    artifactType === "agent_run"
+      ? await db.select<WorkflowArtifactOwnershipRow[]>(
+          `SELECT
+            campaign_id,
+            workflow_run_id,
+            workflow_step_id
+          FROM agent_runs
+          WHERE id = $1
+          LIMIT 1`,
+          [artifactId],
+        )
+      : await db.select<WorkflowArtifactOwnershipRow[]>(
+          `SELECT
+            campaign_id,
+            NULL AS workflow_run_id,
+            NULL AS workflow_step_id
+          FROM candidate_posts
+          WHERE id = $1
+          LIMIT 1`,
+          [artifactId],
+        );
   const artifact = artifactRows[0];
   if (artifact === undefined)
-    throw new Error("Agent run artifact was not found");
+    throw new Error("Workflow artifact was not found");
   if (artifact.campaign_id !== campaignId) {
     throw new Error("Artifact belongs to a different campaign");
   }
@@ -892,11 +1013,24 @@ export async function updateWorkflowStepExecution(input: {
 }
 
 export async function executeWorkflowRun(
-  input: StartWorkflowRunInput,
+  input: ExecuteWorkflowRunInput,
 ): Promise<void> {
-  const parsed = startWorkflowRunSchema.parse(input);
+  const parsed = executeWorkflowRunSchema.parse(input);
   const { runContentPipelineExecutor } = await import("@/workflows/executor");
-  await runContentPipelineExecutor(parsed.id);
+  const executeInput: ExecuteWorkflowRunInput =
+    parsed.scoring === undefined
+      ? { id: parsed.id }
+      : {
+          id: parsed.id,
+          scoring: {
+            ...parsed.scoring,
+            providerKey: parsed.scoring.providerKey as Exclude<
+              typeof parsed.scoring.providerKey,
+              "dry_run"
+            >,
+          },
+        };
+  await runContentPipelineExecutor(executeInput);
 }
 
 export async function resumeWorkflowRun(
@@ -1015,6 +1149,13 @@ export async function setWorkflowStepStatus(
     }
 
     await updateRunFromSteps(db, step.workflow_run_id, step.run_status);
+    if (step.step_key === "score") {
+      await syncPlannerScoringBacklogInTransaction(
+        db,
+        step.workflow_run_id,
+        parsed.status,
+      );
+    }
     await db.execute("COMMIT");
   } catch (error) {
     await rollbackWorkflowTransaction(db);
@@ -1049,6 +1190,28 @@ export async function cancelWorkflowRun(
       "run_cancelled",
       "Workflow run cancelled",
     );
+    const scoreRows = await db.select<
+      Array<{ id: number; status: WorkflowStepStatus }>
+    >(
+      `SELECT id, status FROM workflow_steps
+        WHERE workflow_run_id = $1 AND step_key = 'score' LIMIT 1`,
+      [parsed.id],
+    );
+    const scoreStep = scoreRows[0];
+    if (
+      scoreStep !== undefined &&
+      !["completed", "skipped"].includes(scoreStep.status)
+    ) {
+      await db.execute(
+        `UPDATE workflow_steps
+          SET status = 'skipped',
+            completed_at = COALESCE(completed_at, datetime('now')),
+            updated_at = datetime('now')
+          WHERE id = $1`,
+        [scoreStep.id],
+      );
+      await syncPlannerScoringBacklogInTransaction(db, parsed.id, "skipped");
+    }
     await db.execute("COMMIT");
   } catch (error) {
     await rollbackWorkflowTransaction(db);
