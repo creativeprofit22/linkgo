@@ -39,6 +39,7 @@ import {
 } from "@/agent/schemas";
 import type { AgentToolExecutionContext } from "@/agent/types";
 import { DEFAULT_AGENT_MODELS } from "@/agent/provider-catalog";
+import { settleLinkedDraftRequestsForCandidateDeletionInTransaction } from "@/workflows/draft-generation";
 import { applyNativeRelevanceScores } from "@/workflows/relevance-scoring-commands";
 
 interface TargetPostRow {
@@ -661,10 +662,22 @@ export async function setCandidateStatus(
 
 export async function deleteCandidate(id: number): Promise<void> {
   const db = await getDb();
-  await db.execute(`DELETE FROM dedupe_keys WHERE candidate_post_id = $1`, [
-    id,
-  ]);
-  await db.execute(`DELETE FROM candidate_posts WHERE id = $1`, [id]);
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    await settleLinkedDraftRequestsForCandidateDeletionInTransaction(db, id);
+    await db.execute(`DELETE FROM dedupe_keys WHERE candidate_post_id = $1`, [
+      id,
+    ]);
+    const deleted = await db.execute(
+      `DELETE FROM candidate_posts WHERE id = $1`,
+      [id],
+    );
+    if (deleted.rowsAffected !== 1) throw new Error("Candidate was not found");
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackTransaction(db);
+    throw error;
+  }
 }
 
 async function assertCandidateCampaignCanMutate(

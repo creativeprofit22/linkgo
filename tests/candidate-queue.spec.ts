@@ -321,6 +321,150 @@ test("candidate deletion requires confirmation", async ({ page }) => {
   ).toBeHidden();
 });
 
+test("linked draft deletion blocks its workflow and rolls back atomically", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+
+  const fixture = await page.evaluate(() => {
+    const mockWindow = window as unknown as {
+      __LINKGO_SQL_SEED_LINKED_DRAFT_CANDIDATE_DELETE__: () => {
+        candidateId: number;
+        requestId: number;
+        workflowRunId: number;
+        workflowStepId: number;
+      };
+    };
+    return mockWindow.__LINKGO_SQL_SEED_LINKED_DRAFT_CANDIDATE_DELETE__();
+  });
+  const readState = async () =>
+    page.evaluate((ids) => {
+      const mockWindow = window as unknown as {
+        __LINKGO_SQL_CANDIDATE_POSTS__: () => Array<{ id: number }>;
+        __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{
+          id: number;
+          status: string;
+          error_message: string;
+        }>;
+        __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{
+          id: number;
+          status: string;
+          current_step_key: string;
+        }>;
+        __LINKGO_SQL_WORKFLOW_STEPS__: () => Array<{
+          id: number;
+          status: string;
+          output_summary: string;
+          error_message: string;
+        }>;
+        __LINKGO_SQL_WORKFLOW_EVENTS__: () => Array<{
+          workflow_run_id: number;
+          workflow_step_id: number | null;
+          event_type: string;
+          summary: string;
+        }>;
+        __LINKGO_SQL_WORKFLOW_ARTIFACTS__: () => Array<{
+          workflow_run_id: number;
+          artifact_type: string;
+          artifact_id: number;
+          summary: string;
+        }>;
+      };
+      return {
+        candidate: mockWindow
+          .__LINKGO_SQL_CANDIDATE_POSTS__()
+          .find((row) => row.id === ids.candidateId),
+        request: mockWindow
+          .__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()
+          .find((row) => row.id === ids.requestId),
+        run: mockWindow
+          .__LINKGO_SQL_WORKFLOW_RUNS__()
+          .find((row) => row.id === ids.workflowRunId),
+        step: mockWindow
+          .__LINKGO_SQL_WORKFLOW_STEPS__()
+          .find((row) => row.id === ids.workflowStepId),
+        events: mockWindow
+          .__LINKGO_SQL_WORKFLOW_EVENTS__()
+          .filter((row) => row.workflow_run_id === ids.workflowRunId),
+        artifact: mockWindow
+          .__LINKGO_SQL_WORKFLOW_ARTIFACTS__()
+          .find(
+            (row) =>
+              row.workflow_run_id === ids.workflowRunId &&
+              row.artifact_type === "candidate_post" &&
+              row.artifact_id === ids.candidateId,
+          ),
+      };
+    }, fixture);
+
+  page.on("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_FAIL_CANDIDATE_DELETE_WORKFLOW_EVENT__?: boolean;
+      }
+    ).__LINKGO_FAIL_CANDIDATE_DELETE_WORKFLOW_EVENT__ = true;
+  });
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+
+  await expect(page.getByText("Candidate was not deleted")).toBeVisible();
+  await expect(
+    page.getByText("Injected candidate deletion workflow event failure"),
+  ).toBeVisible();
+  const rolledBack = await readState();
+  expect(rolledBack.candidate).toBeDefined();
+  expect(rolledBack.request).toMatchObject({ status: "generated" });
+  expect(rolledBack.run).toMatchObject({
+    status: "running",
+    current_step_key: "draft",
+  });
+  expect(rolledBack.step).toMatchObject({
+    status: "running",
+    output_summary: "Waiting for operator to save generated variants",
+    error_message: "",
+  });
+  expect(rolledBack.events).toHaveLength(0);
+  expect(rolledBack.artifact).toBeDefined();
+
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Jane Operator" }),
+  ).toBeHidden();
+
+  const deleted = await readState();
+  expect(deleted.candidate).toBeUndefined();
+  expect(deleted.request).toBeUndefined();
+  expect(deleted.run).toMatchObject({
+    status: "blocked",
+    current_step_key: "draft",
+  });
+  expect(deleted.step).toMatchObject({
+    status: "blocked",
+    output_summary: "",
+  });
+  expect(deleted.step?.error_message).toContain(
+    `Candidate #${fixture.candidateId} was deleted`,
+  );
+  expect(deleted.events).toContainEqual(
+    expect.objectContaining({
+      workflow_step_id: fixture.workflowStepId,
+      event_type: "step_blocked",
+      summary: expect.stringContaining(
+        `Candidate #${fixture.candidateId} was deleted`,
+      ),
+    }),
+  );
+  expect(deleted.artifact).toMatchObject({
+    artifact_id: fixture.candidateId,
+    summary: `Candidate #${fixture.candidateId} selected for drafting`,
+  });
+});
+
 test("queue renders no-campaign empty state", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await openQueue(page);
