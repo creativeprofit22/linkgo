@@ -1,8 +1,10 @@
 import { Archive, ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DraftVariantCard } from "@/features/drafts/components/draft-variant-card";
+import { DRAFT_PROMPT_ROUTES } from "@/features/drafts/prompt-routing";
 import {
   DraftAuditSeverityBadge,
   DraftStatusBadge,
@@ -63,6 +65,9 @@ export function DraftCard({
               <CardTitle className="truncate">{authorName}</CardTitle>
               <DraftStatusBadge status={draft.status} />
               <DraftAuditSeverityBadge severity={highestSeverity} />
+              <Badge variant="outline">
+                {DRAFT_PROMPT_ROUTES[draft.content_intent].label} intent
+              </Badge>
             </div>
             <p className="text-muted-foreground text-sm">
               {draft.campaign_name} · {draft.variants.length} variants

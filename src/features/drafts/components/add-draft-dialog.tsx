@@ -14,7 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { CandidateWithTarget } from "@/features/candidate-queue/types";
-import type { CreateDraftInput } from "@/features/drafts/types";
+import { DRAFT_PROMPT_ROUTES } from "@/features/drafts/prompt-routing";
+import {
+  DRAFT_CONTENT_INTENTS,
+  type CreateDraftInput,
+  type DraftContentIntent,
+} from "@/features/drafts/types";
 
 interface AddDraftDialogProps {
   candidates: CandidateWithTarget[];
@@ -33,6 +38,7 @@ interface DraftVariantFormState {
 
 interface DraftFormState {
   candidateId: string;
+  contentIntent: DraftContentIntent;
   angle: string;
   notes: string;
   variants: DraftVariantFormState[];
@@ -50,6 +56,7 @@ function getInitialFormState(
 ): DraftFormState {
   return {
     candidateId: candidates[0] === undefined ? "" : String(candidates[0].id),
+    contentIntent: "idea",
     angle: "",
     notes: "",
     variants: [{ ...emptyVariant }],
@@ -61,6 +68,7 @@ function toDraftInput(form: DraftFormState): CreateDraftInput {
     candidateId: Number(form.candidateId),
     angle: form.angle,
     notes: form.notes,
+    contentIntent: form.contentIntent,
     variants: form.variants,
   };
 }
@@ -206,6 +214,29 @@ export function AddDraftDialog({
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Content intent" htmlFor="draft-content-intent">
+                <select
+                  id="draft-content-intent"
+                  value={form.contentIntent}
+                  onChange={(event) =>
+                    updateField("contentIntent", event.target.value)
+                  }
+                  aria-describedby="draft-content-intent-help"
+                  className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                >
+                  {DRAFT_CONTENT_INTENTS.map((intent) => (
+                    <option key={intent} value={intent}>
+                      {DRAFT_PROMPT_ROUTES[intent].label}
+                    </option>
+                  ))}
+                </select>
+                <p
+                  id="draft-content-intent-help"
+                  className="text-muted-foreground text-xs"
+                >
+                  {DRAFT_PROMPT_ROUTES[form.contentIntent].guidance}
+                </p>
+              </Field>
               <Field label="Angle" htmlFor="draft-angle">
                 <Input
                   id="draft-angle"

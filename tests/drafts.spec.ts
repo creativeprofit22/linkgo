@@ -110,6 +110,7 @@ test("generates distinct dry-run provider variants and saves their exact text", 
   await expect(
     page.getByText("This variant has draft text to review.").first(),
   ).toBeVisible();
+  await expect(page.getByText("Idea intent").first()).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Generate variants" }),
   ).toBeDisabled();
