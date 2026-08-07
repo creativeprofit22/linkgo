@@ -98,6 +98,12 @@ export interface DraftAiAuditFinding {
   created_at: string;
 }
 
+export interface DraftVariantAiAudit {
+  status: DraftAiAuditRunStatus | null;
+  run: DraftAiAuditRun | null;
+  findings: DraftAiAuditFinding[];
+}
+
 export interface RunDraftAiAuditInput {
   draftVariantId: number;
   providerKey?: AgentProviderKey;
@@ -147,6 +153,7 @@ export interface FailDraftAiAuditRunInput {
 export type DraftVariantWithAudits = DraftVariant & {
   audits: DraftAuditFinding[];
   auditSeverity: DraftAuditSeverity;
+  aiAudit: DraftVariantAiAudit;
 };
 
 export type DraftWithDetails = Draft & {

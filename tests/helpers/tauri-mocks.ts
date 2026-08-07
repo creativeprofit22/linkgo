@@ -4380,6 +4380,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             agent_run_id: audit.agent_run_id,
           }));
       }
+      if (
+        query.includes("FROM draft_ai_audit_runs dar") &&
+        query.includes("dar.content_revision = dv.content_revision")
+      ) {
+        const variantIds = new Set(values.map(Number));
+        return draftAiAuditRuns
+          .filter((run) => variantIds.has(run.draft_variant_id))
+          .filter((run) => {
+            const variant = draftVariants.find(
+              (candidate) => candidate.id === run.draft_variant_id,
+            );
+            return run.content_revision === variant?.content_revision;
+          })
+          .sort((left, right) => right.id - left.id);
+      }
       if (query.includes("FROM draft_ai_audit_runs")) {
         if (query.includes("WHERE id = $1")) {
           return draftAiAuditRuns.filter(
@@ -4398,8 +4413,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         );
       }
       if (query.includes("FROM draft_ai_audit_findings")) {
-        return draftAiAuditFindings.filter(
-          (finding) => finding.audit_run_id === Number(values[0] ?? 0),
+        const runIds = new Set(values.map(Number));
+        return draftAiAuditFindings.filter((finding) =>
+          runIds.has(finding.audit_run_id),
         );
       }
       if (
@@ -8268,10 +8284,38 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         campaigns.push(campaign);
         nextCampaignId += 1;
       }
+      const targetPostId = nextTargetPostId++;
+      const candidatePostId = nextCandidatePostId++;
+      targetPosts.push({
+        id: targetPostId,
+        platform: "linkedin",
+        url: `https://www.linkedin.com/posts/ai-audit-${targetPostId}`,
+        normalized_url: `https://www.linkedin.com/posts/ai-audit-${targetPostId}`,
+        platform_resource_urn: "",
+        author_name: "AI audit author",
+        author_profile_url: "",
+        posted_at: now,
+        content: "AI audit source content",
+        content_hash: `ai-audit-${targetPostId}`,
+        created_at: now,
+        updated_at: now,
+      });
+      candidatePosts.push({
+        id: candidatePostId,
+        campaign_id: campaign.id,
+        target_post_id: targetPostId,
+        source_keyword: "ai audit",
+        status: "new",
+        relevance_score: 90,
+        score_reason: "AI audit fixture",
+        notes: "",
+        created_at: now,
+        updated_at: now,
+      });
       const draft: Draft = {
         id: nextDraftId,
         campaign_id: campaign.id,
-        candidate_post_id: 0,
+        candidate_post_id: candidatePostId,
         angle: "AI audit runtime fixture",
         notes: "",
         content_intent: "idea",

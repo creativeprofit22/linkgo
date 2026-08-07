@@ -74,6 +74,7 @@ type DraftTestApi = {
     input: CompleteDraftAiAuditRunInput,
   ) => Promise<void>;
   createDraft: (input: CreateDraftInput) => Promise<number>;
+  listDrafts: typeof import("@/features/drafts/data").listDrafts;
   listEligibleDraftWorkflowOptions: (
     campaignId: number,
   ) => Promise<EligibleDraftWorkflowOption[]>;
@@ -139,6 +140,7 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
       completeDraftAiAuditRun,
       createDraft,
       failDraftAiAuditRun,
+      listDrafts,
       listEligibleDraftWorkflowOptions,
       reconcileDraftAiAuditLifecycle,
       runDraftAiAudit,
@@ -151,6 +153,7 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
       ).__LINKGO_DRAFTS_TEST_API__ = {
         completeDraftAiAuditRun,
         createDraft,
+        listDrafts,
         listEligibleDraftWorkflowOptions,
         failDraftAiAuditRun,
         reconcileDraftAiAuditLifecycle,

@@ -18,6 +18,8 @@ import {
   createDraftSchema,
   completeDraftAiAuditRunSchema,
   dismissDraftGenerationRequestSchema,
+  draftAiAuditFindingRowsSchema,
+  draftAiAuditRunRowSchema,
   failDraftAiAuditRunSchema,
   generateDraftVariantsSchema,
   generatedDraftVariantSchema,
@@ -35,12 +37,14 @@ import type {
   CandidateStatus,
   CandidateWithTarget,
 } from "@/features/candidate-queue/types";
+import { DRAFT_AI_AUDIT_RULE_KEYS } from "@/features/drafts/types";
 import type {
   CompleteDraftAiAuditRunInput,
   CreateDraftInput,
   Draft,
   DraftAuditFinding,
   DraftAuditSeverity,
+  DraftAiAuditFinding,
   DraftAiAuditRun,
   DraftAiAuditRunStatus,
   DraftGenerationRequest,
@@ -52,6 +56,7 @@ import type {
   DraftVariantInput,
   DraftVariantStatus,
   DraftVariantWithAudits,
+  DraftVariantAiAudit,
   DraftWithDetails,
   FailDraftAiAuditRunInput,
   GenerateDraftVariantsInput,
@@ -410,7 +415,27 @@ function mapDraftVariantBase(row: DraftVariantRow): DraftVariant {
 }
 
 function mapDraftAiAuditRun(row: DraftAiAuditRunRow): DraftAiAuditRun {
-  return { ...row };
+  return draftAiAuditRunRowSchema.parse(row);
+}
+
+function mapCurrentDraftAiAudit(
+  run: DraftAiAuditRun | undefined,
+  findingRows: DraftAiAuditFinding[],
+): DraftVariantAiAudit {
+  if (run === undefined) return { status: null, run: null, findings: [] };
+
+  const findings =
+    run.status === "completed"
+      ? draftAiAuditFindingRowsSchema
+          .parse(findingRows)
+          .sort(
+            (left, right) =>
+              DRAFT_AI_AUDIT_RULE_KEYS.indexOf(left.rule_key) -
+              DRAFT_AI_AUDIT_RULE_KEYS.indexOf(right.rule_key),
+          )
+      : [];
+
+  return { status: run.status, run, findings };
 }
 
 export function mapDraftAudit(row: DraftAuditRow): DraftAuditFinding {
@@ -435,11 +460,13 @@ export function getAuditSeverity(
 export function mapDraftVariant(
   row: DraftVariantRow,
   audits: DraftAuditFinding[],
+  aiAudit: DraftVariantAiAudit = { status: null, run: null, findings: [] },
 ): DraftVariantWithAudits {
   return {
     ...mapDraftVariantBase(row),
     audits,
     auditSeverity: getAuditSeverity(audits),
+    aiAudit,
   };
 }
 
@@ -1318,6 +1345,47 @@ export async function listDrafts(
           variantIds,
         );
 
+  const aiAuditRunRows =
+    variantIds.length === 0
+      ? []
+      : await db.select<DraftAiAuditRunRow[]>(
+          `SELECT dar.*
+          FROM draft_ai_audit_runs dar
+          INNER JOIN draft_variants dv ON dv.id = dar.draft_variant_id
+          WHERE dar.draft_variant_id IN (${getPlaceholders(variantIds)})
+            AND dar.content_revision = dv.content_revision
+          ORDER BY dar.id DESC`,
+          variantIds,
+        );
+  const currentAiAuditRunByVariantId = new Map<number, DraftAiAuditRun>();
+  for (const runRow of aiAuditRunRows) {
+    if (!currentAiAuditRunByVariantId.has(runRow.draft_variant_id)) {
+      currentAiAuditRunByVariantId.set(
+        runRow.draft_variant_id,
+        mapDraftAiAuditRun(runRow),
+      );
+    }
+  }
+
+  const completedRunIds = [...currentAiAuditRunByVariantId.values()]
+    .filter((run) => run.status === "completed")
+    .map((run) => run.id);
+  const aiAuditFindingRows =
+    completedRunIds.length === 0
+      ? []
+      : await db.select<DraftAiAuditFinding[]>(
+          `SELECT * FROM draft_ai_audit_findings
+          WHERE audit_run_id IN (${getPlaceholders(completedRunIds)})`,
+          completedRunIds,
+        );
+  const aiAuditFindingsByRunId = new Map<number, DraftAiAuditFinding[]>();
+  for (const findingRow of aiAuditFindingRows) {
+    const runFindings =
+      aiAuditFindingsByRunId.get(findingRow.audit_run_id) ?? [];
+    runFindings.push(findingRow);
+    aiAuditFindingsByRunId.set(findingRow.audit_run_id, runFindings);
+  }
+
   const auditsByVariantId = new Map<number, DraftAuditFinding[]>();
   for (const auditRow of auditRows) {
     const audits = auditsByVariantId.get(auditRow.draft_variant_id) ?? [];
@@ -1336,8 +1404,18 @@ export async function listDrafts(
   const variantsByDraftId = new Map<number, DraftVariantWithAudits[]>();
   for (const variantRow of variantRows) {
     const variants = variantsByDraftId.get(variantRow.draft_id) ?? [];
+    const currentAiAuditRun = currentAiAuditRunByVariantId.get(variantRow.id);
     variants.push(
-      mapDraftVariant(variantRow, auditsByVariantId.get(variantRow.id) ?? []),
+      mapDraftVariant(
+        variantRow,
+        auditsByVariantId.get(variantRow.id) ?? [],
+        mapCurrentDraftAiAudit(
+          currentAiAuditRun,
+          currentAiAuditRun === undefined
+            ? []
+            : (aiAuditFindingsByRunId.get(currentAiAuditRun.id) ?? []),
+        ),
+      ),
     );
     variantsByDraftId.set(variantRow.draft_id, variants);
   }

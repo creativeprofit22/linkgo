@@ -33,6 +33,35 @@ export const draftAiAuditRunStatusSchema = z.enum([
   "cancelled",
 ]);
 
+export const draftAiAuditRunRowSchema = z
+  .object({
+    id: z.number().int().positive(),
+    draft_variant_id: z.number().int().positive(),
+    content_revision: z.number().int().positive(),
+    agent_run_id: z.number().int().positive().nullable(),
+    provider_key: agentProviderKeySchema,
+    model_name: z.string().max(120),
+    status: draftAiAuditRunStatusSchema,
+    summary: z.string().max(1000),
+    error_message: z.string().max(1000),
+    started_at: z.string().nullable(),
+    completed_at: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .strict();
+
+export const draftAiAuditFindingRowSchema = z
+  .object({
+    id: z.number().int().positive(),
+    audit_run_id: z.number().int().positive(),
+    rule_key: draftAiAuditRuleKeySchema,
+    severity: draftAuditSeveritySchema,
+    message: z.string().trim().min(1).max(1000),
+    created_at: z.string(),
+  })
+  .strict();
+
 export const draftAiAuditFindingInputSchema = z
   .object({
     ruleKey: draftAiAuditRuleKeySchema,
@@ -41,18 +70,37 @@ export const draftAiAuditFindingInputSchema = z
   })
   .strict();
 
+function requireEveryAuditRule(
+  ruleKeys: string[],
+  context: z.RefinementCtx,
+): void {
+  if (new Set(ruleKeys).size !== DRAFT_AI_AUDIT_RULE_KEYS.length) {
+    context.addIssue({
+      code: "custom",
+      message:
+        "findings must contain exactly one entry for each required audit category",
+    });
+  }
+}
+
 export const draftAiAuditFindingsSchema = z
   .array(draftAiAuditFindingInputSchema)
   .length(DRAFT_AI_AUDIT_RULE_KEYS.length)
   .superRefine((findings, context) => {
-    const ruleKeys = new Set(findings.map((finding) => finding.ruleKey));
-    if (ruleKeys.size !== DRAFT_AI_AUDIT_RULE_KEYS.length) {
-      context.addIssue({
-        code: "custom",
-        message:
-          "findings must contain exactly one entry for each required audit category",
-      });
-    }
+    requireEveryAuditRule(
+      findings.map((finding) => finding.ruleKey),
+      context,
+    );
+  });
+
+export const draftAiAuditFindingRowsSchema = z
+  .array(draftAiAuditFindingRowSchema)
+  .length(DRAFT_AI_AUDIT_RULE_KEYS.length)
+  .superRefine((findings, context) => {
+    requireEveryAuditRule(
+      findings.map((finding) => finding.rule_key),
+      context,
+    );
   });
 
 export const runDraftAiAuditSchema = z

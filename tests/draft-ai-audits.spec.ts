@@ -1,10 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { DraftVariantWithAudits } from "../src/features/drafts/types";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
 type DraftAuditTestApi = Pick<
   typeof import("../src/features/drafts/data"),
   | "completeDraftAiAuditRun"
   | "failDraftAiAuditRun"
+  | "listDrafts"
   | "reconcileDraftAiAuditLifecycle"
   | "runDraftAiAudit"
   | "startDraftAiAuditRun"
@@ -555,6 +557,111 @@ test("starts one exact-revision run and completes with six findings", async ({
   });
   expect(state.findings).toHaveLength(6);
   expect(state.findings.map((finding) => finding.rule_key)).toEqual(RULE_KEYS);
+});
+
+test("listDrafts exposes only current-revision AI audit state", async ({
+  page,
+}) => {
+  const variants = {
+    noRun: await seedVariant(page),
+    running: await seedVariant(page),
+    completed: await seedVariant(page),
+    failed: await seedVariant(page),
+    staleCompleted: await seedVariant(page),
+  };
+
+  const readModels = await page.evaluate(
+    async ({ variants, findings }) => {
+      const data = (
+        window as unknown as {
+          __LINKGO_DRAFTS_TEST_API__: DraftAuditTestApi;
+        }
+      ).__LINKGO_DRAFTS_TEST_API__;
+
+      await data.startDraftAiAuditRun({
+        draftVariantId: variants.running.id,
+        contentRevision: variants.running.contentRevision,
+      });
+
+      const completedRun = await data.startDraftAiAuditRun({
+        draftVariantId: variants.completed.id,
+        contentRevision: variants.completed.contentRevision,
+      });
+      await data.completeDraftAiAuditRun({
+        auditRunId: completedRun.id,
+        draftVariantId: variants.completed.id,
+        contentRevision: variants.completed.contentRevision,
+        findings: [...findings].reverse(),
+      });
+
+      const failedRun = await data.startDraftAiAuditRun({
+        draftVariantId: variants.failed.id,
+        contentRevision: variants.failed.contentRevision,
+      });
+      await data.failDraftAiAuditRun({
+        auditRunId: failedRun.id,
+        draftVariantId: variants.failed.id,
+        contentRevision: variants.failed.contentRevision,
+        errorMessage: "Provider audit failed.",
+      });
+
+      const staleRun = await data.startDraftAiAuditRun({
+        draftVariantId: variants.staleCompleted.id,
+        contentRevision: variants.staleCompleted.contentRevision,
+      });
+      await data.completeDraftAiAuditRun({
+        auditRunId: staleRun.id,
+        draftVariantId: variants.staleCompleted.id,
+        contentRevision: variants.staleCompleted.contentRevision,
+        findings,
+      });
+      await data.updateDraftVariant({
+        id: variants.staleCompleted.id,
+        body: "A real edit makes the completed audit stale.",
+      });
+
+      const drafts = await data.listDrafts(1);
+      return Object.fromEntries(
+        drafts.flatMap((draft) =>
+          draft.variants.map((variant: DraftVariantWithAudits) => [
+            variant.id,
+            variant.aiAudit,
+          ]),
+        ),
+      );
+    },
+    { variants, findings },
+  );
+
+  expect(readModels[variants.noRun.id]).toEqual({
+    status: null,
+    run: null,
+    findings: [],
+  });
+  expect(readModels[variants.running.id]).toMatchObject({
+    status: "running",
+    run: { content_revision: 1, status: "running" },
+    findings: [],
+  });
+  expect(readModels[variants.completed.id]).toMatchObject({
+    status: "completed",
+    run: { content_revision: 1, status: "completed" },
+  });
+  expect(
+    readModels[variants.completed.id]?.findings.map(
+      (finding: { rule_key: string }) => finding.rule_key,
+    ),
+  ).toEqual(RULE_KEYS);
+  expect(readModels[variants.failed.id]).toMatchObject({
+    status: "failed",
+    run: { status: "failed", error_message: "Provider audit failed." },
+    findings: [],
+  });
+  expect(readModels[variants.staleCompleted.id]).toEqual({
+    status: null,
+    run: null,
+    findings: [],
+  });
 });
 
 test("keeps the current AI audit revision for normalized no-op edits", async ({
