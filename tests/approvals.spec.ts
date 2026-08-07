@@ -7,6 +7,28 @@ test.beforeEach(async ({ page }) => {
 
 test.setTimeout(90_000);
 
+type ApprovalAiAuditState =
+  | "missing"
+  | "running"
+  | "failed"
+  | "stale"
+  | "incomplete"
+  | "blocked"
+  | "passing";
+
+const approvalAiAuditCases: Array<{
+  state: ApprovalAiAuditState;
+  eligible: boolean;
+}> = [
+  { state: "missing", eligible: false },
+  { state: "running", eligible: false },
+  { state: "failed", eligible: false },
+  { state: "stale", eligible: false },
+  { state: "incomplete", eligible: false },
+  { state: "blocked", eligible: false },
+  { state: "passing", eligible: true },
+];
+
 test("creates, previews, approves, schedules, and publishes an approval", async ({
   page,
 }) => {
@@ -110,7 +132,9 @@ test("records a failed LinkedIn OAuth publish attempt and error queue item", asy
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(getBadge(page, "Failed")).toBeVisible();
   await expect(
-    page.getByRole("paragraph").filter({ hasText: "LinkedIn API rejected the post." }),
+    page
+      .getByRole("paragraph")
+      .filter({ hasText: "LinkedIn API rejected the post." }),
   ).toBeVisible();
   const counts = await getStateCounts(page);
   expect(counts.publishAttempts).toBe(1);
@@ -488,7 +512,9 @@ test("cancelled schedules can be rescheduled with new details", async ({
   await page.getByRole("button", { name: "Cancel schedule" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(getBadge(page, "Cancelled").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Schedule", exact: true }),
+  ).toBeVisible();
 
   await scheduleApproval(page, "2026-06-26T09:15", "America/New_York");
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
@@ -516,7 +542,9 @@ test("failed scheduled publish attempts can be rescheduled with new details", as
   await page.getByRole("button", { name: "Record attempt" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(getBadge(page, "Failed").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Schedule", exact: true }),
+  ).toBeVisible();
 
   await scheduleApproval(page, "2026-06-27T10:45", "Europe/London");
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
@@ -525,6 +553,26 @@ test("failed scheduled publish attempts can be rescheduled with new details", as
   ).toBeVisible();
   await expect(page.getByText("2026-06-25T14:30 · local")).toBeHidden();
 });
+
+for (const { state, eligible } of approvalAiAuditCases) {
+  test(`${state} AI audit enforces approval query and creation readiness`, async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await createReadyDraft(page, cleanVariant());
+    await setApprovalAiAuditState(page, state);
+
+    const result = await checkApprovalReadiness(page);
+
+    expect(result.eligibleDraftIds).toEqual(eligible ? [1] : []);
+    expect(result.created).toBe(eligible);
+    expect(result.error).toBe(
+      eligible
+        ? ""
+        : "Selected variant requires a completed current-revision AI audit with six canonical non-blocking findings",
+    );
+  });
+}
 
 test("blocked variant is not listed as an approval candidate", async ({
   page,
@@ -570,7 +618,9 @@ test("archived campaign approvals hide mutation controls with restore guidance",
 
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Schedule", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Mark published" }),
   ).toBeVisible();
@@ -593,7 +643,9 @@ test("archived campaign approvals hide mutation controls with restore guidance",
   await expect(
     page.getByRole("button", { name: "Request changes" }),
   ).toBeHidden();
-  await expect(page.getByRole("button", { name: "Schedule", exact: true })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Schedule", exact: true }),
+  ).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Mark published" }),
   ).toBeHidden();
@@ -798,6 +850,93 @@ function reservedCharacterVariant(): VariantFormInput {
   };
 }
 
+async function setApprovalAiAuditState(
+  page: Page,
+  state: ApprovalAiAuditState,
+): Promise<void> {
+  if (state === "passing") return;
+  await page.evaluate(async (nextState) => {
+    const invoke = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: {
+          invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__?.invoke;
+    if (invoke === undefined) {
+      throw new Error("Tauri invoke mock was not initialized");
+    }
+
+    const queryByState: Record<
+      Exclude<ApprovalAiAuditState, "passing">,
+      string
+    > = {
+      missing: "DELETE FROM draft_ai_audit_runs",
+      running: `UPDATE draft_ai_audit_runs
+        SET status = 'running', completed_at = NULL, updated_at = datetime('now')`,
+      failed: `UPDATE draft_ai_audit_runs
+        SET status = 'failed', error_message = 'Audit failed', updated_at = datetime('now')`,
+      stale: `UPDATE draft_variants
+        SET hook = hook || ' revised', updated_at = datetime('now')
+        WHERE status = 'selected'`,
+      incomplete: `UPDATE draft_ai_audit_findings
+        SET rule_key = 'tone'
+        WHERE rule_key = 'safety'`,
+      blocked: `UPDATE draft_ai_audit_findings
+        SET severity = 'block', message = 'AI audit blocked approval.'
+        WHERE rule_key = 'safety'`,
+    };
+    await invoke("plugin:sql|execute", {
+      query: queryByState[nextState],
+      values: [],
+    });
+  }, state);
+}
+
+async function checkApprovalReadiness(page: Page): Promise<{
+  eligibleDraftIds: number[];
+  created: boolean;
+  error: string;
+}> {
+  return page.evaluate(async () => {
+    const approvalApi = (
+      window as unknown as {
+        __LINKGO_APPROVAL_TEST_API__?: {
+          createApproval: (input: {
+            draftId: number;
+            reviewerNotes: string;
+          }) => Promise<number>;
+          listApprovalEligibleDrafts: (
+            campaignId?: number,
+          ) => Promise<Array<{ id: number }>>;
+        };
+      }
+    ).__LINKGO_APPROVAL_TEST_API__;
+    if (approvalApi === undefined) {
+      throw new Error("Approval test API was not initialized");
+    }
+
+    const eligibleDrafts = await approvalApi.listApprovalEligibleDrafts(1);
+    try {
+      await approvalApi.createApproval({
+        draftId: 1,
+        reviewerNotes: "Audit readiness boundary test.",
+      });
+      return {
+        eligibleDraftIds: eligibleDrafts.map((draft) => draft.id),
+        created: true,
+        error: "",
+      };
+    } catch (error) {
+      return {
+        eligibleDraftIds: eligibleDrafts.map((draft) => draft.id),
+        created: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+}
+
 async function createReadyDraft(
   page: Page,
   variant: VariantFormInput,
@@ -809,6 +948,11 @@ async function createReadyDraft(
   await createDraft(page, variant);
   await page.getByRole("button", { name: "Select for review" }).click();
   await expect(getBadge(page, "Ready for review")).toBeVisible();
+  const auditPanel = page.getByRole("region", { name: /AI audit/ });
+  await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
+  await expect(
+    auditPanel.getByText("Completed", { exact: true }),
+  ).toBeVisible();
 }
 
 async function openQueue(page: Page): Promise<void> {

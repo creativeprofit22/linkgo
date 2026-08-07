@@ -1840,6 +1840,36 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       };
     }
 
+    const approvalAiAuditRuleKeys = new Set([
+      "hook",
+      "specificity",
+      "generic_language",
+      "authenticity",
+      "clarity",
+      "safety",
+    ]);
+
+    function isApprovalAiAuditReady(variant: DraftVariant): boolean {
+      const latestRun = draftAiAuditRuns
+        .filter(
+          (run) =>
+            run.draft_variant_id === variant.id &&
+            run.content_revision === variant.content_revision,
+        )
+        .sort((left, right) => right.id - left.id)[0];
+      if (latestRun?.status !== "completed") return false;
+      const findings = draftAiAuditFindings.filter(
+        (finding) => finding.audit_run_id === latestRun.id,
+      );
+      return (
+        findings.length === 6 &&
+        findings.every((finding) =>
+          approvalAiAuditRuleKeys.has(finding.rule_key),
+        ) &&
+        !findings.some((finding) => finding.severity === "block")
+      );
+    }
+
     function getEligibleApprovalDraftRow(
       draft: Draft,
     ): Record<string, unknown> | null {
@@ -1861,6 +1891,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       ) {
         return null;
       }
+      if (!isApprovalAiAuditReady(variant)) return null;
       const candidate = candidatePosts.find(
         (row) => row.id === draft.candidate_post_id,
       );
@@ -4300,6 +4331,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         query.includes("LEFT JOIN draft_variants dv")
       ) {
         return selectApprovalValidation(values);
+      }
+      if (
+        query.includes("FROM draft_variants dv") &&
+        query.includes("approval_audit_run")
+      ) {
+        const variantId = Number(values[0] ?? 0);
+        const variant = draftVariants.find((row) => row.id === variantId);
+        return [{ count: variant && isApprovalAiAuditReady(variant) ? 1 : 0 }];
       }
       if (
         query.includes("FROM approvals a") &&
@@ -7019,6 +7058,65 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           draft.updated_at = now;
           return { lastInsertId: id, rowsAffected: 1 };
         }
+      }
+
+      if (query.includes("DELETE FROM draft_ai_audit_runs")) {
+        const deletedIds = new Set(draftAiAuditRuns.map((run) => run.id));
+        draftAiAuditRuns.splice(0);
+        for (
+          let index = draftAiAuditFindings.length - 1;
+          index >= 0;
+          index -= 1
+        ) {
+          if (deletedIds.has(draftAiAuditFindings[index].audit_run_id)) {
+            draftAiAuditFindings.splice(index, 1);
+          }
+        }
+        return { lastInsertId: 0, rowsAffected: deletedIds.size };
+      }
+
+      if (query.includes("UPDATE draft_ai_audit_runs") && values.length === 0) {
+        const nextStatus: DraftAiAuditRunStatus = query.includes("'running'")
+          ? "running"
+          : "failed";
+        for (const run of draftAiAuditRuns) {
+          run.status = nextStatus;
+          run.completed_at = nextStatus === "running" ? null : run.completed_at;
+          run.error_message = nextStatus === "failed" ? "Audit failed" : "";
+          run.updated_at = now;
+        }
+        return { lastInsertId: 0, rowsAffected: draftAiAuditRuns.length };
+      }
+
+      if (
+        query.includes("UPDATE draft_ai_audit_findings") &&
+        values.length === 0
+      ) {
+        const finding = draftAiAuditFindings.find(
+          (candidate) => candidate.rule_key === "safety",
+        );
+        if (!finding) return { lastInsertId: 0, rowsAffected: 0 };
+        if (query.includes("rule_key = 'tone'")) finding.rule_key = "tone";
+        if (query.includes("severity = 'block'")) {
+          finding.severity = "block";
+          finding.message = "AI audit blocked approval.";
+        }
+        return { lastInsertId: finding.id, rowsAffected: 1 };
+      }
+
+      if (
+        query.includes("UPDATE draft_variants") &&
+        query.includes("hook = hook || ' revised'")
+      ) {
+        let rowsAffected = 0;
+        for (const variant of draftVariants) {
+          if (variant.status !== "selected") continue;
+          variant.hook += " revised";
+          variant.content_revision += 1;
+          variant.updated_at = now;
+          rowsAffected += 1;
+        }
+        return { lastInsertId: 0, rowsAffected };
       }
 
       if (

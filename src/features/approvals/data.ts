@@ -123,6 +123,42 @@ function getPlaceholders(ids: number[]): string {
   return ids.map((_, index) => `$${index + 1}`).join(", ");
 }
 
+const APPROVAL_AI_AUDIT_RULE_KEYS_SQL =
+  "'hook', 'specificity', 'generic_language', 'authenticity', 'clarity', 'safety'";
+
+function getApprovalAiAuditReadySql(variantAlias: string): string {
+  return `EXISTS (
+    SELECT 1
+    FROM draft_ai_audit_runs approval_audit_run
+    WHERE approval_audit_run.id = (
+      SELECT latest_audit_run.id
+      FROM draft_ai_audit_runs latest_audit_run
+      WHERE latest_audit_run.draft_variant_id = ${variantAlias}.id
+        AND latest_audit_run.content_revision = ${variantAlias}.content_revision
+      ORDER BY latest_audit_run.id DESC
+      LIMIT 1
+    )
+      AND approval_audit_run.status = 'completed'
+      AND (
+        SELECT COUNT(*)
+        FROM draft_ai_audit_findings approval_audit_finding
+        WHERE approval_audit_finding.audit_run_id = approval_audit_run.id
+      ) = 6
+      AND (
+        SELECT COUNT(*)
+        FROM draft_ai_audit_findings canonical_audit_finding
+        WHERE canonical_audit_finding.audit_run_id = approval_audit_run.id
+          AND canonical_audit_finding.rule_key IN (${APPROVAL_AI_AUDIT_RULE_KEYS_SQL})
+      ) = 6
+      AND NOT EXISTS (
+        SELECT 1
+        FROM draft_ai_audit_findings blocking_audit_finding
+        WHERE blocking_audit_finding.audit_run_id = approval_audit_run.id
+          AND blocking_audit_finding.severity = 'block'
+      )
+  )`;
+}
+
 function mapApproval(row: ApprovalDetailRow): Approval {
   return {
     id: row.id,
@@ -375,6 +411,7 @@ export async function listApprovalEligibleDrafts(
         SELECT 1 FROM draft_audits da
         WHERE da.draft_variant_id = dv.id AND da.severity = 'block'
       )
+      AND ${getApprovalAiAuditReadySql("dv")}
     ORDER BY datetime(d.updated_at) DESC, d.id DESC`,
     values,
   );
@@ -430,6 +467,18 @@ export async function createApproval(
     }
     if (draft.draft_variant_id === null || draft.selected_count !== 1) {
       throw new Error("Select a draft variant before review");
+    }
+    const aiAuditReadyRows = await db.select<CountRow[]>(
+      `SELECT COUNT(*) AS count
+      FROM draft_variants dv
+      WHERE dv.id = $1
+        AND ${getApprovalAiAuditReadySql("dv")}`,
+      [draft.draft_variant_id],
+    );
+    if ((aiAuditReadyRows[0]?.count ?? 0) !== 1) {
+      throw new Error(
+        "Selected variant requires a completed current-revision AI audit with six canonical non-blocking findings",
+      );
     }
 
     const blockRows = await db.select<CountRow[]>(

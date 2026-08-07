@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import type {
+  ApprovalEligibleDraft,
+  CreateApprovalInput,
   RecordPublishAttemptInput,
   ScheduleApprovalInput,
 } from "@/features/approvals/types";
@@ -43,6 +45,10 @@ const pathname = window.location.pathname;
 const PageComponent = pageMap[pathname as keyof typeof pageMap] ?? HomePage;
 
 type ApprovalTestApi = {
+  createApproval: (input: CreateApprovalInput) => Promise<number>;
+  listApprovalEligibleDrafts: (
+    campaignId?: number,
+  ) => Promise<ApprovalEligibleDraft[]>;
   recordPublishAttempt: (input: RecordPublishAttemptInput) => Promise<number>;
   scheduleApproval: (input: ScheduleApprovalInput) => Promise<number>;
 };
@@ -119,10 +125,17 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
     },
   );
   void import("@/features/approvals/data").then(
-    ({ recordPublishAttempt, scheduleApproval }) => {
+    ({
+      createApproval,
+      listApprovalEligibleDrafts,
+      recordPublishAttempt,
+      scheduleApproval,
+    }) => {
       (
         window as unknown as { __LINKGO_APPROVAL_TEST_API__?: ApprovalTestApi }
       ).__LINKGO_APPROVAL_TEST_API__ = {
+        createApproval,
+        listApprovalEligibleDrafts,
         recordPublishAttempt,
         scheduleApproval,
       };
