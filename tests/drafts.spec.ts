@@ -570,6 +570,20 @@ test("an older campaign response cannot replace the newest draft workspace", asy
   );
 });
 
+interface GeneratedVariantRecord {
+  hook: string;
+  body: string;
+  cta: string;
+  hashtags: string[];
+}
+
+interface SavedDraftVariantRecord {
+  hook: string;
+  body: string;
+  cta: string;
+  hashtags: string;
+}
+
 interface VariantFormInput {
   hook: string;
   body: string;
