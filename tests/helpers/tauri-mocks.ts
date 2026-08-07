@@ -8685,6 +8685,142 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);
     w.__LINKGO_SQL_CANDIDATE_POSTS__ = () => cloneRows(candidatePosts);
+    w.__LINKGO_SQL_SEED_DRAFT_CAMPAIGN_LOAD__ = (
+      campaignId: number,
+      label: string,
+    ) => {
+      if (!campaigns.some((campaign) => campaign.id === campaignId)) {
+        throw new Error("Campaign was not found");
+      }
+
+      const now = getNow();
+      const targetPostId = nextTargetPostId++;
+      const candidatePostId = nextCandidatePostId++;
+      const draftId = nextDraftId++;
+      const requestId = nextDraftGenerationRequestId++;
+      const workflowRunId = nextWorkflowRunId++;
+      const workflowStepId = nextWorkflowStepId++;
+
+      targetPosts.push({
+        id: targetPostId,
+        platform: "linkedin",
+        url: `https://www.linkedin.com/posts/${label.toLowerCase()}-${targetPostId}`,
+        normalized_url: `https://www.linkedin.com/posts/${label.toLowerCase()}-${targetPostId}`,
+        platform_resource_urn: "",
+        author_name: `${label} draft author`,
+        author_profile_url: "",
+        posted_at: now,
+        content: `${label} candidate content`,
+        content_hash: `${label.toLowerCase()}-draft-load-${targetPostId}`,
+        created_at: now,
+        updated_at: now,
+      });
+      candidatePosts.push({
+        id: candidatePostId,
+        campaign_id: campaignId,
+        target_post_id: targetPostId,
+        source_keyword: "draft load race",
+        status: "new",
+        relevance_score: 91,
+        score_reason: "Deferred campaign load fixture",
+        notes: "",
+        created_at: now,
+        updated_at: now,
+      });
+      drafts.push({
+        id: draftId,
+        campaign_id: campaignId,
+        candidate_post_id: candidatePostId,
+        angle: `${label} draft angle`,
+        notes: "",
+        content_intent: "idea",
+        status: "drafting",
+        created_at: now,
+        updated_at: now,
+      });
+      const draftVariantId = nextDraftVariantId++;
+      draftVariants.push({
+        id: draftVariantId,
+        draft_id: draftId,
+        variant_number: 1,
+        hook: `${label} fixture hook`,
+        body: `${label} fixture body`,
+        cta: `${label} fixture CTA`,
+        hashtags: "#Linkgo",
+        content_revision: 1,
+        status: "draft",
+        created_at: now,
+        updated_at: now,
+      });
+      draftAudits.push({
+        id: nextDraftAuditId++,
+        draft_variant_id: draftVariantId,
+        rule_key: "fixture_pass",
+        severity: "pass",
+        message: "Deferred campaign load fixture passed.",
+        created_at: now,
+      });
+      draftGenerationRequests.push({
+        id: requestId,
+        campaign_id: campaignId,
+        candidate_post_id: candidatePostId,
+        agent_run_id: null,
+        provider_key: "dry_run",
+        model_name: "local-deterministic",
+        playbook_key: "linkedin_writer",
+        variant_count: 1,
+        content_intent: "idea",
+        workflow_run_id: null,
+        workflow_step_id: null,
+        angle: "",
+        voice_notes: "",
+        status: "failed",
+        summary: `${label} generation request`,
+        generated_variants_json: "[]",
+        error_message: `${label} deferred request fixture`,
+        created_draft_id: null,
+        created_at: now,
+        updated_at: now,
+      });
+      workflowRuns.push({
+        id: workflowRunId,
+        campaign_id: campaignId,
+        workflow_type: "content_pipeline",
+        title: `${label} workflow`,
+        status: "running",
+        current_step_key: "draft",
+        context_summary: "Deferred campaign load fixture",
+        started_at: now,
+        completed_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      workflowSteps.push({
+        id: workflowStepId,
+        workflow_run_id: workflowRunId,
+        step_key: "draft",
+        title: "Draft variants",
+        description: "Create draft variants.",
+        sort_order: 3,
+        status: "running",
+        output_summary: "",
+        error_message: "",
+        started_at: now,
+        completed_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      workflowArtifacts.push({
+        id: nextWorkflowArtifactId++,
+        workflow_run_id: workflowRunId,
+        workflow_step_id: workflowStepId,
+        artifact_type: "candidate_post",
+        artifact_id: candidatePostId,
+        summary: `${label} candidate artifact`,
+        created_at: now,
+        updated_at: now,
+      });
+    };
     w.__LINKGO_SQL_MUTATE_CANDIDATE__ = (
       id: number,
       patch: Partial<{

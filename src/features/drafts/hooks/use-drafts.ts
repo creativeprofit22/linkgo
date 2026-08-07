@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
@@ -77,9 +77,12 @@ export function useDrafts(): UseDraftsState {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const latestDraftsLoadRequest = useRef(0);
+  const latestCampaignLoadRequest = useRef(0);
 
   const loadDraftsForCampaign = useCallback(
     async (campaignId: number | null) => {
+      const requestId = ++latestCampaignLoadRequest.current;
       if (campaignId === null) {
         setCandidates([]);
         setDrafts([]);
@@ -88,30 +91,39 @@ export function useDrafts(): UseDraftsState {
         return;
       }
 
-      const [
-        loadedCandidates,
-        loadedDrafts,
-        loadedGenerationRequests,
-        loadedEligibleWorkflowOptions,
-      ] = await Promise.all([
+      try {
+        const [
+          loadedCandidates,
+          loadedDrafts,
+          loadedGenerationRequests,
+          loadedEligibleWorkflowOptions,
+        ] = await Promise.all([
           listCandidates(campaignId),
           listDrafts(campaignId),
           listDraftGenerationRequests(campaignId),
           listEligibleDraftWorkflowOptions(campaignId),
         ]);
-      setCandidates(loadedCandidates);
-      setDrafts(loadedDrafts);
-      setGenerationRequests(loadedGenerationRequests);
-      setEligibleWorkflowOptions(loadedEligibleWorkflowOptions);
+        if (requestId !== latestCampaignLoadRequest.current) return;
+
+        setCandidates(loadedCandidates);
+        setDrafts(loadedDrafts);
+        setGenerationRequests(loadedGenerationRequests);
+        setEligibleWorkflowOptions(loadedEligibleWorkflowOptions);
+      } catch (caught) {
+        if (requestId === latestCampaignLoadRequest.current) throw caught;
+      }
     },
     [],
   );
 
   const loadDrafts = useCallback(async () => {
+    const requestId = ++latestDraftsLoadRequest.current;
     setLoading(true);
     setError(null);
     try {
       const loadedCampaigns = await listCampaigns();
+      if (requestId !== latestDraftsLoadRequest.current) return;
+
       setCampaigns(loadedCampaigns);
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === selectedCampaignId,
@@ -120,26 +132,34 @@ export function useDrafts(): UseDraftsState {
         ? selectedCampaignId
         : getDefaultCampaignId(loadedCampaigns);
       setSelectedCampaignId(nextCampaignId);
-      await loadDraftsForCampaign(nextCampaignId);
+
+      // A changed selection is loaded once by the selected-id effect below.
+      if (nextCampaignId === selectedCampaignId) {
+        await loadDraftsForCampaign(nextCampaignId);
+      }
     } catch (caught) {
+      if (requestId !== latestDraftsLoadRequest.current) return;
       const message = getErrorMessage(caught);
       setError(message);
     } finally {
-      setLoading(false);
+      if (requestId === latestDraftsLoadRequest.current) setLoading(false);
     }
   }, [loadDraftsForCampaign, selectedCampaignId]);
 
   useEffect(() => {
     void loadDrafts();
+    return () => {
+      latestDraftsLoadRequest.current += 1;
+      latestCampaignLoadRequest.current += 1;
+    };
   }, [loadDrafts]);
 
-  const selectCampaign = useCallback(
-    (id: number | null) => {
-      setSelectedCampaignId(id);
-      void loadDraftsForCampaign(id);
-    },
-    [loadDraftsForCampaign],
-  );
+  const selectCampaign = useCallback((id: number | null) => {
+    // Invalidate in-flight work immediately, before the selection effect runs.
+    latestDraftsLoadRequest.current += 1;
+    latestCampaignLoadRequest.current += 1;
+    setSelectedCampaignId(id);
+  }, []);
 
   const addDraft = useCallback(
     async (input: CreateDraftInput) => {

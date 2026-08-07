@@ -437,6 +437,138 @@ test("archived campaign candidates are not available for draft flows", async ({
   ).toBeDisabled();
 });
 
+test("an older campaign response cannot replace the newest draft workspace", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page, "Alpha campaign");
+  await createCampaign(page, "Beta campaign");
+  await page.evaluate(() => {
+    const seed = (
+      window as unknown as {
+        __LINKGO_SQL_SEED_DRAFT_CAMPAIGN_LOAD__: (
+          campaignId: number,
+          label: string,
+        ) => void;
+      }
+    ).__LINKGO_SQL_SEED_DRAFT_CAMPAIGN_LOAD__;
+    seed(1, "Alpha");
+    seed(2, "Beta");
+  });
+  await openDrafts(page);
+
+  const campaignSelect = page.getByRole("combobox").first();
+  await campaignSelect.selectOption({ label: "Alpha campaign" });
+  await expect(
+    page.getByRole("heading", { name: "Alpha draft author" }),
+  ).toBeVisible();
+
+  await page.evaluate(() => {
+    const mock = window as unknown as {
+      __LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__: (campaignId: number) => void;
+    };
+    mock.__LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__(1);
+    mock.__LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__(2);
+  });
+
+  await page.getByRole("button", { name: "Select for review" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as unknown as {
+            __LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__: (
+              campaignId: number,
+            ) => number;
+          }
+        ).__LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__(1),
+      ),
+    )
+    .toBe(4);
+
+  await page.evaluate(() => {
+    const select = Array.from(document.querySelectorAll("select")).find(
+      (candidate) =>
+        Array.from(candidate.options).some(
+          (option) => option.textContent?.trim() === "Beta campaign",
+        ),
+    );
+    if (!select) throw new Error("Campaign select was not found");
+    select.value = "2";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as unknown as {
+            __LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__: (
+              campaignId: number,
+            ) => number;
+          }
+        ).__LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__(2),
+      ),
+    )
+    .toBe(4);
+
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_SQL_RELEASE_CAMPAIGN_SELECTS__: (campaignId: number) => void;
+      }
+    ).__LINKGO_SQL_RELEASE_CAMPAIGN_SELECTS__(2);
+  });
+  await expect(
+    page.getByRole("heading", { name: "Beta draft author" }),
+  ).toBeVisible();
+  await expect(page.getByText("Beta generation request")).toBeVisible();
+
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_SQL_RELEASE_CAMPAIGN_SELECTS__: (campaignId: number) => void;
+      }
+    ).__LINKGO_SQL_RELEASE_CAMPAIGN_SELECTS__(1);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as unknown as {
+            __LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__: (
+              campaignId: number,
+            ) => number;
+          }
+        ).__LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__(1),
+      ),
+    )
+    .toBe(0);
+
+  await expect(
+    page.getByRole("heading", { name: "Beta draft author" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Alpha draft author" }),
+  ).toBeHidden();
+  await expect(page.getByText("Beta generation request")).toBeVisible();
+  await expect(page.getByText("Alpha generation request")).toBeHidden();
+
+  await page.getByRole("button", { name: "Generate variants" }).click();
+  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await expect(dialog.getByLabel("Candidate")).toContainText(
+    "Beta draft author",
+  );
+  await expect(dialog.getByLabel("Candidate")).not.toContainText(
+    "Alpha draft author",
+  );
+  await expect(dialog.getByLabel("Workflow scope")).toContainText(
+    "Beta workflow",
+  );
+  await expect(dialog.getByLabel("Workflow scope")).not.toContainText(
+    "Alpha workflow",
+  );
+});
+
 interface VariantFormInput {
   hook: string;
   body: string;
