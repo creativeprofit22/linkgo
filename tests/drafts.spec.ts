@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
@@ -616,6 +617,46 @@ function linkBlockedVariant(): VariantFormInput {
     cta: "Comment with your take.",
     hashtags: "#Growth",
   };
+}
+
+test("generation controls remain accessible and usable at 320 pixels", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+  await page.getByRole("button", { name: "Generate variants" }).click();
+  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await expect(dialog).toBeVisible();
+  await expectGenerationDialogToBeAccessible(page);
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await expect(
+    dialog.getByRole("group", { name: "Content intent" }),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("Variants").locator("option")).toHaveCount(3);
+  await dialog.getByLabel("Community").check();
+  await expect(dialog.getByLabel("Community")).toBeChecked();
+  await expectGenerationDialogToBeAccessible(page);
+  const dimensions = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.viewport);
+  await page.screenshot({
+    path: ".gg/screenshots/draft-generation-320.png",
+    fullPage: true,
+  });
+});
+
+async function expectGenerationDialogToBeAccessible(page: Page): Promise<void> {
+  const accessibilityScan = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+
+  expect(accessibilityScan.violations).toEqual([]);
 }
 
 async function getGeneratedVariants(
