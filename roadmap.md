@@ -22,7 +22,7 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 | 4 Keyword + trend discovery           | **Partial**           | Structured operator-triggered suggestions exist; expansion from real posts and competitor/source imports does not.                                                                                                       |
 | 5 Relevance filtering                 | **Partial**           | Rules-first intake plus attended planner-linked connected-provider scoring, exact-set atomic writes, rationale, and optional low-score rejection exist; unattended/background scoring and a production connector remain. |
 | 6 Draft generation                    | **Partial**           | Save-gated provider variants exist; default 3–5 enforcement and event/launch/idea/community routing do not.                                                                                                              |
-| 7 Humanizer + audit                   | **Partial**           | Deterministic blockers and warnings exist; AI humanizer checks and enforced believable first-person specifics do not.                                                                                                    |
+| 7 Humanizer + audit                   | **Partial**           | Revision-scoped AI audit runtime and recovery exist; operator/workflow execution and enforced believable first-person specifics remain.                                                                                 |
 | 8 Quality scoring loop                | **Not started**       | No persisted category scorecard, threshold rewrite, or automatic re-score loop exists. Manual edit and re-audit is only a foundation.                                                                                    |
 | 9 Content calendar                    | **Implemented**       | Purpose, angle, format, visual direction, CTA, and the approval bridge exist.                                                                                                                                            |
 | 10 Approval gate                      | **Partial**           | Durable human approvals and runtime continuation exist; shareable review links and wait URLs do not.                                                                                                                     |
@@ -118,9 +118,9 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 - Force believable first-person specifics.
 - Pattern: `Core-Mate/OpenGUI/server/apps/backend/src/modules/creator-agent/templates/platform-prompts.ts`.
 
-**Evidence:** Deterministic draft blockers and warnings are implemented.
+**Evidence:** Deterministic blockers and warnings are implemented. The callable, revision-scoped AI auditor reserves durable work before provider execution, validates exact `audit_post` identity and canonical text, atomically stores all six findings, rejects stale results, and reconciles interrupted audit/agent lifecycle state at startup.
 
-**Remaining:** Add AI humanizer checks and enforce believable first-person specifics.
+**Remaining:** Roadmap 7 remains **Partial** because AI audit has no operator UI or workflow-owned automatic execution, and believable first-person specifics are reported as findings rather than enforced before approval.
 
 ## 8. Quality scoring loop — Not started
 

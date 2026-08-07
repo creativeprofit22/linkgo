@@ -304,18 +304,19 @@ Indexes: `idx_drafts_campaign_id`, `idx_drafts_candidate_post_id`, `idx_drafts_s
 
 Stores one to five operator-written LinkedIn post options per draft.
 
-| Column           | Type    | Notes                                       |
-| ---------------- | ------- | ------------------------------------------- |
-| `id`             | INTEGER | Primary key                                 |
-| `draft_id`       | INTEGER | References `drafts(id)` with cascade delete |
-| `variant_number` | INTEGER | `1` through `5`, unique per draft           |
-| `hook`           | TEXT    | Optional hook text, default empty string    |
-| `body`           | TEXT    | Optional body text, default empty string    |
-| `cta`            | TEXT    | Optional CTA text, default empty string     |
-| `hashtags`       | TEXT    | Optional hashtag text, default empty string |
-| `status`         | TEXT    | `draft`, `selected`, or `rejected`          |
-| `created_at`     | TEXT    | SQLite datetime                             |
-| `updated_at`     | TEXT    | SQLite datetime                             |
+| Column             | Type    | Notes                                                   |
+| ------------------ | ------- | ------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                             |
+| `draft_id`         | INTEGER | References `drafts(id)` with cascade delete             |
+| `variant_number`   | INTEGER | `1` through `5`, unique per draft                       |
+| `hook`             | TEXT    | Optional hook text, default empty string                |
+| `body`             | TEXT    | Optional body text, default empty string                |
+| `cta`              | TEXT    | Optional CTA text, default empty string                 |
+| `hashtags`         | TEXT    | Optional hashtag text, default empty string             |
+| `content_revision` | INTEGER | Positive revision, incremented when stored text changes |
+| `status`           | TEXT    | `draft`, `selected`, or `rejected`                      |
+| `created_at`       | TEXT    | SQLite datetime                                         |
+| `updated_at`       | TEXT    | SQLite datetime                                         |
 
 Constraints: unique `(draft_id, variant_number)`, checked variant number range, and checked status values.
 
@@ -337,6 +338,43 @@ Stores deterministic audit findings for each draft variant.
 Constraints: checked severity values.
 
 Indexes: `idx_draft_audits_variant_id`, `idx_draft_audits_severity`.
+
+### `draft_ai_audit_runs`
+
+Stores each reserved AI audit attempt against one immutable draft variant revision. The linked `agent_run_id` preserves provider, tool-call, event, and error evidence.
+
+| Column             | Type    | Notes                                                                   |
+| ------------------ | ------- | ----------------------------------------------------------------------- |
+| `id`               | INTEGER | Primary key                                                             |
+| `draft_variant_id` | INTEGER | References `draft_variants(id)` with cascade delete                     |
+| `content_revision` | INTEGER | Positive stored revision reserved before provider execution             |
+| `agent_run_id`     | INTEGER | Nullable unique reference to `agent_runs(id)` with `ON DELETE SET NULL` |
+| `provider_key`     | TEXT    | Selected supported model provider                                       |
+| `model_name`       | TEXT    | Selected model, maximum 120 characters                                  |
+| `status`           | TEXT    | `pending`, `running`, `completed`, `failed`, or `cancelled`             |
+| `summary`          | TEXT    | Validated provider outcome, maximum 1,000 characters                    |
+| `error_message`    | TEXT    | Durable bounded failure detail, maximum 1,000 characters                |
+| `started_at`       | TEXT    | Nullable start timestamp                                                |
+| `completed_at`     | TEXT    | Required for terminal states and null for active states                 |
+| `created_at`       | TEXT    | SQLite datetime                                                         |
+| `updated_at`       | TEXT    | SQLite datetime                                                         |
+
+Migration 31 makes variant/revision identity immutable, rejects future revisions, and permits only one `pending` or `running` row for each variant revision. The runtime reserves the current revision first, then creates and links the auditor agent before provider execution. Completion rechecks the current revision and atomically persists all findings; stale or invalid results fail without findings.
+
+### `draft_ai_audit_findings`
+
+Stores the normalized provider-authored six-category result only after trusted audit identity and byte-identical canonical text validation.
+
+| Column         | Type    | Notes                                                        |
+| -------------- | ------- | ------------------------------------------------------------ |
+| `id`           | INTEGER | Primary key                                                  |
+| `audit_run_id` | INTEGER | References `draft_ai_audit_runs(id)` with cascade delete     |
+| `rule_key`     | TEXT    | One required normalized audit category, unique per audit run |
+| `severity`     | TEXT    | `pass`, `warning`, or `block`                                |
+| `message`      | TEXT    | Nonblank provider-authored finding, maximum 1,000 characters |
+| `created_at`   | TEXT    | SQLite datetime                                              |
+
+The six accepted categories are `hook`, `specificity`, `generic_language`, `authenticity`, `clarity`, and `safety`. Provider failure, tool failure, identity mismatch, and stale completion leave this table empty for the failed run while preserving linked agent evidence.
 
 ### `approvals`
 

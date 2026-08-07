@@ -15,11 +15,11 @@ The feature stores:
 
 Creating a draft marks the source candidate as `drafted` in the Candidate Queue.
 
-AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. AI audit loops, AI rewrites, LinkedIn scraping, approval records, scheduling, publishing, and comment automation are excluded from this slice.
+AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. A callable data/runtime API can audit one persisted variant revision, but this slice does not add a UI trigger, workflow automation, automatic retries or resume, AI rewrites, LinkedIn scraping, scheduling, publishing, or comment automation.
 
 ## Schema
 
-Migrations: `src-tauri/src/migrations/drafts.rs` and `src-tauri/src/migrations/draft_generation.rs`.
+Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, and Migration 31 in `draft_ai_audits.rs`.
 
 Tables:
 
@@ -27,6 +27,8 @@ Tables:
 - `draft_variants`
 - `draft_audits`
 - `draft_generation_requests`
+- `draft_ai_audit_runs`
+- `draft_ai_audit_findings`
 
 Key constraints:
 
@@ -36,6 +38,8 @@ Key constraints:
 - All draft tables cascade when their campaign or candidate source is deleted.
 - `draft_generation_requests.status` is limited to `pending`, `generated`, `saved`, `failed`, or `dismissed`.
 - Generation requests keep agent-run provenance and generated variants as bounded JSON until the operator saves them.
+- Variant text changes increment `content_revision`; each active AI audit is unique by variant and revision.
+- Each AI audit has at most one linked agent run, and normalized findings are unique by audit run and category.
 
 See `docs/DATA_MODEL.md` for column-level details.
 
@@ -52,6 +56,11 @@ Data functions live in `src/features/drafts/data.ts`:
 - `listDrafts(campaignId)`
 - `listDraftGenerationRequests(campaignId)`
 - `generateDraftVariants(input)`
+- `runDraftAiAudit(input)`
+- `reconcileDraftAiAuditLifecycle(input?)`
+- `startDraftAiAuditRun(input)`
+- `completeDraftAiAuditRun(input)`
+- `failDraftAiAuditRun(input)`
 - `saveGeneratedDraft(input)`
 - `dismissDraftGenerationRequest(id)`
 - `updateDraft(input)`
@@ -65,7 +74,19 @@ Data functions live in `src/features/drafts/data.ts`:
 
 `createDraft` validates the candidate, rejects archived campaigns, rejected candidates, and candidates that already have a draft, inserts the draft and variants in a transaction, writes audit rows, and updates `candidate_posts.status` to `drafted`.
 
-`updateDraftVariant` updates only provided fields, deletes old audit rows, writes fresh deterministic audit rows, and updates the parent draft timestamp.
+`updateDraftVariant` updates only provided fields, deletes old audit rows, writes fresh deterministic audit rows, and updates the parent draft timestamp. SQLite increments `content_revision` only when stored hook, body, CTA, or hashtags change.
+
+## AI auditor runtime ownership
+
+`runDraftAiAudit` snapshots the variant and campaign, builds the canonical text by preserving each non-empty `hook`, `body`, `cta`, and `hashtags` segment byte-for-byte and joining them with two newlines, then reserves the current revision before any provider call. It creates an `auditor` agent run with the `linkedin_humanizer` playbook and persists the campaign ID, variant ID, revision, audit-run ID, and exact text under `input_context_json.auditRequest`.
+
+The audit and agent are linked before provider execution. Success requires a completed agent and exactly one completed `audit_post` call. The drafts feature parses the stored tool input and output, compares every trusted identity and the canonical text exactly, and accepts only the validated provider-authored findings. `audit_post` itself does not write draft audit tables.
+
+Completion rechecks the current variant revision and inserts all six normalized findings in the same transaction that marks the audit completed. The required categories are `hook`, `specificity`, `generic_language`, `authenticity`, `clarity`, and `safety`; partial finding sets never commit.
+
+Provider, tool, identity, and stale-revision failures durably mark the audit failed with a bounded error and no accepted findings. Provider/tool evidence remains on the linked agent run. If orchestration fails while that agent is nonterminal, failure settlement marks it failed and clears its approval checkpoint in the same transaction; completed or already failed agents are not rewritten.
+
+Startup calls the bounded `reconcileDraftAiAuditLifecycle` API. Each immediate transaction claims at most 25 stale active audits and 25 stale orphaned auditor agents. Reserved audits and unlinked auditor agents are stale after 5 minutes; linked audit execution is stale after 30 minutes since the newest audit/agent lifecycle activity. Reconciliation atomically fails stale audits plus linked nonterminal agents, clears their approval checkpoints, and records `run_failed` events. It also closes reserved-but-unlinked audits and auditor agents whose durable `auditRequest.auditRunId` never became linked. Terminal agent status, output, events, tool calls, audit summary, and normalized findings are preserved as evidence. Callers may reduce or raise each batch bound from 1 to 100.
 
 ## Deterministic audit rules
 
@@ -109,6 +130,12 @@ The UI shows passing findings for hard blockers so operators can see why a varia
 Selecting a blocked variant is rejected by the data API with `Blocked variants cannot be selected`.
 
 ## Verification
+
+The committed audit coverage includes:
+
+- `tests/draft-ai-audits.spec.ts` for exact identity/text handoff, six-finding completion, provider/tool/identity/stale-revision failures, no-op versus real edits, atomic rollback, bounded startup reconciliation, crash boundaries, retries, and evidence preservation.
+- `tests/agent-schema-contract.spec.ts`, `tests/agent-tool-contracts.spec.ts`, and `tests/agent-runtime.spec.ts` for the native/frontend `audit_post` contract, canonical-text bounds, auditor allowlisting, and dry-run persistence.
+- Rust tests in `src-tauri/src/migrations/draft_ai_audits.rs` for migration ordering, revision triggers, run/finding constraints, retry release, and delete behavior.
 
 Run:
 

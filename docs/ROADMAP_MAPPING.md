@@ -148,22 +148,25 @@ Roadmap 5 remains partial because unattended/background scoring ownership and th
 Roadmap coverage:
 
 - Section 6: manual and operator-triggered AI-assisted draft variants.
-- Section 7: deterministic audit checks for draft safety.
+- Section 7: deterministic checks plus a callable revision-scoped AI humanizer audit.
 - Section 8: rewrite-loop foundation via edit-and-re-audit, without AI loops.
-- Sections 17 and 18: drafter role/playbook path through the agent runtime.
+- Sections 17 and 18: drafter and auditor role/playbook paths through the agent runtime.
 
 Delivered in this slice:
 
-- Draft, draft variant, draft audit, and draft generation request tables.
+- Draft, draft variant, deterministic audit, generation request, revision-scoped AI audit run, and normalized AI finding storage.
 - Manual one-to-five variant creation for non-rejected candidates.
 - Operator-triggered dry-run/provider draft generation through `draft_post`.
 - Save-gated generated drafts that reuse `createDraft` and deterministic audits.
 - Deterministic audit findings for required text, length, links, hashtags, hook strength, and specificity.
+- Callable `audit_post` execution with exact durable identity and canonical-text validation, six-category atomic completion, and stale-revision rejection.
+- Bounded startup reconciliation for stale reserved/linked audits and orphaned auditor agents, including nonterminal-agent failure settlement and approval-checkpoint cleanup.
+- Migration, schema-contract, runtime, transaction-boundary, recovery, retry, and evidence-preservation tests.
 - Variant edit-and-re-audit flow.
 - Variant status actions for selected, rejected, and draft reset.
 - Drafts tab with campaign filtering, summary cards, draft cards, and archive action.
 
-Autonomous content generation, AI audit/rewrite loops, LinkedIn scraping, autonomous approval creation, scheduling, publishing, and commenting are not implemented in this slice.
+Roadmap 7 remains partial because the AI audit has no operator UI or workflow-owned automatic execution, and findings do not yet enforce believable first-person specifics before approval. Automatic AI rewrite/re-score loops, LinkedIn scraping, autonomous approval creation, scheduling, publishing, and commenting are not implemented in this slice.
 
 ### Approvals slice
 
