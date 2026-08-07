@@ -10,10 +10,17 @@ import type {
   UpdateCampaignBacklogItemInput,
 } from "@/features/campaign-backlog/types";
 import type { RecordCommentAttemptInput } from "@/features/comments/types";
+import type {
+  CreateDraftInput,
+  EligibleDraftWorkflowOption,
+  SaveGeneratedDraftInput,
+} from "@/features/drafts/types";
 import { IS_TAURI } from "@/lib/env";
 import type {
   CreateWorkflowArtifactInput,
   CreateWorkflowRunInput,
+  ExecuteWorkflowRunInput,
+  SetWorkflowStepStatusInput,
   StartWorkflowRunInput,
 } from "@/workflows/types";
 import { HomePage } from "@/pages/home";
@@ -55,12 +62,22 @@ type CommentTestApi = {
   recordCommentAttempt: (input: RecordCommentAttemptInput) => Promise<number>;
 };
 
+type DraftTestApi = {
+  createDraft: (input: CreateDraftInput) => Promise<number>;
+  listEligibleDraftWorkflowOptions: (
+    campaignId: number,
+  ) => Promise<EligibleDraftWorkflowOption[]>;
+  saveGeneratedDraft: (input: SaveGeneratedDraftInput) => Promise<number>;
+};
+
 type WorkflowTestApi = {
   createWorkflowArtifact: (
     input: CreateWorkflowArtifactInput,
   ) => Promise<number>;
   createWorkflowRun: (input: CreateWorkflowRunInput) => Promise<number>;
+  executeWorkflowRun: (input: ExecuteWorkflowRunInput) => Promise<void>;
   resumeWorkflowRun: (input: StartWorkflowRunInput) => Promise<void>;
+  setWorkflowStepStatus: (input: SetWorkflowStepStatusInput) => Promise<void>;
 };
 
 if (import.meta.env.VITE_PLAYWRIGHT) {
@@ -100,14 +117,33 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
       recordCommentAttempt,
     };
   });
+  void import("@/features/drafts/data").then(
+    ({ createDraft, listEligibleDraftWorkflowOptions, saveGeneratedDraft }) => {
+      (
+        window as unknown as { __LINKGO_DRAFTS_TEST_API__?: DraftTestApi }
+      ).__LINKGO_DRAFTS_TEST_API__ = {
+        createDraft,
+        listEligibleDraftWorkflowOptions,
+        saveGeneratedDraft,
+      };
+    },
+  );
   void import("@/workflows/data").then(
-    ({ createWorkflowArtifact, createWorkflowRun, resumeWorkflowRun }) => {
+    ({
+      createWorkflowArtifact,
+      createWorkflowRun,
+      executeWorkflowRun,
+      resumeWorkflowRun,
+      setWorkflowStepStatus,
+    }) => {
       (
         window as unknown as { __LINKGO_WORKFLOWS_TEST_API__?: WorkflowTestApi }
       ).__LINKGO_WORKFLOWS_TEST_API__ = {
         createWorkflowArtifact,
         createWorkflowRun,
+        executeWorkflowRun,
         resumeWorkflowRun,
+        setWorkflowStepStatus,
       };
     },
   );

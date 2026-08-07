@@ -17,6 +17,7 @@ export function DraftsView(): React.ReactNode {
     generationRequests,
     campaigns,
     candidates,
+    eligibleWorkflowOptions,
     selectedCampaignId,
     loading,
     error,
@@ -61,6 +62,7 @@ export function DraftsView(): React.ReactNode {
             candidates={candidates}
             selectedCampaignId={selectedCampaignId}
             selectedCampaignArchived={selectedCampaignArchived}
+            eligibleWorkflowOptions={eligibleWorkflowOptions}
             onGenerate={generateDraft}
             disabled={campaigns.length === 0}
           />
@@ -156,6 +158,7 @@ export function DraftsView(): React.ReactNode {
                 <DraftGenerationRequestCard
                   key={request.id}
                   request={request}
+                  saveDisabled={selectedCampaignArchived}
                   onSave={(id) => saveGenerationRequest({ id })}
                   onDismiss={dismissGenerationRequest}
                 />

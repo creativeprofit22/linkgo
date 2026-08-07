@@ -53,7 +53,7 @@ export const AGENT_TOOL_METADATA = [
     name: "draft_post",
     label: "Draft post",
     description:
-      "Creates bounded draft variant structures for later human editing and review.",
+      "Creates exactly 3–5 routed draft variants for later explicit human save, editing, and review.",
     roadmapSection: "1, 6, 18",
     requiresApproval: false,
     stepKeys: ["draft"],
@@ -141,13 +141,8 @@ export const agentToolRegistry = {
     inputSchema: draftPostInputSchema,
     outputSchema: draftPostOutputSchema,
     execute: async (input: DraftPostInput) => ({
-      variants: Array.from({ length: input.variantCount }, (_, index) => ({
-        hook: `Dry-run hook ${index + 1}: a practical LinkedIn lesson`,
-        body: `This is a local dry-run draft for candidate ${input.candidatePostId}. It validates the runtime contract without calling a model.`,
-        cta: "Save this checklist for your next post.",
-        hashtags: ["#LinkedIn", "#ContentOps"],
-      })),
-      summary: `Drafted ${input.variantCount} local variants.`,
+      variants: input.variants,
+      summary: `Accepted ${input.variants.length} provider-authored draft variants.`,
     }),
   },
   audit_post: {

@@ -235,6 +235,574 @@ test("scores an exact planner scope through a connected provider and reconciles 
   await expect(page.getByText("OpenAI · completed")).toBeVisible();
 });
 
+test("linked draft advances to audit only after operator save", async ({
+  page,
+}) => {
+  await preparePlannerScoringWorkflow(page);
+  await configureScoringProvider(page);
+  await page.getByRole("button", { name: "Score batch" }).click();
+  const scoringDialog = page.getByRole("dialog", {
+    name: "Score attached candidate batch",
+  });
+  await scoringDialog
+    .getByRole("button", { name: "Confirm and score" })
+    .click();
+  await expect(page.getByText("Current step: Draft variants")).toBeVisible();
+  await expect(
+    page.getByText(/planner-linked draft step is save-only/u),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Continue in Drafts" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run executor", exact: true }),
+  ).toHaveCount(0);
+
+  const guardedExecution = await page.evaluate(async () => {
+    const testWindow = window as unknown as {
+      __LINKGO_WORKFLOWS_TEST_API__: {
+        executeWorkflowRun: (input: { id: number }) => Promise<void>;
+        resumeWorkflowRun: (input: { id: number }) => Promise<void>;
+        setWorkflowStepStatus: (input: {
+          stepId: number;
+          status: "completed" | "blocked";
+          outputSummary?: string;
+          errorMessage?: string;
+        }) => Promise<void>;
+      };
+      __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{
+        id: number;
+        current_step_key: string;
+      }>;
+      __LINKGO_SQL_WORKFLOW_STEPS__: () => Array<{
+        id: number;
+        step_key: string;
+        status: string;
+      }>;
+      __LINKGO_SQL_AGENT_RUNS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_ARTIFACTS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__: () => unknown[];
+    };
+    const run = testWindow.__LINKGO_SQL_WORKFLOW_RUNS__()[0];
+    const draftStep = testWindow
+      .__LINKGO_SQL_WORKFLOW_STEPS__()
+      .find((step) => step.step_key === "draft");
+    if (!run || !draftStep)
+      throw new Error("Planner draft scope was not found");
+    const countsBefore = {
+      agentRuns: testWindow.__LINKGO_SQL_AGENT_RUNS__().length,
+      artifacts: testWindow.__LINKGO_SQL_WORKFLOW_ARTIFACTS__().length,
+      executions: testWindow.__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__().length,
+    };
+    const captureError = async (
+      action: () => Promise<void>,
+    ): Promise<string> => {
+      try {
+        await action();
+        return "";
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    };
+    const executeError = await captureError(() =>
+      testWindow.__LINKGO_WORKFLOWS_TEST_API__.executeWorkflowRun({
+        id: run.id,
+      }),
+    );
+    const resumeError = await captureError(() =>
+      testWindow.__LINKGO_WORKFLOWS_TEST_API__.resumeWorkflowRun({
+        id: run.id,
+      }),
+    );
+    const completeError = await captureError(() =>
+      testWindow.__LINKGO_WORKFLOWS_TEST_API__.setWorkflowStepStatus({
+        stepId: draftStep.id,
+        status: "completed",
+        outputSummary: "Bypass save-only draft advancement",
+      }),
+    );
+    await testWindow.__LINKGO_WORKFLOWS_TEST_API__.setWorkflowStepStatus({
+      stepId: draftStep.id,
+      status: "blocked",
+      errorMessage: "Verify the planner draft resume gate",
+    });
+    return {
+      executeError,
+      resumeError,
+      completeError,
+      countsBefore,
+      countsAfter: {
+        agentRuns: testWindow.__LINKGO_SQL_AGENT_RUNS__().length,
+        artifacts: testWindow.__LINKGO_SQL_WORKFLOW_ARTIFACTS__().length,
+        executions: testWindow.__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__().length,
+      },
+      run: testWindow.__LINKGO_SQL_WORKFLOW_RUNS__()[0],
+      draftStep: testWindow
+        .__LINKGO_SQL_WORKFLOW_STEPS__()
+        .find((step) => step.id === draftStep.id),
+    };
+  });
+  const saveOnlyMessage =
+    "Planner-linked draft steps are save-only. Open Drafts, generate variants, and save a generated draft to continue to audit.";
+  expect(guardedExecution.executeError).toBe(saveOnlyMessage);
+  expect(guardedExecution.resumeError).toBe(saveOnlyMessage);
+  expect(guardedExecution.completeError).toBe(saveOnlyMessage);
+  expect(guardedExecution.countsAfter).toEqual(guardedExecution.countsBefore);
+  expect(guardedExecution.run?.current_step_key).toBe("draft");
+  expect(guardedExecution.draftStep?.status).toBe("blocked");
+
+  await openCampaigns(page);
+  await openWorkflows(page);
+  await expect(page.getByText("Current step: Draft variants")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Resume executor", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Start run", exact: true }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+  await expect(
+    page.getByRole("heading", { name: "Drafts", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Generate variants" }).click();
+  const generationDialog = page.getByRole("dialog", {
+    name: "Generate draft variants",
+  });
+  await generationDialog.getByLabel("Provider").selectOption("dry_run");
+  await generationDialog.getByLabel("Variants").selectOption("4");
+  await generationDialog.getByLabel("Launch").check();
+  await expect(generationDialog.getByLabel("Workflow scope")).not.toHaveValue(
+    "adhoc",
+  );
+  await generationDialog
+    .getByRole("button", { name: "Generate variants" })
+    .click();
+  await expect(generationDialog).toBeHidden();
+  await expect(page.getByText("Linked workflow #1")).toBeVisible();
+
+  const beforeSave = await page.evaluate(() => {
+    const testWindow = window as unknown as {
+      __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{ current_step_key: string }>;
+      __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{
+        status: string;
+        workflow_step_id: number | null;
+        variant_count: number;
+        content_intent: string;
+      }>;
+    };
+    return {
+      run: testWindow.__LINKGO_SQL_WORKFLOW_RUNS__()[0],
+      request: testWindow.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()[0],
+    };
+  });
+  expect(beforeSave.run?.current_step_key).toBe("draft");
+  expect(beforeSave.request).toMatchObject({
+    status: "generated",
+    variant_count: 4,
+    content_intent: "launch",
+  });
+  expect(beforeSave.request?.workflow_step_id).not.toBeNull();
+
+  await page.evaluate(() => {
+    (
+      window as unknown as { __LINKGO_FAIL_DRAFT_ARTIFACT_INSERT__?: boolean }
+    ).__LINKGO_FAIL_DRAFT_ARTIFACT_INSERT__ = true;
+  });
+  await page.getByRole("button", { name: "Save as draft" }).click();
+  await expect(
+    page.getByText("Injected draft artifact insert failure"),
+  ).toBeVisible();
+  const rolledBack = await page.evaluate(() => {
+    const testWindow = window as unknown as {
+      __LINKGO_SQL_DRAFTS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{ current_step_key: string }>;
+      __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{ status: string }>;
+    };
+    return {
+      drafts: testWindow.__LINKGO_SQL_DRAFTS__(),
+      run: testWindow.__LINKGO_SQL_WORKFLOW_RUNS__()[0],
+      request: testWindow.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()[0],
+    };
+  });
+  expect(rolledBack.drafts).toHaveLength(0);
+  expect(rolledBack.run?.current_step_key).toBe("draft");
+  expect(rolledBack.request?.status).toBe("generated");
+
+  await page.getByRole("button", { name: "Save as draft" }).click();
+  await expect(page.getByText("Generated request #1")).toBeHidden();
+  const afterSave = await page.evaluate(() => {
+    const testWindow = window as unknown as {
+      __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{ current_step_key: string }>;
+      __LINKGO_SQL_WORKFLOW_ARTIFACTS__: () => Array<{
+        artifact_type: string;
+      }>;
+      __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{ status: string }>;
+    };
+    return {
+      run: testWindow.__LINKGO_SQL_WORKFLOW_RUNS__()[0],
+      artifacts: testWindow.__LINKGO_SQL_WORKFLOW_ARTIFACTS__(),
+      request: testWindow.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()[0],
+    };
+  });
+  expect(afterSave.run?.current_step_key).toBe("audit");
+  expect(afterSave.request?.status).toBe("saved");
+  expect(
+    afterSave.artifacts.filter(
+      (artifact) => artifact.artifact_type === "draft",
+    ),
+  ).toHaveLength(1);
+
+  await openWorkflows(page);
+  await expect(page.getByLabel("Workflow artifacts")).toContainText(
+    /Draft #\d+ · launch · drafting/u,
+  );
+});
+
+test("queries planner draft eligibility authoritatively", async ({ page }) => {
+  await preparePlannerDraftWorkflow(page);
+
+  const eligibility = await page.evaluate(async () => {
+    type EligibleOption = {
+      workflowRunId: number;
+      workflowStepId: number;
+      candidateId: number;
+      title: string;
+      status: "running" | "blocked" | "failed";
+    };
+    const testWindow = window as unknown as {
+      __LINKGO_DRAFTS_TEST_API__: {
+        listEligibleDraftWorkflowOptions: (
+          campaignId: number,
+        ) => Promise<EligibleOption[]>;
+      };
+      __LINKGO_SQL_DELETE_CANDIDATE__: (id: number) => void;
+      __LINKGO_SQL_MUTATE_CANDIDATE__: (
+        id: number,
+        patch: { relevance_score: number | null },
+      ) => void;
+      __LINKGO_SQL_MUTATE_WORKFLOW_RUN__: (
+        id: number,
+        patch: { current_step_key: string },
+      ) => void;
+      __LINKGO_SQL_SEED_PENDING_DRAFT_GENERATION__: (withAgentRun: boolean) => {
+        requestId: number;
+      };
+      __LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__: (
+        id: number,
+        patch: { status: string },
+      ) => void;
+    };
+    const listOptions = () =>
+      testWindow.__LINKGO_DRAFTS_TEST_API__.listEligibleDraftWorkflowOptions(1);
+
+    const baseline = await listOptions();
+    if (baseline.length === 0)
+      throw new Error("Eligible planner draft was not found");
+    const candidateIds = [
+      ...new Set(baseline.map((option) => option.candidateId)),
+    ];
+    const workflowRunIds = [
+      ...new Set(baseline.map((option) => option.workflowRunId)),
+    ];
+
+    candidateIds.forEach((candidateId) =>
+      testWindow.__LINKGO_SQL_MUTATE_CANDIDATE__(candidateId, {
+        relevance_score: null,
+      }),
+    );
+    const unscored = await listOptions();
+    candidateIds.forEach((candidateId) =>
+      testWindow.__LINKGO_SQL_MUTATE_CANDIDATE__(candidateId, {
+        relevance_score: 84,
+      }),
+    );
+
+    workflowRunIds.forEach((workflowRunId) =>
+      testWindow.__LINKGO_SQL_MUTATE_WORKFLOW_RUN__(workflowRunId, {
+        current_step_key: "audit",
+      }),
+    );
+    const wrongStep = await listOptions();
+    workflowRunIds.forEach((workflowRunId) =>
+      testWindow.__LINKGO_SQL_MUTATE_WORKFLOW_RUN__(workflowRunId, {
+        current_step_key: "draft",
+      }),
+    );
+
+    const { requestId } =
+      testWindow.__LINKGO_SQL_SEED_PENDING_DRAFT_GENERATION__(false);
+    const alreadyClaimed = await listOptions();
+    testWindow.__LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__(requestId, {
+      status: "dismissed",
+    });
+
+    candidateIds.forEach((candidateId) =>
+      testWindow.__LINKGO_SQL_DELETE_CANDIDATE__(candidateId),
+    );
+    const removed = await listOptions();
+
+    return { baseline, unscored, wrongStep, alreadyClaimed, removed };
+  });
+
+  expect(eligibility.baseline).not.toHaveLength(0);
+  expect(eligibility.unscored).toEqual([]);
+  expect(eligibility.wrongStep).toEqual([]);
+  expect(eligibility.alreadyClaimed).toEqual([]);
+  expect(eligibility.removed).toEqual([]);
+});
+
+test("blocks archived generated draft saves without mutating linked work", async ({
+  page,
+}) => {
+  await preparePlannerDraftWorkflow(page);
+  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+  await page.getByRole("button", { name: "Generate variants" }).click();
+  const generationDialog = page.getByRole("dialog", {
+    name: "Generate draft variants",
+  });
+  await generationDialog.getByLabel("Provider").selectOption("dry_run");
+  await generationDialog
+    .getByRole("button", { name: "Generate variants" })
+    .click();
+  await expect(generationDialog).toBeHidden();
+  await expect(page.getByText("Linked workflow #1")).toBeVisible();
+
+  await archiveSelectedCampaign(page);
+  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+  await page.getByRole("combobox").selectOption("1");
+  const saveButton = page.getByRole("button", { name: "Save as draft" });
+  const dismissButton = page.getByRole("button", {
+    name: "Dismiss",
+    exact: true,
+  });
+  await expect(saveButton).toBeDisabled();
+  await expect(dismissButton).toBeEnabled();
+
+  const stateBeforeUiAttempt = await readArchivedDraftMutationState(page);
+  await saveButton.evaluate((button) => (button as HTMLButtonElement).click());
+  expect(await readArchivedDraftMutationState(page)).toEqual(
+    stateBeforeUiAttempt,
+  );
+
+  await page.waitForFunction(() => "__LINKGO_DRAFTS_TEST_API__" in window);
+  const directErrors = await page.evaluate(async () => {
+    const testWindow = window as unknown as {
+      __LINKGO_DRAFTS_TEST_API__: {
+        saveGeneratedDraft: (input: { id: number }) => Promise<number>;
+        createDraft: (input: {
+          candidateId: number;
+          angle: string;
+          notes: string;
+          variants: Array<{
+            hook: string;
+            body: string;
+            cta: string;
+            hashtags: string;
+          }>;
+        }) => Promise<number>;
+      };
+    };
+    const captureError = async (
+      action: () => Promise<unknown>,
+    ): Promise<string> => {
+      try {
+        await action();
+        return "";
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    };
+    return {
+      generatedSave: await captureError(() =>
+        testWindow.__LINKGO_DRAFTS_TEST_API__.saveGeneratedDraft({ id: 1 }),
+      ),
+      manualCreate: await captureError(() =>
+        testWindow.__LINKGO_DRAFTS_TEST_API__.createDraft({
+          candidateId: 1,
+          angle: "Archived campaign bypass attempt",
+          notes: "Direct data API guard verification",
+          variants: [
+            {
+              hook: "This must not be saved",
+              body: "The campaign was archived before this direct mutation.",
+              cta: "Do not persist this draft.",
+              hashtags: "#Archived",
+            },
+          ],
+        }),
+      ),
+    };
+  });
+  expect(directErrors).toEqual({
+    generatedSave: "Campaign is archived",
+    manualCreate: "Campaign is archived",
+  });
+  expect(await readArchivedDraftMutationState(page)).toEqual(
+    stateBeforeUiAttempt,
+  );
+
+  await dismissButton.click();
+  await expect(page.getByText("Generated request #1")).toBeHidden();
+});
+
+for (const withAgentRun of [false, true]) {
+  test(`recovers a reloaded pending draft request ${
+    withAgentRun ? "with" : "without"
+  } an agent run`, async ({ page }) => {
+    await preparePlannerDraftWorkflow(page);
+    const fixture = await page.evaluate((seedAgentRun) => {
+      const testWindow = window as unknown as {
+        __LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__: () => void;
+        __LINKGO_SQL_SEED_PENDING_DRAFT_GENERATION__: (
+          withAgentRun: boolean,
+        ) => {
+          requestId: number;
+          agentRunId: number | null;
+          workflowRunId: number;
+          workflowStepId: number;
+        };
+      };
+      testWindow.__LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__();
+      return testWindow.__LINKGO_SQL_SEED_PENDING_DRAFT_GENERATION__(
+        seedAgentRun,
+      );
+    }, withAgentRun);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+    await expect(
+      page.getByRole("heading", { name: "Drafts", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`Generated request #${fixture.requestId}`),
+    ).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Dismiss interrupted request" })
+      .click();
+    await expect(
+      page.getByText(`Generated request #${fixture.requestId}`),
+    ).toBeHidden();
+
+    const recovered = await page.evaluate((seeded) => {
+      const testWindow = window as unknown as {
+        __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{
+          id: number;
+          status: string;
+          error_message: string;
+        }>;
+        __LINKGO_SQL_AGENT_RUNS__: () => Array<{
+          id: number;
+          status: string;
+          error_message: string;
+        }>;
+        __LINKGO_SQL_AGENT_RUN_EVENTS__: () => Array<{
+          agent_run_id: number;
+          event_type: string;
+          summary: string;
+        }>;
+        __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{
+          id: number;
+          status: string;
+          current_step_key: string;
+        }>;
+        __LINKGO_SQL_WORKFLOW_STEPS__: () => Array<{
+          id: number;
+          status: string;
+          error_message: string;
+        }>;
+        __LINKGO_SQL_WORKFLOW_EVENTS__: () => Array<{
+          workflow_run_id: number;
+          event_type: string;
+          summary: string;
+        }>;
+      };
+      return {
+        request: testWindow
+          .__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()
+          .find((request) => request.id === seeded.requestId),
+        agentRun: testWindow
+          .__LINKGO_SQL_AGENT_RUNS__()
+          .find((run) => run.id === seeded.agentRunId),
+        agentEvents: testWindow
+          .__LINKGO_SQL_AGENT_RUN_EVENTS__()
+          .filter((event) => event.agent_run_id === seeded.agentRunId),
+        workflowRun: testWindow
+          .__LINKGO_SQL_WORKFLOW_RUNS__()
+          .find((run) => run.id === seeded.workflowRunId),
+        workflowStep: testWindow
+          .__LINKGO_SQL_WORKFLOW_STEPS__()
+          .find((step) => step.id === seeded.workflowStepId),
+        workflowEvents: testWindow
+          .__LINKGO_SQL_WORKFLOW_EVENTS__()
+          .filter((event) => event.workflow_run_id === seeded.workflowRunId),
+      };
+    }, fixture);
+    const recoveryMessage = `Draft generation request #${fixture.requestId} was dismissed after an interrupted provider call. Generate variants again to retry.`;
+    expect(recovered.request).toMatchObject({
+      status: "dismissed",
+      error_message: recoveryMessage,
+    });
+    expect(recovered.workflowRun).toMatchObject({
+      status: "blocked",
+      current_step_key: "draft",
+    });
+    expect(recovered.workflowStep).toMatchObject({
+      status: "blocked",
+      error_message: recoveryMessage,
+    });
+    expect(recovered.workflowEvents).toContainEqual(
+      expect.objectContaining({
+        event_type: "step_blocked",
+        summary: recoveryMessage,
+      }),
+    );
+    if (withAgentRun) {
+      expect(recovered.agentRun).toMatchObject({
+        status: "cancelled",
+        error_message: recoveryMessage,
+      });
+      expect(recovered.agentEvents).toContainEqual(
+        expect.objectContaining({
+          event_type: "run_cancelled",
+          summary: recoveryMessage,
+        }),
+      );
+    } else {
+      expect(recovered.agentRun).toBeUndefined();
+      expect(recovered.agentEvents).toHaveLength(0);
+    }
+
+    await page.getByRole("button", { name: "Generate variants" }).click();
+    const generationDialog = page.getByRole("dialog", {
+      name: "Generate draft variants",
+    });
+    await generationDialog.getByLabel("Provider").selectOption("dry_run");
+    await expect(generationDialog.getByLabel("Workflow scope")).not.toHaveValue(
+      "adhoc",
+    );
+    await generationDialog
+      .getByRole("button", { name: "Generate variants" })
+      .click();
+    await expect(generationDialog).toBeHidden();
+
+    const retriedRequests = await page.evaluate((workflowStepId) => {
+      const testWindow = window as unknown as {
+        __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{
+          workflow_step_id: number | null;
+          status: string;
+        }>;
+      };
+      return testWindow
+        .__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()
+        .filter((request) => request.workflow_step_id === workflowStepId)
+        .map((request) => request.status);
+    }, fixture.workflowStepId);
+    expect(retriedRequests).toEqual(["dismissed", "generated"]);
+  });
+}
+
 test("delimits instruction-like candidate content at the provider boundary", async ({
   page,
 }) => {
@@ -1255,6 +1823,52 @@ async function seedWorkflowApproval(page: Page): Promise<void> {
   });
 }
 
+async function readArchivedDraftMutationState(page: Page) {
+  return page.evaluate(() => {
+    type StateCounts = {
+      drafts: number;
+      draftVariants: number;
+      draftAudits: number;
+      workflowEvents: number;
+      workflowArtifacts: number;
+      workflowStepExecutions: number;
+    };
+    const testWindow = window as unknown as {
+      __LINKGO_SQL_STATE_COUNTS__: () => StateCounts;
+      __LINKGO_SQL_DRAFTS__: () => unknown[];
+      __LINKGO_SQL_DRAFT_VARIANTS__: () => unknown[];
+      __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => unknown[];
+      __LINKGO_SQL_CANDIDATE_POSTS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_RUNS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_STEPS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_EVENTS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_ARTIFACTS__: () => unknown[];
+      __LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__: () => unknown[];
+    };
+    const counts = testWindow.__LINKGO_SQL_STATE_COUNTS__();
+    return {
+      counts: {
+        drafts: counts.drafts,
+        draftVariants: counts.draftVariants,
+        draftAudits: counts.draftAudits,
+        workflowEvents: counts.workflowEvents,
+        workflowArtifacts: counts.workflowArtifacts,
+        workflowStepExecutions: counts.workflowStepExecutions,
+      },
+      drafts: testWindow.__LINKGO_SQL_DRAFTS__(),
+      draftVariants: testWindow.__LINKGO_SQL_DRAFT_VARIANTS__(),
+      requests: testWindow.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__(),
+      candidates: testWindow.__LINKGO_SQL_CANDIDATE_POSTS__(),
+      workflowRuns: testWindow.__LINKGO_SQL_WORKFLOW_RUNS__(),
+      workflowSteps: testWindow.__LINKGO_SQL_WORKFLOW_STEPS__(),
+      workflowEvents: testWindow.__LINKGO_SQL_WORKFLOW_EVENTS__(),
+      workflowArtifacts: testWindow.__LINKGO_SQL_WORKFLOW_ARTIFACTS__(),
+      workflowStepExecutions:
+        testWindow.__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__(),
+    };
+  });
+}
+
 function getBadge(page: Page, label: string): Locator {
   return page
     .locator("span")
@@ -1337,6 +1951,19 @@ async function preparePlannerScoringWorkflow(
   await page.getByRole("button", { name: "Plan now" }).click();
   await expect(page.getByText("Plan #1 · Founder-led growth")).toBeVisible();
   await openWorkflows(page);
+}
+
+async function preparePlannerDraftWorkflow(page: Page): Promise<void> {
+  await preparePlannerScoringWorkflow(page);
+  await configureScoringProvider(page);
+  await page.getByRole("button", { name: "Score batch" }).click();
+  const scoringDialog = page.getByRole("dialog", {
+    name: "Score attached candidate batch",
+  });
+  await scoringDialog
+    .getByRole("button", { name: "Confirm and score" })
+    .click();
+  await expect(page.getByText("Current step: Draft variants")).toBeVisible();
 }
 
 async function configureScoringProvider(

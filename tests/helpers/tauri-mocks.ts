@@ -222,6 +222,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       updated_at: string;
     };
 
+    type DraftContentIntent = "event" | "launch" | "idea" | "community";
+
     type DraftStatus =
       | "drafting"
       | "needs_revision"
@@ -238,6 +240,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       candidate_post_id: number;
       angle: string;
       notes: string;
+      content_intent: DraftContentIntent;
       status: DraftStatus;
       created_at: string;
       updated_at: string;
@@ -274,6 +277,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       model_name: string;
       playbook_key: AgentPlaybookKey | "";
       variant_count: number;
+      content_intent: DraftContentIntent;
+      workflow_run_id: number | null;
+      workflow_step_id: number | null;
       angle: string;
       voice_notes: string;
       status: "pending" | "generated" | "saved" | "failed" | "dismissed";
@@ -633,7 +639,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       id: number;
       workflow_run_id: number;
       workflow_step_id: number | null;
-      artifact_type: "agent_run" | "candidate_post";
+      artifact_type: "agent_run" | "candidate_post" | "draft";
       artifact_id: number;
       summary: string;
       created_at: string;
@@ -932,6 +938,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       drafts: Draft[];
       draftVariants: DraftVariant[];
       draftAudits: DraftAudit[];
+      draftGenerationRequests: DraftGenerationRequest[];
       approvals: Approval[];
       scheduleJobs: ScheduleJob[];
       publishAttempts: PublishAttempt[];
@@ -977,6 +984,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftId: number;
       nextDraftVariantId: number;
       nextDraftAuditId: number;
+      nextDraftGenerationRequestId: number;
       nextApprovalId: number;
       nextScheduleJobId: number;
       nextPublishAttemptId: number;
@@ -1165,6 +1173,18 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return new Date().toISOString();
     }
 
+    function isOlderThanSqliteModifier(
+      timestamp: string,
+      modifier: unknown,
+    ): boolean {
+      const minutes = Number(
+        String(modifier ?? "").match(/-(\d+) minutes/)?.[1] ?? 0,
+      );
+      return (
+        Date.parse(timestamp) <= Date.parse(getNow()) - minutes * 60 * 1000
+      );
+    }
+
     const VALID_AGENT_PLAYBOOK_KEYS: AgentPlaybookKey[] = [
       "linkedin_writer",
       "linkedin_humanizer",
@@ -1231,6 +1251,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         drafts: cloneRows(drafts),
         draftVariants: cloneRows(draftVariants),
         draftAudits: cloneRows(draftAudits),
+        draftGenerationRequests: cloneRows(draftGenerationRequests),
         approvals: cloneRows(approvals),
         scheduleJobs: cloneRows(scheduleJobs),
         publishAttempts: cloneRows(publishAttempts),
@@ -1277,6 +1298,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextDraftId,
         nextDraftVariantId,
         nextDraftAuditId,
+        nextDraftGenerationRequestId,
         nextApprovalId,
         nextScheduleJobId,
         nextPublishAttemptId,
@@ -1356,6 +1378,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(drafts, snapshot.drafts);
       restoreRows(draftVariants, snapshot.draftVariants);
       restoreRows(draftAudits, snapshot.draftAudits);
+      restoreRows(
+        draftGenerationRequests,
+        snapshot.draftGenerationRequests ?? [],
+      );
       restoreRows(approvals, snapshot.approvals);
       restoreRows(scheduleJobs, snapshot.scheduleJobs);
       restoreRows(publishAttempts, snapshot.publishAttempts);
@@ -1419,6 +1445,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftId = snapshot.nextDraftId;
       nextDraftVariantId = snapshot.nextDraftVariantId;
       nextDraftAuditId = snapshot.nextDraftAuditId;
+      nextDraftGenerationRequestId = snapshot.nextDraftGenerationRequestId ?? 1;
       nextApprovalId = snapshot.nextApprovalId;
       nextScheduleJobId = snapshot.nextScheduleJobId;
       nextPublishAttemptId = snapshot.nextPublishAttemptId;
@@ -1534,9 +1561,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           campaign_status: campaign.status,
           candidate_status: candidate.status,
           campaign_name: campaign.name,
+          campaign_product: campaign.product,
+          campaign_audience: campaign.audience,
+          campaign_voice: campaign.voice,
+          campaign_tone: campaign.tone,
           candidate_source_keyword: candidate.source_keyword,
           candidate_score_reason: candidate.score_reason,
           candidate_notes: candidate.notes,
+          candidate_relevance_score: candidate.relevance_score,
           target_author_name: target.author_name,
           target_content: target.content,
         },
@@ -1563,6 +1595,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           candidate_post_id: draft.candidate_post_id,
           angle: draft.angle,
           notes: draft.notes,
+          content_intent: draft.content_intent,
           status: draft.status,
           created_at: draft.created_at,
           updated_at: draft.updated_at,
@@ -1604,6 +1637,40 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       query: string,
       values: unknown[],
     ): unknown[] {
+      if (query.includes("dgr.id AS request_id")) {
+        const candidateId = Number(values[0] ?? 0);
+        return draftGenerationRequests
+          .filter(
+            (request) =>
+              request.candidate_post_id === candidateId &&
+              ["pending", "generated"].includes(request.status) &&
+              (request.workflow_run_id !== null ||
+                request.workflow_step_id !== null),
+          )
+          .map((request) => {
+            const run = workflowRuns.find(
+              (row) => row.id === request.workflow_run_id,
+            );
+            const step = workflowSteps.find(
+              (row) =>
+                row.id === request.workflow_step_id &&
+                row.workflow_run_id === request.workflow_run_id &&
+                row.step_key === "draft",
+            );
+            return {
+              request_id: request.id,
+              request_status: request.status,
+              agent_run_id: request.agent_run_id,
+              campaign_id: request.campaign_id,
+              workflow_run_id: request.workflow_run_id,
+              workflow_step_id: request.workflow_step_id,
+              run_status: run?.status ?? null,
+              current_step_key: run?.current_step_key ?? null,
+              step_status: step?.status ?? null,
+            };
+          });
+      }
+
       const requestId = query.includes("WHERE dgr.id")
         ? Number(values[0] ?? 0)
         : null;
@@ -2293,7 +2360,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         ? campaigns.find((row) => row.id === run.campaign_id)
         : undefined;
       if (!run || !campaign) return [];
-      return [{ ...run, campaign_status: campaign.status }];
+      const plan = autopilotPlans.find((row) => row.workflow_run_id === run.id);
+      return [
+        {
+          ...run,
+          campaign_status: campaign.status,
+          autopilot_plan_id: plan?.id ?? null,
+        },
+      ];
     }
 
     function selectWorkflowStepValidation(values: unknown[]): unknown[] {
@@ -2306,12 +2380,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         ? campaigns.find((row) => row.id === run.campaign_id)
         : undefined;
       if (!step || !run || !campaign) return [];
+      const plan = autopilotPlans.find((row) => row.workflow_run_id === run.id);
       return [
         {
           ...step,
           run_status: run.status,
           campaign_id: run.campaign_id,
           campaign_status: campaign.status,
+          autopilot_plan_id: plan?.id ?? null,
         },
       ];
     }
@@ -2385,6 +2461,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           artifact.artifact_type === "candidate_post" &&
           row.id === artifact.artifact_id,
       );
+      const draft = drafts.find(
+        (row) =>
+          artifact.artifact_type === "draft" && row.id === artifact.artifact_id,
+      );
       return {
         ...artifact,
         agent_role: agentRun?.agent_role ?? null,
@@ -2392,6 +2472,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         candidate_id: candidate?.id ?? null,
         candidate_status: candidate?.status ?? null,
         candidate_relevance_score: candidate?.relevance_score ?? null,
+        draft_id: draft?.id ?? null,
+        draft_status: draft?.status ?? null,
+        draft_content_intent: draft?.content_intent ?? null,
       };
     }
 
@@ -3799,6 +3882,124 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             };
           });
       }
+      if (
+        query.includes("cp.id AS candidate_id") &&
+        query.includes("FROM workflow_runs wr") &&
+        query.includes("NOT EXISTS")
+      ) {
+        const campaignId = Number(values[0] ?? 0);
+        return workflowRuns
+          .filter(
+            (run) =>
+              run.campaign_id === campaignId &&
+              run.current_step_key === "draft" &&
+              ["running", "blocked", "failed"].includes(run.status),
+          )
+          .flatMap((run) => {
+            const draftSteps = workflowSteps.filter(
+              (step) =>
+                step.workflow_run_id === run.id &&
+                step.step_key === "draft" &&
+                ["pending", "running", "blocked", "failed"].includes(
+                  step.status,
+                ) &&
+                !draftGenerationRequests.some(
+                  (request) =>
+                    request.workflow_step_id === step.id &&
+                    ["pending", "generated"].includes(request.status),
+                ),
+            );
+            return draftSteps.flatMap((step) =>
+              workflowArtifacts
+                .filter(
+                  (artifact) =>
+                    artifact.workflow_run_id === run.id &&
+                    artifact.artifact_type === "candidate_post",
+                )
+                .flatMap((artifact) => {
+                  const candidate = candidatePosts.find(
+                    (row) =>
+                      row.id === artifact.artifact_id &&
+                      row.campaign_id === run.campaign_id &&
+                      ["new", "shortlisted"].includes(row.status) &&
+                      row.relevance_score !== null,
+                  );
+                  return candidate
+                    ? [
+                        {
+                          workflow_run_id: run.id,
+                          workflow_step_id: step.id,
+                          candidate_id: candidate.id,
+                          title: run.title,
+                          status: run.status,
+                        },
+                      ]
+                    : [];
+                }),
+            );
+          });
+      }
+      if (
+        query.includes("cp.status AS candidate_status") &&
+        query.includes("FROM workflow_runs wr") &&
+        query.includes("ws.step_key = 'draft'")
+      ) {
+        const candidateId = Number(values[0] ?? 0);
+        const workflowRunId = Number(values[1] ?? 0);
+        const run = workflowRuns.find((row) => row.id === workflowRunId);
+        const step = workflowSteps.find(
+          (row) =>
+            row.workflow_run_id === workflowRunId && row.step_key === "draft",
+        );
+        const artifact = workflowArtifacts.find(
+          (row) =>
+            row.workflow_run_id === workflowRunId &&
+            row.artifact_type === "candidate_post" &&
+            row.artifact_id === candidateId,
+        );
+        const candidate = artifact
+          ? candidatePosts.find((row) => row.id === candidateId)
+          : undefined;
+        if (!run || !step || !candidate) return [];
+        return [
+          {
+            workflow_run_id: run.id,
+            campaign_id: run.campaign_id,
+            run_status: run.status,
+            current_step_key: run.current_step_key,
+            workflow_step_id: step.id,
+            step_status: step.status,
+            step_title: step.title,
+            candidate_status: candidate.status,
+            relevance_score: candidate.relevance_score,
+            candidate_campaign_id: candidate.campaign_id,
+          },
+        ];
+      }
+      if (
+        query.includes("ws.status AS step_status") &&
+        query.includes("wr.current_step_key") &&
+        query.includes("FROM workflow_steps ws")
+      ) {
+        const stepId = Number(values[0] ?? 0);
+        const workflowRunId = Number(values[1] ?? 0);
+        const campaignId = Number(values[2] ?? 0);
+        const step = workflowSteps.find(
+          (row) => row.id === stepId && row.workflow_run_id === workflowRunId,
+        );
+        const run = workflowRuns.find(
+          (row) => row.id === workflowRunId && row.campaign_id === campaignId,
+        );
+        return step && run
+          ? [
+              {
+                step_status: step.status,
+                run_status: run.status,
+                current_step_key: run.current_step_key,
+              },
+            ]
+          : [];
+      }
       if (query.includes("FROM workflow_step_executions")) {
         const workflowStepId = Number(values[0] ?? 0);
         if (query.includes("next_attempt")) {
@@ -3846,6 +4047,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (query.includes("FROM workflow_runs wr")) {
         return selectWorkflowRunValidation(values);
+      }
+      if (
+        query.includes("FROM workflow_steps") &&
+        query.includes("step_key = 'audit'")
+      ) {
+        const workflowRunId = Number(values[0] ?? 0);
+        return workflowSteps.filter(
+          (step) =>
+            step.workflow_run_id === workflowRunId && step.step_key === "audit",
+        );
       }
       if (query.includes("FROM workflow_steps")) {
         return selectWorkflowSteps(values);
@@ -4212,9 +4423,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function getDelayedSelectCampaignId(args?: unknown): number | null {
       const { query, values } = readSqlArgs(args);
-      const isCandidateList =
-        query.includes("FROM candidate_posts cp") &&
-        query.includes("INNER JOIN target_posts tp");
+      const isCandidateList = query.includes("ORDER BY cp.status = 'rejected'");
+      const isDraftList = query.includes("ORDER BY d.status = 'archived'");
+      const isDraftGenerationRequestList = query.includes(
+        "ORDER BY CASE dgr.status",
+      );
+      const isWorkflowRunList = query.includes("ORDER BY CASE wr.status");
+      const isEligibleDraftWorkflowList =
+        query.includes("cp.id AS candidate_id") && query.includes("NOT EXISTS");
       const isDiscoveryList =
         query.includes("FROM candidate_discovery_items") &&
         query.includes("ORDER BY status = 'promoted'");
@@ -4225,6 +4441,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const isAutopilotList = isAutopilotPlannerQuery(query);
       if (
         !isCandidateList &&
+        !isDraftList &&
+        !isDraftGenerationRequestList &&
+        !isWorkflowRunList &&
+        !isEligibleDraftWorkflowList &&
         !isDiscoveryList &&
         !isSourceImportList &&
         !isCandidatePolicyList &&
@@ -5112,17 +5332,40 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
 
       if (query.includes("INSERT INTO draft_generation_requests")) {
+        const workflowStepId =
+          values[8] === null ? null : Number(values[8] ?? 0);
+        if (
+          workflowStepId !== null &&
+          draftGenerationRequests.some(
+            (row) =>
+              row.workflow_step_id === workflowStepId &&
+              ["pending", "generated"].includes(row.status),
+          )
+        ) {
+          throw new Error(
+            "UNIQUE constraint failed: draft_generation_requests.workflow_step_id",
+          );
+        }
+        const variantCount = Number(values[5] ?? 3);
+        if (variantCount < 3 || variantCount > 5) {
+          throw new Error(
+            "new draft generation requests require 3 to 5 variants",
+          );
+        }
         const request: DraftGenerationRequest = {
           id: nextDraftGenerationRequestId,
           campaign_id: Number(values[0] ?? 0),
           candidate_post_id: Number(values[1] ?? 0),
-          agent_run_id: values[2] === null ? null : Number(values[2] ?? 0),
-          provider_key: values[3] as AgentProviderKey,
-          model_name: String(values[4] ?? ""),
-          playbook_key: values[5] as AgentPlaybookKey | "",
-          variant_count: Number(values[6] ?? 3),
-          angle: String(values[7] ?? ""),
-          voice_notes: String(values[8] ?? ""),
+          agent_run_id: null,
+          provider_key: values[2] as AgentProviderKey,
+          model_name: String(values[3] ?? ""),
+          playbook_key: values[4] as AgentPlaybookKey | "",
+          variant_count: variantCount,
+          content_intent: values[6] as DraftContentIntent,
+          workflow_run_id: values[7] === null ? null : Number(values[7] ?? 0),
+          workflow_step_id: workflowStepId,
+          angle: String(values[9] ?? ""),
+          voice_notes: String(values[10] ?? ""),
           status: "pending",
           summary: "",
           generated_variants_json: "[]",
@@ -5148,6 +5391,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           candidate_post_id: candidatePostId,
           angle: String(values[2] ?? ""),
           notes: String(values[3] ?? ""),
+          content_intent: (values[4] as DraftContentIntent) ?? "idea",
           status: "drafting",
           created_at: now,
           updated_at: now,
@@ -5670,6 +5914,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             : query.includes("'step_started'")
               ? "step_started"
               : null;
+        if (
+          literalEventType === "step_blocked" &&
+          w.__LINKGO_FAIL_CANDIDATE_DELETE_WORKFLOW_EVENT__ === true &&
+          String(values[2] ?? "").includes("Candidate #")
+        ) {
+          w.__LINKGO_FAIL_CANDIDATE_DELETE_WORKFLOW_EVENT__ = undefined;
+          throw new Error("Injected candidate deletion workflow event failure");
+        }
         const event: WorkflowEvent = {
           id: nextWorkflowEventId,
           workflow_run_id: Number(values[0] ?? 0),
@@ -5689,16 +5941,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
 
       if (query.includes("INSERT INTO workflow_artifacts")) {
+        const literalDraft = query.includes("'draft'");
+        const artifactType = literalDraft
+          ? "draft"
+          : (values[2] as "agent_run" | "candidate_post");
+        const artifactId = Number(values[literalDraft ? 2 : 3] ?? 0);
+        const summary = String(values[literalDraft ? 3 : 4] ?? "");
+        if (literalDraft && w.__LINKGO_FAIL_DRAFT_ARTIFACT_INSERT__ === true) {
+          w.__LINKGO_FAIL_DRAFT_ARTIFACT_INSERT__ = false;
+          throw new Error("Injected draft artifact insert failure");
+        }
         const existing = workflowArtifacts.find(
           (artifact) =>
             artifact.workflow_run_id === Number(values[0] ?? 0) &&
-            artifact.artifact_type === values[2] &&
-            artifact.artifact_id === Number(values[3] ?? 0),
+            artifact.artifact_type === artifactType &&
+            artifact.artifact_id === artifactId,
         );
         if (existing) {
           existing.workflow_step_id =
             values[1] === null ? null : Number(values[1] ?? 0);
-          existing.summary = String(values[4] ?? "");
+          existing.summary = summary;
           existing.updated_at = now;
           return { lastInsertId: existing.id, rowsAffected: 1 };
         }
@@ -5706,9 +5968,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           id: nextWorkflowArtifactId,
           workflow_run_id: Number(values[0] ?? 0),
           workflow_step_id: values[1] === null ? null : Number(values[1] ?? 0),
-          artifact_type: values[2] as "agent_run" | "candidate_post",
-          artifact_id: Number(values[3] ?? 0),
-          summary: String(values[4] ?? ""),
+          artifact_type: artifactType,
+          artifact_id: artifactId,
+          summary,
           created_at: now,
           updated_at: now,
         };
@@ -5721,19 +5983,42 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const id = Number(values[values.length - 1] ?? 0);
         const request = draftGenerationRequests.find((row) => row.id === id);
         if (!request) return { lastInsertId: 0, rowsAffected: 0 };
-        if (query.includes("status = 'generated'")) {
+        if (
+          query.includes("AND status = 'pending'") &&
+          request.status !== "pending"
+        ) {
+          return { lastInsertId: 0, rowsAffected: 0 };
+        }
+        if (
+          query.includes("AND status = 'generated'") &&
+          request.status !== "generated"
+        ) {
+          return { lastInsertId: 0, rowsAffected: 0 };
+        }
+        if (
+          query.includes("AND status IN ('pending', 'generated')") &&
+          !["pending", "generated"].includes(request.status)
+        ) {
+          return { lastInsertId: 0, rowsAffected: 0 };
+        }
+        if (query.includes("SET agent_run_id = $1")) {
+          request.agent_run_id = Number(values[0] ?? 0);
+        } else if (query.includes("SET status = 'generated'")) {
           request.status = "generated";
           request.summary = String(values[0] ?? "");
           request.generated_variants_json = String(values[1] ?? "[]");
           request.error_message = "";
-        } else if (query.includes("status = 'failed'")) {
+        } else if (query.includes("SET status = 'failed'")) {
           request.status = "failed";
           request.error_message = String(values[0] ?? "");
-        } else if (query.includes("status = 'saved'")) {
+        } else if (query.includes("SET status = 'saved'")) {
           request.status = "saved";
           request.created_draft_id = Number(values[0] ?? 0);
-        } else if (query.includes("status = 'dismissed'")) {
+        } else if (query.includes("SET status = 'dismissed'")) {
           request.status = "dismissed";
+          if (query.includes("error_message")) {
+            request.error_message = String(values[0] ?? "");
+          }
         }
         request.updated_at = now;
         return { lastInsertId: 0, rowsAffected: 1 };
@@ -5803,12 +6088,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             run.completed_at = null;
             run.error_message = "";
           } else if (literalCancelled) {
+            if (
+              query.includes("status IN ('queued', 'running')") &&
+              !["queued", "running"].includes(run.status)
+            ) {
+              return { lastInsertId: id, rowsAffected: 0 };
+            }
             run.status = "cancelled";
             run.completed_at = now;
             if (cancellationWithError) {
               run.error_message = String(values[0] ?? "");
             }
           } else if (literalFailed) {
+            if (
+              query.includes(
+                "status IN ('queued', 'running', 'waiting_approval')",
+              ) &&
+              !["queued", "running", "waiting_approval"].includes(run.status)
+            ) {
+              return { lastInsertId: id, rowsAffected: 0 };
+            }
             run.status = "failed";
             run.error_message = String(values[0] ?? "");
             run.completed_at = now;
@@ -5913,13 +6212,18 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             if (query.includes("current_step_key = 'draft'")) {
               run.current_step_key = "draft";
             }
+            if (query.includes("current_step_key = 'audit'")) {
+              run.current_step_key = "audit";
+            }
           } else if (query.includes("status = 'failed'")) {
             run.status = "failed";
             run.current_step_key = "score";
             run.completed_at = null;
           } else if (query.includes("status = 'blocked'")) {
             run.status = "blocked";
-            run.current_step_key = "score";
+            run.current_step_key = query.includes("current_step_key = 'draft'")
+              ? "draft"
+              : "score";
             run.completed_at = null;
           } else if (query.includes("status = 'cancelled'")) {
             run.status = "cancelled";
@@ -5956,6 +6260,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           step.output_summary = String(values[0] ?? "");
           step.completed_at = now;
         } else {
+          if (query.includes("output_summary = ''")) {
+            step.output_summary = "";
+          }
           step.error_message = String(values[0] ?? "");
           step.completed_at = null;
         }
@@ -6565,6 +6872,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         for (const item of sourceImportItems) {
           if (item.candidate_post_id === id) item.candidate_post_id = null;
         }
+        removeRows(
+          draftGenerationRequests,
+          (request) => request.candidate_post_id === id,
+        );
         const draftIds = drafts
           .filter((draft) => draft.candidate_post_id === id)
           .map((draft) => draft.id);
@@ -7596,8 +7907,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return result;
     }
 
+    w.__LINKGO_SQL_DRAFTS__ = () => cloneRows(drafts);
+    w.__LINKGO_SQL_DRAFT_VARIANTS__ = () => cloneRows(draftVariants);
+    w.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__ = () =>
+      cloneRows(draftGenerationRequests);
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
     w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
+    w.__LINKGO_SQL_AGENT_RUN_EVENTS__ = () => cloneRows(agentRunEvents);
     w.__LINKGO_SQL_AGENT_APPROVAL_CHECKPOINTS__ = () =>
       cloneRows(agentApprovalCheckpoints);
     w.__LINKGO_SQL_WORKFLOW_ARTIFACTS__ = () => cloneRows(workflowArtifacts);
@@ -7606,6 +7922,216 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_WORKFLOW_EVENTS__ = () => cloneRows(workflowEvents);
     w.__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__ = () =>
       cloneRows(workflowStepExecutions);
+    w.__LINKGO_SQL_DELETE_CANDIDATE__ = (id: number) => {
+      const index = candidatePosts.findIndex(
+        (candidate) => candidate.id === id,
+      );
+      if (index < 0) throw new Error("Candidate was not found");
+      candidatePosts.splice(index, 1);
+    };
+    w.__LINKGO_SQL_MUTATE_WORKFLOW_RUN__ = (
+      id: number,
+      patch: Partial<WorkflowRun>,
+    ) => {
+      const run = workflowRuns.find((candidate) => candidate.id === id);
+      if (!run) throw new Error("Workflow run was not found");
+      Object.assign(run, patch);
+    };
+    w.__LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__ = (
+      id: number,
+      patch: Partial<DraftGenerationRequest>,
+    ) => {
+      const request = draftGenerationRequests.find(
+        (candidate) => candidate.id === id,
+      );
+      if (!request) throw new Error("Draft generation request was not found");
+      Object.assign(request, patch);
+    };
+    w.__LINKGO_SQL_SEED_LINKED_DRAFT_CANDIDATE_DELETE__ = () => {
+      const candidate = candidatePosts.at(-1);
+      if (candidate === undefined) throw new Error("Candidate was not found");
+      const now = getNow();
+      const workflowRunId = nextWorkflowRunId++;
+      const workflowStepId = nextWorkflowStepId++;
+      const requestId = nextDraftGenerationRequestId++;
+
+      workflowRuns.push({
+        id: workflowRunId,
+        campaign_id: candidate.campaign_id,
+        workflow_type: "content_pipeline",
+        title: "Linked candidate deletion fixture",
+        status: "running",
+        current_step_key: "draft",
+        context_summary: "Generated draft awaiting an operator decision",
+        started_at: now,
+        completed_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      workflowSteps.push({
+        id: workflowStepId,
+        workflow_run_id: workflowRunId,
+        step_key: "draft",
+        title: "Draft variants",
+        description: "Create draft variants.",
+        sort_order: 3,
+        status: "running",
+        output_summary: "Waiting for operator to save generated variants",
+        error_message: "",
+        started_at: now,
+        completed_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      workflowArtifacts.push({
+        id: nextWorkflowArtifactId++,
+        workflow_run_id: workflowRunId,
+        workflow_step_id: workflowStepId,
+        artifact_type: "candidate_post",
+        artifact_id: candidate.id,
+        summary: `Candidate #${candidate.id} selected for drafting`,
+        created_at: now,
+        updated_at: now,
+      });
+      draftGenerationRequests.push({
+        id: requestId,
+        campaign_id: candidate.campaign_id,
+        candidate_post_id: candidate.id,
+        agent_run_id: null,
+        provider_key: "openai",
+        model_name: "mock-drafter",
+        playbook_key: "linkedin_writer",
+        variant_count: 3,
+        content_intent: "idea",
+        workflow_run_id: workflowRunId,
+        workflow_step_id: workflowStepId,
+        angle: "Generated workflow fixture",
+        voice_notes: "",
+        status: "generated",
+        summary: "Three generated variants await a decision",
+        generated_variants_json: "[]",
+        error_message: "",
+        created_draft_id: null,
+        created_at: now,
+        updated_at: now,
+      });
+      persistReloadSnapshot();
+      return {
+        candidateId: candidate.id,
+        requestId,
+        workflowRunId,
+        workflowStepId,
+      };
+    };
+    w.__LINKGO_SQL_SEED_PENDING_DRAFT_GENERATION__ = (
+      withAgentRun: boolean,
+    ) => {
+      const draftStep = [...workflowSteps]
+        .reverse()
+        .find((step) => step.step_key === "draft");
+      const workflowRun =
+        draftStep === undefined
+          ? undefined
+          : workflowRuns.find((run) => run.id === draftStep.workflow_run_id);
+      const candidateArtifact =
+        workflowRun === undefined
+          ? undefined
+          : workflowArtifacts.find(
+              (artifact) =>
+                artifact.workflow_run_id === workflowRun.id &&
+                artifact.artifact_type === "candidate_post",
+            );
+      const candidate =
+        candidateArtifact === undefined
+          ? undefined
+          : candidatePosts.find(
+              (row) => row.id === candidateArtifact.artifact_id,
+            );
+      if (
+        workflowRun === undefined ||
+        draftStep === undefined ||
+        candidate === undefined
+      ) {
+        throw new Error("Planner draft scope was not found");
+      }
+      if (
+        draftGenerationRequests.some(
+          (request) =>
+            request.workflow_step_id === draftStep.id &&
+            ["pending", "generated"].includes(request.status),
+        )
+      ) {
+        throw new Error("Planner draft scope already has an active request");
+      }
+
+      const now = getNow();
+      workflowRun.status = "running";
+      workflowRun.current_step_key = "draft";
+      workflowRun.completed_at = null;
+      workflowRun.updated_at = now;
+      draftStep.status = "running";
+      draftStep.error_message = "";
+      draftStep.completed_at = null;
+      draftStep.updated_at = now;
+
+      let agentRunId: number | null = null;
+      if (withAgentRun) {
+        agentRunId = nextAgentRunId;
+        agentRuns.push({
+          id: agentRunId,
+          campaign_id: workflowRun.campaign_id,
+          workflow_run_id: workflowRun.id,
+          workflow_step_id: null,
+          agent_role: "drafter",
+          provider_key: "openai",
+          model_name: "mock-drafter",
+          playbook_key: "linkedin_writer",
+          status: "running",
+          input_summary: "Interrupted durable draft generation fixture",
+          input_context_json: "{}",
+          output_summary: "",
+          error_message: "",
+          iteration_count: 0,
+          started_at: now,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        });
+        nextAgentRunId += 1;
+      }
+
+      const requestId = nextDraftGenerationRequestId;
+      draftGenerationRequests.push({
+        id: requestId,
+        campaign_id: workflowRun.campaign_id,
+        candidate_post_id: candidate.id,
+        agent_run_id: agentRunId,
+        provider_key: "openai",
+        model_name: "mock-drafter",
+        playbook_key: "linkedin_writer",
+        variant_count: 3,
+        content_intent: "idea",
+        workflow_run_id: workflowRun.id,
+        workflow_step_id: draftStep.id,
+        angle: "Interrupted workflow recovery",
+        voice_notes: "",
+        status: "pending",
+        summary: "",
+        generated_variants_json: "[]",
+        error_message: "",
+        created_draft_id: null,
+        created_at: now,
+        updated_at: now,
+      });
+      nextDraftGenerationRequestId += 1;
+      persistReloadSnapshot();
+      return {
+        requestId,
+        agentRunId,
+        workflowRunId: workflowRun.id,
+        workflowStepId: draftStep.id,
+      };
+    };
     w.__LINKGO_SQL_PLAYBOOK_OVERRIDES__ = () =>
       cloneRows(agentPlaybookOverrides);
     w.__LINKGO_SQL_KEYWORDS__ = () => cloneRows(keywords);

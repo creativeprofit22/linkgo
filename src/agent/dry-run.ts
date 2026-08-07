@@ -1,3 +1,7 @@
+import {
+  DRAFT_CONTENT_INTENTS,
+  type DraftContentIntent,
+} from "@/features/drafts/types";
 import type {
   AgentModelChunk,
   AgentModelRequest,
@@ -21,28 +25,52 @@ function getCandidatePostIds(request: AgentModelRequest): number[] {
 }
 
 function getDraftRequestDetails(request: AgentModelRequest): {
+  draftGenerationRequestId: number;
   candidatePostId: number;
   variantCount: number;
+  contentIntent: DraftContentIntent;
   angle: string;
+  voiceNotes: string;
 } {
-  const candidatePostId = Number.parseInt(
-    /candidate #(?<id>\d+)/iu.exec(request.inputSummary)?.groups?.id ?? "1",
-    10,
+  const draftRequest = request.inputContext?.draftRequest;
+  const requestMetadata =
+    typeof draftRequest === "object" && draftRequest !== null
+      ? (draftRequest as Record<string, unknown>)
+      : {};
+  const draftGenerationRequestId = Number(
+    requestMetadata.draftGenerationRequestId ?? request.runId,
   );
-  const variantCount = Number.parseInt(
-    /generate (?<count>[1-5]) linkedin draft variants/iu.exec(
-      request.inputSummary,
-    )?.groups?.count ?? "3",
-    10,
-  );
+  const candidatePostId = Number(requestMetadata.candidatePostId ?? 1);
+  const variantCount = Number(requestMetadata.variantCount ?? 3);
+  const requestedIntent = requestMetadata.contentIntent;
+  const contentIntent = DRAFT_CONTENT_INTENTS.includes(
+    requestedIntent as DraftContentIntent,
+  )
+    ? (requestedIntent as DraftContentIntent)
+    : "idea";
   const angle =
-    /angle: (?<angle>[^.]+)\./iu.exec(request.inputSummary)?.groups?.angle ??
-    "Dry-run operator lesson";
+    /^Operator angle: (?<angle>.+)$/imu.exec(request.inputSummary)?.groups
+      ?.angle ?? "Dry-run operator lesson";
+  const voiceNotes =
+    /^Operator voice notes: (?<voice>.+)$/imu.exec(request.inputSummary)?.groups
+      ?.voice ?? "Use the campaign voice.";
 
   return {
-    candidatePostId: Number.isInteger(candidatePostId) ? candidatePostId : 1,
-    variantCount: Number.isInteger(variantCount) ? variantCount : 3,
+    draftGenerationRequestId:
+      Number.isInteger(draftGenerationRequestId) && draftGenerationRequestId > 0
+        ? draftGenerationRequestId
+        : request.runId,
+    candidatePostId:
+      Number.isInteger(candidatePostId) && candidatePostId > 0
+        ? candidatePostId
+        : 1,
+    variantCount:
+      Number.isInteger(variantCount) && variantCount >= 3 && variantCount <= 5
+        ? variantCount
+        : 3,
+    contentIntent,
     angle,
+    voiceNotes,
   };
 }
 
@@ -80,15 +108,25 @@ function buildToolCall(request: AgentModelRequest): {
       providerToolCallId: `dry-run-${request.runId}-tool-call-2`,
       toolName: "draft_post",
       input: {
+        draftGenerationRequestId: draftDetails.draftGenerationRequestId,
         campaignId: request.campaignId,
         candidatePostId: draftDetails.candidatePostId,
         variantCount: draftDetails.variantCount,
+        contentIntent: draftDetails.contentIntent,
         angle: draftDetails.angle,
-        voiceNotes: request.inputSummary,
+        voiceNotes: draftDetails.voiceNotes,
+        variants: Array.from(
+          { length: draftDetails.variantCount },
+          (_, index) => ({
+            hook: `Dry-run provider hook ${index + 1}: ${draftDetails.contentIntent} insight`,
+            body: `Dry-run provider body ${index + 1} turns candidate ${draftDetails.candidatePostId} into a distinct operator lesson.`,
+            cta: `Review dry-run provider variant ${index + 1}.`,
+            hashtags: ["#LinkedIn", `#Variant${index + 1}`],
+          }),
+        ),
       },
     };
   }
-
   if (request.agentRole === "auditor") {
     return {
       providerToolCallId: `dry-run-${request.runId}-tool-call-2`,

@@ -10,6 +10,7 @@ import {
   dismissDraftGenerationRequest,
   generateDraftVariants,
   listDraftGenerationRequests,
+  listEligibleDraftWorkflowOptions,
   listDrafts,
   saveGeneratedDraft,
   setDraftVariantStatus,
@@ -19,6 +20,7 @@ import {
 import type {
   CreateDraftInput,
   DraftGenerationRequest,
+  EligibleDraftWorkflowOption,
   DraftWithDetails,
   GenerateDraftVariantsInput,
   SaveGeneratedDraftInput,
@@ -32,6 +34,7 @@ interface UseDraftsState {
   generationRequests: DraftGenerationRequest[];
   campaigns: CampaignWithKeywords[];
   candidates: CandidateWithTarget[];
+  eligibleWorkflowOptions: EligibleDraftWorkflowOption[];
   selectedCampaignId: number | null;
   loading: boolean;
   error: string | null;
@@ -66,6 +69,9 @@ export function useDrafts(): UseDraftsState {
   >([]);
   const [campaigns, setCampaigns] = useState<CampaignWithKeywords[]>([]);
   const [candidates, setCandidates] = useState<CandidateWithTarget[]>([]);
+  const [eligibleWorkflowOptions, setEligibleWorkflowOptions] = useState<
+    EligibleDraftWorkflowOption[]
+  >([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(
     null,
   );
@@ -78,18 +84,25 @@ export function useDrafts(): UseDraftsState {
         setCandidates([]);
         setDrafts([]);
         setGenerationRequests([]);
+        setEligibleWorkflowOptions([]);
         return;
       }
 
-      const [loadedCandidates, loadedDrafts, loadedGenerationRequests] =
-        await Promise.all([
+      const [
+        loadedCandidates,
+        loadedDrafts,
+        loadedGenerationRequests,
+        loadedEligibleWorkflowOptions,
+      ] = await Promise.all([
           listCandidates(campaignId),
           listDrafts(campaignId),
           listDraftGenerationRequests(campaignId),
+          listEligibleDraftWorkflowOptions(campaignId),
         ]);
       setCandidates(loadedCandidates);
       setDrafts(loadedDrafts);
       setGenerationRequests(loadedGenerationRequests);
+      setEligibleWorkflowOptions(loadedEligibleWorkflowOptions);
     },
     [],
   );
@@ -259,6 +272,7 @@ export function useDrafts(): UseDraftsState {
       generationRequests,
       campaigns,
       candidates,
+      eligibleWorkflowOptions,
       selectedCampaignId,
       loading,
       error,
@@ -278,6 +292,7 @@ export function useDrafts(): UseDraftsState {
       generationRequests,
       campaigns,
       candidates,
+      eligibleWorkflowOptions,
       selectedCampaignId,
       loading,
       error,

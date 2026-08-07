@@ -1,6 +1,9 @@
 import { agentProviderKeySchema } from "@/agent/schemas";
 import { AGENT_PLAYBOOK_KEYS } from "@/agent/playbooks";
+import { DRAFT_CONTENT_INTENTS } from "@/features/drafts/types";
 import { z } from "zod";
+
+export const draftContentIntentSchema = z.enum(DRAFT_CONTENT_INTENTS);
 
 export const draftStatusSchema = z.enum([
   "drafting",
@@ -28,6 +31,7 @@ export const createDraftSchema = z.object({
   candidateId: z.number().int().positive(),
   angle: z.string().trim().max(240).default(""),
   notes: z.string().trim().max(1000).default(""),
+  contentIntent: draftContentIntentSchema.default("idea"),
   variants: z.array(draftVariantInputSchema).min(1).max(5),
 });
 
@@ -74,7 +78,9 @@ export const generateDraftVariantsSchema = z.object({
   providerKey: agentProviderKeySchema.default("dry_run"),
   modelName: z.string().trim().max(120).default(""),
   playbookKey: playbookKeySchema.default("linkedin_writer"),
-  variantCount: z.number().int().min(1).max(5).default(3),
+  variantCount: z.number().int().min(3).max(5).default(3),
+  contentIntent: draftContentIntentSchema.default("idea"),
+  workflowRunId: z.number().int().positive().nullable().default(null),
   angle: z.string().trim().max(240).default(""),
   voiceNotes: z.string().trim().max(1000).default(""),
 });

@@ -36,6 +36,13 @@ const terminalStatuses = ["completed", "cancelled"];
 function getArtifactChipLabel(
   artifact: WorkflowRunWithDetails["artifacts"][number],
 ): string {
+  if (artifact.artifact_type === "draft") {
+    if (artifact.draft_removed)
+      return `Draft #${artifact.artifact_id} · removed`;
+    const intent = artifact.draft_content_intent ?? "idea";
+    const status = artifact.draft_status ?? "unknown";
+    return `Draft #${artifact.artifact_id} · ${intent} · ${status}`;
+  }
   const baseLabel = `Agent run #${artifact.artifact_id}`;
   const details = [artifact.agent_role, artifact.agent_status].filter(Boolean);
   return details.length > 0
@@ -68,10 +75,14 @@ export function WorkflowRunCard({
     run.candidateScope !== null &&
     run.currentStep?.step_key === "score" &&
     !terminalStatuses.includes(run.status);
+  const plannerDraftStep =
+    run.autopilot_plan_id !== null &&
+    run.currentStep?.step_key === "draft" &&
+    !terminalStatuses.includes(run.status);
   const unscopedScoreStep =
     run.currentStep?.step_key === "score" && run.candidateScope === null;
-  const agentArtifacts = run.artifacts.filter(
-    (artifact) => artifact.artifact_type === "agent_run",
+  const visibleArtifacts = run.artifacts.filter((artifact) =>
+    ["agent_run", "draft"].includes(artifact.artifact_type),
   );
   const autopilotOrigin =
     run.autopilot_plan_id == null
@@ -117,6 +128,12 @@ export function WorkflowRunCard({
                 Scoring is disabled because no candidate scope is attached.
               </p>
             ) : null}
+            {plannerDraftStep ? (
+              <p className="text-muted-foreground text-xs">
+                This planner-linked draft step is save-only. Open Drafts,
+                generate variants, and save one to continue to audit.
+              </p>
+            ) : null}
             <p className="text-muted-foreground text-sm">
               {run.completedStepCount}/{run.totalStepCount} steps complete ·{" "}
               {run.progressPercent}%
@@ -126,7 +143,7 @@ export function WorkflowRunCard({
                 {run.context_summary}
               </p>
             )}
-            {run.candidateScope !== null || agentArtifacts.length > 0 ? (
+            {run.candidateScope !== null || visibleArtifacts.length > 0 ? (
               <div
                 className="flex max-w-3xl flex-wrap gap-2"
                 aria-label="Workflow artifacts"
@@ -138,7 +155,7 @@ export function WorkflowRunCard({
                     {run.candidateScope.removed} removed
                   </Badge>
                 ) : null}
-                {agentArtifacts.map((artifact) => (
+                {visibleArtifacts.map((artifact) => (
                   <Badge key={artifact.id} variant="outline">
                     {getArtifactChipLabel(artifact)}
                   </Badge>
@@ -148,7 +165,11 @@ export function WorkflowRunCard({
           </div>
           {!selectedCampaignArchived && (
             <div className="flex shrink-0 flex-wrap gap-2">
-              {plannerScoreStep ? (
+              {plannerDraftStep ? (
+                <Button type="button" size="sm" disabled>
+                  Continue in Drafts
+                </Button>
+              ) : plannerScoreStep ? (
                 <ScoreWorkflowDialog
                   run={run}
                   connectedAccounts={connectedAccounts}
@@ -217,6 +238,9 @@ export function WorkflowRunCard({
           steps={run.steps}
           runStatus={run.status}
           selectedCampaignArchived={selectedCampaignArchived}
+          saveOnlyStepId={
+            plannerDraftStep ? (run.currentStep?.id ?? null) : null
+          }
           onSetStepStatus={onSetStepStatus}
         />
 

@@ -1,3 +1,4 @@
+import { DRAFT_CONTENT_INTENTS } from "@/features/drafts/types";
 import { z } from "zod";
 import {
   AGENT_PROVIDER_KEYS,
@@ -244,31 +245,40 @@ export const scoreRelevanceOutputSchema = z
   })
   .strict();
 
-export const draftPostInputSchema = z
+const draftPostVariantSchema = z
   .object({
-    campaignId: positiveIdSchema,
-    candidatePostId: positiveIdSchema,
-    variantCount: z.number().int().min(1).max(5).default(3),
-    angle: optionalTextSchema,
-    voiceNotes: optionalTextSchema,
+    hook: z.string().trim().min(1).max(280),
+    body: z.string().trim().min(1).max(2500),
+    cta: z.string().trim().max(240),
+    hashtags: z.array(z.string().trim().min(1).max(40)).max(5),
   })
   .strict();
 
+export const draftPostInputSchema = z
+  .object({
+    draftGenerationRequestId: positiveIdSchema,
+    campaignId: positiveIdSchema,
+    candidatePostId: positiveIdSchema,
+    variantCount: z.number().int().min(3).max(5).default(3),
+    contentIntent: z.enum(DRAFT_CONTENT_INTENTS),
+    angle: optionalTextSchema,
+    voiceNotes: optionalTextSchema,
+    variants: z.array(draftPostVariantSchema).min(3).max(5),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    if (input.variants.length !== input.variantCount) {
+      context.addIssue({
+        code: "custom",
+        path: ["variants"],
+        message: "variants must contain exactly variantCount items",
+      });
+    }
+  });
+
 export const draftPostOutputSchema = z
   .object({
-    variants: z
-      .array(
-        z
-          .object({
-            hook: z.string().trim().min(1).max(280),
-            body: z.string().trim().min(1).max(2500),
-            cta: z.string().trim().max(240).default(""),
-            hashtags: z.array(z.string().trim().min(1).max(40)).max(5),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(5),
+    variants: z.array(draftPostVariantSchema).min(3).max(5),
     summary: summarySchema,
   })
   .strict();

@@ -1,6 +1,15 @@
-import { draftPostOutputSchema } from "@/agent/schemas";
+import {
+  draftPostInputSchema,
+  draftPostOutputSchema,
+} from "@/agent/schemas";
 import { createAgentRun, startAgentRun } from "@/features/agent-runtime/data";
 import { getDb, type LinkgoDatabase } from "@/lib/db";
+import {
+  blockLinkedDraftGenerationInTransaction,
+  claimLinkedDraftGenerationInTransaction,
+  completeLinkedDraftSaveInTransaction,
+  validateLinkedDraftSaveInTransaction,
+} from "@/workflows/draft-generation";
 import {
   createDraftSchema,
   dismissDraftGenerationRequestSchema,
@@ -11,6 +20,7 @@ import {
   updateDraftSchema,
   updateDraftVariantSchema,
 } from "@/features/drafts/schemas";
+import { buildDraftPromptSummary } from "@/features/drafts/prompt-routing";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import type {
   CandidateStatus,
@@ -23,6 +33,8 @@ import type {
   DraftAuditSeverity,
   DraftGenerationRequest,
   DraftGenerationRequestStatus,
+  EligibleDraftWorkflowOption,
+  DraftContentIntent,
   DraftStatus,
   DraftVariant,
   DraftVariantInput,
@@ -43,6 +55,7 @@ interface DraftRow {
   candidate_post_id: number;
   angle: string;
   notes: string;
+  content_intent: DraftContentIntent;
   status: DraftStatus;
   created_at: string;
   updated_at: string;
@@ -99,9 +112,14 @@ interface DraftCandidateRow {
 
 interface DraftCandidateContextRow extends DraftCandidateRow {
   campaign_name: string;
+  campaign_product: string;
+  campaign_audience: string;
+  campaign_voice: string;
+  campaign_tone: string;
   candidate_source_keyword: string;
   candidate_score_reason: string;
   candidate_notes: string;
+  candidate_relevance_score: number | null;
   target_author_name: string;
   target_content: string;
 }
@@ -115,6 +133,9 @@ interface DraftGenerationRequestRow {
   model_name: string;
   playbook_key: DraftGenerationRequest["playbook_key"];
   variant_count: number;
+  content_intent: DraftContentIntent;
+  workflow_run_id: number | null;
+  workflow_step_id: number | null;
   angle: string;
   voice_notes: string;
   status: DraftGenerationRequestStatus;
@@ -147,6 +168,7 @@ interface DraftGenerationRequestRow {
 }
 
 interface DraftToolCallRow {
+  input_json: string;
   output_json: string;
 }
 
@@ -282,6 +304,9 @@ function mapDraftGenerationRequest(
     model_name: row.model_name,
     playbook_key: row.playbook_key,
     variant_count: row.variant_count,
+    content_intent: row.content_intent,
+    workflow_run_id: row.workflow_run_id,
+    workflow_step_id: row.workflow_step_id,
     angle: row.angle,
     voice_notes: row.voice_notes,
     status: row.status,
@@ -301,6 +326,7 @@ export function mapDraft(row: DraftRow): Draft {
     candidate_post_id: row.candidate_post_id,
     angle: row.angle,
     notes: row.notes,
+    content_intent: row.content_intent,
     status: row.status,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -321,6 +347,7 @@ function mapDraftVariantBase(row: DraftVariantRow): DraftVariant {
     updated_at: row.updated_at,
   };
 }
+
 
 export function mapDraftAudit(row: DraftAuditRow): DraftAuditFinding {
   return {
@@ -473,6 +500,23 @@ async function rollbackDraftTransaction(db: LinkgoDatabase): Promise<void> {
   }
 }
 
+interface CampaignMutationStatusRow {
+  status: CampaignStatus;
+}
+
+async function assertCampaignMutableInTransaction(
+  db: LinkgoDatabase,
+  campaignId: number,
+): Promise<void> {
+  const campaigns = await db.select<CampaignMutationStatusRow[]>(
+    "SELECT status FROM campaigns WHERE id = $1 LIMIT 1",
+    [campaignId],
+  );
+  const campaign = campaigns[0];
+  if (campaign === undefined) throw new Error("Campaign was not found");
+  if (campaign.status === "archived") throw new Error("Campaign is archived");
+}
+
 async function insertAuditFindings(
   db: LinkgoDatabase,
   variantId: number,
@@ -487,82 +531,81 @@ async function insertAuditFindings(
   }
 }
 
+interface DraftInsertInput {
+  campaignId: number;
+  candidateId: number;
+  angle: string;
+  notes: string;
+  contentIntent: DraftContentIntent;
+  variants: CreateDraftInput["variants"];
+}
+
+async function insertDraftInTransaction(
+  db: LinkgoDatabase,
+  input: DraftInsertInput,
+): Promise<number> {
+  const draftResult = await db.execute(
+    `INSERT INTO drafts (
+      campaign_id, candidate_post_id, angle, notes, content_intent, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, datetime('now'))`,
+    [
+      input.campaignId,
+      input.candidateId,
+      input.angle,
+      input.notes,
+      input.contentIntent,
+    ],
+  );
+  const draftId = draftResult.lastInsertId;
+
+  for (const [index, variant] of input.variants.entries()) {
+    const variantResult = await db.execute(
+      `INSERT INTO draft_variants (
+        draft_id, variant_number, hook, body, cta, hashtags, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
+      [
+        draftId,
+        index + 1,
+        variant.hook,
+        variant.body,
+        variant.cta,
+        variant.hashtags,
+      ],
+    );
+    await insertAuditFindings(
+      db,
+      variantResult.lastInsertId,
+      auditDraftVariant(variant),
+    );
+  }
+
+  const candidateUpdate = await db.execute(
+    `UPDATE candidate_posts
+    SET status = 'drafted', updated_at = datetime('now')
+    WHERE id = $1 AND campaign_id = $2 AND status IN ('new', 'shortlisted')`,
+    [input.candidateId, input.campaignId],
+  );
+  if (candidateUpdate.rowsAffected !== 1) {
+    throw new Error("Candidate is no longer eligible for drafting");
+  }
+  return draftId;
+}
+
 export async function createDraft(input: CreateDraftInput): Promise<number> {
   const parsed = createDraftSchema.parse(input);
   const db = await getDb();
 
-  await db.execute("BEGIN TRANSACTION");
+  await db.execute("BEGIN IMMEDIATE");
   try {
-    const candidates = await db.select<DraftCandidateRow[]>(
-      `SELECT
-        cp.id AS candidate_id,
-        cp.campaign_id,
-        c.status AS campaign_status,
-        cp.status AS candidate_status
-      FROM candidate_posts cp
-      INNER JOIN campaigns c ON c.id = cp.campaign_id
-      INNER JOIN target_posts tp ON tp.id = cp.target_post_id
-      WHERE cp.id = $1
-      LIMIT 1`,
-      [parsed.candidateId],
-    );
-    const candidate = candidates[0];
-    if (candidate === undefined) throw new Error("Candidate was not found");
-    if (candidate.campaign_status === "archived") {
-      throw new Error("Campaign is archived");
-    }
-    if (candidate.candidate_status === "rejected") {
-      throw new Error("Rejected candidates cannot be drafted");
-    }
-    if (candidate.candidate_status === "drafted") {
-      throw new Error("Candidate already has a draft");
-    }
-
-    const draftResult = await db.execute(
-      `INSERT INTO drafts (
-        campaign_id,
-        candidate_post_id,
-        angle,
-        notes,
-        updated_at
-      ) VALUES ($1, $2, $3, $4, datetime('now'))`,
-      [candidate.campaign_id, parsed.candidateId, parsed.angle, parsed.notes],
-    );
-    const draftId = draftResult.lastInsertId;
-
-    for (const [index, variant] of parsed.variants.entries()) {
-      const variantResult = await db.execute(
-        `INSERT INTO draft_variants (
-          draft_id,
-          variant_number,
-          hook,
-          body,
-          cta,
-          hashtags,
-          updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
-        [
-          draftId,
-          index + 1,
-          variant.hook,
-          variant.body,
-          variant.cta,
-          variant.hashtags,
-        ],
-      );
-      await insertAuditFindings(
-        db,
-        variantResult.lastInsertId,
-        auditDraftVariant(variant),
-      );
-    }
-
-    await db.execute(
-      `UPDATE candidate_posts
-      SET status = 'drafted', updated_at = datetime('now')
-      WHERE id = $1`,
-      [parsed.candidateId],
-    );
+    const candidate = await getEligibleDraftCandidate(db, parsed.candidateId);
+    const draftId = await insertDraftInTransaction(db, {
+      campaignId: candidate.campaign_id,
+      candidateId: parsed.candidateId,
+      angle: parsed.angle,
+      notes: parsed.notes,
+      contentIntent: parsed.contentIntent,
+      variants: parsed.variants,
+    });
     await db.execute("COMMIT");
     return draftId;
   } catch (error) {
@@ -580,9 +623,14 @@ async function getEligibleDraftCandidate(
   const contextSelect = includeGenerationContext
     ? `,
       c.name AS campaign_name,
+      c.product AS campaign_product,
+      c.audience AS campaign_audience,
+      c.voice AS campaign_voice,
+      c.tone AS campaign_tone,
       cp.source_keyword AS candidate_source_keyword,
       cp.score_reason AS candidate_score_reason,
       cp.notes AS candidate_notes,
+      cp.relevance_score AS candidate_relevance_score,
       tp.author_name AS target_author_name,
       tp.content AS target_content`
     : "";
@@ -605,9 +653,7 @@ async function getEligibleDraftCandidate(
   if (campaignId !== undefined && candidate.campaign_id !== campaignId) {
     throw new Error("Candidate belongs to a different campaign");
   }
-  if (candidate.campaign_status === "archived") {
-    throw new Error("Campaign is archived");
-  }
+  await assertCampaignMutableInTransaction(db, candidate.campaign_id);
   if (candidate.candidate_status === "rejected") {
     throw new Error("Rejected candidates cannot be drafted");
   }
@@ -689,6 +735,60 @@ function getDraftGenerationSelectSql(whereClause: string): string {
     ${whereClause}`;
 }
 
+interface EligibleDraftWorkflowOptionRow {
+  workflow_run_id: number;
+  workflow_step_id: number;
+  candidate_id: number;
+  title: string;
+  status: EligibleDraftWorkflowOption["status"];
+}
+
+export async function listEligibleDraftWorkflowOptions(
+  campaignId: number,
+): Promise<EligibleDraftWorkflowOption[]> {
+  const db = await getDb();
+  const rows = await db.select<EligibleDraftWorkflowOptionRow[]>(
+    `SELECT
+      wr.id AS workflow_run_id,
+      ws.id AS workflow_step_id,
+      cp.id AS candidate_id,
+      wr.title,
+      wr.status
+    FROM workflow_runs wr
+    INNER JOIN workflow_steps ws
+      ON ws.workflow_run_id = wr.id
+      AND ws.step_key = 'draft'
+    INNER JOIN workflow_artifacts wa
+      ON wa.workflow_run_id = wr.id
+      AND wa.artifact_type = 'candidate_post'
+    INNER JOIN candidate_posts cp
+      ON cp.id = wa.artifact_id
+      AND cp.campaign_id = wr.campaign_id
+    WHERE wr.campaign_id = $1
+      AND wr.current_step_key = 'draft'
+      AND wr.status IN ('running', 'blocked', 'failed')
+      AND ws.status IN ('pending', 'running', 'blocked', 'failed')
+      AND cp.status IN ('new', 'shortlisted')
+      AND cp.relevance_score IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM draft_generation_requests dgr
+        WHERE dgr.workflow_step_id = ws.id
+          AND dgr.status IN ('pending', 'generated')
+      )
+    ORDER BY datetime(wr.updated_at) DESC, wr.id DESC, wa.id ASC`,
+    [campaignId],
+  );
+
+  return rows.map((row) => ({
+    workflowRunId: row.workflow_run_id,
+    workflowStepId: row.workflow_step_id,
+    candidateId: row.candidate_id,
+    title: row.title,
+    status: row.status,
+  }));
+}
+
 export async function listDraftGenerationRequests(
   campaignId?: number,
 ): Promise<DraftGenerationRequest[]> {
@@ -714,37 +814,87 @@ export async function listDraftGenerationRequests(
   return rows.map((row) => mapDraftGenerationRequest(row));
 }
 
-function truncateForAgentSummary(value: string, maxLength: number): string {
+function truncateDraftReference(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/gu, " ").trim();
   if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}â€¦`;
 }
 
-function buildDraftGenerationInputSummary(
-  parsed: GenerateDraftVariantsInput,
+function buildDraftGenerationContext(
+  parsed: ReturnType<typeof generateDraftVariantsSchema.parse>,
   candidate: DraftCandidateContextRow,
-  maxLength = 1000,
-): string {
-  const targetExcerpt = truncateForAgentSummary(candidate.target_content, 360);
-  const lines = [
-    `Generate ${parsed.variantCount} LinkedIn draft variants for candidate #${parsed.candidateId}.`,
-    parsed.angle ? `Angle: ${parsed.angle}.` : "",
-    parsed.voiceNotes ? `Voice notes: ${parsed.voiceNotes}.` : "",
-    `Campaign: ${candidate.campaign_name}.`,
-    `Target author: ${candidate.target_author_name || "Unknown"}.`,
-    targetExcerpt ? `Target post excerpt: "${targetExcerpt}".` : "",
-    candidate.candidate_source_keyword
-      ? `Source keyword: ${candidate.candidate_source_keyword}.`
-      : "",
-    candidate.candidate_score_reason
-      ? `Score reason: ${candidate.candidate_score_reason}.`
-      : "",
-    candidate.candidate_notes
-      ? `Candidate notes: ${candidate.candidate_notes}.`
-      : "",
-  ];
+  draftGenerationRequestId: number,
+): Record<string, unknown> {
+  return {
+    draftRequest: {
+      draftGenerationRequestId,
+      campaignId: candidate.campaign_id,
+      candidatePostId: parsed.candidateId,
+      variantCount: parsed.variantCount,
+      contentIntent: parsed.contentIntent,
+    },
+    referenceData: {
+      campaign: {
+        name: truncateDraftReference(candidate.campaign_name, 160),
+        product: truncateDraftReference(candidate.campaign_product, 500),
+        audience: truncateDraftReference(candidate.campaign_audience, 500),
+        voice: truncateDraftReference(candidate.campaign_voice, 500),
+        tone: truncateDraftReference(candidate.campaign_tone, 500),
+      },
+      candidate: {
+        id: candidate.candidate_id,
+        sourceKeyword: truncateDraftReference(
+          candidate.candidate_source_keyword,
+          160,
+        ),
+        relevanceScore: candidate.candidate_relevance_score,
+        scoreReason: truncateDraftReference(
+          candidate.candidate_score_reason,
+          500,
+        ),
+        notes: truncateDraftReference(candidate.candidate_notes, 500),
+        targetAuthorName: truncateDraftReference(
+          candidate.target_author_name,
+          160,
+        ),
+        targetContent: truncateDraftReference(candidate.target_content, 2000),
+      },
+    },
+  };
+}
 
-  return truncateForAgentSummary(lines.filter(Boolean).join(" "), maxLength);
+function assertDraftToolMatchesRequest(
+  row: DraftToolCallRow,
+  request: {
+    requestId: number;
+    campaignId: number;
+    candidateId: number;
+    variantCount: number;
+    contentIntent: DraftContentIntent;
+  },
+): ReturnType<typeof draftPostOutputSchema.parse> {
+  const toolInput = draftPostInputSchema.parse(JSON.parse(row.input_json));
+  if (
+    toolInput.draftGenerationRequestId !== request.requestId ||
+    toolInput.campaignId !== request.campaignId ||
+    toolInput.candidatePostId !== request.candidateId ||
+    toolInput.variantCount !== request.variantCount ||
+    toolInput.contentIntent !== request.contentIntent
+  ) {
+    throw new Error("Drafter tool input did not match the durable request");
+  }
+  const output = draftPostOutputSchema.parse(JSON.parse(row.output_json));
+  if (output.variants.length !== request.variantCount) {
+    throw new Error(
+      "Drafter output did not contain the requested variant count",
+    );
+  }
+  if (JSON.stringify(output.variants) !== JSON.stringify(toolInput.variants)) {
+    throw new Error(
+      "Drafter output did not preserve provider-authored variants",
+    );
+  }
+  return output;
 }
 
 export async function generateDraftVariants(
@@ -758,70 +908,151 @@ export async function generateDraftVariants(
     parsed.campaignId,
     true,
   )) as DraftCandidateContextRow;
-  const inputSummary = buildDraftGenerationInputSummary(parsed, candidate);
-
-  const agentRunId = await createAgentRun({
-    campaignId: candidate.campaign_id,
-    agentRole: "drafter",
-    providerKey: parsed.providerKey,
-    modelName: parsed.modelName,
-    playbookKey: parsed.playbookKey,
-    inputSummary,
+  const inputSummary = buildDraftPromptSummary({
+    intent: parsed.contentIntent,
+    variantCount: parsed.variantCount,
+    angle: parsed.angle,
+    voiceNotes: parsed.voiceNotes,
   });
 
-  const requestResult = await db.execute(
-    `INSERT INTO draft_generation_requests (
-      campaign_id, candidate_post_id, agent_run_id, provider_key, model_name,
-      playbook_key, variant_count, angle, voice_notes, status, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', datetime('now'))`,
-    [
-      candidate.campaign_id,
-      parsed.candidateId,
-      agentRunId,
-      parsed.providerKey,
-      parsed.modelName,
-      parsed.playbookKey,
-      parsed.variantCount,
-      parsed.angle,
-      parsed.voiceNotes,
-    ],
+  const { requestId, linkedScope } = await (async () => {
+    await db.execute("BEGIN IMMEDIATE");
+    try {
+      const claimedScope = await claimLinkedDraftGenerationInTransaction(db, {
+        workflowRunId: parsed.workflowRunId,
+        campaignId: candidate.campaign_id,
+        candidateId: parsed.candidateId,
+      });
+      const requestResult = await db.execute(
+        `INSERT INTO draft_generation_requests (
+          campaign_id, candidate_post_id, provider_key, model_name, playbook_key,
+          variant_count, content_intent, workflow_run_id, workflow_step_id, angle,
+          voice_notes, status, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', datetime('now')
+        )`,
+        [
+          candidate.campaign_id,
+          parsed.candidateId,
+          parsed.providerKey,
+          parsed.modelName,
+          parsed.playbookKey,
+          parsed.variantCount,
+          parsed.contentIntent,
+          claimedScope?.workflowRunId ?? null,
+          claimedScope?.workflowStepId ?? null,
+          parsed.angle,
+          parsed.voiceNotes,
+        ],
+      );
+      await db.execute("COMMIT");
+      return {
+        requestId: requestResult.lastInsertId,
+        linkedScope: claimedScope,
+      };
+    } catch (error) {
+      await rollbackDraftTransaction(db);
+      throw error;
+    }
+  })();
+
+  const inputContext = buildDraftGenerationContext(
+    parsed,
+    candidate,
+    requestId,
   );
-  const requestId = requestResult.lastInsertId;
 
   try {
+    const agentRunId = await createAgentRun({
+      campaignId: candidate.campaign_id,
+      ...(linkedScope === null
+        ? {}
+        : { workflowRunId: linkedScope.workflowRunId }),
+      agentRole: "drafter",
+      providerKey: parsed.providerKey,
+      modelName: parsed.modelName,
+      playbookKey: parsed.playbookKey,
+      inputSummary,
+      inputContext,
+    });
+    const linkResult = await db.execute(
+      `UPDATE draft_generation_requests
+      SET agent_run_id = $1, updated_at = datetime('now')
+      WHERE id = $2 AND status = 'pending'`,
+      [agentRunId, requestId],
+    );
+    if (linkResult.rowsAffected !== 1) {
+      throw new Error(
+        "Draft generation request could not be linked to its agent run",
+      );
+    }
+
     await startAgentRun({ id: agentRunId });
     const toolRows = await db.select<DraftToolCallRow[]>(
-      `SELECT output_json
+      `SELECT input_json, output_json
       FROM agent_tool_calls
       WHERE agent_run_id = $1 AND tool_name = 'draft_post' AND status = 'completed'
       ORDER BY id DESC
-      LIMIT 1`,
+      LIMIT 2`,
       [agentRunId],
     );
-    const toolRow = toolRows[0];
-    if (toolRow === undefined) {
-      throw new Error("Drafter did not return draft_post variants");
+    if (toolRows.length !== 1 || toolRows[0] === undefined) {
+      throw new Error(
+        "Drafter must return exactly one completed draft_post call",
+      );
     }
-    const output = draftPostOutputSchema.parse(JSON.parse(toolRow.output_json));
-    await db.execute(
+    const output = assertDraftToolMatchesRequest(toolRows[0], {
+      requestId,
+      campaignId: candidate.campaign_id,
+      candidateId: parsed.candidateId,
+      variantCount: parsed.variantCount,
+      contentIntent: parsed.contentIntent,
+    });
+    const generatedResult = await db.execute(
       `UPDATE draft_generation_requests
       SET status = 'generated',
         summary = $1,
         generated_variants_json = $2,
         error_message = '',
         updated_at = datetime('now')
-      WHERE id = $3`,
+      WHERE id = $3 AND status = 'pending'`,
       [output.summary, JSON.stringify(output.variants), requestId],
     );
+    if (generatedResult.rowsAffected !== 1) {
+      throw new Error("Draft generation request is no longer pending");
+    }
   } catch (caught) {
-    const message =
-      caught instanceof Error ? caught.message : "Draft generation failed";
-    await db.execute(
-      `UPDATE draft_generation_requests
-      SET status = 'failed', error_message = $1, updated_at = datetime('now')
-      WHERE id = $2`,
-      [message, requestId],
+    const message = truncateDraftReference(
+      caught instanceof Error ? caught.message : "Draft generation failed",
+      1000,
     );
+    await db.execute("BEGIN IMMEDIATE");
+    try {
+      const failedResult = await db.execute(
+        `UPDATE draft_generation_requests
+        SET status = 'failed', error_message = $1, updated_at = datetime('now')
+        WHERE id = $2 AND status = 'pending'`,
+        [message, requestId],
+      );
+      if (failedResult.rowsAffected === 1) {
+        await blockLinkedDraftGenerationInTransaction(db, {
+          workflowRunId: linkedScope?.workflowRunId ?? null,
+          workflowStepId: linkedScope?.workflowStepId ?? null,
+          campaignId: candidate.campaign_id,
+          candidateId: parsed.candidateId,
+          reason: `Draft generation failed: ${message}`,
+        });
+      }
+      await db.execute("COMMIT");
+    } catch (settlementError) {
+      await rollbackDraftTransaction(db);
+      throw Object.assign(
+        new Error("Draft generation failure could not be settled"),
+        {
+          cause: settlementError,
+        },
+      );
+    }
     throw Object.assign(new Error(message), { cause: caught });
   }
 
@@ -833,51 +1064,125 @@ export async function saveGeneratedDraft(
 ): Promise<number> {
   const parsed = saveGeneratedDraftSchema.parse(input);
   const db = await getDb();
-  const request = await loadDraftGenerationRequestRow(db, parsed.id);
-  if (request.status !== "generated") {
-    throw new Error("Only generated draft requests can be saved");
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    const request = await loadDraftGenerationRequestRow(db, parsed.id);
+    if (request.status !== "generated") {
+      throw new Error("Only generated draft requests can be saved");
+    }
+    await getEligibleDraftCandidate(
+      db,
+      request.candidate_post_id,
+      request.campaign_id,
+    );
+    const generatedVariants = mapGeneratedVariants(
+      request.generated_variants_json,
+    );
+    if (generatedVariants.length !== request.variant_count) {
+      throw new Error(
+        "Generated request does not have its exact requested variants",
+      );
+    }
+    const linkedScope = await validateLinkedDraftSaveInTransaction(db, {
+      workflowRunId: request.workflow_run_id,
+      workflowStepId: request.workflow_step_id,
+      campaignId: request.campaign_id,
+      candidateId: request.candidate_post_id,
+    });
+    const draftId = await insertDraftInTransaction(db, {
+      campaignId: request.campaign_id,
+      candidateId: request.candidate_post_id,
+      angle: request.angle,
+      notes: `Generated by ${request.provider_key}/${request.model_name || "default"} from request #${request.id}.`,
+      contentIntent: request.content_intent,
+      variants: generatedVariants.map((variant) => ({
+        hook: variant.hook,
+        body: variant.body,
+        cta: variant.cta,
+        hashtags: generatedHashtagsToDraftString(variant.hashtags),
+      })),
+    });
+    const savedResult = await db.execute(
+      `UPDATE draft_generation_requests
+      SET status = 'saved', created_draft_id = $1, updated_at = datetime('now')
+      WHERE id = $2 AND status = 'generated'`,
+      [draftId, request.id],
+    );
+    if (savedResult.rowsAffected !== 1) {
+      throw new Error("Draft generation request is no longer saveable");
+    }
+    if (linkedScope !== null) {
+      await completeLinkedDraftSaveInTransaction(db, {
+        ...linkedScope,
+        draftId,
+        contentIntent: request.content_intent,
+      });
+    }
+    await db.execute("COMMIT");
+    return draftId;
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    throw error;
   }
-  await getEligibleDraftCandidate(
-    db,
-    request.candidate_post_id,
-    request.campaign_id,
-  );
-  const generatedVariants = mapGeneratedVariants(
-    request.generated_variants_json,
-  );
-  if (generatedVariants.length === 0) {
-    throw new Error("Generated request has no variants to save");
-  }
-
-  const draftId = await createDraft({
-    candidateId: request.candidate_post_id,
-    angle: request.angle,
-    notes: `Generated by ${request.provider_key}/${request.model_name || "default"} from request #${request.id}.`,
-    variants: generatedVariants.map((variant) => ({
-      hook: variant.hook,
-      body: variant.body,
-      cta: variant.cta,
-      hashtags: generatedHashtagsToDraftString(variant.hashtags),
-    })),
-  });
-  await db.execute(
-    `UPDATE draft_generation_requests
-    SET status = 'saved', created_draft_id = $1, updated_at = datetime('now')
-    WHERE id = $2`,
-    [draftId, request.id],
-  );
-  return draftId;
 }
 
 export async function dismissDraftGenerationRequest(id: number): Promise<void> {
   const parsed = dismissDraftGenerationRequestSchema.parse({ id });
   const db = await getDb();
-  await db.execute(
-    `UPDATE draft_generation_requests
-    SET status = 'dismissed', updated_at = datetime('now')
-    WHERE id = $1 AND status IN ('generated', 'failed', 'pending')`,
-    [parsed.id],
-  );
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    const request = await loadDraftGenerationRequestRow(db, parsed.id);
+    const interruptedReason =
+      request.status === "pending"
+        ? `Draft generation request #${request.id} was dismissed after an interrupted provider call. Generate variants again to retry.`
+        : "Draft generation dismissed by operator";
+
+    if (request.status === "pending" && request.agent_run_id !== null) {
+      const cancelledRun = await db.execute(
+        `UPDATE agent_runs
+        SET status = 'cancelled',
+          error_message = $1,
+          completed_at = COALESCE(completed_at, datetime('now')),
+          updated_at = datetime('now')
+        WHERE id = $2 AND status IN ('queued', 'running')`,
+        [interruptedReason, request.agent_run_id],
+      );
+      if (cancelledRun.rowsAffected === 1) {
+        await db.execute(
+          `DELETE FROM agent_run_approval_checkpoints
+          WHERE agent_run_id = $1`,
+          [request.agent_run_id],
+        );
+        await db.execute(
+          `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+          VALUES ($1, $2, $3)`,
+          [request.agent_run_id, "run_cancelled", interruptedReason],
+        );
+      }
+    }
+
+    const dismissedResult = await db.execute(
+      `UPDATE draft_generation_requests
+      SET status = 'dismissed',
+        error_message = CASE WHEN status = 'pending' THEN $1 ELSE error_message END,
+        updated_at = datetime('now')
+      WHERE id = $2 AND status IN ('generated', 'failed', 'pending')`,
+      [interruptedReason, parsed.id],
+    );
+    if (dismissedResult.rowsAffected === 1 && request.status !== "failed") {
+      await blockLinkedDraftGenerationInTransaction(db, {
+        workflowRunId: request.workflow_run_id,
+        workflowStepId: request.workflow_step_id,
+        campaignId: request.campaign_id,
+        candidateId: request.candidate_post_id,
+        reason: interruptedReason,
+      });
+    }
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    throw error;
+  }
 }
 
 export async function listDrafts(
@@ -896,6 +1201,7 @@ export async function listDrafts(
       d.candidate_post_id,
       d.angle,
       d.notes,
+      d.content_intent,
       d.status,
       d.created_at,
       d.updated_at,

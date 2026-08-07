@@ -16,6 +16,7 @@ pub mod drafts;
 pub mod integrations;
 pub mod metric_refresh;
 pub mod metrics;
+pub mod planner_draft_generation;
 pub mod playbooks;
 pub mod provider_parity;
 pub mod relevance_scoring;
@@ -53,6 +54,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(campaign_backlog::migrations());
     migrations.extend(autopilot_planner::migrations());
     migrations.extend(relevance_scoring::migrations());
+    migrations.extend(planner_draft_generation::migrations());
     migrations
 }
 

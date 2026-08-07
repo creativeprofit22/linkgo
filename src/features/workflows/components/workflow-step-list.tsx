@@ -23,6 +23,7 @@ interface WorkflowStepListProps {
   steps: WorkflowStep[];
   runStatus: WorkflowRunStatus;
   selectedCampaignArchived: boolean;
+  saveOnlyStepId: number | null;
   onSetStepStatus: (input: SetWorkflowStepStatusInput) => Promise<void>;
 }
 
@@ -98,6 +99,7 @@ export function WorkflowStepList({
   steps,
   runStatus,
   selectedCampaignArchived,
+  saveOnlyStepId,
   onSetStepStatus,
 }: WorkflowStepListProps): React.ReactNode {
   const [pendingAction, setPendingAction] = useState<PendingStepAction | null>(
@@ -204,22 +206,28 @@ export function WorkflowStepList({
                 </div>
                 {!stepMutationsDisabled && (
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    {getStepActions(step.status).map((action) => (
-                      <Button
-                        key={`${step.id}-${action.label}`}
-                        type="button"
-                        size="xs"
-                        variant={
-                          action.status === "failed" ||
-                          action.status === "blocked"
-                            ? "destructive"
-                            : "outline"
-                        }
-                        onClick={() => handleActionClick(step, action)}
-                      >
-                        {action.label}
-                      </Button>
-                    ))}
+                    {getStepActions(step.status)
+                      .filter(
+                        (action) =>
+                          step.id !== saveOnlyStepId ||
+                          !["completed", "skipped"].includes(action.status),
+                      )
+                      .map((action) => (
+                        <Button
+                          key={`${step.id}-${action.label}`}
+                          type="button"
+                          size="xs"
+                          variant={
+                            action.status === "failed" ||
+                            action.status === "blocked"
+                              ? "destructive"
+                              : "outline"
+                          }
+                          onClick={() => handleActionClick(step, action)}
+                        >
+                          {action.label}
+                        </Button>
+                      ))}
                   </div>
                 )}
               </div>

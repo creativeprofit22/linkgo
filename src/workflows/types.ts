@@ -1,5 +1,6 @@
 import type { AgentProviderKey } from "@/agent/provider-catalog";
 import type { CampaignStatus } from "@/features/campaigns/types";
+import type { DraftContentIntent, DraftStatus } from "@/features/drafts/types";
 
 export const WORKFLOW_TYPES = ["content_pipeline"] as const;
 
@@ -48,7 +49,11 @@ export const WORKFLOW_EVENT_TYPES = [
   "note_added",
 ] as const;
 
-export const WORKFLOW_ARTIFACT_TYPES = ["agent_run", "candidate_post"] as const;
+export const WORKFLOW_ARTIFACT_TYPES = [
+  "agent_run",
+  "candidate_post",
+  "draft",
+] as const;
 
 export const CONTENT_PIPELINE_STEPS = [
   {
@@ -158,6 +163,9 @@ export interface WorkflowArtifactWithDetails extends WorkflowArtifact {
   candidate_status: string | null;
   candidate_relevance_score: number | null;
   candidate_removed: boolean;
+  draft_status: DraftStatus | null;
+  draft_content_intent: DraftContentIntent | null;
+  draft_removed: boolean;
 }
 
 export interface WorkflowCampaignSnapshot {

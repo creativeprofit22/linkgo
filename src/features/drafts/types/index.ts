@@ -2,6 +2,15 @@ import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type { AgentProviderKey } from "@/agent/types";
 import type { CandidateWithTarget } from "@/features/candidate-queue/types";
 
+export const DRAFT_CONTENT_INTENTS = [
+  "event",
+  "launch",
+  "idea",
+  "community",
+] as const;
+
+export type DraftContentIntent = (typeof DRAFT_CONTENT_INTENTS)[number];
+
 export type DraftStatus =
   | "drafting"
   | "needs_revision"
@@ -18,6 +27,7 @@ export interface Draft {
   candidate_post_id: number;
   angle: string;
   notes: string;
+  content_intent: DraftContentIntent;
   status: DraftStatus;
   created_at: string;
   updated_at: string;
@@ -67,6 +77,7 @@ export interface CreateDraftInput {
   candidateId: number;
   angle?: string;
   notes?: string;
+  contentIntent?: DraftContentIntent;
   variants: DraftVariantInput[];
 }
 
@@ -113,6 +124,9 @@ export interface DraftGenerationRequest {
   model_name: string;
   playbook_key: AgentPlaybookKey | "";
   variant_count: number;
+  content_intent: DraftContentIntent;
+  workflow_run_id: number | null;
+  workflow_step_id: number | null;
   angle: string;
   voice_notes: string;
   status: DraftGenerationRequestStatus;
@@ -132,8 +146,18 @@ export interface GenerateDraftVariantsInput {
   modelName?: string;
   playbookKey?: AgentPlaybookKey | "";
   variantCount?: number;
+  contentIntent?: DraftContentIntent;
+  workflowRunId?: number | null;
   angle?: string;
   voiceNotes?: string;
+}
+
+export interface EligibleDraftWorkflowOption {
+  workflowRunId: number;
+  workflowStepId: number;
+  candidateId: number;
+  title: string;
+  status: "running" | "blocked" | "failed";
 }
 
 export interface SaveGeneratedDraftInput {

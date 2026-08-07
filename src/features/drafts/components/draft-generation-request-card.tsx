@@ -1,16 +1,19 @@
 import { CheckCircle2, Sparkles, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DRAFT_PROMPT_ROUTES } from "@/features/drafts/prompt-routing";
 import type { DraftGenerationRequest } from "@/features/drafts/types";
 
 interface DraftGenerationRequestCardProps {
   request: DraftGenerationRequest;
+  saveDisabled: boolean;
   onSave: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
 }
 
 export function DraftGenerationRequestCard({
   request,
+  saveDisabled,
   onSave,
   onDismiss,
 }: DraftGenerationRequestCardProps): React.ReactNode {
@@ -30,7 +33,8 @@ export function DraftGenerationRequestCard({
             <p className="text-muted-foreground mt-1 text-xs">
               {request.provider_key}/{request.model_name || "default"} ·{" "}
               {request.playbook_key || "no playbook"} · Candidate #
-              {request.candidate_post_id}
+              {request.candidate_post_id} ·{" "}
+              {DRAFT_PROMPT_ROUTES[request.content_intent].label} intent
             </p>
           </div>
           <StatusPill status={request.status} />
@@ -43,6 +47,19 @@ export function DraftGenerationRequestCard({
           </p>
           <p className="text-muted-foreground mt-1">
             {candidateExcerpt || "No candidate text captured."}
+          </p>
+        </div>
+
+        <div className="bg-muted/20 rounded-lg border p-3 text-sm">
+          <p className="font-medium">
+            {request.workflow_run_id === null
+              ? "Ad-hoc generation"
+              : `Linked workflow #${request.workflow_run_id}`}
+          </p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {request.workflow_run_id === null
+              ? "Saving creates a draft without changing a workflow."
+              : "The workflow remains on Draft until you explicitly save these variants."}
           </p>
         </div>
 
@@ -77,9 +94,32 @@ export function DraftGenerationRequestCard({
           </div>
         )}
 
+        {request.status === "pending" && (
+          <div className="border-info/30 bg-info/5 space-y-3 rounded-lg border p-3">
+            <p className="text-info text-sm">
+              This request was restored after generation was interrupted.
+              Dismiss it to release{" "}
+              {request.workflow_step_id === null
+                ? "the request"
+                : "the workflow step"}{" "}
+              and retry.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void onDismiss(request.id)}
+            >
+              <XCircle className="size-4" /> Dismiss interrupted request
+            </Button>
+          </div>
+        )}
         {request.status === "generated" && (
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void onSave(request.id)}>
+            <Button
+              type="button"
+              disabled={saveDisabled}
+              onClick={() => void onSave(request.id)}
+            >
               <CheckCircle2 className="size-4" /> Save as draft
             </Button>
             <Button

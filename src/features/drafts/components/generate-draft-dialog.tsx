@@ -21,12 +21,19 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type { AgentProviderKey } from "@/agent/types";
 import type { CandidateWithTarget } from "@/features/candidate-queue/types";
-import type { GenerateDraftVariantsInput } from "@/features/drafts/types";
+import { DRAFT_PROMPT_ROUTES } from "@/features/drafts/prompt-routing";
+import {
+  DRAFT_CONTENT_INTENTS,
+  type DraftContentIntent,
+  type EligibleDraftWorkflowOption,
+  type GenerateDraftVariantsInput,
+} from "@/features/drafts/types";
 
 interface GenerateDraftDialogProps {
   candidates: CandidateWithTarget[];
   selectedCampaignId: number | null;
   selectedCampaignArchived: boolean;
+  eligibleWorkflowOptions: EligibleDraftWorkflowOption[];
   onGenerate: (input: GenerateDraftVariantsInput) => Promise<void>;
   disabled?: boolean;
 }
@@ -37,6 +44,8 @@ interface GenerateDraftFormState {
   modelName: string;
   playbookKey: AgentPlaybookKey | "";
   variantCount: string;
+  contentIntent: DraftContentIntent;
+  workflowRunId: string;
   angle: string;
   voiceNotes: string;
 }
@@ -47,15 +56,33 @@ function getCandidateLabel(candidate: CandidateWithTarget): string {
   return excerpt ? `${author} — ${excerpt}` : author;
 }
 
+function getDefaultWorkflowSelection(
+  candidateId: number,
+  workflowOptions: EligibleDraftWorkflowOption[],
+): string {
+  const matches = workflowOptions.filter(
+    (option) => option.candidateId === candidateId,
+  );
+  if (matches.length === 1) return String(matches[0]?.workflowRunId);
+  return matches.length === 0 ? "adhoc" : "";
+}
+
 function getInitialFormState(
   candidates: CandidateWithTarget[],
+  workflowOptions: EligibleDraftWorkflowOption[],
 ): GenerateDraftFormState {
+  const candidateId = candidates[0]?.id ?? 0;
   return {
-    candidateId: candidates[0] === undefined ? "" : String(candidates[0].id),
+    candidateId: candidateId === 0 ? "" : String(candidateId),
     providerKey: "dry_run",
     modelName: DEFAULT_AGENT_MODELS.dry_run,
     playbookKey: "linkedin_writer",
     variantCount: "3",
+    contentIntent: "idea",
+    workflowRunId:
+      candidateId === 0
+        ? "adhoc"
+        : getDefaultWorkflowSelection(candidateId, workflowOptions),
     angle: "",
     voiceNotes: "",
   };
@@ -72,6 +99,9 @@ function toGenerateInput(
     modelName: form.modelName,
     playbookKey: form.playbookKey,
     variantCount: Number(form.variantCount),
+    contentIntent: form.contentIntent,
+    workflowRunId:
+      form.workflowRunId === "adhoc" ? null : Number(form.workflowRunId),
     angle: form.angle,
     voiceNotes: form.voiceNotes,
   };
@@ -81,6 +111,7 @@ export function GenerateDraftDialog({
   candidates,
   selectedCampaignId,
   selectedCampaignArchived,
+  eligibleWorkflowOptions,
   onGenerate,
   disabled = false,
 }: GenerateDraftDialogProps): React.ReactNode {
@@ -100,14 +131,23 @@ export function GenerateDraftDialog({
     [candidates, selectedCampaignArchived, selectedCampaignId],
   );
   const [form, setForm] = useState<GenerateDraftFormState>(() =>
-    getInitialFormState(candidateOptions),
+    getInitialFormState(candidateOptions, eligibleWorkflowOptions),
+  );
+  const candidateWorkflowOptions = useMemo(
+    () =>
+      eligibleWorkflowOptions.filter(
+        (option) => option.candidateId === Number(form.candidateId),
+      ),
+    [eligibleWorkflowOptions, form.candidateId],
   );
   const generateDisabled =
     disabled || selectedCampaignId === null || candidateOptions.length === 0;
 
   useEffect(() => {
-    if (!open) setForm(getInitialFormState(candidateOptions));
-  }, [candidateOptions, open]);
+    if (!open) {
+      setForm(getInitialFormState(candidateOptions, eligibleWorkflowOptions));
+    }
+  }, [candidateOptions, eligibleWorkflowOptions, open]);
 
   async function handleSubmit(
     event: SyntheticEvent<HTMLFormElement>,
@@ -150,9 +190,17 @@ export function GenerateDraftDialog({
             <select
               id="generate-draft-candidate"
               value={form.candidateId}
-              onChange={(event) =>
-                updateField("candidateId", event.target.value)
-              }
+              onChange={(event) => {
+                const candidateId = Number(event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  candidateId: event.target.value,
+                  workflowRunId: getDefaultWorkflowSelection(
+                    candidateId,
+                    eligibleWorkflowOptions,
+                  ),
+                }));
+              }}
               required
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
@@ -224,7 +272,7 @@ export function GenerateDraftDialog({
                 }
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
-                {[1, 2, 3, 4, 5].map((count) => (
+                {[3, 4, 5].map((count) => (
                   <option key={count} value={count}>
                     {count}
                   </option>
@@ -232,6 +280,75 @@ export function GenerateDraftDialog({
               </select>
             </Field>
           </div>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Content intent</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {DRAFT_CONTENT_INTENTS.map((intent) => {
+                const route = DRAFT_PROMPT_ROUTES[intent];
+                return (
+                  <label
+                    key={intent}
+                    className="has-checked:border-linkgo-blue has-checked:bg-linkgo-blue/5 flex cursor-pointer gap-3 rounded-lg border p-3"
+                  >
+                    <input
+                      type="radio"
+                      name="draft-content-intent"
+                      value={intent}
+                      checked={form.contentIntent === intent}
+                      onChange={() => updateField("contentIntent", intent)}
+                      className="mt-1 size-4 shrink-0"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium">
+                        {route.label}
+                      </span>
+                      <span className="text-muted-foreground block text-xs leading-relaxed">
+                        {route.guidance}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          {candidateWorkflowOptions.length > 0 ? (
+            <Field label="Workflow scope" htmlFor="generate-draft-workflow">
+              <select
+                id="generate-draft-workflow"
+                value={form.workflowRunId}
+                onChange={(event) =>
+                  updateField("workflowRunId", event.target.value)
+                }
+                required
+                aria-describedby="generate-draft-workflow-help"
+                className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
+                {candidateWorkflowOptions.length > 1 ? (
+                  <option value="" disabled>
+                    Choose a workflow or ad-hoc draft
+                  </option>
+                ) : null}
+                <option value="adhoc">Ad-hoc draft — no workflow</option>
+                {candidateWorkflowOptions.map((option) => (
+                  <option
+                    key={option.workflowRunId}
+                    value={option.workflowRunId}
+                  >
+                    {option.title} · {option.status}
+                  </option>
+                ))}
+              </select>
+              <p
+                id="generate-draft-workflow-help"
+                className="text-muted-foreground text-xs"
+              >
+                Linked workflows stay on Draft until you explicitly save the
+                generated variants.
+              </p>
+            </Field>
+          ) : null}
 
           <Field label="Angle" htmlFor="generate-draft-angle">
             <Input
@@ -255,7 +372,12 @@ export function GenerateDraftDialog({
           </Field>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting || generateDisabled}>
+            <Button
+              type="submit"
+              disabled={
+                submitting || generateDisabled || form.workflowRunId === ""
+              }
+            >
               {submitting ? "Generating…" : "Generate variants"}
             </Button>
           </DialogFooter>

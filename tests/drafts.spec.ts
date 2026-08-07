@@ -29,7 +29,7 @@ test("creates a draft with two variants and shows audit output", async ({
   ).toBeVisible();
 });
 
-test("generates dry-run variants then saves them as an audited draft", async ({
+test("generates distinct dry-run provider variants and saves their exact text", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -41,29 +41,68 @@ test("generates dry-run variants then saves them as an audited draft", async ({
   await generateDraftVariants(page);
 
   await expect(page.getByText("Generated request #1")).toBeVisible();
-  await expect(page.getByText("Drafted 3 local variants.")).toBeVisible();
-  const inputSummary = await page.evaluate(() => {
+  await expect(
+    page.getByText("Accepted 3 provider-authored draft variants."),
+  ).toBeVisible();
+  const agentInput = await page.evaluate(() => {
     const getAgentRuns = (
       window as unknown as {
-        __LINKGO_SQL_AGENT_RUNS__: () => Array<{ input_summary: string }>;
+        __LINKGO_SQL_AGENT_RUNS__: () => Array<{
+          input_summary: string;
+          input_context_json: string;
+        }>;
       }
     ).__LINKGO_SQL_AGENT_RUNS__;
-    return getAgentRuns()[0]?.input_summary ?? "";
+    const run = getAgentRuns()[0];
+    return {
+      summary: run?.input_summary ?? "",
+      context: JSON.parse(run?.input_context_json ?? "{}") as Record<
+        string,
+        unknown
+      >,
+    };
   });
-  expect(inputSummary).toContain("Campaign: Founder-led growth.");
-  expect(inputSummary).toContain("Target author: Jane Operator.");
-  expect(inputSummary).toContain(
-    'Target post excerpt: "This founder post has a sharp ICP signal.".',
+  expect(agentInput.summary).toContain(
+    "Create exactly 3 LinkedIn draft variants using the fixed idea",
   );
-  expect(inputSummary).toContain("Source keyword: founder content.");
-  expect(inputSummary).toContain("Score reason: Strong audience overlap.");
-  expect(inputSummary).toContain("Candidate notes: Good comment opportunity.");
+  expect(agentInput.summary).not.toContain("This founder post has a sharp ICP");
+  expect(agentInput.summary).not.toContain("Jane Operator");
+  expect(agentInput.context).toMatchObject({
+    draftRequest: {
+      draftGenerationRequestId: 1,
+      variantCount: 3,
+      contentIntent: "idea",
+    },
+    referenceData: {
+      candidate: {
+        targetAuthorName: "Jane Operator",
+        targetContent: "This founder post has a sharp ICP signal.",
+      },
+    },
+  });
+
+  const generatedVariants = await getGeneratedVariants(page, 1);
+  expect(generatedVariants.map((variant) => variant.hook)).toEqual([
+    "Dry-run provider hook 1: idea insight",
+    "Dry-run provider hook 2: idea insight",
+    "Dry-run provider hook 3: idea insight",
+  ]);
+  expect(new Set(generatedVariants.map((variant) => variant.body)).size).toBe(
+    3,
+  );
+
   await page.getByRole("button", { name: "Save as draft" }).click();
   await expect(
     page.getByRole("heading", { name: "Generated drafts pending" }),
   ).toBeHidden();
   await expect(page.getByText("Generated request #1")).toBeHidden();
 
+  const savedVariants = await getSavedDraftVariants(page);
+  expect(
+    savedVariants.map(({ hook, body, cta }) => ({ hook, body, cta })),
+  ).toEqual(
+    generatedVariants.map(({ hook, body, cta }) => ({ hook, body, cta })),
+  );
   await expect(
     page.getByRole("heading", { name: "Jane Operator" }),
   ).toBeVisible();
@@ -76,6 +115,112 @@ test("generates dry-run variants then saves them as an audited draft", async ({
   await expect(
     page.getByRole("button", { name: "Create draft" }),
   ).toBeDisabled();
+});
+
+test("persists and saves distinct connected-provider authored variants", async ({
+  page,
+}) => {
+  const authoredVariants: GeneratedVariantRecord[] = [
+    {
+      hook: "A provider found the first concrete signal",
+      body: "Provider body one explains the signal with a specific operator example.",
+      cta: "Compare this first provider lesson.",
+      hashtags: ["#ProviderOne"],
+    },
+    {
+      hook: "The second provider angle starts with the constraint",
+      body: "Provider body two describes the constraint and the decision it changed.",
+      cta: "Save the second provider framework.",
+      hashtags: ["#ProviderTwo"],
+    },
+    {
+      hook: "Provider variant three leads with the outcome",
+      body: "Provider body three connects the outcome to a repeatable workflow.",
+      cta: "Try the third provider workflow.",
+      hashtags: ["#ProviderThree"],
+    },
+  ];
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+  await installAuthoredDraftProvider(page, authoredVariants);
+
+  await generateDraftVariants(page, "Custom API");
+
+  expect(await getGeneratedVariants(page, 1)).toEqual(authoredVariants);
+  await page.getByRole("button", { name: "Save as draft" }).click();
+  await expect(page.getByText("Generated request #1")).toBeHidden();
+  const savedVariants = await getSavedDraftVariants(page);
+  expect(
+    savedVariants.map(({ hook, body, cta, hashtags }) => ({
+      hook,
+      body,
+      cta,
+      hashtags: hashtags.split(" ").filter(Boolean),
+    })),
+  ).toEqual(authoredVariants);
+});
+
+test("rejects count-mismatched and malformed provider arrays atomically", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+  await installInvalidDraftProvider(page);
+
+  await generateDraftVariants(page, "Custom API", false);
+  await expect(
+    page.getByText("Draft variants were not generated").last(),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await generateDraftVariants(page, "Custom API", false);
+  await expect(
+    page.getByText("Draft variants were not generated").last(),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const atomicState = await page.evaluate(() => {
+    const mocks = window as unknown as {
+      __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{
+        status: string;
+        generated_variants_json: string;
+      }>;
+      __LINKGO_SQL_STATE_COUNTS__: () => {
+        drafts: number;
+        draftVariants: number;
+        agentToolCalls: number;
+      };
+    };
+    return {
+      requests: mocks.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__(),
+      counts: mocks.__LINKGO_SQL_STATE_COUNTS__(),
+    };
+  });
+  expect(atomicState.requests).toHaveLength(2);
+  expect(
+    atomicState.requests.map(({ status, generated_variants_json }) => ({
+      status,
+      generated_variants_json,
+    })),
+  ).toEqual([
+    { status: "failed", generated_variants_json: "[]" },
+    { status: "failed", generated_variants_json: "[]" },
+  ]);
+  expect(atomicState.counts).toMatchObject({
+    drafts: 0,
+    draftVariants: 0,
+    agentToolCalls: 0,
+  });
 });
 
 test("dismisses generated variants from the pending work area", async ({
@@ -98,7 +243,9 @@ test("dismisses generated variants from the pending work area", async ({
   await expect(page.getByText("Generated request #1")).toBeHidden();
 });
 
-test("persists a failed generation request and dismisses it", async ({ page }) => {
+test("persists a failed generation request and dismisses it", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
@@ -114,20 +261,18 @@ test("persists a failed generation request and dismisses it", async ({ page }) =
     .fill("Turn this into a concrete operator lesson");
   await dialog.getByRole("button", { name: "Generate variants" }).click();
 
-  await expect(page.getByText("Draft variants were not generated")).toBeVisible();
   await expect(
-    page
-      .locator("p")
-      .filter({ hasText: "Agent provider is not connected" }),
+    page.getByText("Draft variants were not generated"),
+  ).toBeVisible();
+  await expect(
+    page.locator("p").filter({ hasText: "Agent provider is not connected" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Generated request #1")).toBeVisible();
   await expect(getBadge(page, "failed")).toBeVisible();
   await expect(
-    page
-      .locator("p")
-      .filter({ hasText: "Agent provider is not connected" }),
+    page.locator("p").filter({ hasText: "Agent provider is not connected" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Dismiss failed request" }).click();
@@ -341,6 +486,159 @@ function linkBlockedVariant(): VariantFormInput {
   };
 }
 
+async function getGeneratedVariants(
+  page: Page,
+  requestId: number,
+): Promise<GeneratedVariantRecord[]> {
+  return page.evaluate((id) => {
+    const getRequests = (
+      window as unknown as {
+        __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{
+          id: number;
+          generated_variants_json: string;
+        }>;
+      }
+    ).__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__;
+    const request = getRequests().find((candidate) => candidate.id === id);
+    return JSON.parse(request?.generated_variants_json ?? "[]");
+  }, requestId);
+}
+
+async function getSavedDraftVariants(
+  page: Page,
+): Promise<SavedDraftVariantRecord[]> {
+  return page.evaluate(() =>
+    (
+      window as unknown as {
+        __LINKGO_SQL_DRAFT_VARIANTS__: () => SavedDraftVariantRecord[];
+      }
+    ).__LINKGO_SQL_DRAFT_VARIANTS__(),
+  );
+}
+
+async function connectCustomProvider(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("test-custom-api-key");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://custom.example.com/v1");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Connected").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+}
+
+async function installAuthoredDraftProvider(
+  page: Page,
+  variants: GeneratedVariantRecord[],
+): Promise<void> {
+  await page.evaluate((authoredVariants) => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => unknown;
+        };
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute: (args: unknown) => {
+        const request = (
+          args as {
+            input: { request: { messages: Array<{ role: string }> } };
+          }
+        ).input.request;
+        if (request.messages.some((message) => message.role === "tool")) {
+          return {
+            chunks: [
+              {
+                type: "done",
+                outputSummary: "Provider-authored draft generation completed.",
+              },
+            ],
+          };
+        }
+        return {
+          chunks: [
+            {
+              type: "tool_call",
+              providerToolCallId: "provider-authored-drafts",
+              toolName: "draft_post",
+              input: {
+                draftGenerationRequestId: 1,
+                campaignId: 1,
+                candidatePostId: 1,
+                variantCount: 3,
+                contentIntent: "idea",
+                angle: "Turn this into a concrete operator lesson",
+                voiceNotes: "Use the campaign voice.",
+                variants: authoredVariants,
+              },
+            },
+            {
+              type: "done",
+              outputSummary: "Provider requested draft persistence.",
+            },
+          ],
+        };
+      },
+    };
+  }, variants);
+}
+
+async function installInvalidDraftProvider(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    let attempt = 0;
+    const validVariants = Array.from({ length: 3 }, (_, index) => ({
+      hook: `Provider hook ${index + 1}`,
+      body: `Provider body ${index + 1}`,
+      cta: `Provider CTA ${index + 1}`,
+      hashtags: [`#Provider${index + 1}`],
+    }));
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: () => unknown;
+        };
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute: () => {
+        attempt += 1;
+        const draftGenerationRequestId = attempt;
+        const variants =
+          attempt === 1
+            ? [...validVariants, { ...validVariants[0] }]
+            : validVariants.map((variant, index) =>
+                index === 0 ? { ...variant, hook: "   " } : variant,
+              );
+        return {
+          chunks: [
+            {
+              type: "tool_call",
+              providerToolCallId: `invalid-provider-drafts-${attempt}`,
+              toolName: "draft_post",
+              input: {
+                draftGenerationRequestId,
+                campaignId: 1,
+                candidatePostId: 1,
+                variantCount: 3,
+                contentIntent: "idea",
+                angle: "Turn this into a concrete operator lesson",
+                voiceNotes: "Use the campaign voice.",
+                variants,
+              },
+            },
+            { type: "done", outputSummary: "Invalid draft response." },
+          ],
+        };
+      },
+    };
+  });
+}
+
 async function openQueue(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Queue/ }).click();
   await expect(
@@ -418,15 +716,22 @@ async function addCandidate(page: Page): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
-async function generateDraftVariants(page: Page): Promise<void> {
+async function generateDraftVariants(
+  page: Page,
+  providerLabel?: string,
+  expectSuccess = true,
+): Promise<void> {
   await page.getByRole("button", { name: "Generate variants" }).click();
   const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
   await expect(dialog).toBeVisible();
+  if (providerLabel !== undefined) {
+    await dialog.getByLabel("Provider").selectOption({ label: providerLabel });
+  }
   await dialog
     .getByLabel("Angle")
     .fill("Turn this into a concrete operator lesson");
   await dialog.getByRole("button", { name: "Generate variants" }).click();
-  await expect(dialog).toBeHidden();
+  if (expectSuccess) await expect(dialog).toBeHidden();
 }
 
 async function createDraft(

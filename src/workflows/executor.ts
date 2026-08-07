@@ -8,6 +8,7 @@ import {
   createWorkflowArtifact,
   createWorkflowStepExecution,
   listWorkflowRuns,
+  PLANNER_DRAFT_SAVE_ONLY_MESSAGE,
   setWorkflowStepStatus,
   startWorkflowRun,
   updateWorkflowStepExecution,
@@ -158,6 +159,9 @@ export async function runContentPipelineExecutor(
   );
   if (run === undefined) throw new Error("Workflow run was not found");
   const initialStep = getRunnableStep(run);
+  if (run.autopilot_plan_id !== null && run.current_step_key === "draft") {
+    throw new Error(PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
+  }
   if (initialStep?.step_key === "score" && run.autopilot_plan_id !== null) {
     return runPlannerScoringExecutor(run, input.scoring);
   }

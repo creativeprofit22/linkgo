@@ -47,12 +47,14 @@ interface WorkflowRunRow extends WorkflowRun {
 
 interface WorkflowRunValidationRow extends WorkflowRun {
   campaign_status: CampaignStatus;
+  autopilot_plan_id: number | null;
 }
 
 interface WorkflowStepValidationRow extends WorkflowStep {
   run_status: WorkflowRunStatus;
   campaign_id: number;
   campaign_status: CampaignStatus;
+  autopilot_plan_id: number | null;
 }
 
 interface WorkflowArtifactRow extends WorkflowArtifact {
@@ -61,6 +63,9 @@ interface WorkflowArtifactRow extends WorkflowArtifact {
   candidate_id: number | null;
   candidate_status: string | null;
   candidate_relevance_score: number | null;
+  draft_id: number | null;
+  draft_status: WorkflowArtifactWithDetails["draft_status"];
+  draft_content_intent: WorkflowArtifactWithDetails["draft_content_intent"];
 }
 
 interface WorkflowArtifactOwnershipRow {
@@ -89,6 +94,8 @@ export interface ReconcileWorkflowAgentRunInput {
 }
 const TERMINAL_RUN_STATUSES: WorkflowRunStatus[] = ["completed", "cancelled"];
 const FINISHED_STEP_STATUSES: WorkflowStepStatus[] = ["completed", "skipped"];
+export const PLANNER_DRAFT_SAVE_ONLY_MESSAGE =
+  "Planner-linked draft steps are save-only. Open Drafts, generate variants, and save a generated draft to continue to audit.";
 
 const STEP_TRANSITIONS: Record<WorkflowStepStatus, WorkflowStepStatus[]> = {
   pending: ["running", "skipped"],
@@ -277,9 +284,11 @@ async function getWorkflowRunValidation(
   const rows = await db.select<WorkflowRunValidationRow[]>(
     `SELECT
       wr.*,
-      c.status AS campaign_status
+      c.status AS campaign_status,
+      ap.id AS autopilot_plan_id
     FROM workflow_runs wr
     INNER JOIN campaigns c ON c.id = wr.campaign_id
+    LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
     WHERE wr.id = $1
     LIMIT 1`,
     [id],
@@ -580,7 +589,10 @@ export async function listWorkflowRuns(
         ar.status AS agent_status,
         cp.id AS candidate_id,
         cp.status AS candidate_status,
-        cp.relevance_score AS candidate_relevance_score
+        cp.relevance_score AS candidate_relevance_score,
+        d.id AS draft_id,
+        d.status AS draft_status,
+        d.content_intent AS draft_content_intent
       FROM workflow_artifacts wa
       LEFT JOIN agent_runs ar
         ON wa.artifact_type = 'agent_run'
@@ -588,6 +600,9 @@ export async function listWorkflowRuns(
       LEFT JOIN candidate_posts cp
         ON wa.artifact_type = 'candidate_post'
         AND cp.id = wa.artifact_id
+      LEFT JOIN drafts d
+        ON wa.artifact_type = 'draft'
+        AND d.id = wa.artifact_id
       WHERE wa.workflow_run_id IN (${placeholders})
       ORDER BY wa.workflow_run_id ASC, wa.id ASC`,
       runIds,
@@ -616,6 +631,8 @@ export async function listWorkflowRuns(
       candidate_removed:
         artifact.artifact_type === "candidate_post" &&
         artifact.candidate_id === null,
+      draft_removed:
+        artifact.artifact_type === "draft" && artifact.draft_id === null,
     });
     artifactsByRunId.set(artifact.workflow_run_id, artifacts);
   }
@@ -838,28 +855,38 @@ async function getWorkflowArtifactOwnership(
     }
   }
 
-  const artifactRows =
-    artifactType === "agent_run"
-      ? await db.select<WorkflowArtifactOwnershipRow[]>(
-          `SELECT
-            campaign_id,
-            workflow_run_id,
-            workflow_step_id
-          FROM agent_runs
-          WHERE id = $1
-          LIMIT 1`,
-          [artifactId],
-        )
-      : await db.select<WorkflowArtifactOwnershipRow[]>(
-          `SELECT
-            campaign_id,
-            NULL AS workflow_run_id,
-            NULL AS workflow_step_id
-          FROM candidate_posts
-          WHERE id = $1
-          LIMIT 1`,
-          [artifactId],
-        );
+  let artifactRows: WorkflowArtifactOwnershipRow[];
+  if (artifactType === "agent_run") {
+    artifactRows = await db.select<WorkflowArtifactOwnershipRow[]>(
+      `SELECT campaign_id, workflow_run_id, workflow_step_id
+      FROM agent_runs
+      WHERE id = $1
+      LIMIT 1`,
+      [artifactId],
+    );
+  } else if (artifactType === "draft") {
+    artifactRows = await db.select<WorkflowArtifactOwnershipRow[]>(
+      `SELECT
+        campaign_id,
+        NULL AS workflow_run_id,
+        NULL AS workflow_step_id
+      FROM drafts
+      WHERE id = $1
+      LIMIT 1`,
+      [artifactId],
+    );
+  } else {
+    artifactRows = await db.select<WorkflowArtifactOwnershipRow[]>(
+      `SELECT
+        campaign_id,
+        NULL AS workflow_run_id,
+        NULL AS workflow_step_id
+      FROM candidate_posts
+      WHERE id = $1
+      LIMIT 1`,
+      [artifactId],
+    );
+  }
   const artifact = artifactRows[0];
   if (artifact === undefined)
     throw new Error("Workflow artifact was not found");
@@ -1016,6 +1043,11 @@ export async function executeWorkflowRun(
   input: ExecuteWorkflowRunInput,
 ): Promise<void> {
   const parsed = executeWorkflowRunSchema.parse(input);
+  const db = await getDb();
+  const run = await getWorkflowRunValidation(db, parsed.id);
+  if (run.autopilot_plan_id !== null && run.current_step_key === "draft") {
+    throw new Error(PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
+  }
   const { runContentPipelineExecutor } = await import("@/workflows/executor");
   const executeInput: ExecuteWorkflowRunInput =
     parsed.scoring === undefined
@@ -1043,6 +1075,9 @@ export async function resumeWorkflowRun(
   await db.execute("BEGIN TRANSACTION");
   try {
     const run = await getWorkflowRunValidation(db, parsed.id);
+    if (run.autopilot_plan_id !== null && run.current_step_key === "draft") {
+      throw new Error(PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
+    }
     const steps = await loadWorkflowSteps(db, parsed.id);
     const waitingStep =
       steps.find(
@@ -1099,10 +1134,12 @@ export async function setWorkflowStepStatus(
         ws.*,
         wr.status AS run_status,
         wr.campaign_id,
-        c.status AS campaign_status
+        c.status AS campaign_status,
+        ap.id AS autopilot_plan_id
       FROM workflow_steps ws
       INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
       INNER JOIN campaigns c ON c.id = wr.campaign_id
+      LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
       WHERE ws.id = $1
       LIMIT 1`,
       [parsed.stepId],
@@ -1116,6 +1153,13 @@ export async function setWorkflowStepStatus(
     }
     if (step.run_status === "completed" && parsed.status !== "running") {
       throw new Error("Completed workflow runs can only reopen steps");
+    }
+    if (
+      step.autopilot_plan_id !== null &&
+      step.step_key === "draft" &&
+      FINISHED_STEP_STATUSES.includes(parsed.status)
+    ) {
+      throw new Error(PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
     }
 
     assertStepTransition(step.status, parsed.status);
