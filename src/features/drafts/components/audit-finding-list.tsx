@@ -28,7 +28,7 @@ export function AuditFindingList({
   }
 
   return (
-    <ul className="space-y-2" aria-label="Audit findings">
+    <ul className="space-y-2" aria-label="Deterministic check findings">
       {findings.map((finding) => {
         const Icon = severityIcon[finding.severity];
         return (
@@ -45,8 +45,8 @@ export function AuditFindingList({
             <span className="min-w-0">
               <span className="font-medium">{finding.rule_key}</span>
               <span className="text-muted-foreground">
-                {" "}
-                — {finding.message}
+                {": "}
+                {finding.message}
               </span>
             </span>
           </li>

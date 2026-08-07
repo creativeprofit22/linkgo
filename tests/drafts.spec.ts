@@ -20,8 +20,12 @@ test("creates a draft with two variants and shows audit output", async ({
   await expect(
     page.getByRole("heading", { name: "Jane Operator" }),
   ).toBeVisible();
-  await expect(page.getByText("Variant 1")).toBeVisible();
-  await expect(page.getByText("Variant 2")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Variant 1", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Variant 2", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText("This variant has draft text to review.").first(),
   ).toBeVisible();
@@ -308,6 +312,104 @@ test("creating a draft removes the drafted candidate from draft flows", async ({
   ).toBeVisible();
 });
 
+test("renders accessible AI audit states separately from deterministic checks", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+  await createDraft(page, [
+    cleanVariant(),
+    cleanVariant(),
+    cleanVariant(),
+    cleanVariant(),
+  ]);
+  await configureAiAuditStates(page);
+
+  await openQueue(page);
+  await openDrafts(page);
+
+  const aiAuditPanels = page.getByRole("region", { name: "AI audit" });
+  await expect(aiAuditPanels).toHaveCount(4);
+  await expect(
+    page.getByRole("region", { name: "Deterministic checks" }),
+  ).toHaveCount(4);
+
+  await expect(aiAuditPanels.nth(0)).toContainText("Not run");
+  await expect(aiAuditPanels.nth(0)).toContainText(
+    "No AI audit has been run for this revision.",
+  );
+  await expect(aiAuditPanels.nth(1)).toContainText("Running");
+  await expect(aiAuditPanels.nth(1)).toContainText("Custom API");
+  await expect(aiAuditPanels.nth(1)).toContainText("audit-model-2026");
+  await expect(aiAuditPanels.nth(2)).toContainText("Completed");
+  await expect(aiAuditPanels.nth(2)).toContainText(
+    "The draft is specific, useful, and ready for review.",
+  );
+  await expect(
+    aiAuditPanels.nth(2).getByRole("list", { name: "AI audit findings" }),
+  ).toHaveCount(1);
+  await expect(aiAuditPanels.nth(2).getByRole("listitem")).toHaveCount(6);
+  await expect(aiAuditPanels.nth(2)).toContainText("Hook");
+  await expect(aiAuditPanels.nth(2)).toContainText("Safety");
+  await expect(aiAuditPanels.nth(3)).toContainText("Failed");
+  await expect(aiAuditPanels.nth(3)).toContainText(
+    "The provider returned an invalid audit response.",
+  );
+  await expect(page.getByRole("button", { name: /run ai audit/i })).toHaveCount(
+    0,
+  );
+
+  const accessibilityScan = await new AxeBuilder({ page })
+    .include('section[aria-labelledby*="-ai-audit-title"]')
+    .analyze();
+  expect(accessibilityScan.violations).toEqual([]);
+
+  const stateNames = ["not-run", "running", "completed", "failed"];
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const [index, stateName] of stateNames.entries()) {
+    await aiAuditPanels.nth(index).screenshot({
+      path: `.gg/screenshots/draft-ai-audit-${stateName}-desktop.png`,
+    });
+  }
+
+  await page.setViewportSize({ width: 320, height: 1400 });
+  await aiAuditPanels.nth(3).scrollIntoViewIfNeeded();
+  await expect(aiAuditPanels.nth(3)).toBeVisible();
+  const dimensions = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.viewport);
+  for (const [index, stateName] of stateNames.entries()) {
+    const panel = page.locator(
+      `section[aria-labelledby="variant-${index + 1}-ai-audit-title"]`,
+    );
+    await panel.evaluate((element, stateIndex) => {
+      const marker = document.createElement("span");
+      marker.dataset.aiAuditScreenshotMarker = String(stateIndex);
+      element.before(marker);
+      document.body.append(element);
+      element.setAttribute(
+        "style",
+        "position: fixed; inset: 0 auto auto 0; z-index: 9999; box-sizing: border-box; width: 320px;",
+      );
+    }, index);
+    await panel.screenshot({
+      path: `.gg/screenshots/draft-ai-audit-${stateName}-320.png`,
+    });
+    await panel.evaluate((element, stateIndex) => {
+      const marker = document.querySelector(
+        `[data-ai-audit-screenshot-marker="${stateIndex}"]`,
+      );
+      marker?.replaceWith(element);
+      element.removeAttribute("style");
+    }, index);
+  }
+});
+
 test("audit blocks external links and too many hashtags", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
@@ -579,6 +681,7 @@ interface GeneratedVariantRecord {
 }
 
 interface SavedDraftVariantRecord {
+  id: number;
   hook: string;
   body: string;
   cta: string;
@@ -690,6 +793,71 @@ async function getGeneratedVariants(
     const request = getRequests().find((candidate) => candidate.id === id);
     return JSON.parse(request?.generated_variants_json ?? "[]");
   }, requestId);
+}
+
+async function configureAiAuditStates(page: Page): Promise<void> {
+  const variants = await getSavedDraftVariants(page);
+  const findings = [
+    "hook",
+    "specificity",
+    "generic_language",
+    "authenticity",
+    "clarity",
+    "safety",
+  ].map((ruleKey) => ({
+    ruleKey,
+    severity: ruleKey === "authenticity" ? "warning" : "pass",
+    message: `Focused ${ruleKey.replaceAll("_", " ")} feedback.`,
+  }));
+
+  await page.evaluate(
+    async ({ variantIds, findings }) => {
+      const data = (
+        window as unknown as {
+          __LINKGO_DRAFTS_TEST_API__: {
+            startDraftAiAuditRun: (input: unknown) => Promise<{ id: number }>;
+            completeDraftAiAuditRun: (input: unknown) => Promise<unknown>;
+            failDraftAiAuditRun: (input: unknown) => Promise<unknown>;
+          };
+        }
+      ).__LINKGO_DRAFTS_TEST_API__;
+
+      await data.startDraftAiAuditRun({
+        draftVariantId: variantIds[1],
+        contentRevision: 1,
+        providerKey: "custom",
+        modelName: "audit-model-2026",
+      });
+
+      const completedRun = await data.startDraftAiAuditRun({
+        draftVariantId: variantIds[2],
+        contentRevision: 1,
+        providerKey: "openai",
+        modelName: "gpt-audit-2026",
+      });
+      await data.completeDraftAiAuditRun({
+        auditRunId: completedRun.id,
+        draftVariantId: variantIds[2],
+        contentRevision: 1,
+        summary: "The draft is specific, useful, and ready for review.",
+        findings,
+      });
+
+      const failedRun = await data.startDraftAiAuditRun({
+        draftVariantId: variantIds[3],
+        contentRevision: 1,
+        providerKey: "anthropic",
+        modelName: "claude-audit-2026",
+      });
+      await data.failDraftAiAuditRun({
+        auditRunId: failedRun.id,
+        draftVariantId: variantIds[3],
+        contentRevision: 1,
+        errorMessage: "The provider returned an invalid audit response.",
+      });
+    },
+    { variantIds: variants.map((variant) => variant.id), findings },
+  );
 }
 
 async function getSavedDraftVariants(

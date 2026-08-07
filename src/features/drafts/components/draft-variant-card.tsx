@@ -11,6 +11,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { AiAuditPanel } from "@/features/drafts/components/ai-audit-panel";
 import { AuditFindingList } from "@/features/drafts/components/audit-finding-list";
 import {
   DraftAuditSeverityBadge,
@@ -161,7 +162,26 @@ export function DraftVariantCard({
         )}
 
         <Separator />
-        <AuditFindingList findings={variant.audits} />
+        <section
+          aria-labelledby={`variant-${variant.id}-deterministic-checks-title`}
+          className="space-y-3"
+        >
+          <div className="space-y-1">
+            <h3
+              id={`variant-${variant.id}-deterministic-checks-title`}
+              className="text-sm font-semibold"
+            >
+              Deterministic checks
+              <span className="sr-only"> for variant {variant.id}</span>
+            </h3>
+            <p className="text-muted-foreground text-sm">
+              Rule-based checks run locally whenever the draft changes.
+            </p>
+          </div>
+          <AuditFindingList findings={variant.audits} />
+        </section>
+
+        <AiAuditPanel audit={variant.aiAudit} variantId={variant.id} />
       </CardContent>
 
       <CardFooter className="flex flex-wrap gap-2">
