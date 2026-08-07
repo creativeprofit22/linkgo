@@ -358,9 +358,12 @@ test("renders accessible AI audit states separately from deterministic checks", 
   await expect(aiAuditPanels.nth(3)).toContainText(
     "The provider returned an invalid audit response.",
   );
-  await expect(page.getByRole("button", { name: /run ai audit/i })).toHaveCount(
-    0,
+  await expect(page.getByRole("button", { name: "Run AI audit" })).toHaveCount(
+    3,
   );
+  await expect(
+    page.getByRole("button", { name: /Running AI audit/ }),
+  ).toBeDisabled();
 
   const accessibilityScan = await new AxeBuilder({ page })
     .include('section[aria-labelledby*="-ai-audit-title"]')

@@ -2,10 +2,20 @@ import {
   CheckCircle2,
   CircleAlert,
   Clock3,
+  LoaderCircle,
   ShieldQuestion,
 } from "lucide-react";
-import { PROVIDER_LABELS } from "@/agent/provider-catalog";
+import { useRef, useState } from "react";
+import {
+  AGENT_PROVIDER_KEYS,
+  DEFAULT_AGENT_MODELS,
+  PROVIDER_LABELS,
+} from "@/agent/provider-catalog";
+import type { AgentProviderKey } from "@/agent/types";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type {
   DraftAiAuditFinding,
@@ -13,6 +23,7 @@ import type {
   DraftAiAuditRuleKey,
   DraftAuditSeverity,
   DraftVariantAiAudit,
+  RunDraftAiAuditInput,
 } from "@/features/drafts/types";
 
 const ruleLabels: Record<DraftAiAuditRuleKey, string> = {
@@ -89,14 +100,45 @@ function getPresentation(
 export function AiAuditPanel({
   audit,
   variantId,
+  onRun,
 }: {
   audit: DraftVariantAiAudit;
   variantId: number;
+  onRun: (input: RunDraftAiAuditInput) => Promise<void>;
 }): React.ReactNode {
-  const presentation = getPresentation(audit.status);
+  const [providerKey, setProviderKey] = useState<AgentProviderKey>("dry_run");
+  const [modelName, setModelName] = useState(DEFAULT_AGENT_MODELS.dry_run);
+  const [submitting, setSubmitting] = useState(false);
+  const [attemptError, setAttemptError] = useState<string | null>(null);
+  const runLock = useRef(false);
+  const durableRunActive =
+    audit.status === "pending" || audit.status === "running";
+  const runActive = submitting || durableRunActive;
+  const presentation = getPresentation(runActive ? "running" : audit.status);
   const { Icon } = presentation;
   const titleId = `variant-${variantId}-ai-audit-title`;
   const descriptionId = `variant-${variantId}-ai-audit-description`;
+  const providerId = `variant-${variantId}-ai-audit-provider`;
+  const modelId = `variant-${variantId}-ai-audit-model`;
+
+  async function runAudit(): Promise<void> {
+    if (runLock.current || durableRunActive) return;
+    runLock.current = true;
+    setSubmitting(true);
+    setAttemptError(null);
+    try {
+      await onRun({ draftVariantId: variantId, providerKey, modelName });
+    } catch (error) {
+      setAttemptError(
+        error instanceof Error
+          ? error.message
+          : "The AI audit could not be started.",
+      );
+    } finally {
+      runLock.current = false;
+      setSubmitting(false);
+    }
+  }
 
   return (
     <section
@@ -134,6 +176,63 @@ export function AiAuditPanel({
           {presentation.label}
         </Badge>
       </div>
+
+      <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <div className="space-y-2">
+          <Label htmlFor={providerId}>Provider</Label>
+          <select
+            id={providerId}
+            value={providerKey}
+            disabled={runActive}
+            onChange={(event) => {
+              const nextProvider = event.target.value as AgentProviderKey;
+              setProviderKey(nextProvider);
+              setModelName(DEFAULT_AGENT_MODELS[nextProvider]);
+            }}
+            className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {AGENT_PROVIDER_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {PROVIDER_LABELS[key]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={modelId}>Model</Label>
+          <Input
+            id={modelId}
+            value={modelName}
+            disabled={runActive}
+            maxLength={120}
+            onChange={(event) => setModelName(event.target.value)}
+          />
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          disabled={runActive}
+          aria-describedby={descriptionId}
+          onClick={() => void runAudit()}
+        >
+          {runActive ? (
+            <>
+              <LoaderCircle className="size-4 animate-spin" /> Running AI audit…
+            </>
+          ) : (
+            "Run AI audit"
+          )}
+        </Button>
+      </div>
+
+      {attemptError !== null && (
+        <p
+          role="alert"
+          className="text-destructive mt-3 text-sm font-medium break-words"
+        >
+          {attemptError}
+        </p>
+      )}
 
       {audit.run !== null && (
         <div className="mt-4 space-y-4 border-t pt-4">

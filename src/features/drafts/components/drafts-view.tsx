@@ -30,6 +30,7 @@ export function DraftsView(): React.ReactNode {
     updateVariant,
     setVariantStatus,
     archiveDraft,
+    runDraftAiAudit,
   } = useDrafts();
 
   const summary = getDraftSummary(drafts);
@@ -177,6 +178,7 @@ export function DraftsView(): React.ReactNode {
                   onUpdateVariant={updateVariant}
                   onSetVariantStatus={setVariantStatus}
                   onArchiveDraft={archiveDraft}
+                  onRunAiAudit={runDraftAiAudit}
                 />
               ))}
             </div>

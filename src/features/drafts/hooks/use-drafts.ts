@@ -12,6 +12,7 @@ import {
   listDraftGenerationRequests,
   listEligibleDraftWorkflowOptions,
   listDrafts,
+  runDraftAiAudit as runDraftAiAuditRecord,
   saveGeneratedDraft,
   setDraftVariantStatus,
   updateDraft as updateDraftRecord,
@@ -23,6 +24,7 @@ import type {
   EligibleDraftWorkflowOption,
   DraftWithDetails,
   GenerateDraftVariantsInput,
+  RunDraftAiAuditInput,
   SaveGeneratedDraftInput,
   SetDraftVariantStatusInput,
   UpdateDraftInput,
@@ -45,6 +47,7 @@ interface UseDraftsState {
   updateVariant: (input: UpdateDraftVariantInput) => Promise<void>;
   setVariantStatus: (input: SetDraftVariantStatusInput) => Promise<void>;
   archiveDraft: (id: number) => Promise<void>;
+  runDraftAiAudit: (input: RunDraftAiAuditInput) => Promise<void>;
   generateDraft: (input: GenerateDraftVariantsInput) => Promise<void>;
   saveGenerationRequest: (input: SaveGeneratedDraftInput) => Promise<void>;
   dismissGenerationRequest: (id: number) => Promise<void>;
@@ -233,6 +236,22 @@ export function useDrafts(): UseDraftsState {
     [loadDraftsForCampaign, selectedCampaignId],
   );
 
+  const runDraftAiAudit = useCallback(
+    async (input: RunDraftAiAuditInput) => {
+      try {
+        await runDraftAiAuditRecord(input);
+        toast.success("AI audit completed");
+      } catch (caught) {
+        const message = getErrorMessage(caught);
+        toast.error("AI audit failed", { description: message });
+        throw caught;
+      } finally {
+        await loadDraftsForCampaign(selectedCampaignId);
+      }
+    },
+    [loadDraftsForCampaign, selectedCampaignId],
+  );
+
   const generateDraft = useCallback(
     async (input: GenerateDraftVariantsInput) => {
       try {
@@ -303,6 +322,7 @@ export function useDrafts(): UseDraftsState {
       updateVariant,
       setVariantStatus,
       archiveDraft,
+      runDraftAiAudit,
       generateDraft,
       saveGenerationRequest,
       dismissGenerationRequest,
@@ -323,6 +343,7 @@ export function useDrafts(): UseDraftsState {
       updateVariant,
       setVariantStatus,
       archiveDraft,
+      runDraftAiAudit,
       generateDraft,
       saveGenerationRequest,
       dismissGenerationRequest,

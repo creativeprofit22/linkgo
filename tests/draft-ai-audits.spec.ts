@@ -1006,3 +1006,242 @@ test("bounds each reconciliation candidate class", async ({ page }) => {
   expect(result.failedAuditRunIds).toHaveLength(1);
   expect(result.failedAgentRunIds).toHaveLength(1);
 });
+
+async function openSeededAuditPanel(page: Page) {
+  await seedVariant(page);
+  await page.getByRole("button", { name: /Drafts/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Drafts", exact: true }),
+  ).toBeVisible();
+  return page
+    .getByRole("heading", { name: /AI audit for variant/ })
+    .locator("xpath=ancestor::section[1]");
+}
+
+async function connectCustomAuditProvider(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const internals = (
+      window as unknown as {
+        __TAURI_INTERNALS__: {
+          invoke: (command: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    await internals.invoke("linkgo_auth_api_key", {
+      input: {
+        providerKey: "custom",
+        apiKey: "e2e-token",
+        baseUrl: "https://custom.example.com/v1",
+      },
+    });
+  });
+}
+
+async function installUiAuditProvider(
+  page: Page,
+  mode: "success" | "gated" | "retry",
+): Promise<void> {
+  await page.evaluate(
+    ({ auditFindings, providerMode }) => {
+      type ProviderRequest = {
+        messages: Array<{ role: string }>;
+        inputContext?: { auditRequest?: Record<string, unknown> };
+      };
+      type ProviderResult = { chunks: Array<Record<string, unknown>> };
+      type TestWindow = {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => Promise<ProviderResult> | ProviderResult;
+        };
+        __RELEASE_AUDIT_PROVIDER__?: () => void;
+      };
+      const testWindow = window as unknown as TestWindow;
+      let attempts = 0;
+      let releaseGate: (() => void) | undefined;
+      const gate =
+        providerMode === "gated"
+          ? new Promise<void>((resolve) => {
+              releaseGate = resolve;
+            })
+          : Promise.resolve();
+      testWindow.__RELEASE_AUDIT_PROVIDER__ = () => releaseGate?.();
+      testWindow.__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+        async execute(args: unknown): Promise<ProviderResult> {
+          const request = (args as { input: { request: ProviderRequest } })
+            .input.request;
+          if (request.messages.some((message) => message.role === "tool")) {
+            return {
+              chunks: [
+                { type: "done", outputSummary: "Custom audit completed." },
+              ],
+            };
+          }
+          attempts += 1;
+          if (providerMode === "retry" && attempts === 1) {
+            throw new Error("Injected audit provider outage");
+          }
+          await gate;
+          const auditRequest = request.inputContext?.auditRequest;
+          if (auditRequest === undefined) {
+            throw new Error("Audit request context unavailable");
+          }
+          return {
+            chunks: [
+              {
+                type: "tool_call",
+                providerToolCallId: `ui-audit-${attempts}`,
+                toolName: "audit_post",
+                input: { ...auditRequest, findings: auditFindings },
+              },
+              {
+                type: "done",
+                outputSummary: "Custom provider requested audit persistence.",
+              },
+            ],
+          };
+        },
+      };
+    },
+    { auditFindings: findings, providerMode: mode },
+  );
+}
+
+test.describe("draft AI audit action", () => {
+  test("runs a dry-run audit and refreshes the completed read model", async ({
+    page,
+  }) => {
+    const panel = await openSeededAuditPanel(page);
+
+    await panel.getByRole("button", { name: "Run AI audit" }).click();
+
+    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByRole("definition").filter({ hasText: "Dry run" }),
+    ).toBeVisible();
+    await expect(
+      panel.getByText("dry-run-local", { exact: true }),
+    ).toBeVisible();
+    await expect(panel.getByText("Findings (6/6)")).toBeVisible();
+    expect((await getAuditState(page)).runs).toEqual([
+      expect.objectContaining({ provider_key: "dry_run", status: "completed" }),
+    ]);
+
+    await panel.screenshot({
+      path: ".gg/screenshots/draft-ai-audit-action-desktop.png",
+    });
+    await page.setViewportSize({ width: 320, height: 1400 });
+    await panel.evaluate((element) => {
+      const marker = document.createElement("span");
+      marker.dataset.auditActionScreenshotMarker = "true";
+      element.before(marker);
+      document.body.append(element);
+      element.setAttribute(
+        "style",
+        "position: fixed; inset: 0 auto auto 0; z-index: 9999; box-sizing: border-box; width: 320px;",
+      );
+    });
+    await panel.screenshot({
+      path: ".gg/screenshots/draft-ai-audit-action-320.png",
+    });
+    await panel.evaluate((element) => {
+      document
+        .querySelector("[data-audit-action-screenshot-marker]")
+        ?.replaceWith(element);
+      element.removeAttribute("style");
+    });
+  });
+
+  test("runs with a connected provider and selected model", async ({
+    page,
+  }) => {
+    await connectCustomAuditProvider(page);
+    await installUiAuditProvider(page, "success");
+    const panel = await openSeededAuditPanel(page);
+
+    await panel.getByLabel("Provider").selectOption("custom");
+    await panel.getByLabel("Model").fill("custom-audit-model");
+    await panel.getByRole("button", { name: "Run AI audit" }).click();
+
+    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByRole("definition").filter({ hasText: "Custom API" }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("definition").filter({ hasText: "custom-audit-model" }),
+    ).toBeVisible();
+    expect((await getAuditState(page)).runs[0]).toMatchObject({
+      provider_key: "custom",
+      model_name: "custom-audit-model",
+      status: "completed",
+    });
+  });
+
+  test("shows missing credentials in both immediate and durable failed state", async ({
+    page,
+  }) => {
+    const panel = await openSeededAuditPanel(page);
+    await panel.getByLabel("Provider").selectOption("anthropic");
+
+    await panel.getByRole("button", { name: "Run AI audit" }).click();
+
+    await expect(panel.getByText("Failed", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Provider is not connected")).toHaveCount(2);
+    expect((await getAuditState(page)).runs[0]).toMatchObject({
+      provider_key: "anthropic",
+      status: "failed",
+      error_message: "Agent provider is not connected",
+    });
+  });
+
+  test("suppresses duplicate clicks while an audit is active", async ({
+    page,
+  }) => {
+    await connectCustomAuditProvider(page);
+    await installUiAuditProvider(page, "gated");
+    const panel = await openSeededAuditPanel(page);
+    await panel.getByLabel("Provider").selectOption("custom");
+    const runButton = panel.getByRole("button", { name: "Run AI audit" });
+
+    await runButton.evaluate((button: HTMLButtonElement) => {
+      button.click();
+      button.click();
+    });
+
+    await expect(
+      panel.getByRole("button", { name: /Running AI audit/ }),
+    ).toBeDisabled();
+    await expect(panel.getByText("Running", { exact: true })).toBeVisible();
+    expect((await getAuditState(page)).runs).toHaveLength(1);
+    await page.evaluate(() =>
+      (
+        window as unknown as { __RELEASE_AUDIT_PROVIDER__: () => void }
+      ).__RELEASE_AUDIT_PROVIDER__(),
+    );
+    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    expect((await getAuditState(page)).runs).toHaveLength(1);
+  });
+
+  test("retries after failure without hiding the failed durable state", async ({
+    page,
+  }) => {
+    await connectCustomAuditProvider(page);
+    await installUiAuditProvider(page, "retry");
+    const panel = await openSeededAuditPanel(page);
+    await panel.getByLabel("Provider").selectOption("custom");
+
+    await panel.getByRole("button", { name: "Run AI audit" }).click();
+    await expect(panel.getByText("Failed", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Injected audit provider outage")).toHaveCount(
+      2,
+    );
+
+    await panel.getByRole("button", { name: "Run AI audit" }).click();
+
+    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    const state = await getAuditState(page);
+    expect(state.runs.map((run) => run.status)).toEqual([
+      "failed",
+      "completed",
+    ]);
+    expect(state.findings).toHaveLength(6);
+  });
+});

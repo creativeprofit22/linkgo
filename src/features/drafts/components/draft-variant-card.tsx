@@ -20,6 +20,7 @@ import {
 import type {
   DraftVariantStatus,
   DraftVariantWithAudits,
+  RunDraftAiAuditInput,
   SetDraftVariantStatusInput,
   UpdateDraftVariantInput,
 } from "@/features/drafts/types";
@@ -28,6 +29,7 @@ interface DraftVariantCardProps {
   variant: DraftVariantWithAudits;
   onUpdateVariant: (input: UpdateDraftVariantInput) => Promise<void>;
   onSetVariantStatus: (input: SetDraftVariantStatusInput) => Promise<void>;
+  onRunAiAudit: (input: RunDraftAiAuditInput) => Promise<void>;
 }
 
 interface VariantEditorState {
@@ -52,6 +54,7 @@ export function DraftVariantCard({
   variant,
   onUpdateVariant,
   onSetVariantStatus,
+  onRunAiAudit,
 }: DraftVariantCardProps): React.ReactNode {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -181,7 +184,11 @@ export function DraftVariantCard({
           <AuditFindingList findings={variant.audits} />
         </section>
 
-        <AiAuditPanel audit={variant.aiAudit} variantId={variant.id} />
+        <AiAuditPanel
+          audit={variant.aiAudit}
+          variantId={variant.id}
+          onRun={onRunAiAudit}
+        />
       </CardContent>
 
       <CardFooter className="flex flex-wrap gap-2">

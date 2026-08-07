@@ -12,6 +12,7 @@ import {
 import type {
   DraftAuditSeverity,
   DraftWithDetails,
+  RunDraftAiAuditInput,
   SetDraftVariantStatusInput,
   UpdateDraftVariantInput,
 } from "@/features/drafts/types";
@@ -21,6 +22,7 @@ interface DraftCardProps {
   onUpdateVariant: (input: UpdateDraftVariantInput) => Promise<void>;
   onSetVariantStatus: (input: SetDraftVariantStatusInput) => Promise<void>;
   onArchiveDraft: (id: number) => Promise<void>;
+  onRunAiAudit: (input: RunDraftAiAuditInput) => Promise<void>;
 }
 
 const SEVERITY_RANK: Record<DraftAuditSeverity, number> = {
@@ -42,6 +44,7 @@ export function DraftCard({
   onUpdateVariant,
   onSetVariantStatus,
   onArchiveDraft,
+  onRunAiAudit,
 }: DraftCardProps): React.ReactNode {
   const authorName = draft.candidate.target.author_name || "Unknown author";
   const highestSeverity = getHighestSeverity(draft);
@@ -113,6 +116,7 @@ export function DraftCard({
               variant={variant}
               onUpdateVariant={onUpdateVariant}
               onSetVariantStatus={onSetVariantStatus}
+              onRunAiAudit={onRunAiAudit}
             />
           ))}
         </div>
