@@ -161,11 +161,17 @@ fn tool_payloads(tools: &[AgentProviderToolDefinitionInput]) -> Vec<Value> {
 
 const SCORE_RELEVANCE_INPUT_SCHEMA_JSON: &str =
     include_str!("../schemas/score_relevance.input.schema.json");
+const DRAFT_POST_INPUT_SCHEMA_JSON: &str = include_str!("../schemas/draft_post.input.schema.json");
 const AUDIT_POST_INPUT_SCHEMA_JSON: &str = include_str!("../schemas/audit_post.input.schema.json");
 
 fn score_relevance_input_schema() -> Value {
     serde_json::from_str(SCORE_RELEVANCE_INPUT_SCHEMA_JSON)
         .expect("bundled score_relevance input schema should be valid JSON")
+}
+
+fn draft_post_input_schema() -> Value {
+    serde_json::from_str(DRAFT_POST_INPUT_SCHEMA_JSON)
+        .expect("bundled draft_post input schema should be valid JSON")
 }
 
 fn audit_post_input_schema() -> Value {
@@ -204,18 +210,7 @@ fn native_agent_tool_definitions() -> Vec<AgentProviderToolDefinitionInput> {
         AgentProviderToolDefinitionInput {
             name: "draft_post".to_string(),
             description: "Creates bounded draft variant structures for later human editing and review.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                    "campaignId": { "type": "integer", "minimum": 1 },
-                    "candidatePostId": { "type": "integer", "minimum": 1 },
-                    "variantCount": { "type": "integer", "minimum": 1, "maximum": 5, "default": 3 },
-                    "angle": { "type": "string", "maxLength": 1000 },
-                    "voiceNotes": { "type": "string", "maxLength": 1000 }
-                },
-                "required": ["campaignId", "candidatePostId"]
-            }),
+            input_schema: draft_post_input_schema(),
         },
         AgentProviderToolDefinitionInput {
             name: "audit_post".to_string(),
@@ -993,16 +988,7 @@ mod tests {
         AgentProviderToolDefinitionInput {
             name: "draft_post".to_string(),
             description: "Creates bounded draft variant structures.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "campaignId": { "type": "integer" },
-                    "candidatePostId": { "type": "integer" },
-                    "variantCount": { "type": "integer" },
-                    "angle": { "type": "string" }
-                },
-                "required": ["campaignId", "candidatePostId"]
-            }),
+            input_schema: draft_post_input_schema(),
         }
     }
 
@@ -1057,6 +1043,47 @@ mod tests {
     }
 
     #[test]
+    fn native_draft_post_schema_matches_the_frontend_contract() {
+        let tools = native_agent_tool_definitions();
+        let draft_tool = tools
+            .iter()
+            .find(|tool| tool.name == "draft_post")
+            .expect("draft_post should stay native-allowlisted");
+        let schema = &draft_tool.input_schema;
+        let variants = &schema["properties"]["variants"];
+        let variant_items = &variants["items"];
+
+        assert_eq!(
+            schema["required"],
+            json!([
+                "draftGenerationRequestId",
+                "campaignId",
+                "candidatePostId",
+                "contentIntent",
+                "variants"
+            ])
+        );
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(schema["properties"]["variantCount"]["default"], 3);
+        assert_eq!(schema["properties"]["variantCount"]["minimum"], 3);
+        assert_eq!(schema["properties"]["variantCount"]["maximum"], 5);
+        assert_eq!(
+            schema["properties"]["contentIntent"]["enum"],
+            json!(["event", "launch", "idea", "community"])
+        );
+        assert_eq!(variants["minItems"], 3);
+        assert_eq!(variants["maxItems"], 5);
+        assert_eq!(variant_items["additionalProperties"], false);
+        assert_eq!(
+            variant_items["required"],
+            json!(["hook", "body", "cta", "hashtags"])
+        );
+        assert_eq!(variant_items["properties"]["hook"]["maxLength"], 280);
+        assert_eq!(variant_items["properties"]["body"]["maxLength"], 2500);
+        assert_eq!(variant_items["properties"]["hashtags"]["maxItems"], 5);
+    }
+
+    #[test]
     fn native_adapter_filters_renderer_tools_through_the_native_allowlist() {
         let mut input: AgentProviderStreamInput = serde_json::from_value(json!({
             "providerKey": "custom",
@@ -1081,8 +1108,7 @@ mod tests {
         let (tools, tool_choice) = native_agent_provider_options(&input);
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "draft_post");
-        assert_eq!(tools[0].input_schema["type"], "object");
-        assert_eq!(tools[0].input_schema["additionalProperties"], false);
+        assert_eq!(tools[0].input_schema, draft_post_input_schema());
         assert_eq!(tool_choice, "auto");
 
         input.tool_choice = json!({ "name": "publish_post" });

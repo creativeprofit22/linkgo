@@ -231,7 +231,20 @@ test("starts a provider-backed run through the native command boundary", async (
       providerKey: "custom",
       modelName: "custom-model",
       request: expect.objectContaining({ messages: expect.any(Array) }),
-      tools: [expect.objectContaining({ name: "draft_post" })],
+      tools: expect.arrayContaining([
+        expect.objectContaining({
+          name: "draft_post",
+          inputSchema: expect.objectContaining({
+            required: [
+              "draftGenerationRequestId",
+              "campaignId",
+              "candidatePostId",
+              "contentIntent",
+              "variants",
+            ],
+          }),
+        }),
+      ]),
       toolChoice: "auto",
     },
   });
@@ -592,6 +605,75 @@ test("provider duplicate research_posts calls are rejected before local writes",
   await expect(
     page.getByText("Duplicate provider tool call ignored.", { exact: true }),
   ).toBeVisible();
+});
+
+test("rejects research_posts writes for a different campaign", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+          execute: (args: unknown) => unknown;
+        };
+      }
+    ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute(args: unknown): unknown {
+        const request = (args as { input: { request: { campaignId: number } } })
+          .input.request;
+        return {
+          chunks: [
+            {
+              type: "tool_call",
+              providerToolCallId: "provider-research-cross-campaign",
+              toolName: "research_posts",
+              input: {
+                campaignId: request.campaignId === 1 ? 2 : 1,
+                keywords: ["cross-campaign"],
+                maxPosts: 1,
+                suggestions: [
+                  {
+                    kind: "keyword",
+                    title: "Cross-campaign write",
+                    keyword: "cross-campaign",
+                    rationale: "This write must be rejected.",
+                    sourceKeyword: "cross-campaign",
+                    confidenceScore: 100,
+                  },
+                ],
+              },
+            },
+            { type: "done", outputSummary: "Cross-campaign research." },
+          ],
+        };
+      },
+    };
+  });
+  await connectCustomProvider(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "custom", "researcher");
+
+  await page.getByRole("button", { name: "Start Custom API" }).click();
+
+  await expect(getBadge(page, "Failed").first()).toBeVisible();
+  const errorMessage = "Research request belongs to a different campaign";
+  const runs = await getAgentRuns(page);
+  expect(runs[0]).toMatchObject({
+    status: "failed",
+    error_message: errorMessage,
+  });
+  const toolCalls = await getAgentToolCalls(page);
+  expect(toolCalls).toHaveLength(1);
+  expect(toolCalls[0]).toMatchObject({
+    tool_name: "research_posts",
+    status: "failed",
+    error_message: errorMessage,
+  });
+  expect((await getStateCounts(page)).candidateDiscoveryItems).toBe(0);
 });
 
 for (const approvalPosition of ["first", "second"] as const) {

@@ -688,6 +688,9 @@ export async function insertDiscoveryItemsFromTool(
   input: ResearchPostsInput,
   context: AgentToolExecutionContext,
 ): Promise<ResearchPostsOutput["discoveryItems"]> {
+  if (context.request.campaignId !== input.campaignId) {
+    throw new Error("Research request belongs to a different campaign");
+  }
   const db = await getDb();
   await assertCandidateCampaignCanMutate(db, input.campaignId);
 

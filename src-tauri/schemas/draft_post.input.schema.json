@@ -1,0 +1,81 @@
+{
+  "type": "object",
+  "properties": {
+    "draftGenerationRequestId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "campaignId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "candidatePostId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "variantCount": {
+      "default": 3,
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 5
+    },
+    "contentIntent": {
+      "type": "string",
+      "enum": ["event", "launch", "idea", "community"]
+    },
+    "angle": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "voiceNotes": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "variants": {
+      "minItems": 3,
+      "maxItems": 5,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "hook": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2500
+          },
+          "cta": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "hashtags": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          }
+        },
+        "required": ["hook", "body", "cta", "hashtags"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "draftGenerationRequestId",
+    "campaignId",
+    "candidatePostId",
+    "contentIntent",
+    "variants"
+  ],
+  "additionalProperties": false
+}
