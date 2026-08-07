@@ -800,6 +800,42 @@ test("selects the LinkedIn writer playbook for drafter runs", async ({
   await expect(
     page.getByText("with playbook LinkedIn Writer (linkedin_writer)").first(),
   ).toBeVisible();
+  const toolPayload = await page.evaluate(() => {
+    const getToolCalls = (
+      window as unknown as {
+        __LINKGO_SQL_AGENT_TOOL_CALLS__: () => Array<{
+          input_json: string;
+          output_json: string;
+        }>;
+      }
+    ).__LINKGO_SQL_AGENT_TOOL_CALLS__;
+    const toolCall = getToolCalls()[0];
+    return {
+      input: JSON.parse(toolCall?.input_json ?? "{}") as {
+        draftGenerationRequestId: number;
+        variantCount: number;
+        contentIntent: string;
+        variants: Array<{ hook: string; body: string }>;
+      },
+      output: JSON.parse(toolCall?.output_json ?? "{}") as {
+        variants: Array<{ hook: string; body: string }>;
+      },
+    };
+  });
+  expect(toolPayload.input).toMatchObject({
+    draftGenerationRequestId: 1,
+    variantCount: 3,
+    contentIntent: "idea",
+  });
+  expect(toolPayload.input.variants.map((variant) => variant.hook)).toEqual([
+    "Dry-run provider hook 1: idea insight",
+    "Dry-run provider hook 2: idea insight",
+    "Dry-run provider hook 3: idea insight",
+  ]);
+  expect(
+    new Set(toolPayload.input.variants.map((variant) => variant.body)).size,
+  ).toBe(3);
+  expect(toolPayload.output.variants).toEqual(toolPayload.input.variants);
 });
 
 test("hides disabled runtime playbooks from new agent runs", async ({
