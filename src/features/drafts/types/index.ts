@@ -21,6 +21,23 @@ export type DraftVariantStatus = "draft" | "selected" | "rejected";
 
 export type DraftAuditSeverity = "pass" | "warning" | "block";
 
+export const DRAFT_AI_AUDIT_RULE_KEYS = [
+  "hook",
+  "specificity",
+  "generic_language",
+  "authenticity",
+  "clarity",
+  "safety",
+] as const;
+
+export type DraftAiAuditRuleKey = (typeof DRAFT_AI_AUDIT_RULE_KEYS)[number];
+export type DraftAiAuditRunStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
 export interface Draft {
   id: number;
   campaign_id: number;
@@ -41,6 +58,7 @@ export interface DraftVariant {
   body: string;
   cta: string;
   hashtags: string;
+  content_revision: number;
   status: DraftVariantStatus;
   created_at: string;
   updated_at: string;
@@ -53,6 +71,77 @@ export interface DraftAuditFinding {
   severity: DraftAuditSeverity;
   message: string;
   created_at?: string;
+}
+
+export interface DraftAiAuditRun {
+  id: number;
+  draft_variant_id: number;
+  content_revision: number;
+  agent_run_id: number | null;
+  provider_key: AgentProviderKey;
+  model_name: string;
+  status: DraftAiAuditRunStatus;
+  summary: string;
+  error_message: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DraftAiAuditFinding {
+  id: number;
+  audit_run_id: number;
+  rule_key: DraftAiAuditRuleKey;
+  severity: DraftAuditSeverity;
+  message: string;
+  created_at: string;
+}
+
+export interface RunDraftAiAuditInput {
+  draftVariantId: number;
+  providerKey?: AgentProviderKey;
+  modelName?: string;
+}
+
+export type RunDraftAiAudit = (input: RunDraftAiAuditInput) => Promise<number>;
+
+export interface ReconcileDraftAiAuditLifecycleInput {
+  maxAuditRuns?: number;
+  maxOrphanAgentRuns?: number;
+}
+
+export interface ReconcileDraftAiAuditLifecycleResult {
+  failedAuditRunIds: number[];
+  failedAgentRunIds: number[];
+  clearedApprovalCheckpointCount: number;
+}
+
+export interface StartDraftAiAuditRunInput {
+  draftVariantId: number;
+  contentRevision: number;
+  agentRunId?: number | null;
+  providerKey?: AgentProviderKey;
+  modelName?: string;
+}
+
+export interface CompleteDraftAiAuditRunInput {
+  auditRunId: number;
+  draftVariantId: number;
+  contentRevision: number;
+  summary?: string;
+  findings: Array<{
+    ruleKey: DraftAiAuditRuleKey;
+    severity: DraftAuditSeverity;
+    message: string;
+  }>;
+}
+
+export interface FailDraftAiAuditRunInput {
+  auditRunId: number;
+  draftVariantId: number;
+  contentRevision: number;
+  errorMessage: string;
 }
 
 export type DraftVariantWithAudits = DraftVariant & {

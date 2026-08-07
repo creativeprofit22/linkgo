@@ -7,6 +7,7 @@ import {
   type AgentModelRequest,
   type AgentProvider,
   type AgentProviderKey,
+  type AgentProviderStreamOptions,
 } from "@/agent/types";
 
 const agentToolNameSchema = z.enum(AGENT_TOOL_NAMES);
@@ -58,7 +59,7 @@ async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
   return invoke(cmd, args as Record<string, unknown> | undefined);
 }
 
-export interface TauriAgentProviderCommandInput {
+export interface TauriAgentProviderCommandInput extends AgentProviderStreamOptions {
   providerKey: Exclude<AgentProviderKey, "dry_run">;
   modelName: string;
   request: AgentModelRequest;
@@ -75,12 +76,15 @@ export function createTauriAgentProvider(
     modelName,
     stream: async function* tauriAgentProviderStream(
       request: AgentModelRequest,
+      options: AgentProviderStreamOptions = { tools: [], toolChoice: "none" },
     ): AsyncIterable<AgentModelChunk> {
       const result = await invokeCommand("linkgo_agent_provider_stream", {
         input: {
           providerKey: parsedKey,
           modelName,
           request,
+          tools: options.tools,
+          toolChoice: options.toolChoice,
         } satisfies TauriAgentProviderCommandInput,
       });
       const parsed = agentProviderStreamResultSchema.parse(result);

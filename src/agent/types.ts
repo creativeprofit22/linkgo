@@ -86,7 +86,13 @@ export interface AgentToolContract<
   ) => Promise<z.infer<TOutput>>;
 }
 
-export type AgentToolRegistry = Record<AgentToolName, AgentToolContract>;
+export type AgentToolRegistry = Partial<
+  Record<AgentToolName, AgentToolContract>
+>;
+export type CompleteAgentToolRegistry = Record<
+  AgentToolName,
+  AgentToolContract
+>;
 
 export interface AgentProviderToolDefinition {
   name: AgentToolName;

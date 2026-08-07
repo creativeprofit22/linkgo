@@ -23,11 +23,13 @@ import {
   insertDiscoveryItemsFromTool,
 } from "@/features/candidate-queue/data";
 import type {
+  AgentRole,
   AgentToolContract,
   AgentToolExecutionContext,
   AgentToolMetadata,
   AgentToolName,
   AgentToolRegistry,
+  CompleteAgentToolRegistry,
 } from "@/agent/types";
 
 export const AGENT_TOOL_METADATA = [
@@ -62,7 +64,7 @@ export const AGENT_TOOL_METADATA = [
     name: "audit_post",
     label: "Audit post",
     description:
-      "Returns pass, warning, and block findings for deterministic or future model audit rules.",
+      "Validates and echoes six bounded provider-authored findings for an exact draft content revision and audit run.",
     roadmapSection: "1, 7, 8",
     requiresApproval: false,
     stepKeys: ["audit"],
@@ -86,6 +88,15 @@ export const AGENT_TOOL_METADATA = [
     stepKeys: ["measure"],
   },
 ] satisfies AgentToolMetadata[];
+
+export const AGENT_ROLE_TOOL_NAMES = {
+  researcher: ["research_posts"],
+  scorer: ["score_relevance"],
+  drafter: ["draft_post"],
+  auditor: ["audit_post"],
+  scheduler: ["schedule_post"],
+  analyst: ["collect_metrics"],
+} as const satisfies Record<AgentRole, readonly AgentToolName[]>;
 
 function getKeyword(input: ResearchPostsInput): string {
   return input.keywords[0] ?? "campaign context";
@@ -149,16 +160,40 @@ export const agentToolRegistry = {
     ...getToolMetadata("audit_post"),
     inputSchema: auditPostInputSchema,
     outputSchema: auditPostOutputSchema,
-    execute: async (input: AuditPostInput) => ({
-      findings: [
-        {
-          ruleKey: "contract_valid",
-          severity: "pass" as const,
-          message: `Audited ${input.text.length} characters through the dry-run contract.`,
-        },
-      ],
-      summary: "Dry-run audit completed with no blocking findings.",
-    }),
+    execute: async (
+      input: AuditPostInput,
+      context: AgentToolExecutionContext,
+    ) => {
+      if (input.campaignId !== context.request.campaignId) {
+        throw new Error(
+          "audit_post campaignId must match the agent run campaign",
+        );
+      }
+
+      const auditRequest = context.request.inputContext?.auditRequest;
+      const trustedAuditRequest =
+        typeof auditRequest === "object" && auditRequest !== null
+          ? (auditRequest as Record<string, unknown>)
+          : {};
+      const identityFields = [
+        ["draftVariantId", input.draftVariantId],
+        ["contentRevision", input.contentRevision],
+        ["auditRunId", input.auditRunId],
+      ] as const;
+      for (const [field, actualValue] of identityFields) {
+        const trustedValue = trustedAuditRequest[field];
+        if (trustedValue !== undefined && trustedValue !== actualValue) {
+          throw new Error(
+            `audit_post ${field} must match the trusted audit request`,
+          );
+        }
+      }
+
+      return {
+        findings: input.findings,
+        summary: `Accepted ${input.findings.length} provider-authored audit findings.`,
+      };
+    },
   },
   schedule_post: {
     ...getToolMetadata("schedule_post"),
@@ -184,6 +219,16 @@ export const agentToolRegistry = {
       summary: "Dry-run metrics request recorded without external fetch.",
     }),
   },
-} as AgentToolRegistry;
+} as CompleteAgentToolRegistry;
+
+export function getAgentToolRegistryForRole(
+  role: AgentRole,
+): AgentToolRegistry {
+  const scopedRegistry: AgentToolRegistry = {};
+  for (const toolName of AGENT_ROLE_TOOL_NAMES[role]) {
+    scopedRegistry[toolName] = agentToolRegistry[toolName];
+  }
+  return scopedRegistry;
+}
 
 export type AnyAgentToolContract = AgentToolContract;

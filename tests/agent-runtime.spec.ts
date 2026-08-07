@@ -111,6 +111,47 @@ test("dry-run scorer applies candidate scores through score_relevance", async ({
   });
 });
 
+test("dry-run auditor persists exact identities and echoes provider-authored findings", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createDryRun(page, "auditor");
+
+  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+
+  const toolCall = (await getAgentToolCalls(page))[0];
+  const input = JSON.parse(toolCall?.input_json ?? "{}") as {
+    campaignId: number;
+    draftVariantId: number;
+    contentRevision: number;
+    auditRunId: number;
+    findings: Array<{ ruleKey: string; message: string }>;
+  };
+  const output = JSON.parse(toolCall?.output_json ?? "{}") as {
+    findings: Array<{ ruleKey: string; message: string }>;
+  };
+
+  expect(input).toMatchObject({
+    campaignId: 1,
+    draftVariantId: 1,
+    contentRevision: 1,
+    auditRunId: 1,
+  });
+  expect(input.findings.map((finding) => finding.ruleKey)).toEqual([
+    "hook",
+    "specificity",
+    "generic_language",
+    "authenticity",
+    "clarity",
+    "safety",
+  ]);
+  expect(output.findings).toEqual(input.findings);
+  expect(JSON.stringify(output)).not.toContain("contract_valid");
+});
+
 test("starts a provider-backed run through the native command boundary", async ({
   page,
 }) => {
@@ -190,14 +231,14 @@ test("starts a provider-backed run through the native command boundary", async (
       providerKey: "custom",
       modelName: "custom-model",
       request: expect.objectContaining({ messages: expect.any(Array) }),
+      tools: [expect.objectContaining({ name: "draft_post" })],
+      toolChoice: "auto",
     },
   });
   expect(commandArgs).not.toHaveProperty("input.provider");
   expect(commandArgs).not.toHaveProperty("input.apiKey");
   expect(commandArgs).not.toHaveProperty("input.baseUrl");
   expect(commandArgs).not.toHaveProperty("input.messages");
-  expect(commandArgs).not.toHaveProperty("input.tools");
-  expect(commandArgs).not.toHaveProperty("input.toolChoice");
   const serializedCommandArgs = JSON.stringify(commandArgs);
   expect(serializedCommandArgs).not.toContain("sk-test-custom-key");
   expect(serializedCommandArgs).not.toContain("https://custom.example.com/v1");
@@ -648,14 +689,14 @@ test("starts an Anthropic provider-backed run through the native command boundar
       providerKey: "anthropic",
       modelName: "claude-sonnet-4-6",
       request: expect.objectContaining({ messages: expect.any(Array) }),
+      tools: [expect.objectContaining({ name: "research_posts" })],
+      toolChoice: "auto",
     },
   });
   expect(commandArgs).not.toHaveProperty("input.provider");
   expect(commandArgs).not.toHaveProperty("input.apiKey");
   expect(commandArgs).not.toHaveProperty("input.baseUrl");
   expect(commandArgs).not.toHaveProperty("input.messages");
-  expect(commandArgs).not.toHaveProperty("input.tools");
-  expect(commandArgs).not.toHaveProperty("input.toolChoice");
   expect(JSON.stringify(commandArgs)).not.toContain("sk-ant-test-key");
 });
 
@@ -1340,6 +1381,7 @@ async function getAgentToolCalls(page: Page): Promise<
     provider_tool_call_id: string;
     tool_name: string;
     status: string;
+    input_json: string;
     output_json: string;
   }>
 > {
@@ -1351,6 +1393,7 @@ async function getAgentToolCalls(page: Page): Promise<
           provider_tool_call_id: string;
           tool_name: string;
           status: string;
+          input_json: string;
           output_json: string;
         }>;
       }
@@ -1695,7 +1738,12 @@ async function createProviderRun(
 
 async function createDryRun(
   page: Page,
-  role: "researcher" | "scorer" | "drafter" | "scheduler" = "researcher",
+  role:
+    | "researcher"
+    | "scorer"
+    | "drafter"
+    | "auditor"
+    | "scheduler" = "researcher",
   playbookKey = "",
   inputSummary = "Validate runtime contracts for this campaign.",
 ): Promise<void> {

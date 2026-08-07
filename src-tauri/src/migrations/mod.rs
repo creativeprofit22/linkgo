@@ -11,6 +11,7 @@ pub mod candidate_queue;
 pub mod comment_publishing;
 pub mod comments;
 pub mod content_calendar;
+pub mod draft_ai_audits;
 pub mod draft_generation;
 pub mod drafts;
 pub mod integrations;
@@ -55,6 +56,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(autopilot_planner::migrations());
     migrations.extend(relevance_scoring::migrations());
     migrations.extend(planner_draft_generation::migrations());
+    migrations.extend(draft_ai_audits::migrations());
     migrations
 }
 

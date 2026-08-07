@@ -11,9 +11,16 @@ import type {
 } from "@/features/campaign-backlog/types";
 import type { RecordCommentAttemptInput } from "@/features/comments/types";
 import type {
+  CompleteDraftAiAuditRunInput,
   CreateDraftInput,
   EligibleDraftWorkflowOption,
+  FailDraftAiAuditRunInput,
+  ReconcileDraftAiAuditLifecycleInput,
+  ReconcileDraftAiAuditLifecycleResult,
+  RunDraftAiAuditInput,
   SaveGeneratedDraftInput,
+  StartDraftAiAuditRunInput,
+  UpdateDraftVariantInput,
 } from "@/features/drafts/types";
 import { IS_TAURI } from "@/lib/env";
 import type {
@@ -63,11 +70,21 @@ type CommentTestApi = {
 };
 
 type DraftTestApi = {
+  completeDraftAiAuditRun: (
+    input: CompleteDraftAiAuditRunInput,
+  ) => Promise<void>;
   createDraft: (input: CreateDraftInput) => Promise<number>;
   listEligibleDraftWorkflowOptions: (
     campaignId: number,
   ) => Promise<EligibleDraftWorkflowOption[]>;
+  failDraftAiAuditRun: (input: FailDraftAiAuditRunInput) => Promise<void>;
+  reconcileDraftAiAuditLifecycle: (
+    input?: ReconcileDraftAiAuditLifecycleInput,
+  ) => Promise<ReconcileDraftAiAuditLifecycleResult>;
+  runDraftAiAudit: (input: RunDraftAiAuditInput) => Promise<number>;
   saveGeneratedDraft: (input: SaveGeneratedDraftInput) => Promise<number>;
+  startDraftAiAuditRun: (input: StartDraftAiAuditRunInput) => Promise<unknown>;
+  updateDraftVariant: (input: UpdateDraftVariantInput) => Promise<void>;
 };
 
 type WorkflowTestApi = {
@@ -118,13 +135,29 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
     };
   });
   void import("@/features/drafts/data").then(
-    ({ createDraft, listEligibleDraftWorkflowOptions, saveGeneratedDraft }) => {
+    ({
+      completeDraftAiAuditRun,
+      createDraft,
+      failDraftAiAuditRun,
+      listEligibleDraftWorkflowOptions,
+      reconcileDraftAiAuditLifecycle,
+      runDraftAiAudit,
+      saveGeneratedDraft,
+      startDraftAiAuditRun,
+      updateDraftVariant,
+    }) => {
       (
         window as unknown as { __LINKGO_DRAFTS_TEST_API__?: DraftTestApi }
       ).__LINKGO_DRAFTS_TEST_API__ = {
+        completeDraftAiAuditRun,
         createDraft,
         listEligibleDraftWorkflowOptions,
+        failDraftAiAuditRun,
+        reconcileDraftAiAuditLifecycle,
+        runDraftAiAudit,
         saveGeneratedDraft,
+        startDraftAiAuditRun,
+        updateDraftVariant,
       };
     },
   );
@@ -152,6 +185,13 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
 function RootShell(): React.ReactNode {
   useEffect(() => {
     if (!IS_TAURI) return;
+    void import("@/features/drafts/data")
+      .then(({ reconcileDraftAiAuditLifecycle }) =>
+        reconcileDraftAiAuditLifecycle(),
+      )
+      .catch((error: unknown) => {
+        console.error("Draft AI audit startup reconciliation failed", error);
+      });
     void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
       void getCurrentWindow()
         .show()

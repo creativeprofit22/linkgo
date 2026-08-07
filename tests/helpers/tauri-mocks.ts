@@ -254,6 +254,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       body: string;
       cta: string;
       hashtags: string;
+      content_revision: number;
       status: DraftVariantStatus;
       created_at: string;
       updated_at: string;
@@ -262,6 +263,38 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     type DraftAudit = {
       id: number;
       draft_variant_id: number;
+      rule_key: string;
+      severity: DraftAuditSeverity;
+      message: string;
+      created_at: string;
+    };
+
+    type DraftAiAuditRunStatus =
+      | "pending"
+      | "running"
+      | "completed"
+      | "failed"
+      | "cancelled";
+
+    type DraftAiAuditRun = {
+      id: number;
+      draft_variant_id: number;
+      content_revision: number;
+      agent_run_id: number | null;
+      provider_key: AgentProviderKey;
+      model_name: string;
+      status: DraftAiAuditRunStatus;
+      summary: string;
+      error_message: string;
+      started_at: string | null;
+      completed_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+
+    type DraftAiAuditFinding = {
+      id: number;
+      audit_run_id: number;
       rule_key: string;
       severity: DraftAuditSeverity;
       message: string;
@@ -938,6 +971,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       drafts: Draft[];
       draftVariants: DraftVariant[];
       draftAudits: DraftAudit[];
+      draftAiAuditRuns: DraftAiAuditRun[];
+      draftAiAuditFindings: DraftAiAuditFinding[];
       draftGenerationRequests: DraftGenerationRequest[];
       approvals: Approval[];
       scheduleJobs: ScheduleJob[];
@@ -984,6 +1019,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftId: number;
       nextDraftVariantId: number;
       nextDraftAuditId: number;
+      nextDraftAiAuditRunId: number;
+      nextDraftAiAuditFindingId: number;
       nextDraftGenerationRequestId: number;
       nextApprovalId: number;
       nextScheduleJobId: number;
@@ -1037,6 +1074,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const drafts: Draft[] = [];
     const draftVariants: DraftVariant[] = [];
     const draftAudits: DraftAudit[] = [];
+    const draftAiAuditRuns: DraftAiAuditRun[] = [];
+    const draftAiAuditFindings: DraftAiAuditFinding[] = [];
     const draftGenerationRequests: DraftGenerationRequest[] = [];
     const approvals: Approval[] = [];
     const scheduleJobs: ScheduleJob[] = [];
@@ -1113,6 +1152,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextDraftId = 1;
     let nextDraftVariantId = 1;
     let nextDraftAuditId = 1;
+    let nextDraftAiAuditRunId = 1;
+    let nextDraftAiAuditFindingId = 1;
     let nextDraftGenerationRequestId = 1;
     let nextApprovalId = 1;
     let nextScheduleJobId = 1;
@@ -1251,6 +1292,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         drafts: cloneRows(drafts),
         draftVariants: cloneRows(draftVariants),
         draftAudits: cloneRows(draftAudits),
+        draftAiAuditRuns: cloneRows(draftAiAuditRuns),
+        draftAiAuditFindings: cloneRows(draftAiAuditFindings),
         draftGenerationRequests: cloneRows(draftGenerationRequests),
         approvals: cloneRows(approvals),
         scheduleJobs: cloneRows(scheduleJobs),
@@ -1298,6 +1341,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextDraftId,
         nextDraftVariantId,
         nextDraftAuditId,
+        nextDraftAiAuditRunId,
+        nextDraftAiAuditFindingId,
         nextDraftGenerationRequestId,
         nextApprovalId,
         nextScheduleJobId,
@@ -1378,6 +1423,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(drafts, snapshot.drafts);
       restoreRows(draftVariants, snapshot.draftVariants);
       restoreRows(draftAudits, snapshot.draftAudits);
+      restoreRows(draftAiAuditRuns, snapshot.draftAiAuditRuns ?? []);
+      restoreRows(draftAiAuditFindings, snapshot.draftAiAuditFindings ?? []);
       restoreRows(
         draftGenerationRequests,
         snapshot.draftGenerationRequests ?? [],
@@ -1445,6 +1492,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftId = snapshot.nextDraftId;
       nextDraftVariantId = snapshot.nextDraftVariantId;
       nextDraftAuditId = snapshot.nextDraftAuditId;
+      nextDraftAiAuditRunId = snapshot.nextDraftAiAuditRunId ?? 1;
+      nextDraftAiAuditFindingId = snapshot.nextDraftAiAuditFindingId ?? 1;
       nextDraftGenerationRequestId = snapshot.nextDraftGenerationRequestId ?? 1;
       nextApprovalId = snapshot.nextApprovalId;
       nextScheduleJobId = snapshot.nextScheduleJobId;
@@ -2605,14 +2654,24 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const ids = new Set(
         values.filter((value): value is number => typeof value === "number"),
       );
-      return agentToolCalls
-        .filter((toolCall) => ids.has(toolCall.agent_run_id))
+      const matchingCalls = agentToolCalls.filter(
+        (toolCall) =>
+          ids.has(toolCall.agent_run_id) &&
+          (!query.includes("tool_name = 'audit_post'") ||
+            toolCall.tool_name === "audit_post") &&
+          (!query.includes("status = 'completed'") ||
+            toolCall.status === "completed"),
+      );
+      return matchingCalls
         .sort((left, right) => {
           if (left.agent_run_id !== right.agent_run_id) {
             return left.agent_run_id - right.agent_run_id;
           }
-          return left.id - right.id;
-        });
+          return query.includes("ORDER BY id DESC")
+            ? right.id - left.id
+            : left.id - right.id;
+        })
+        .slice(0, query.includes("LIMIT 2") ? 2 : undefined);
     }
 
     function selectAgentPlaybookOverrides(
@@ -3752,8 +3811,52 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       ) {
         return selectAgentRunJoin(values);
       }
+      if (
+        query.includes("FROM agent_runs ar") &&
+        query.includes("$.auditRequest.auditRunId") &&
+        query.includes("NOT EXISTS")
+      ) {
+        const limit = Number(values[1] ?? 25);
+        return agentRuns
+          .filter(
+            (run) =>
+              run.agent_role === "auditor" &&
+              ["queued", "running", "waiting_approval"].includes(run.status) &&
+              isOlderThanSqliteModifier(run.updated_at, values[0]) &&
+              !draftAiAuditRuns.some((audit) => audit.agent_run_id === run.id),
+          )
+          .filter((run) => {
+            try {
+              const context = JSON.parse(run.input_context_json) as {
+                auditRequest?: { auditRunId?: unknown };
+              };
+              return Number.isInteger(context.auditRequest?.auditRunId);
+            } catch {
+              return false;
+            }
+          })
+          .sort((left, right) => {
+            const updatedDelta = left.updated_at.localeCompare(
+              right.updated_at,
+            );
+            return updatedDelta !== 0 ? updatedDelta : left.id - right.id;
+          })
+          .slice(0, limit)
+          .map((run) => ({ id: run.id }));
+      }
       if (query.includes("FROM agent_runs ar")) {
         return selectAgentRunValidation(values);
+      }
+      if (
+        query.includes("SELECT status, error_message") &&
+        query.includes("FROM agent_runs")
+      ) {
+        const run = agentRuns.find(
+          (candidate) => candidate.id === Number(values[0] ?? 0),
+        );
+        return run
+          ? [{ status: run.status, error_message: run.error_message }]
+          : [];
       }
       if (
         query.includes("SELECT workflow_run_id, workflow_step_id") &&
@@ -4241,8 +4344,106 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("FROM draft_generation_requests dgr")) {
         return selectDraftGenerationRequestJoin(query, values);
       }
+      if (
+        query.includes("FROM draft_ai_audit_runs dar") &&
+        query.includes("LEFT JOIN agent_runs ar")
+      ) {
+        const limit = Number(values[2] ?? 25);
+        return draftAiAuditRuns
+          .filter(
+            (audit) => audit.status === "pending" || audit.status === "running",
+          )
+          .filter((audit) => {
+            if (audit.agent_run_id === null) {
+              return isOlderThanSqliteModifier(audit.updated_at, values[0]);
+            }
+            const agent = agentRuns.find(
+              (candidate) => candidate.id === audit.agent_run_id,
+            );
+            const latestActivity =
+              agent && agent.updated_at > audit.updated_at
+                ? agent.updated_at
+                : audit.updated_at;
+            return isOlderThanSqliteModifier(latestActivity, values[1]);
+          })
+          .sort((left, right) => {
+            const updatedDelta = left.updated_at.localeCompare(
+              right.updated_at,
+            );
+            return updatedDelta !== 0 ? updatedDelta : left.id - right.id;
+          })
+          .slice(0, limit)
+          .map((audit) => ({
+            id: audit.id,
+            draft_variant_id: audit.draft_variant_id,
+            content_revision: audit.content_revision,
+            agent_run_id: audit.agent_run_id,
+          }));
+      }
+      if (query.includes("FROM draft_ai_audit_runs")) {
+        if (query.includes("WHERE id = $1")) {
+          return draftAiAuditRuns.filter(
+            (run) => run.id === Number(values[0] ?? 0),
+          );
+        }
+        const variantId = Number(values[0] ?? 0);
+        const contentRevision = Number(values[1] ?? 0);
+        return draftAiAuditRuns.filter(
+          (run) =>
+            run.draft_variant_id === variantId &&
+            run.content_revision === contentRevision &&
+            (!query.includes("status IN ('pending', 'running')") ||
+              run.status === "pending" ||
+              run.status === "running"),
+        );
+      }
+      if (query.includes("FROM draft_ai_audit_findings")) {
+        return draftAiAuditFindings.filter(
+          (finding) => finding.audit_run_id === Number(values[0] ?? 0),
+        );
+      }
+      if (
+        query.includes("SELECT\n        campaign_id") &&
+        query.includes("FROM drafts") &&
+        !query.includes("FROM drafts d")
+      ) {
+        const draft = drafts.find((row) => row.id === Number(values[0] ?? 0));
+        return draft
+          ? [
+              {
+                campaign_id: draft.campaign_id,
+                workflow_run_id: null,
+                workflow_step_id: null,
+              },
+            ]
+          : [];
+      }
       if (query.includes("c.status AS campaign_status")) {
         return selectDraftCandidate(values);
+      }
+      if (
+        query.includes("dv.id AS draft_variant_id") &&
+        query.includes("FROM draft_variants dv")
+      ) {
+        const variant = draftVariants.find(
+          (row) => row.id === Number(values[0] ?? 0),
+        );
+        const draft = variant
+          ? drafts.find((row) => row.id === variant.draft_id)
+          : undefined;
+        return variant && draft
+          ? [
+              {
+                draft_variant_id: variant.id,
+                campaign_id: draft.campaign_id,
+                content_revision: variant.content_revision,
+                hook: variant.hook,
+                body: variant.body,
+                cta: variant.cta,
+                hashtags: variant.hashtags,
+              },
+            ]
+          : [];
       }
       if (query.includes("FROM drafts d")) return selectDraftJoin(values);
       if (query.includes("FROM draft_variants")) {
@@ -5410,6 +5611,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           body: String(values[3] ?? ""),
           cta: String(values[4] ?? ""),
           hashtags: String(values[5] ?? ""),
+          content_revision: 1,
           status: "draft",
           created_at: now,
           updated_at: now,
@@ -5417,6 +5619,69 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         draftVariants.push(variant);
         nextDraftVariantId += 1;
         return { lastInsertId: variant.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO draft_ai_audit_runs")) {
+        const draftVariantId = Number(values[0] ?? 0);
+        const contentRevision = Number(values[1] ?? 0);
+        if (
+          draftAiAuditRuns.some(
+            (run) =>
+              run.draft_variant_id === draftVariantId &&
+              run.content_revision === contentRevision &&
+              (run.status === "pending" || run.status === "running"),
+          )
+        ) {
+          throw new Error(
+            "UNIQUE constraint failed: draft_ai_audit_runs.draft_variant_id, draft_ai_audit_runs.content_revision",
+          );
+        }
+        const run: DraftAiAuditRun = {
+          id: nextDraftAiAuditRunId,
+          draft_variant_id: draftVariantId,
+          content_revision: contentRevision,
+          agent_run_id:
+            values[2] === null || values[2] === undefined
+              ? null
+              : Number(values[2]),
+          provider_key: values[3] as AgentProviderKey,
+          model_name: String(values[4] ?? ""),
+          status: "running",
+          summary: "",
+          error_message: "",
+          started_at: now,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        draftAiAuditRuns.push(run);
+        nextDraftAiAuditRunId += 1;
+        return { lastInsertId: run.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("INSERT INTO draft_ai_audit_findings")) {
+        const auditRunId = Number(values[0] ?? 0);
+        const insertionNumber =
+          draftAiAuditFindings.filter(
+            (finding) => finding.audit_run_id === auditRunId,
+          ).length + 1;
+        if (
+          Number(w.__LINKGO_FAIL_DRAFT_AI_AUDIT_FINDING_INSERT_AT__ ?? 0) ===
+          insertionNumber
+        ) {
+          throw new Error("Injected draft AI audit finding insert failure");
+        }
+        const finding: DraftAiAuditFinding = {
+          id: nextDraftAiAuditFindingId,
+          audit_run_id: auditRunId,
+          rule_key: String(values[1] ?? ""),
+          severity: values[2] as DraftAuditSeverity,
+          message: String(values[3] ?? ""),
+          created_at: now,
+        };
+        draftAiAuditFindings.push(finding);
+        nextDraftAiAuditFindingId += 1;
+        return { lastInsertId: finding.id, rowsAffected: 1 };
       }
 
       if (query.includes("INSERT INTO draft_audits")) {
@@ -6740,6 +7005,53 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
       }
 
+      if (
+        query.includes("UPDATE draft_ai_audit_runs") &&
+        query.includes("SET agent_run_id = $1")
+      ) {
+        const agentRunId = Number(values[0] ?? 0);
+        const id = Number(values[1] ?? 0);
+        const variantId = Number(values[2] ?? 0);
+        const contentRevision = Number(values[3] ?? 0);
+        const run = draftAiAuditRuns.find(
+          (candidate) =>
+            candidate.id === id &&
+            candidate.draft_variant_id === variantId &&
+            candidate.content_revision === contentRevision &&
+            candidate.agent_run_id === null &&
+            (candidate.status === "pending" || candidate.status === "running"),
+        );
+        if (!run) return { lastInsertId: 0, rowsAffected: 0 };
+        run.agent_run_id = agentRunId;
+        run.updated_at = now;
+        return { lastInsertId: run.id, rowsAffected: 1 };
+      }
+
+      if (query.includes("UPDATE draft_ai_audit_runs")) {
+        const completed = query.includes("status = 'completed'");
+        const id = Number(values[1] ?? 0);
+        const variantId = Number(values[2] ?? 0);
+        const contentRevision = Number(values[3] ?? 0);
+        const run = draftAiAuditRuns.find(
+          (candidate) =>
+            candidate.id === id &&
+            candidate.draft_variant_id === variantId &&
+            candidate.content_revision === contentRevision &&
+            (candidate.status === "pending" || candidate.status === "running"),
+        );
+        if (!run) return { lastInsertId: 0, rowsAffected: 0 };
+        run.status = completed ? "completed" : "failed";
+        if (completed) {
+          run.summary = String(values[0] ?? "");
+          run.error_message = "";
+        } else {
+          run.error_message = String(values[0] ?? "");
+        }
+        run.completed_at = now;
+        run.updated_at = now;
+        return { lastInsertId: run.id, rowsAffected: 1 };
+      }
+
       if (query.includes("UPDATE draft_variants")) {
         if (query.includes("WHERE draft_id = $1 AND id <> $2")) {
           const draftId = Number(values[0] ?? 0);
@@ -6761,17 +7073,35 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (query.includes("status = 'selected'")) {
             variant.status = "selected";
           } else {
+            let contentChanged = false;
             const columns = parseUpdateColumns(query, "draft_variants");
             columns.forEach((column, index) => {
               const value = values[index];
-              if (column === "hook") variant.hook = String(value ?? "");
-              if (column === "body") variant.body = String(value ?? "");
-              if (column === "cta") variant.cta = String(value ?? "");
-              if (column === "hashtags") variant.hashtags = String(value ?? "");
+              if (column === "hook") {
+                const nextValue = String(value ?? "");
+                contentChanged ||= variant.hook !== nextValue;
+                variant.hook = nextValue;
+              }
+              if (column === "body") {
+                const nextValue = String(value ?? "");
+                contentChanged ||= variant.body !== nextValue;
+                variant.body = nextValue;
+              }
+              if (column === "cta") {
+                const nextValue = String(value ?? "");
+                contentChanged ||= variant.cta !== nextValue;
+                variant.cta = nextValue;
+              }
+              if (column === "hashtags") {
+                const nextValue = String(value ?? "");
+                contentChanged ||= variant.hashtags !== nextValue;
+                variant.hashtags = nextValue;
+              }
               if (column === "status") {
                 variant.status = value as DraftVariantStatus;
               }
             });
+            if (contentChanged) variant.content_revision += 1;
           }
           variant.updated_at = now;
           return { lastInsertId: id, rowsAffected: 1 };
@@ -7907,15 +8237,234 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return result;
     }
 
-    w.__LINKGO_SQL_DRAFTS__ = () => cloneRows(drafts);
-    w.__LINKGO_SQL_DRAFT_VARIANTS__ = () => cloneRows(draftVariants);
-    w.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__ = () =>
-      cloneRows(draftGenerationRequests);
     w.__LINKGO_SQL_AGENT_TOOL_CALLS__ = () => cloneRows(agentToolCalls);
     w.__LINKGO_SQL_AGENT_RUNS__ = () => cloneRows(agentRuns);
     w.__LINKGO_SQL_AGENT_RUN_EVENTS__ = () => cloneRows(agentRunEvents);
     w.__LINKGO_SQL_AGENT_APPROVAL_CHECKPOINTS__ = () =>
       cloneRows(agentApprovalCheckpoints);
+    w.__LINKGO_SQL_DRAFTS__ = () => cloneRows(drafts);
+    w.__LINKGO_SQL_DRAFT_VARIANTS__ = () => cloneRows(draftVariants);
+    w.__LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__ = () => cloneRows(draftAiAuditRuns);
+    w.__LINKGO_SQL_DRAFT_AI_AUDIT_FINDINGS__ = () =>
+      cloneRows(draftAiAuditFindings);
+    w.__LINKGO_SQL_SEED_DRAFT_AI_AUDIT_VARIANT__ = () => {
+      const now = getNow();
+      let campaign = campaigns[0];
+      if (campaign === undefined) {
+        campaign = {
+          id: nextCampaignId,
+          name: "AI audit campaign",
+          product: "Linkgo",
+          audience: "Operators",
+          voice: "Practical",
+          tone: "Direct",
+          auto_pilot: 0,
+          status: "active",
+          daily_post_limit: 1,
+          daily_comment_limit: 3,
+          created_at: now,
+          updated_at: now,
+        };
+        campaigns.push(campaign);
+        nextCampaignId += 1;
+      }
+      const draft: Draft = {
+        id: nextDraftId,
+        campaign_id: campaign.id,
+        candidate_post_id: 0,
+        angle: "AI audit runtime fixture",
+        notes: "",
+        content_intent: "idea",
+        status: "drafting",
+        created_at: now,
+        updated_at: now,
+      };
+      drafts.push(draft);
+      nextDraftId += 1;
+      const variant: DraftVariant = {
+        id: nextDraftVariantId,
+        draft_id: draft.id,
+        variant_number: 1,
+        hook: "Exact revision hook",
+        body: "Exact revision body with a concrete operator detail.",
+        cta: "Review the exact revision.",
+        hashtags: "#Linkgo",
+        content_revision: 1,
+        status: "draft",
+        created_at: now,
+        updated_at: now,
+      };
+      draftVariants.push(variant);
+      nextDraftVariantId += 1;
+      return { ...variant };
+    };
+    w.__LINKGO_SQL_SEED_DRAFT_AI_AUDIT_RECOVERY__ = () => {
+      const staleAt = "2000-01-01T00:00:00.000Z";
+      const seedVariant =
+        w.__LINKGO_SQL_SEED_DRAFT_AI_AUDIT_VARIANT__ as () => DraftVariant;
+      const labels: Record<string, number> = {};
+
+      function createAudit(label: string): DraftAiAuditRun {
+        const variant = seedVariant();
+        const audit: DraftAiAuditRun = {
+          id: nextDraftAiAuditRunId,
+          draft_variant_id: variant.id,
+          content_revision: variant.content_revision,
+          agent_run_id: null,
+          provider_key: "dry_run",
+          model_name: "recovery-fixture",
+          status: "pending",
+          summary: "",
+          error_message: "",
+          started_at: staleAt,
+          completed_at: null,
+          created_at: staleAt,
+          updated_at: staleAt,
+        };
+        draftAiAuditRuns.push(audit);
+        nextDraftAiAuditRunId += 1;
+        labels[label] = audit.id;
+        return audit;
+      }
+
+      function createAgent(
+        label: string,
+        audit: DraftAiAuditRun,
+        status: AgentRunStatus,
+        updatedAt = staleAt,
+      ): AgentRun {
+        const variant = draftVariants.find(
+          (candidate) => candidate.id === audit.draft_variant_id,
+        );
+        const draft = drafts.find(
+          (candidate) => candidate.id === variant?.draft_id,
+        );
+        const agent: AgentRun = {
+          id: nextAgentRunId,
+          campaign_id: draft?.campaign_id ?? 1,
+          workflow_run_id: null,
+          workflow_step_id: null,
+          agent_role: "auditor",
+          provider_key: "dry_run",
+          model_name: "recovery-fixture",
+          playbook_key: "linkedin_humanizer",
+          status,
+          input_summary: `Recovery fixture ${label}`,
+          input_context_json: JSON.stringify({
+            auditRequest: { auditRunId: audit.id },
+          }),
+          output_summary:
+            status === "completed"
+              ? "Preserved terminal provider evidence."
+              : "",
+          error_message: "",
+          iteration_count: status === "queued" ? 0 : 1,
+          started_at: status === "queued" ? null : staleAt,
+          completed_at: status === "completed" ? staleAt : null,
+          created_at: staleAt,
+          updated_at: updatedAt,
+        };
+        agentRuns.push(agent);
+        nextAgentRunId += 1;
+        labels[label] = agent.id;
+        return agent;
+      }
+
+      createAudit("reservedAudit");
+
+      const unlinkedAudit = createAudit("unlinkedAudit");
+      createAgent("orphanAgent", unlinkedAudit, "queued");
+
+      const queuedAudit = createAudit("queuedAudit");
+      const queuedAgent = createAgent("queuedAgent", queuedAudit, "queued");
+      queuedAudit.agent_run_id = queuedAgent.id;
+
+      const runningAudit = createAudit("runningAudit");
+      const runningAgent = createAgent("runningAgent", runningAudit, "running");
+      runningAudit.agent_run_id = runningAgent.id;
+
+      const waitingAudit = createAudit("waitingAudit");
+      const waitingAgent = createAgent(
+        "waitingAgent",
+        waitingAudit,
+        "waiting_approval",
+      );
+      waitingAudit.agent_run_id = waitingAgent.id;
+      const waitingToolCall: AgentToolCall = {
+        id: nextAgentToolCallId,
+        agent_run_id: waitingAgent.id,
+        provider_tool_call_id: "recovery-waiting-tool",
+        tool_name: "audit_post",
+        status: "waiting_approval",
+        requires_approval: 1,
+        input_json: "{}",
+        output_json: "{}",
+        error_message: "",
+        started_at: staleAt,
+        completed_at: null,
+        created_at: staleAt,
+      };
+      agentToolCalls.push(waitingToolCall);
+      nextAgentToolCallId += 1;
+      agentApprovalCheckpoints.push({
+        agent_run_id: waitingAgent.id,
+        pending_tool_call_id: waitingToolCall.id,
+        approval_id: 1,
+        phase: "waiting_approval",
+        messages_json: "[]",
+        iteration_count: 1,
+        created_at: staleAt,
+        updated_at: staleAt,
+      });
+
+      const completedAudit = createAudit("completedAudit");
+      completedAudit.summary = "Preserved audit-side evidence.";
+      const completedAgent = createAgent(
+        "completedAgent",
+        completedAudit,
+        "completed",
+      );
+      completedAudit.agent_run_id = completedAgent.id;
+      agentToolCalls.push({
+        id: nextAgentToolCallId,
+        agent_run_id: completedAgent.id,
+        provider_tool_call_id: "recovery-completed-tool",
+        tool_name: "audit_post",
+        status: "completed",
+        requires_approval: 0,
+        input_json: JSON.stringify({ evidence: "preserve me" }),
+        output_json: JSON.stringify({ evidence: "preserved" }),
+        error_message: "",
+        started_at: staleAt,
+        completed_at: staleAt,
+        created_at: staleAt,
+      });
+      labels.completedToolCall = nextAgentToolCallId;
+      nextAgentToolCallId += 1;
+
+      const freshAudit = createAudit("freshAudit");
+      const freshAgent = createAgent(
+        "freshAgent",
+        freshAudit,
+        "running",
+        getNow(),
+      );
+      freshAudit.agent_run_id = freshAgent.id;
+
+      const unrelatedAudit = createAudit("unrelatedAudit");
+      unrelatedAudit.status = "failed";
+      unrelatedAudit.completed_at = staleAt;
+      const unrelatedAgent = createAgent(
+        "unrelatedAgent",
+        unrelatedAudit,
+        "running",
+      );
+      unrelatedAgent.input_context_json = "{}";
+
+      return { ...labels };
+    };
+    w.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__ = () =>
+      cloneRows(draftGenerationRequests);
     w.__LINKGO_SQL_WORKFLOW_ARTIFACTS__ = () => cloneRows(workflowArtifacts);
     w.__LINKGO_SQL_WORKFLOW_RUNS__ = () => cloneRows(workflowRuns);
     w.__LINKGO_SQL_WORKFLOW_STEPS__ = () => cloneRows(workflowSteps);

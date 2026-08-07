@@ -1,6 +1,9 @@
 import { agentProviderKeySchema } from "@/agent/schemas";
 import { AGENT_PLAYBOOK_KEYS } from "@/agent/playbooks";
-import { DRAFT_CONTENT_INTENTS } from "@/features/drafts/types";
+import {
+  DRAFT_AI_AUDIT_RULE_KEYS,
+  DRAFT_CONTENT_INTENTS,
+} from "@/features/drafts/types";
 import { z } from "zod";
 
 export const draftContentIntentSchema = z.enum(DRAFT_CONTENT_INTENTS);
@@ -19,6 +22,82 @@ export const draftVariantStatusSchema = z.enum([
 ]);
 
 export const draftAuditSeveritySchema = z.enum(["pass", "warning", "block"]);
+
+export const draftAiAuditRuleKeySchema = z.enum(DRAFT_AI_AUDIT_RULE_KEYS);
+
+export const draftAiAuditRunStatusSchema = z.enum([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const draftAiAuditFindingInputSchema = z
+  .object({
+    ruleKey: draftAiAuditRuleKeySchema,
+    severity: draftAuditSeveritySchema,
+    message: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export const draftAiAuditFindingsSchema = z
+  .array(draftAiAuditFindingInputSchema)
+  .length(DRAFT_AI_AUDIT_RULE_KEYS.length)
+  .superRefine((findings, context) => {
+    const ruleKeys = new Set(findings.map((finding) => finding.ruleKey));
+    if (ruleKeys.size !== DRAFT_AI_AUDIT_RULE_KEYS.length) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "findings must contain exactly one entry for each required audit category",
+      });
+    }
+  });
+
+export const runDraftAiAuditSchema = z
+  .object({
+    draftVariantId: z.number().int().positive(),
+    providerKey: agentProviderKeySchema.default("dry_run"),
+    modelName: z.string().trim().max(120).default(""),
+  })
+  .strict();
+
+export const reconcileDraftAiAuditLifecycleSchema = z
+  .object({
+    maxAuditRuns: z.number().int().min(1).max(100).default(25),
+    maxOrphanAgentRuns: z.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+
+export const startDraftAiAuditRunSchema = z
+  .object({
+    draftVariantId: z.number().int().positive(),
+    contentRevision: z.number().int().positive(),
+    agentRunId: z.number().int().positive().nullable().default(null),
+    providerKey: agentProviderKeySchema.default("dry_run"),
+    modelName: z.string().trim().max(120).default(""),
+  })
+  .strict();
+
+export const completeDraftAiAuditRunSchema = z
+  .object({
+    auditRunId: z.number().int().positive(),
+    draftVariantId: z.number().int().positive(),
+    contentRevision: z.number().int().positive(),
+    summary: z.string().trim().max(1000).default(""),
+    findings: draftAiAuditFindingsSchema,
+  })
+  .strict();
+
+export const failDraftAiAuditRunSchema = z
+  .object({
+    auditRunId: z.number().int().positive(),
+    draftVariantId: z.number().int().positive(),
+    contentRevision: z.number().int().positive(),
+    errorMessage: z.string().trim().min(1).max(1000),
+  })
+  .strict();
 
 export const draftVariantInputSchema = z.object({
   hook: z.string().trim().max(500).default(""),

@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "properties": {
+    "campaignId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "draftVariantId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "contentRevision": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "auditRunId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4306,
+      "pattern": "\\S"
+    },
+    "findings": {
+      "minItems": 6,
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ruleKey": {
+            "type": "string",
+            "enum": [
+              "hook",
+              "specificity",
+              "generic_language",
+              "authenticity",
+              "clarity",
+              "safety"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["pass", "warning", "block"]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": ["ruleKey", "severity", "message"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "campaignId",
+    "draftVariantId",
+    "contentRevision",
+    "auditRunId",
+    "text",
+    "findings"
+  ],
+  "additionalProperties": false
+}

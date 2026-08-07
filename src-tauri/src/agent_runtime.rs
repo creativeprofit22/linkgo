@@ -15,6 +15,8 @@ pub struct AgentProviderStreamInput {
     pub provider_key: String,
     pub model_name: String,
     pub request: AgentModelRequestInput,
+    pub tools: Vec<AgentProviderToolSelectionInput>,
+    pub tool_choice: Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +32,12 @@ pub struct AgentMessageInput {
     pub content: String,
     pub tool_name: Option<String>,
     pub provider_tool_call_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentProviderToolSelectionInput {
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -153,10 +161,16 @@ fn tool_payloads(tools: &[AgentProviderToolDefinitionInput]) -> Vec<Value> {
 
 const SCORE_RELEVANCE_INPUT_SCHEMA_JSON: &str =
     include_str!("../schemas/score_relevance.input.schema.json");
+const AUDIT_POST_INPUT_SCHEMA_JSON: &str = include_str!("../schemas/audit_post.input.schema.json");
 
 fn score_relevance_input_schema() -> Value {
     serde_json::from_str(SCORE_RELEVANCE_INPUT_SCHEMA_JSON)
         .expect("bundled score_relevance input schema should be valid JSON")
+}
+
+fn audit_post_input_schema() -> Value {
+    serde_json::from_str(AUDIT_POST_INPUT_SCHEMA_JSON)
+        .expect("bundled audit_post input schema should be valid JSON")
 }
 
 fn native_agent_tool_definitions() -> Vec<AgentProviderToolDefinitionInput> {
@@ -205,22 +219,8 @@ fn native_agent_tool_definitions() -> Vec<AgentProviderToolDefinitionInput> {
         },
         AgentProviderToolDefinitionInput {
             name: "audit_post".to_string(),
-            description: "Returns pass, warning, and block findings for deterministic or future model audit rules.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                    "campaignId": { "type": "integer", "minimum": 1 },
-                    "draftVariantId": { "type": "integer", "minimum": 1 },
-                    "text": { "type": "string", "minLength": 1, "maxLength": 3000 },
-                    "rules": {
-                        "type": "array",
-                        "items": { "type": "string", "minLength": 1, "maxLength": 80 },
-                        "maxItems": 20
-                    }
-                },
-                "required": ["campaignId", "text"]
-            }),
+            description: "Validates and echoes six bounded provider-authored findings for an exact draft content revision and audit run.".to_string(),
+            input_schema: audit_post_input_schema(),
         },
         AgentProviderToolDefinitionInput {
             name: "schedule_post".to_string(),
@@ -255,8 +255,37 @@ fn native_agent_tool_definitions() -> Vec<AgentProviderToolDefinitionInput> {
     ]
 }
 
-fn native_agent_tool_choice() -> Value {
-    json!("auto")
+fn native_agent_provider_options(
+    input: &AgentProviderStreamInput,
+) -> (Vec<AgentProviderToolDefinitionInput>, Value) {
+    let requested_tool_names = input
+        .tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<HashSet<_>>();
+    let tools = native_agent_tool_definitions()
+        .into_iter()
+        .filter(|tool| requested_tool_names.contains(tool.name.as_str()))
+        .collect::<Vec<_>>();
+    let allowed_tool_names = tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<HashSet<_>>();
+
+    let tool_choice = match input.tool_choice.as_str() {
+        Some("auto") if !tools.is_empty() => json!("auto"),
+        Some("required") if !tools.is_empty() => json!("required"),
+        Some("none") => json!("none"),
+        _ => input
+            .tool_choice
+            .get("name")
+            .and_then(Value::as_str)
+            .filter(|name| allowed_tool_names.contains(name))
+            .map(|name| json!({ "name": name }))
+            .unwrap_or_else(|| json!("none")),
+    };
+
+    (tools, tool_choice)
 }
 
 fn openai_tool_choice(tool_choice: &Value) -> Value {
@@ -665,8 +694,7 @@ fn openai_payload(input: &AgentProviderStreamInput) -> Value {
         "max_tokens": 1200,
     });
 
-    let tools = native_agent_tool_definitions();
-    let tool_choice = native_agent_tool_choice();
+    let (tools, tool_choice) = native_agent_provider_options(input);
     payload["tools"] = Value::Array(tool_payloads(&tools));
     payload["tool_choice"] = openai_tool_choice(&tool_choice);
 
@@ -722,8 +750,7 @@ fn anthropic_payload(input: &AgentProviderStreamInput) -> Value {
         payload["system"] = json!(system);
     }
 
-    let tools = native_agent_tool_definitions();
-    let tool_choice = native_agent_tool_choice();
+    let (tools, tool_choice) = native_agent_provider_options(input);
     payload["tools"] = Value::Array(
         tools
             .iter()
@@ -805,8 +832,7 @@ fn gemini_payload(input: &AgentProviderStreamInput) -> Value {
         request["systemInstruction"] = system_instruction;
     }
 
-    let tools = native_agent_tool_definitions();
-    let tool_choice = native_agent_tool_choice();
+    let (tools, tool_choice) = native_agent_provider_options(input);
     request["tools"] = json!([
         {
             "functionDeclarations": tools
@@ -859,8 +885,9 @@ fn execute_openai_compatible(
         return Err(parse_provider_error(&response_json));
     }
 
+    let (tools, _) = native_agent_provider_options(input);
     Ok(AgentProviderStreamResult {
-        chunks: openai_response_chunks(&response_json, &native_agent_tool_definitions())?,
+        chunks: openai_response_chunks(&response_json, &tools)?,
     })
 }
 
@@ -894,8 +921,9 @@ fn execute_anthropic_compatible(
         return Err(parse_provider_error(&response_json));
     }
 
+    let (tools, _) = native_agent_provider_options(input);
     Ok(AgentProviderStreamResult {
-        chunks: anthropic_response_chunks(&response_json, &native_agent_tool_definitions())?,
+        chunks: anthropic_response_chunks(&response_json, &tools)?,
     })
 }
 
@@ -920,8 +948,9 @@ fn execute_gemini_code_assist(
         return Err(parse_provider_error(&response_json));
     }
 
+    let (tools, _) = native_agent_provider_options(input);
     Ok(AgentProviderStreamResult {
-        chunks: gemini_response_chunks(&response_json, &native_agent_tool_definitions())?,
+        chunks: gemini_response_chunks(&response_json, &tools)?,
     })
 }
 
@@ -1028,31 +1057,37 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_tauri_command_boundary_without_provider_options() {
-        let input: AgentProviderStreamInput = serde_json::from_value(json!({
-            "providerKey": "custom",
-            "modelName": "custom-model",
-            "request": { "messages": [{ "role": "user", "content": "Draft a post" }] }
-        }))
-        .expect("Tauri command input should deserialize");
-
-        assert_eq!(input.provider_key, "custom");
-        assert_eq!(input.model_name, "custom-model");
-        assert_eq!(input.request.messages[0].content, "Draft a post");
-    }
-
-    #[test]
-    fn native_adapter_rejects_renderer_supplied_provider_options() {
-        let error = serde_json::from_value::<AgentProviderStreamInput>(json!({
+    fn native_adapter_filters_renderer_tools_through_the_native_allowlist() {
+        let mut input: AgentProviderStreamInput = serde_json::from_value(json!({
             "providerKey": "custom",
             "modelName": "custom-model",
             "request": { "messages": [{ "role": "user", "content": "Draft a post" }] },
-            "tools": [],
+            "tools": [
+                {
+                    "name": "draft_post",
+                    "description": "Untrusted renderer description",
+                    "inputSchema": { "type": "string" }
+                },
+                {
+                    "name": "publish_post",
+                    "description": "Must never cross the allowlist",
+                    "inputSchema": {}
+                }
+            ],
             "toolChoice": "auto"
         }))
-        .expect_err("renderer-side provider options should stay out of the command input");
+        .expect("Tauri command input should consume provider options");
 
-        assert!(error.to_string().contains("unknown field"));
+        let (tools, tool_choice) = native_agent_provider_options(&input);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "draft_post");
+        assert_eq!(tools[0].input_schema["type"], "object");
+        assert_eq!(tools[0].input_schema["additionalProperties"], false);
+        assert_eq!(tool_choice, "auto");
+
+        input.tool_choice = json!({ "name": "publish_post" });
+        let (_, filtered_choice) = native_agent_provider_options(&input);
+        assert_eq!(filtered_choice, "none");
     }
 
     #[test]
@@ -1076,13 +1111,17 @@ mod tests {
                     },
                 ],
             },
+            tools: vec![AgentProviderToolSelectionInput {
+                name: "draft_post".to_string(),
+            }],
+            tool_choice: json!("auto"),
         };
 
         let payload = openai_payload(&input);
 
         assert_eq!(payload["model"], "custom-model");
         assert_eq!(payload["messages"][0]["role"], "system");
-        assert_eq!(payload["tools"][2]["function"]["name"], "draft_post");
+        assert_eq!(payload["tools"][0]["function"]["name"], "draft_post");
         assert_eq!(payload["tool_choice"], "auto");
         assert!(payload.get("provider").is_none());
         assert!(payload.get("apiKey").is_none());
@@ -1110,7 +1149,9 @@ mod tests {
                         "providerToolCallId": "call_123"
                     }
                 ]
-            }
+            },
+            "tools": [{ "name": "draft_post" }],
+            "toolChoice": "auto"
         }))
         .expect("multi-turn provider input should deserialize");
 
@@ -1319,12 +1360,16 @@ mod tests {
                     },
                 ],
             },
+            tools: vec![AgentProviderToolSelectionInput {
+                name: "draft_post".to_string(),
+            }],
+            tool_choice: json!("auto"),
         };
 
         let payload = anthropic_payload(&input);
         assert_eq!(payload["system"], "System guardrails");
         assert_eq!(payload["messages"][0]["role"], "user");
-        assert_eq!(payload["tools"][2]["input_schema"]["type"], "object");
+        assert_eq!(payload["tools"][0]["input_schema"]["type"], "object");
         assert_eq!(payload["tool_choice"], json!({ "type": "auto" }));
         assert_eq!(
             anthropic_messages_url("https://api.minimax.io/anthropic"),
@@ -1372,6 +1417,10 @@ mod tests {
                     },
                 ],
             },
+            tools: vec![AgentProviderToolSelectionInput {
+                name: "draft_post".to_string(),
+            }],
+            tool_choice: json!("auto"),
         };
 
         let payload = gemini_payload(&input);
@@ -1385,7 +1434,7 @@ mod tests {
             "System guardrails"
         );
         assert_eq!(
-            payload["request"]["tools"][0]["functionDeclarations"][2]["parameters"]["type"],
+            payload["request"]["tools"][0]["functionDeclarations"][0]["parameters"]["type"],
             "object"
         );
         assert_eq!(

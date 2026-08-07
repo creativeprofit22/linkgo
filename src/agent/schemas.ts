@@ -283,28 +283,65 @@ export const draftPostOutputSchema = z
   })
   .strict();
 
+export const AUDIT_POST_TEXT_MAX_LENGTH = 4306;
+
+const AUDIT_POST_TEXT_REQUIRED_MESSAGE =
+  "Draft AI audit text must contain at least one non-whitespace character";
+
+export const canonicalAuditTextSchema = z
+  .string()
+  .min(1, AUDIT_POST_TEXT_REQUIRED_MESSAGE)
+  .max(
+    AUDIT_POST_TEXT_MAX_LENGTH,
+    `Draft AI audit text must not exceed ${AUDIT_POST_TEXT_MAX_LENGTH} characters`,
+  )
+  .regex(/\S/u, AUDIT_POST_TEXT_REQUIRED_MESSAGE);
+
+export const AUDIT_POST_FINDING_KEYS = [
+  "hook",
+  "specificity",
+  "generic_language",
+  "authenticity",
+  "clarity",
+  "safety",
+] as const;
+
+const auditPostFindingSchema = z
+  .object({
+    ruleKey: z.enum(AUDIT_POST_FINDING_KEYS),
+    severity: z.enum(["pass", "warning", "block"]),
+    message: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+const auditPostFindingsSchema = z
+  .array(auditPostFindingSchema)
+  .length(AUDIT_POST_FINDING_KEYS.length)
+  .superRefine((findings, context) => {
+    const findingKeys = new Set(findings.map((finding) => finding.ruleKey));
+    if (findingKeys.size !== AUDIT_POST_FINDING_KEYS.length) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "findings must contain exactly one entry for each required audit category",
+      });
+    }
+  });
+
 export const auditPostInputSchema = z
   .object({
     campaignId: positiveIdSchema,
-    draftVariantId: positiveIdSchema.optional(),
-    text: z.string().trim().min(1).max(3000),
-    rules: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+    draftVariantId: positiveIdSchema,
+    contentRevision: positiveIdSchema,
+    auditRunId: positiveIdSchema,
+    text: canonicalAuditTextSchema,
+    findings: auditPostFindingsSchema,
   })
   .strict();
 
 export const auditPostOutputSchema = z
   .object({
-    findings: z
-      .array(
-        z
-          .object({
-            ruleKey: z.string().trim().min(1).max(80),
-            severity: z.enum(["pass", "warning", "block"]),
-            message: z.string().trim().min(1).max(500),
-          })
-          .strict(),
-      )
-      .max(20),
+    findings: auditPostFindingsSchema,
     summary: summarySchema,
   })
   .strict();

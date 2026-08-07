@@ -61,11 +61,13 @@ function toProviderInputSchema(
 function toProviderToolDefinitions(
   tools: AgentToolRegistry,
 ): AgentProviderToolDefinition[] {
-  return Object.values(tools).map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    inputSchema: toProviderInputSchema(tool),
-  }));
+  return Object.values(tools)
+    .filter((tool): tool is AgentToolContract => tool !== undefined)
+    .map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: toProviderInputSchema(tool),
+    }));
 }
 
 function getProviderToolCallId(
@@ -87,7 +89,7 @@ function assertApprovalToolCallIsIsolated(
   const approvalToolNames = [
     ...new Set(
       toolCalls
-        .filter((toolCall) => tools[toolCall.toolName].requiresApproval)
+        .filter((toolCall) => tools[toolCall.toolName]?.requiresApproval)
         .map((toolCall) => toolCall.toolName),
     ),
   ];
@@ -96,6 +98,37 @@ function assertApprovalToolCallIsIsolated(
   throw new Error(
     `Provider turn rejected before tool execution: approval-required tool call ${approvalToolNames.join(", ")} must be isolated; received ${toolCalls.length} tool calls.`,
   );
+}
+
+function assertProviderToolCallsWereOffered(
+  toolCalls: Array<Extract<AgentModelChunk, { type: "tool_call" }>>,
+  tools: AgentToolRegistry,
+): void {
+  const unofferedToolNames = [
+    ...new Set(
+      toolCalls
+        .filter((toolCall) => tools[toolCall.toolName] === undefined)
+        .map((toolCall) => toolCall.toolName),
+    ),
+  ];
+  if (unofferedToolNames.length === 0) return;
+
+  throw new Error(
+    `Provider turn rejected before tool execution: tool call ${unofferedToolNames.join(", ")} was not offered for this run.`,
+  );
+}
+
+function getOfferedTool(
+  tools: AgentToolRegistry,
+  toolName: AgentToolContract["name"],
+): AgentToolContract {
+  const tool = tools[toolName];
+  if (tool === undefined) {
+    throw new Error(
+      `Provider tool call ${toolName} was not offered for this run.`,
+    );
+  }
+  return tool;
 }
 
 export async function runAgentLoop(
@@ -153,6 +186,7 @@ export async function runAgentLoop(
       }
 
       assertApprovalToolCallIsIsolated(turnChunks.toolCalls, tools);
+      assertProviderToolCallsWereOffered(turnChunks.toolCalls, tools);
 
       if (turnChunks.assistantText.length > 0) {
         messages.push(createAssistantTextMessage(turnChunks.assistantText));
@@ -161,7 +195,7 @@ export async function runAgentLoop(
       let completedToolCount = 0;
       for (const [toolCallIndex, chunk] of turnChunks.toolCalls.entries()) {
         assertNotAborted(signal);
-        const tool = tools[chunk.toolName];
+        const tool = getOfferedTool(tools, chunk.toolName);
         const parsedInput = tool.inputSchema.parse(chunk.input);
         const providerToolCallId = getProviderToolCallId(
           chunk.providerToolCallId,

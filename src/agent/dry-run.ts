@@ -1,3 +1,4 @@
+import { AUDIT_POST_FINDING_KEYS } from "@/agent/schemas";
 import {
   DRAFT_CONTENT_INTENTS,
   type DraftContentIntent,
@@ -74,6 +75,29 @@ function getDraftRequestDetails(request: AgentModelRequest): {
   };
 }
 
+function getAuditRequestDetails(request: AgentModelRequest) {
+  const auditRequest = request.inputContext?.auditRequest;
+  const hasDurableAuditRequest =
+    typeof auditRequest === "object" && auditRequest !== null;
+  const metadata = hasDurableAuditRequest
+    ? (auditRequest as Record<string, unknown>)
+    : {};
+  const positiveInteger = (value: unknown, fallback: number) => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  const requestedText = typeof metadata.text === "string" ? metadata.text : "";
+
+  return {
+    draftVariantId: positiveInteger(metadata.draftVariantId, 1),
+    contentRevision: positiveInteger(metadata.contentRevision, 1),
+    auditRunId: positiveInteger(metadata.auditRunId, request.runId),
+    text: hasDurableAuditRequest
+      ? requestedText
+      : "Dry-run audit text with concrete operator detail.",
+  };
+}
+
 function buildToolCall(request: AgentModelRequest): {
   providerToolCallId: string;
   toolName: AgentToolName;
@@ -128,13 +152,34 @@ function buildToolCall(request: AgentModelRequest): {
     };
   }
   if (request.agentRole === "auditor") {
+    const auditDetails = getAuditRequestDetails(request);
+    const findingMessages: Record<
+      (typeof AUDIT_POST_FINDING_KEYS)[number],
+      string
+    > = {
+      hook: "The dry-run hook is concrete but could create stronger tension.",
+      specificity: "The draft includes a concrete operator detail.",
+      generic_language: "The draft avoids generic motivational language.",
+      authenticity:
+        "No unsupported personal experience is stated in the supplied text.",
+      clarity: "The supplied sentence is direct and easy to parse.",
+      safety:
+        "The supplied text contains no external action or publishing request.",
+    };
     return {
       providerToolCallId: `dry-run-${request.runId}-tool-call-2`,
       toolName: "audit_post",
       input: {
         campaignId: request.campaignId,
-        text: "Dry-run audit text with concrete operator detail.",
-        rules: ["hook", "specificity", "external_link"],
+        draftVariantId: auditDetails.draftVariantId,
+        contentRevision: auditDetails.contentRevision,
+        auditRunId: auditDetails.auditRunId,
+        text: auditDetails.text,
+        findings: AUDIT_POST_FINDING_KEYS.map((ruleKey) => ({
+          ruleKey,
+          severity: ruleKey === "hook" ? "warning" : "pass",
+          message: findingMessages[ruleKey],
+        })),
       },
     };
   }

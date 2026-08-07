@@ -2,6 +2,7 @@ import {
   AGENT_TOOL_METADATA,
   agentConversationSchema,
   agentToolRegistry,
+  getAgentToolRegistryForRole,
   buildAgentMessages,
   createConfiguredAgentProvider,
   createToolResultMessage,
@@ -823,7 +824,7 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<void> {
 
   const result = await runAgentLoop({
     provider,
-    tools: agentToolRegistry,
+    tools: getAgentToolRegistryForRole(run.agent_role),
     request,
     maxTurns: 8,
     maxRetries: run.provider_key === "dry_run" ? 0 : 1,
@@ -1126,7 +1127,7 @@ export async function resumeAgentRun(
     };
     const result = await runAgentLoop({
       provider,
-      tools: agentToolRegistry,
+      tools: getAgentToolRegistryForRole(run.agent_role),
       request,
       maxTurns: 8,
       initialTurnCount: checkpoint.iteration_count,

@@ -1,4 +1,8 @@
+import { DEFAULT_AGENT_MODELS } from "@/agent/providers";
 import {
+  auditPostInputSchema,
+  auditPostOutputSchema,
+  canonicalAuditTextSchema,
   draftPostInputSchema,
   draftPostOutputSchema,
 } from "@/agent/schemas";
@@ -12,11 +16,16 @@ import {
 } from "@/workflows/draft-generation";
 import {
   createDraftSchema,
+  completeDraftAiAuditRunSchema,
   dismissDraftGenerationRequestSchema,
+  failDraftAiAuditRunSchema,
   generateDraftVariantsSchema,
   generatedDraftVariantSchema,
+  reconcileDraftAiAuditLifecycleSchema,
+  runDraftAiAuditSchema,
   saveGeneratedDraftSchema,
   setDraftVariantStatusSchema,
+  startDraftAiAuditRunSchema,
   updateDraftSchema,
   updateDraftVariantSchema,
 } from "@/features/drafts/schemas";
@@ -27,10 +36,13 @@ import type {
   CandidateWithTarget,
 } from "@/features/candidate-queue/types";
 import type {
+  CompleteDraftAiAuditRunInput,
   CreateDraftInput,
   Draft,
   DraftAuditFinding,
   DraftAuditSeverity,
+  DraftAiAuditRun,
+  DraftAiAuditRunStatus,
   DraftGenerationRequest,
   DraftGenerationRequestStatus,
   EligibleDraftWorkflowOption,
@@ -41,10 +53,15 @@ import type {
   DraftVariantStatus,
   DraftVariantWithAudits,
   DraftWithDetails,
+  FailDraftAiAuditRunInput,
   GenerateDraftVariantsInput,
   GeneratedDraftVariant,
+  ReconcileDraftAiAuditLifecycleInput,
+  ReconcileDraftAiAuditLifecycleResult,
+  RunDraftAiAuditInput,
   SaveGeneratedDraftInput,
   SetDraftVariantStatusInput,
+  StartDraftAiAuditRunInput,
   UpdateDraftInput,
   UpdateDraftVariantInput,
 } from "@/features/drafts/types";
@@ -89,6 +106,7 @@ interface DraftVariantRow {
   body: string;
   cta: string;
   hashtags: string;
+  content_revision: number;
   status: DraftVariantStatus;
   created_at: string;
   updated_at: string;
@@ -101,6 +119,32 @@ interface DraftAuditRow {
   severity: DraftAuditSeverity;
   message: string;
   created_at: string;
+}
+
+interface DraftAiAuditRunRow {
+  id: number;
+  draft_variant_id: number;
+  content_revision: number;
+  agent_run_id: number | null;
+  provider_key: DraftAiAuditRun["provider_key"];
+  model_name: string;
+  status: DraftAiAuditRunStatus;
+  summary: string;
+  error_message: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DraftAiAuditSnapshotRow {
+  draft_variant_id: number;
+  campaign_id: number;
+  content_revision: number;
+  hook: string;
+  body: string;
+  cta: string;
+  hashtags: string;
 }
 
 interface DraftCandidateRow {
@@ -170,6 +214,22 @@ interface DraftGenerationRequestRow {
 interface DraftToolCallRow {
   input_json: string;
   output_json: string;
+}
+
+interface DraftAuditAgentResultRow {
+  status: string;
+  error_message: string;
+}
+
+interface StaleDraftAiAuditRow {
+  id: number;
+  draft_variant_id: number;
+  content_revision: number;
+  agent_run_id: number | null;
+}
+
+interface StaleDraftAuditAgentRow {
+  id: number;
 }
 
 interface SelectedCountRow {
@@ -342,12 +402,16 @@ function mapDraftVariantBase(row: DraftVariantRow): DraftVariant {
     body: row.body,
     cta: row.cta,
     hashtags: row.hashtags,
+    content_revision: row.content_revision,
     status: row.status,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
 }
 
+function mapDraftAiAuditRun(row: DraftAiAuditRunRow): DraftAiAuditRun {
+  return { ...row };
+}
 
 export function mapDraftAudit(row: DraftAuditRow): DraftAuditFinding {
   return {
@@ -1315,27 +1379,59 @@ export async function updateDraftVariant(
   input: UpdateDraftVariantInput,
 ): Promise<void> {
   const parsed = updateDraftVariantSchema.parse(input);
+  const hasContentUpdate =
+    parsed.hook !== undefined ||
+    parsed.body !== undefined ||
+    parsed.cta !== undefined ||
+    parsed.hashtags !== undefined;
+  if (!hasContentUpdate) return;
+
   const db = await getDb();
   const updates: string[] = [];
   const values: unknown[] = [];
 
-  function addUpdate(column: string, value: unknown): void {
+  function addUpdate(column: string, value: string): void {
     values.push(value);
     updates.push(`${column} = $${values.length}`);
   }
 
-  if (parsed.hook !== undefined) addUpdate("hook", parsed.hook);
-  if (parsed.body !== undefined) addUpdate("body", parsed.body);
-  if (parsed.cta !== undefined) addUpdate("cta", parsed.cta);
-  if (parsed.hashtags !== undefined) addUpdate("hashtags", parsed.hashtags);
-  if (updates.length === 0) return;
-
   await db.execute("BEGIN TRANSACTION");
   try {
+    const currentVariants = await db.select<DraftVariantRow[]>(
+      `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+      [parsed.id],
+    );
+    const currentVariant = currentVariants[0];
+    if (currentVariant === undefined) {
+      throw new Error("Draft variant was not found");
+    }
+
+    if (parsed.hook !== undefined && parsed.hook !== currentVariant.hook) {
+      addUpdate("hook", parsed.hook);
+    }
+    if (parsed.body !== undefined && parsed.body !== currentVariant.body) {
+      addUpdate("body", parsed.body);
+    }
+    if (parsed.cta !== undefined && parsed.cta !== currentVariant.cta) {
+      addUpdate("cta", parsed.cta);
+    }
+    if (
+      parsed.hashtags !== undefined &&
+      parsed.hashtags !== currentVariant.hashtags
+    ) {
+      addUpdate("hashtags", parsed.hashtags);
+    }
+
+    if (updates.length === 0) {
+      await db.execute("COMMIT");
+      return;
+    }
+
     values.push(parsed.id);
     await db.execute(
       `UPDATE draft_variants
-      SET ${updates.join(", ")}, updated_at = datetime('now')
+      SET ${updates.join(", ")},
+          updated_at = datetime('now')
       WHERE id = $${values.length}`,
       values,
     );
@@ -1441,4 +1537,667 @@ export async function setDraftVariantStatus(
 export async function archiveDraft(id: number): Promise<void> {
   const parsed = updateDraftSchema.pick({ id: true }).parse({ id });
   await updateDraft({ id: parsed.id, status: "archived" });
+}
+
+export function buildCanonicalDraftAuditText(
+  variant: Pick<DraftAiAuditSnapshotRow, "hook" | "body" | "cta" | "hashtags">,
+): string {
+  return [variant.hook, variant.body, variant.cta, variant.hashtags]
+    .filter((segment) => segment.length > 0)
+    .join("\n\n");
+}
+
+async function loadDraftAiAuditSnapshot(
+  db: LinkgoDatabase,
+  draftVariantId: number,
+): Promise<DraftAiAuditSnapshotRow> {
+  const rows = await db.select<DraftAiAuditSnapshotRow[]>(
+    `SELECT
+      dv.id AS draft_variant_id,
+      d.campaign_id,
+      dv.content_revision,
+      dv.hook,
+      dv.body,
+      dv.cta,
+      dv.hashtags
+    FROM draft_variants dv
+    INNER JOIN drafts d ON d.id = dv.draft_id
+    WHERE dv.id = $1
+    LIMIT 1`,
+    [draftVariantId],
+  );
+  const snapshot = rows[0];
+  if (snapshot === undefined) throw new Error("Draft variant was not found");
+  return snapshot;
+}
+
+async function linkDraftAiAuditAgentRun(
+  db: LinkgoDatabase,
+  input: {
+    auditRunId: number;
+    draftVariantId: number;
+    contentRevision: number;
+    agentRunId: number;
+  },
+): Promise<void> {
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    const result = await db.execute(
+      `UPDATE draft_ai_audit_runs
+      SET agent_run_id = $1, updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND agent_run_id IS NULL
+        AND status IN ('pending', 'running')`,
+      [
+        input.agentRunId,
+        input.auditRunId,
+        input.draftVariantId,
+        input.contentRevision,
+      ],
+    );
+    if (result.rowsAffected !== 1) {
+      throw new Error("Draft AI audit could not be linked to its agent run");
+    }
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    throw error;
+  }
+}
+
+async function consumeCompletedDraftAiAudit(
+  db: LinkgoDatabase,
+  expected: {
+    campaignId: number;
+    draftVariantId: number;
+    contentRevision: number;
+    auditRunId: number;
+    text: string;
+  },
+  agentRunId: number,
+): Promise<ReturnType<typeof auditPostOutputSchema.parse>> {
+  const agentRows = await db.select<DraftAuditAgentResultRow[]>(
+    "SELECT status, error_message FROM agent_runs WHERE id = $1 LIMIT 1",
+    [agentRunId],
+  );
+  const agent = agentRows[0];
+  if (agent === undefined) throw new Error("Auditor agent run was not found");
+  if (agent.status !== "completed") {
+    throw new Error(agent.error_message || "Auditor agent did not complete");
+  }
+
+  const toolRows = await db.select<DraftToolCallRow[]>(
+    `SELECT input_json, output_json
+    FROM agent_tool_calls
+    WHERE agent_run_id = $1
+      AND tool_name = 'audit_post'
+      AND status = 'completed'
+    ORDER BY id DESC
+    LIMIT 2`,
+    [agentRunId],
+  );
+  if (toolRows.length !== 1 || toolRows[0] === undefined) {
+    throw new Error(
+      "Auditor must return exactly one completed audit_post call",
+    );
+  }
+
+  const toolInput = auditPostInputSchema.parse(
+    JSON.parse(toolRows[0].input_json),
+  );
+  if (
+    toolInput.campaignId !== expected.campaignId ||
+    toolInput.draftVariantId !== expected.draftVariantId ||
+    toolInput.contentRevision !== expected.contentRevision ||
+    toolInput.auditRunId !== expected.auditRunId ||
+    toolInput.text !== expected.text
+  ) {
+    throw new Error(
+      "Auditor tool input did not match the durable audit request",
+    );
+  }
+
+  const output = auditPostOutputSchema.parse(
+    JSON.parse(toolRows[0].output_json),
+  );
+  if (JSON.stringify(output.findings) !== JSON.stringify(toolInput.findings)) {
+    throw new Error(
+      "Auditor output did not preserve provider-authored findings",
+    );
+  }
+  return output;
+}
+
+function boundDraftAiAuditError(caught: unknown): string {
+  const detail =
+    caught instanceof Error ? caught.message : "Draft AI audit failed";
+  if (detail.length <= 1000) return detail || "Draft AI audit failed";
+  return `${detail.slice(0, 999)}…`;
+}
+
+async function settleDraftAiAuditFailure(
+  db: LinkgoDatabase,
+  input: {
+    auditRunId: number;
+    draftVariantId: number;
+    contentRevision: number;
+    agentRunId: number | null;
+    errorMessage: string;
+  },
+): Promise<void> {
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    const run = await getDraftAiAuditRunInTransaction(db, input.auditRunId);
+    assertAuditRunIdentity(run, input);
+    const failedAudit = await db.execute(
+      `UPDATE draft_ai_audit_runs
+      SET status = 'failed',
+        error_message = $1,
+        completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND status IN ('pending', 'running')`,
+      [
+        input.errorMessage,
+        input.auditRunId,
+        input.draftVariantId,
+        input.contentRevision,
+      ],
+    );
+    if (failedAudit.rowsAffected !== 1) {
+      throw new Error("Draft AI audit run is not active");
+    }
+
+    const agentRunId = run.agent_run_id ?? input.agentRunId;
+    if (agentRunId !== null) {
+      const failedAgent = await db.execute(
+        `UPDATE agent_runs
+        SET status = 'failed',
+          error_message = $1,
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+        WHERE id = $2
+          AND status IN ('queued', 'running', 'waiting_approval')`,
+        [input.errorMessage, agentRunId],
+      );
+      if (failedAgent.rowsAffected === 1) {
+        await db.execute(
+          "DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1",
+          [agentRunId],
+        );
+        await db.execute(
+          `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+          VALUES ($1, $2, $3)`,
+          [agentRunId, "run_failed", input.errorMessage],
+        );
+      }
+    }
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    throw error;
+  }
+}
+
+export const DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES = 5;
+export const DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES = 30;
+
+async function failStaleDraftAuditAgent(
+  db: LinkgoDatabase,
+  agentRunId: number,
+  errorMessage: string,
+): Promise<{ failed: boolean; clearedApprovalCheckpoints: number }> {
+  const failedAgent = await db.execute(
+    `UPDATE agent_runs
+    SET status = 'failed',
+      error_message = $1,
+      completed_at = datetime('now'),
+      updated_at = datetime('now')
+    WHERE id = $2
+      AND status IN ('queued', 'running', 'waiting_approval')`,
+    [errorMessage, agentRunId],
+  );
+  if (failedAgent.rowsAffected !== 1) {
+    return { failed: false, clearedApprovalCheckpoints: 0 };
+  }
+
+  const clearedCheckpoints = await db.execute(
+    "DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1",
+    [agentRunId],
+  );
+  await db.execute(
+    `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+    VALUES ($1, $2, $3)`,
+    [agentRunId, "run_failed", errorMessage],
+  );
+  return {
+    failed: true,
+    clearedApprovalCheckpoints: clearedCheckpoints.rowsAffected,
+  };
+}
+
+export async function reconcileDraftAiAuditLifecycle(
+  input: ReconcileDraftAiAuditLifecycleInput = {},
+): Promise<ReconcileDraftAiAuditLifecycleResult> {
+  const parsed = reconcileDraftAiAuditLifecycleSchema.parse(input);
+  const db = await getDb();
+  const failedAuditRunIds: number[] = [];
+  const failedAgentRunIds: number[] = [];
+  let clearedApprovalCheckpointCount = 0;
+  const reservationCutoff = `-${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes`;
+  const executionCutoff = `-${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes`;
+
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    const staleAudits = await db.select<StaleDraftAiAuditRow[]>(
+      `SELECT
+        dar.id,
+        dar.draft_variant_id,
+        dar.content_revision,
+        dar.agent_run_id
+      FROM draft_ai_audit_runs dar
+      LEFT JOIN agent_runs ar ON ar.id = dar.agent_run_id
+      WHERE dar.status IN ('pending', 'running')
+        AND (
+          (
+            dar.agent_run_id IS NULL
+            AND datetime(dar.updated_at) <= datetime('now', $1)
+          )
+          OR (
+            dar.agent_run_id IS NOT NULL
+            AND datetime(
+              CASE
+                WHEN ar.updated_at IS NOT NULL
+                  AND datetime(ar.updated_at) > datetime(dar.updated_at)
+                  THEN ar.updated_at
+                ELSE dar.updated_at
+              END
+            ) <= datetime('now', $2)
+          )
+        )
+      ORDER BY datetime(dar.updated_at) ASC, dar.id ASC
+      LIMIT $3`,
+      [reservationCutoff, executionCutoff, parsed.maxAuditRuns],
+    );
+
+    for (const audit of staleAudits) {
+      const errorMessage =
+        audit.agent_run_id === null
+          ? `Draft AI audit was interrupted before agent linking and remained reserved for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`
+          : `Draft AI audit did not reach terminal settlement within ${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes of its last lifecycle activity.`;
+      const failedAudit = await db.execute(
+        `UPDATE draft_ai_audit_runs
+        SET status = 'failed',
+          error_message = $1,
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+        WHERE id = $2
+          AND draft_variant_id = $3
+          AND content_revision = $4
+          AND status IN ('pending', 'running')`,
+        [
+          errorMessage,
+          audit.id,
+          audit.draft_variant_id,
+          audit.content_revision,
+        ],
+      );
+      if (failedAudit.rowsAffected !== 1) continue;
+      failedAuditRunIds.push(audit.id);
+
+      if (audit.agent_run_id !== null) {
+        const agentResult = await failStaleDraftAuditAgent(
+          db,
+          audit.agent_run_id,
+          errorMessage,
+        );
+        if (agentResult.failed) failedAgentRunIds.push(audit.agent_run_id);
+        clearedApprovalCheckpointCount +=
+          agentResult.clearedApprovalCheckpoints;
+      }
+    }
+
+    const orphanedAgents = await db.select<StaleDraftAuditAgentRow[]>(
+      `SELECT ar.id
+      FROM agent_runs ar
+      WHERE ar.agent_role = 'auditor'
+        AND ar.status IN ('queued', 'running', 'waiting_approval')
+        AND datetime(ar.updated_at) <= datetime('now', $1)
+        AND json_valid(ar.input_context_json) = 1
+        AND json_type(
+          ar.input_context_json,
+          '$.auditRequest.auditRunId'
+        ) = 'integer'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM draft_ai_audit_runs dar
+          WHERE dar.agent_run_id = ar.id
+        )
+      ORDER BY datetime(ar.updated_at) ASC, ar.id ASC
+      LIMIT $2`,
+      [reservationCutoff, parsed.maxOrphanAgentRuns],
+    );
+
+    for (const agent of orphanedAgents) {
+      const errorMessage = `Draft AI audit agent was interrupted before linking and remained orphaned for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`;
+      const agentResult = await failStaleDraftAuditAgent(
+        db,
+        agent.id,
+        errorMessage,
+      );
+      if (agentResult.failed) failedAgentRunIds.push(agent.id);
+      clearedApprovalCheckpointCount += agentResult.clearedApprovalCheckpoints;
+    }
+
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    throw error;
+  }
+
+  return {
+    failedAuditRunIds,
+    failedAgentRunIds,
+    clearedApprovalCheckpointCount,
+  };
+}
+
+export async function runDraftAiAudit(
+  input: RunDraftAiAuditInput,
+): Promise<number> {
+  const parsed = runDraftAiAuditSchema.parse(input);
+  const db = await getDb();
+  const snapshot = await loadDraftAiAuditSnapshot(db, parsed.draftVariantId);
+  const canonicalText = canonicalAuditTextSchema.safeParse(
+    buildCanonicalDraftAuditText(snapshot),
+  );
+  if (!canonicalText.success) {
+    throw new Error(
+      canonicalText.error.issues[0]?.message ??
+        "Draft AI audit text does not satisfy the audit contract",
+    );
+  }
+  const text = canonicalText.data;
+  const modelName =
+    parsed.modelName || DEFAULT_AGENT_MODELS[parsed.providerKey];
+  const auditRun = await startDraftAiAuditRun({
+    draftVariantId: snapshot.draft_variant_id,
+    contentRevision: snapshot.content_revision,
+    providerKey: parsed.providerKey,
+    modelName,
+  });
+  let agentRunId: number | null = null;
+
+  try {
+    agentRunId = await createAgentRun({
+      campaignId: snapshot.campaign_id,
+      agentRole: "auditor",
+      providerKey: parsed.providerKey,
+      modelName,
+      playbookKey: "linkedin_humanizer",
+      inputSummary: `Audit draft variant #${snapshot.draft_variant_id} revision ${snapshot.content_revision}.`,
+      inputContext: {
+        auditRequest: {
+          campaignId: snapshot.campaign_id,
+          draftVariantId: snapshot.draft_variant_id,
+          contentRevision: snapshot.content_revision,
+          auditRunId: auditRun.id,
+          text,
+        },
+      },
+    });
+    await linkDraftAiAuditAgentRun(db, {
+      auditRunId: auditRun.id,
+      draftVariantId: snapshot.draft_variant_id,
+      contentRevision: snapshot.content_revision,
+      agentRunId,
+    });
+    await startAgentRun({ id: agentRunId });
+    const output = await consumeCompletedDraftAiAudit(
+      db,
+      {
+        campaignId: snapshot.campaign_id,
+        draftVariantId: snapshot.draft_variant_id,
+        contentRevision: snapshot.content_revision,
+        auditRunId: auditRun.id,
+        text,
+      },
+      agentRunId,
+    );
+    await completeDraftAiAuditRun({
+      auditRunId: auditRun.id,
+      draftVariantId: snapshot.draft_variant_id,
+      contentRevision: snapshot.content_revision,
+      summary: output.summary,
+      findings: output.findings,
+    });
+  } catch (caught) {
+    const errorMessage = boundDraftAiAuditError(caught);
+    try {
+      await settleDraftAiAuditFailure(db, {
+        auditRunId: auditRun.id,
+        draftVariantId: snapshot.draft_variant_id,
+        contentRevision: snapshot.content_revision,
+        agentRunId,
+        errorMessage,
+      });
+    } catch (settlementError) {
+      throw Object.assign(
+        new Error("Draft AI audit failure could not be settled"),
+        { cause: settlementError },
+      );
+    }
+    throw Object.assign(new Error(errorMessage), { cause: caught });
+  }
+
+  return auditRun.id;
+}
+
+function assertAuditRunIdentity(
+  run: DraftAiAuditRunRow,
+  identity: {
+    draftVariantId: number;
+    contentRevision: number;
+  },
+): void {
+  if (
+    run.draft_variant_id !== identity.draftVariantId ||
+    run.content_revision !== identity.contentRevision
+  ) {
+    throw new Error("Draft AI audit run identity does not match");
+  }
+  if (run.status !== "pending" && run.status !== "running") {
+    throw new Error("Draft AI audit run is not active");
+  }
+}
+
+async function getDraftAiAuditRunInTransaction(
+  db: LinkgoDatabase,
+  auditRunId: number,
+): Promise<DraftAiAuditRunRow> {
+  const rows = await db.select<DraftAiAuditRunRow[]>(
+    "SELECT * FROM draft_ai_audit_runs WHERE id = $1 LIMIT 1",
+    [auditRunId],
+  );
+  const run = rows[0];
+  if (run === undefined) throw new Error("Draft AI audit run was not found");
+  return run;
+}
+
+async function assertDraftRevisionCurrentInTransaction(
+  db: LinkgoDatabase,
+  draftVariantId: number,
+  contentRevision: number,
+  message: string,
+): Promise<void> {
+  const rows = await db.select<
+    Array<Pick<DraftVariantRow, "id" | "content_revision">>
+  >("SELECT id, content_revision FROM draft_variants WHERE id = $1 LIMIT 1", [
+    draftVariantId,
+  ]);
+  const variant = rows[0];
+  if (variant === undefined) throw new Error("Draft variant was not found");
+  if (variant.content_revision !== contentRevision) throw new Error(message);
+}
+
+export async function startDraftAiAuditRun(
+  input: StartDraftAiAuditRunInput,
+): Promise<DraftAiAuditRun> {
+  const parsed = startDraftAiAuditRunSchema.parse(input);
+  const db = await getDb();
+  await db.execute("BEGIN IMMEDIATE");
+
+  try {
+    await assertDraftRevisionCurrentInTransaction(
+      db,
+      parsed.draftVariantId,
+      parsed.contentRevision,
+      "Draft AI audit must start against the current content revision",
+    );
+    const activeRuns = await db.select<DraftAiAuditRunRow[]>(
+      `SELECT * FROM draft_ai_audit_runs
+      WHERE draft_variant_id = $1
+        AND content_revision = $2
+        AND status IN ('pending', 'running')
+      LIMIT 1`,
+      [parsed.draftVariantId, parsed.contentRevision],
+    );
+    if (activeRuns.length > 0) {
+      throw new Error(
+        "An active AI audit already exists for this draft revision",
+      );
+    }
+
+    const result = await db.execute(
+      `INSERT INTO draft_ai_audit_runs (
+        draft_variant_id,
+        content_revision,
+        agent_run_id,
+        provider_key,
+        model_name,
+        status,
+        started_at
+      ) VALUES ($1, $2, $3, $4, $5, 'running', datetime('now'))`,
+      [
+        parsed.draftVariantId,
+        parsed.contentRevision,
+        parsed.agentRunId,
+        parsed.providerKey,
+        parsed.modelName,
+      ],
+    );
+    const run = await getDraftAiAuditRunInTransaction(db, result.lastInsertId);
+    await db.execute("COMMIT");
+    return mapDraftAiAuditRun(run);
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    const detail = error instanceof Error ? error.message : String(error);
+    if (
+      /draft_ai_audit_runs.*UNIQUE|UNIQUE.*draft_ai_audit_runs/iu.test(detail)
+    ) {
+      throw Object.assign(
+        new Error("An active AI audit already exists for this draft revision"),
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+}
+
+export async function completeDraftAiAuditRun(
+  input: CompleteDraftAiAuditRunInput,
+): Promise<void> {
+  const parsed = completeDraftAiAuditRunSchema.parse(input);
+  const db = await getDb();
+  await db.execute("BEGIN IMMEDIATE");
+
+  try {
+    const run = await getDraftAiAuditRunInTransaction(db, parsed.auditRunId);
+    assertAuditRunIdentity(run, parsed);
+    await assertDraftRevisionCurrentInTransaction(
+      db,
+      parsed.draftVariantId,
+      parsed.contentRevision,
+      "Draft content changed before the AI audit completed",
+    );
+
+    for (const finding of parsed.findings) {
+      await db.execute(
+        `INSERT INTO draft_ai_audit_findings (
+          audit_run_id,
+          rule_key,
+          severity,
+          message
+        ) VALUES ($1, $2, $3, $4)`,
+        [parsed.auditRunId, finding.ruleKey, finding.severity, finding.message],
+      );
+    }
+
+    const update = await db.execute(
+      `UPDATE draft_ai_audit_runs
+      SET status = 'completed',
+          summary = $1,
+          error_message = '',
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND status IN ('pending', 'running')`,
+      [
+        parsed.summary,
+        parsed.auditRunId,
+        parsed.draftVariantId,
+        parsed.contentRevision,
+      ],
+    );
+    if (update.rowsAffected !== 1) {
+      throw new Error("Draft AI audit run is not active");
+    }
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    throw error;
+  }
+}
+
+export async function failDraftAiAuditRun(
+  input: FailDraftAiAuditRunInput,
+): Promise<void> {
+  const parsed = failDraftAiAuditRunSchema.parse(input);
+  const db = await getDb();
+  await db.execute("BEGIN IMMEDIATE");
+
+  try {
+    const run = await getDraftAiAuditRunInTransaction(db, parsed.auditRunId);
+    assertAuditRunIdentity(run, parsed);
+    const update = await db.execute(
+      `UPDATE draft_ai_audit_runs
+      SET status = 'failed',
+          error_message = $1,
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND status IN ('pending', 'running')`,
+      [
+        parsed.errorMessage,
+        parsed.auditRunId,
+        parsed.draftVariantId,
+        parsed.contentRevision,
+      ],
+    );
+    if (update.rowsAffected !== 1) {
+      throw new Error("Draft AI audit run is not active");
+    }
+    await db.execute("COMMIT");
+  } catch (error) {
+    await rollbackDraftTransaction(db);
+    throw error;
+  }
 }
