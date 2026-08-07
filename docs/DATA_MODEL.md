@@ -292,6 +292,7 @@ Stores one local drafting workspace for a candidate post.
 | `candidate_post_id` | INTEGER | References `candidate_posts(id)` with cascade delete; unique per draft |
 | `angle`             | TEXT    | Optional operator angle, default empty string                          |
 | `notes`             | TEXT    | Optional operator notes, default empty string                          |
+| `content_intent`    | TEXT    | `event`, `launch`, `idea`, or `community`; defaults to `idea`          |
 | `status`            | TEXT    | `drafting`, `needs_revision`, `ready_for_review`, or `archived`        |
 | `created_at`        | TEXT    | SQLite datetime                                                        |
 | `updated_at`        | TEXT    | SQLite datetime                                                        |
@@ -375,6 +376,30 @@ Stores the normalized provider-authored six-category result only after trusted a
 | `created_at`   | TEXT    | SQLite datetime                                              |
 
 The six accepted categories are `hook`, `specificity`, `generic_language`, `authenticity`, `clarity`, and `safety`. Provider failure, tool failure, identity mismatch, and stale completion leave this table empty for the failed run while preserving linked agent evidence.
+
+### `draft_generation_requests`
+
+Stores each explicit provider-assisted generation attempt before provider execution. Generated JSON remains save-gated.
+
+| Column                    | Type    | Notes                                                                 |
+| ------------------------- | ------- | --------------------------------------------------------------------- |
+| `id`                      | INTEGER | Primary key                                                           |
+| `campaign_id`             | INTEGER | References `campaigns(id)` with cascade delete                        |
+| `candidate_post_id`       | INTEGER | References `candidate_posts(id)` with cascade delete                  |
+| `agent_run_id`            | INTEGER | Nullable provider run provenance                                      |
+| `provider_key`            | TEXT    | Selected provider                                                     |
+| `model_name`              | TEXT    | Selected model                                                        |
+| `playbook_key`            | TEXT    | Optional playbook                                                     |
+| `variant_count`           | INTEGER | New requests require `3`, `4`, or `5`; historical `1`–`2` rows remain |
+| `content_intent`          | TEXT    | `event`, `launch`, `idea`, or `community`; defaults to `idea`         |
+| `workflow_run_id`         | INTEGER | Nullable linked workflow provenance, `ON DELETE SET NULL`             |
+| `workflow_step_id`        | INTEGER | Nullable linked draft step provenance, `ON DELETE SET NULL`           |
+| `angle` / `voice_notes`   | TEXT    | Explicit operator instructions                                        |
+| `status`                  | TEXT    | `pending`, `generated`, `saved`, `failed`, or `dismissed`             |
+| `generated_variants_json` | TEXT    | Bounded generated output awaiting save                                |
+| `created_draft_id`        | INTEGER | Nullable saved draft provenance                                       |
+
+Migration 30 adds intent/workflow provenance, insert/update count guards, and a partial unique index allowing only one `pending` or `generated` request per linked draft step. Failure or dismissal releases that active-step claim. Saving a linked request atomically creates the draft, variants, deterministic audits, one `draft` artifact, workflow events, and the transition to `audit`.
 
 ### `approvals`
 
@@ -731,15 +756,15 @@ Links a workflow and optional step to durable execution/domain provenance.
 | `id`               | INTEGER | Primary key                                                         |
 | `workflow_run_id`  | INTEGER | References `workflow_runs(id)` with cascade delete                  |
 | `workflow_step_id` | INTEGER | Nullable, references `workflow_steps(id)` with `ON DELETE SET NULL` |
-| `artifact_type`    | TEXT    | Migration 29 allows `agent_run` or `candidate_post`                 |
+| `artifact_type`    | TEXT    | Migration 30 allows `agent_run`, `candidate_post`, or `draft`       |
 | `artifact_id`      | INTEGER | Positive polymorphic identifier                                     |
 | `summary`          | TEXT    | Compact provenance summary                                          |
 | `created_at`       | TEXT    | SQLite datetime                                                     |
 | `updated_at`       | TEXT    | SQLite datetime                                                     |
 
-The unique key is `(workflow_run_id, artifact_type, artifact_id)`. Migration 29 rebuilds the table, preserves existing agent artifacts and indexes, then backfills planned score workflows from surviving accepted `source_import_items.candidate_post_id` values with campaign ownership checks.
+The unique key is `(workflow_run_id, artifact_type, artifact_id)`. Migration 29 preserves existing agent artifacts and backfills planner candidate artifacts; Migration 30 rebuilds the table again, preserving IDs, uniqueness, and indexes while adding `draft`.
 
-`candidate_post` is intentionally polymorphic and has no candidate foreign key. Candidate deletion therefore does not delete provenance; scope reads left-join the candidate and report a removed artifact without exposing old source text.
+`candidate_post` and `draft` are intentionally polymorphic and have no domain foreign key. Deletion therefore does not delete provenance; reads left-join the current row and report a removed artifact without exposing old source text.
 
 ### `workflow_step_executions`
 

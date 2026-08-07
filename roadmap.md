@@ -21,8 +21,8 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 | 3 Campaign + autopilot queue          | **Partial / Blocked** | Campaigns, guarded connector-neutral local intake, recurring backlog planning, and the bounded idempotent Roadmap 3D local planner exist. One compliant production connector is the sole remaining access/terms blocker. |
 | 4 Keyword + trend discovery           | **Partial**           | Structured operator-triggered suggestions exist; expansion from real posts and competitor/source imports does not.                                                                                                       |
 | 5 Relevance filtering                 | **Partial**           | Rules-first intake plus attended planner-linked connected-provider scoring, exact-set atomic writes, rationale, and optional low-score rejection exist; unattended/background scoring and a production connector remain. |
-| 6 Draft generation                    | **Partial**           | Save-gated provider variants exist; default 3–5 enforcement and event/launch/idea/community routing do not.                                                                                                              |
-| 7 Humanizer + audit                   | **Partial**           | Revision-scoped AI audit runtime and recovery exist; operator/workflow execution and enforced believable first-person specifics remain.                                                                                 |
+| 6 Draft generation                    | **Implemented (6A)**  | Exactly 3–5 save-gated provider variants use fixed event, launch, idea, or community prompt routes and optional planner workflow provenance.                                                                             |
+| 7 Humanizer + audit                   | **Partial**           | Revision-scoped AI audit runtime and recovery exist; operator/workflow execution and enforced believable first-person specifics remain.                                                                                  |
 | 8 Quality scoring loop                | **Not started**       | No persisted category scorecard, threshold rewrite, or automatic re-score loop exists. Manual edit and re-audit is only a foundation.                                                                                    |
 | 9 Content calendar                    | **Implemented**       | Purpose, angle, format, visual direction, CTA, and the approval bridge exist.                                                                                                                                            |
 | 10 Approval gate                      | **Partial**           | Durable human approvals and runtime continuation exist; shareable review links and wait URLs do not.                                                                                                                     |
@@ -37,16 +37,17 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 | 19 Persistent task backlog            | **Implemented**       | One campaign-scoped cross-feature backlog now adds recurring due work, owner labels, lifecycle transitions, atomic successors, and bounded history to the durable feature stores.                                        |
 | 20 Error queue                        | **Partial**           | A fixable queue and transitions exist; rejected-draft and low-performance automatic items do not.                                                                                                                        |
 
-## Current delivery sequence: Roadmap 3
+## Current delivery sequence: Roadmap 6
 
-Roadmap 3 remains **Partial / Blocked** until one compliant production source connector exists. Roadmap 3D's bounded, idempotent local planning slice is complete, and Roadmap 5A now executes its durable candidate handoff only after an operator confirms a connected provider in Workflows.
+Roadmap 3 remains **Partial / Blocked** until one compliant production source connector exists. Its local path is complete through bounded planning, attended scoring, and save-gated planner-linked draft generation.
 
 1. **3A — Local source import foundation (complete):** Bounded JSON import, per-row validation, shared candidate dedupe, durable batch outcomes, and reviewable rejection reasons.
 2. **3B — Candidate policy guardrails (complete):** Age, source, banned-topic, and already-contacted rules run before enforced intake can write candidate artifacts.
 3. **3C — Persistent campaign backlog (complete):** Campaign due work, Operator/Linkgo responsibility, daily/weekly recurrence, immutable history, and atomic future successors.
 4. **3D — Autopilot planner (complete):** Connector-neutral local source contracts and a bounded, idempotent native planner create linked scoring backlog/workflow work and exact candidate artifacts for active `auto_pilot` campaigns. Research is complete and score is pending.
 5. **5A — Planner-linked relevance scoring (complete slice):** An operator can confirm a connected provider, exact scope, threshold, and optional low-score rejection in Workflows. Exact score sets commit atomically and synchronize workflow/backlog state. The native planner remains model-free.
-6. **Production connector (blocked):** Complete Roadmap 3 with one remote source connector only after its API access, terms, permissions, and permitted use are verified.
+6. **6A — Planner-linked draft generation (complete):** Route `event`, `launch`, `idea`, or `community`; generate exactly 3–5 provider-authored variants; keep linked work on `draft` until explicit save; then attach the draft artifact and start `audit`.
+7. **Production connector (blocked):** Complete Roadmap 3 with one remote source connector only after its API access, terms, permissions, and permitted use are verified.
 
 The safe default remains local structured source import. Arbitrary LinkedIn feed search, scraping, browser automation, and autonomous external actions are excluded.
 
@@ -98,7 +99,7 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 
 **Remaining:** Add unattended/background scoring ownership only after its lifecycle is designed, and complete one compliant production source connector. Roadmap 5 remains partial.
 
-## 6. Draft generation — Partial
+## 6. Draft generation — Roadmap 6A complete
 
 - Create 3-5 LinkedIn draft variants per approved idea.
 - Pattern: `sergebulaev/linkedin-skills/skills/linkedin-post-writer/SKILL.md`.
@@ -106,9 +107,9 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 - Route by type: events, launches, ideas, community.
 - Pattern: `getnao/sylph/.claude/skills/linkedin/SKILL.md`.
 
-**Evidence:** Provider-generated variants exist behind an explicit save gate.
+**Evidence:** Provider-assisted generation enforces exactly 3–5 variants and one fixed content intent (`event`, `launch`, `idea`, or `community`). Optional planner workflow provenance is claimed before the provider call. The durable request and agent evidence persist before execution; exact `draft_post` identity, intent, count, and normalized variants are validated before generated text is held for review. Explicit save atomically creates the draft, variants, deterministic audits, one draft artifact, workflow events, and the transition to `audit`. Failure or dismissal blocks linked work and releases the active-request claim for retry.
 
-**Remaining:** Enforce 3–5 variants by default and route prompts by events, launches, ideas, and community.
+**Remaining:** No Roadmap 6A implementation gap. Background generation, automatic rewrite loops, approval creation, scheduling, publishing, scraping, and production source ingestion remain outside this slice.
 
 ## 7. Humanizer + audit pass — Partial
 

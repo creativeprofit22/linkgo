@@ -143,6 +143,25 @@ Delivered in this slice:
 
 Roadmap 5 remains partial because unattended/background scoring ownership and the production connector are not delivered. Roadmap 11 gains candidate artifact flow but remains partial. The native planner stays model-free and never invokes this attended executor path.
 
+### Roadmap 6A planner-linked draft generation
+
+Roadmap coverage:
+
+- Section 6: exactly 3–5 provider-assisted variants with fixed event/launch/idea/community intent routes.
+- Section 11: scored planner candidate artifacts flow into a save-gated draft step and saved draft artifact.
+- Section 16: durable request-before-provider execution, bounded untrusted reference context, duplicate active-step prevention, and atomic rollback.
+
+Delivered in this slice:
+
+- Migration 30 with checked content intent, linked request provenance, new-request count guards, active-step uniqueness, and `draft` workflow artifacts.
+- Four code-owned intent prompt routes and exact `draft_post` input/output validation.
+- Optional workflow selection for eligible scored candidate artifacts while retaining manual and ad-hoc drafting.
+- Successful generation held at `draft` until explicit save; failure/dismissal blocks and terminal retry resumes.
+- One save transaction for draft/variant/audit writes, request settlement, artifact creation, workflow events, and advancement to `audit`.
+- Draft/request intent and workflow provenance UI, draft artifact chips, removed-draft reporting, 320-pixel reflow, and accessibility coverage.
+
+Roadmap 6A adds no background generation, AI audit/rewrite loop, approval creation, scheduling, publishing, scraping, or production source connector.
+
 ### Drafting + audit slice
 
 Roadmap coverage:

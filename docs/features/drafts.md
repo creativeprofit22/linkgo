@@ -19,7 +19,7 @@ AI draft generation is operator-triggered and save-gated: generated text stays i
 
 ## Schema
 
-Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, and Migration 31 in `draft_ai_audits.rs`.
+Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, Migration 30 in `planner_draft_generation.rs`, and Migration 31 in `draft_ai_audits.rs`.
 
 Tables:
 
@@ -37,6 +37,9 @@ Key constraints:
 - `draft_audits.severity` is limited to `pass`, `warning`, or `block`.
 - All draft tables cascade when their campaign or candidate source is deleted.
 - `draft_generation_requests.status` is limited to `pending`, `generated`, `saved`, `failed`, or `dismissed`.
+- New provider requests require exactly 3, 4, or 5 variants; historical 1–2 variant requests remain readable.
+- Drafts and requests persist one fixed content intent: `event`, `launch`, `idea`, or `community`.
+- Linked requests persist workflow run/step provenance, with one active request per draft step.
 - Generation requests keep agent-run provenance and generated variants as bounded JSON until the operator saves them.
 - Variant text changes increment `content_revision`; each active AI audit is unique by variant and revision.
 - Each AI audit has at most one linked agent run, and normalized findings are unique by audit run and category.
@@ -68,9 +71,11 @@ Data functions live in `src/features/drafts/data.ts`:
 - `setDraftVariantStatus(input)`
 - `archiveDraft(id)`
 
-`generateDraftVariants` validates campaign/candidate eligibility, starts a drafter agent run with `draft_post`, stores generated variants as a local request, and records failures when the model does not return valid tool output.
+`generateDraftVariants` persists the durable request before provider execution. It uses one code-owned intent route, puts candidate/campaign text only in bounded untrusted reference data, and requires `draft_post` arguments to carry exactly 3–5 provider-authored `hook`/`body`/`cta`/`hashtags` variants. The completed tool call must preserve those normalized variants and match the durable request ID, campaign, candidate, intent, and exact count before JSON persistence.
 
-`saveGeneratedDraft` requires a `generated` request, revalidates candidate eligibility, converts generated hashtags to the existing draft shape, and calls `createDraft` so deterministic audits and candidate status updates remain centralized.
+`src/workflows/draft-generation.ts` validates optional planner scope, resumes the linked draft step, and keeps the agent run detached from that step so generic reconciliation cannot advance it. Provider failure or operator dismissal blocks linked work and permits a terminal-history retry.
+
+`saveGeneratedDraft` requires a `generated` request and runs one immediate transaction. It revalidates candidate/workflow scope, creates the draft, variants, and audits, marks the request saved, adds one `draft` workflow artifact, completes `draft`, starts `audit`, and appends lifecycle events. Any failure rolls back every write.
 
 `createDraft` validates the candidate, rejects archived campaigns, rejected candidates, and candidates that already have a draft, inserts the draft and variants in a transaction, writes audit rows, and updates `candidate_posts.status` to `drafted`.
 
@@ -113,11 +118,11 @@ The UI shows passing findings for hard blockers so operators can see why a varia
 - Summary cards for total drafts, ready-for-review drafts, blocked variants, selected variants, and generated drafts pending.
 - Draft cards with candidate source context and variant cards.
 
-`GenerateDraftDialog` captures candidate, provider, model, playbook, variant count, angle, and voice notes. It defaults to `dry_run`, the provider catalog's default model, and the LinkedIn Writer playbook.
+`GenerateDraftDialog` captures candidate, provider, model, playbook, a 3/4/5 count, one of four fixed content intents, optional eligible workflow scope, angle, and voice notes. A single eligible workflow defaults selected; multiple matches require an explicit workflow or ad-hoc choice. Linked scope explains that advancement happens only on save.
 
 `DraftGenerationRequestCard` shows generated, failed, dismissed, and saved request states. Generated requests expose `Save as draft` and `Dismiss`; failed requests show the error and can be dismissed.
 
-`AddDraftDialog` captures candidate, angle, notes, and one to five manual variants. It excludes rejected and already-drafted candidates, and disables draft creation for archived campaigns so the UI matches the `createDraft` data guard.
+`AddDraftDialog` captures candidate, content intent, angle, notes, and one to five manual variants. It excludes rejected and already-drafted candidates, and disables draft creation for archived campaigns so the UI matches the `createDraft` data guard.
 
 `DraftVariantCard` supports:
 

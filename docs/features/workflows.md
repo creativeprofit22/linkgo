@@ -19,12 +19,14 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Append-only workflow events for run and step progress.
 - Operator notes in workflow history.
 - Executor-created `agent_run` artifacts auto-linked to workflow runs and steps.
-- Agent-run artifact chips plus one aggregate current/unscored/scored/removed candidate-scope summary.
+- Agent-run and saved-draft artifact chips plus one aggregate current/unscored/scored/removed candidate-scope summary.
 - Campaign filtering and archived-campaign mutation blocking.
 - Roadmap 3D origin projections for planner-created runs: `Autopilot plan #… · source batch #…`.
 - Planner-created runs start queued with research complete, score pending, and exact durable candidate artifacts; no executor starts automatically.
 - Attended connected-provider **Score batch** confirmation with exact scope, provider/model, threshold, and unchecked low-score rejection.
 - Race-safe score attempts, all-scored advance, all-removed block, provider retry, and linked Backlog reconciliation.
+- Optional planner-linked draft generation from scored candidate artifacts, held at `draft` until explicit save.
+- Atomic save creates one draft artifact and advances the workflow to `audit`; failure/dismissal blocks and permits retry.
 - Local SQLite persistence through Tauri migrations.
 
 ## Intentionally not implemented
@@ -34,7 +36,7 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Scraping or LinkedIn API calls.
 - Background workflow/model execution, cron, or unattended scoring.
 - Manual artifact pickers.
-- Automatic links to drafts, approvals, schedules, or metrics. Planner origin links cover the source batch, plan, backlog item, and candidate scope.
+- Automatic links to approvals, schedules, or metrics. Draft artifacts are created only by explicit generated-draft save.
 - Candidate artifact pickers or source-content rendering; planner candidate artifacts are created natively and aggregated.
 - Generic arbitrary workflow builder.
 - Safety/error queue tables.
@@ -55,7 +57,7 @@ Stores append-only lifecycle events for run creation, start/resume, step changes
 
 ### `workflow_artifacts`
 
-Links workflow runs and optional workflow steps to artifacts. Migration 29 allows `agent_run` and `candidate_post`. The planner creates candidate artifacts in its materialization transaction; the foreground executor creates agent artifacts. Candidate deletion leaves a visibly removed provenance artifact.
+Links workflow runs and optional workflow steps to artifacts. Migration 30 allows `agent_run`, `candidate_post`, and `draft`. The planner creates candidate artifacts, the foreground executor creates agent artifacts, and the generated-draft save gate creates draft artifacts. Candidate or draft deletion leaves visibly removed provenance without rendering deleted source text.
 
 ### `workflow_step_executions`
 
@@ -79,6 +81,7 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 4. A restricted native command claims the attempt, creates the scorer run/artifact, and projects workflow/backlog state in one pinned `BEGIN IMMEDIATE` transaction; the provider call starts only after commit.
 5. The model must return exactly one score/rationale per attached unscored candidate. A native immediate transaction commits the complete set or nothing.
 6. Native result reconciliation completes the execution/score step, starts `draft`, and completes the linked backlog atomically. Failure blocks linked work and exposes retry. All-scored advances and all-removed blocks through native no-work settlement without a provider call.
+7. At `draft`, the operator may launch a save-gated request for an eligible scored candidate. Generation leaves the step running; only explicit save atomically attaches the draft and starts `audit`.
 
 ## Manual lifecycle
 
@@ -110,5 +113,6 @@ Playwright covers:
 - Executor-created agent run artifact chips.
 - Workflows tab rendering in the app shell.
 - Planner candidate artifact linkage, bounded provider context, exact/atomic scoring, optional rejection, stale/cross-campaign rollback, provider retry, duplicate actions, all-scored/all-removed paths, provider/archive/kill-switch gates, cross-surface reconciliation, and dialog accessibility.
+- Planner-linked draft scope, trusted prompt boundaries, exact counts/intents, save-only advancement, atomic rollback, draft artifacts, ad-hoc behavior, and narrow dialog reflow.
 
 Rust tests assert migrations plus two-connection claim exclusion, complete score rollback, stale/cross-campaign zero-write behavior, and workflow/execution/backlog reconciliation.

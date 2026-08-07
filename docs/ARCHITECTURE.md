@@ -46,6 +46,14 @@ The claim transaction commits before any provider request. Credentials stay insi
 
 All-scored scope advances without a provider call. All-removed scope blocks without a provider call. Provider failures leave a durable failed attempt and a visible attended retry. The native planner never imports or calls this model orchestration.
 
+## Planner-linked draft boundary
+
+`src/workflows/draft-generation.ts` owns optional workflow scope validation and draft-step lifecycle; `src/features/drafts/data.ts` owns provider request persistence and transaction-aware draft writes. A generation request commits before the provider starts. The agent run carries `workflow_run_id` but deliberately omits `workflow_step_id`, preventing generic agent reconciliation from completing the human-gated draft step.
+
+The trusted prompt summary contains only code-owned intent instructions plus explicit operator angle/voice notes. Campaign and candidate fields live in bounded `input_context_json` reference data and are serialized between untrusted-data delimiters. The `draft_post` arguments carry the provider-authored variants; completed input and output must preserve those normalized variants and match the durable request ID, campaign, candidate, intent, and exact 3–5 count.
+
+Provider success leaves linked `draft` work running. Only explicit save uses one transaction to create the draft, variants, deterministic audits, request settlement, draft artifact, workflow events, and transition to `audit`. Provider failure or dismissal blocks the linked step and releases the partial unique active-request claim for retry. No background generation, AI rewrite loop, approval creation, scheduling, publishing, scraping, or production connector is part of this boundary.
+
 ## Feature slice contract
 
 Each new feature must add:
