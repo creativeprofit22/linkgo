@@ -15,11 +15,11 @@ The feature stores:
 
 Creating a draft marks the source candidate as `drafted` in the Candidate Queue.
 
-AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. A callable data/runtime API can audit one persisted variant revision, but this slice does not add a UI trigger, workflow automation, automatic retries or resume, AI rewrites, LinkedIn scraping, scheduling, publishing, or comment automation.
+AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. A saved planner-linked draft can then be audited through an explicit human-triggered workflow action; ad-hoc/manual AI audits retain their existing callable data/runtime API. Neither path performs AI rewrites, creates or grants approval, schedules, publishes, scrapes LinkedIn, or automates comments.
 
 ## Schema
 
-Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, Migration 30 in `planner_draft_generation.rs`, and Migration 31 in `draft_ai_audits.rs`.
+Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, Migration 30 in `planner_draft_generation.rs`, Migration 31 in `draft_ai_audits.rs`, and Migration 32 in `planner_draft_audits.rs`.
 
 Tables:
 
@@ -43,6 +43,7 @@ Key constraints:
 - Generation requests keep agent-run provenance and generated variants as bounded JSON until the operator saves them.
 - Variant text changes increment `content_revision`; each active AI audit is unique by variant and revision.
 - Each AI audit has at most one linked agent run, and normalized findings are unique by audit run and category.
+- Migration 32 gives a planner-owned AI audit at most one `workflow_step_execution` link; existing and manual audit rows remain valid with no execution link.
 
 See `docs/DATA_MODEL.md` for column-level details.
 
@@ -77,11 +78,19 @@ Data functions live in `src/features/drafts/data.ts`:
 
 `saveGeneratedDraft` requires a `generated` request and runs one immediate transaction. It revalidates candidate/workflow scope, creates the draft, variants, and audits, marks the request saved, adds one `draft` workflow artifact, completes `draft`, starts `audit`, and appends lifecycle events. Any failure rolls back every write.
 
+For a planner-linked saved draft, **Audit all saved variants** starts attended serial execution. The workflow audits every variant's current `content_revision` in ascending `variant_number` order. Each audit inherits the saved generation request's provider and model; a blank saved model resolves through that provider's default model. A completed audit for the same current revision is skipped, while historical findings and audits for older revisions remain evidence.
+
+Each variant claim transaction validates saved request, campaign, draft, artifact, and workflow provenance; creates and links the workflow execution, AI audit, and auditor agent; and reserves only the next unaudited current revision before provider work begins. Success transactionally settles that execution. For the final variant, its six findings, audit and execution completion, `audit` step completion, and transition of `approve` and the workflow to `waiting_approval` commit atomically.
+
+Failure transactionally fails the audit, agent, execution, audit step, and workflow, clears any agent approval checkpoint, and records failure history. Execution stops at that variant. The operator must explicitly choose **Resume variant audits**; resume skips current revisions already completed and retries from the failed/next unaudited variant rather than automatically retrying.
+
+Planner-linked claims with no lifecycle activity for 15 minutes are reconciled transactionally as failed and expose the same explicit Resume path. This linked recovery is separate from the general manual-audit reconciliation described below. Warning and `block` AI findings are retained for human review but do not automatically block the transition to `approve`; approval itself remains a human waiting checkpoint.
+
 `createDraft` validates the candidate, rejects archived campaigns, rejected candidates, and candidates that already have a draft, inserts the draft and variants in a transaction, writes audit rows, and updates `candidate_posts.status` to `drafted`.
 
 `updateDraftVariant` updates only provided fields, deletes old audit rows, writes fresh deterministic audit rows, and updates the parent draft timestamp. SQLite increments `content_revision` only when stored hook, body, CTA, or hashtags change.
 
-## AI auditor runtime ownership
+## Manual AI auditor runtime ownership
 
 `runDraftAiAudit` snapshots the variant and campaign, builds the canonical text by preserving each non-empty `hook`, `body`, `cta`, and `hashtags` segment byte-for-byte and joining them with two newlines, then reserves the current revision before any provider call. It creates an `auditor` agent run with the `linkedin_humanizer` playbook and persists the campaign ID, variant ID, revision, audit-run ID, and exact text under `input_context_json.auditRequest`.
 
@@ -138,9 +147,10 @@ Selecting a blocked variant is rejected by the data API with `Blocked variants c
 
 The committed audit coverage includes:
 
-- `tests/draft-ai-audits.spec.ts` for exact identity/text handoff, six-finding completion, provider/tool/identity/stale-revision failures, no-op versus real edits, atomic rollback, bounded startup reconciliation, crash boundaries, retries, and evidence preservation.
+- `tests/draft-ai-audits.spec.ts` for the unchanged manual audit path: exact identity/text handoff, six-finding completion, provider/tool/identity/stale-revision failures, no-op versus real edits, atomic rollback, bounded startup reconciliation, crash boundaries, retries, and evidence preservation.
+- `tests/workflows.spec.ts` for attended planner-linked serial audit order, inherited provider/default model, completed-current skipping, explicit failure Resume, revision changes, 15-minute stale recovery, provenance and duplicate-claim rejection, findings that do not auto-block approval, and atomic claim/fail/final settlement boundaries.
 - `tests/agent-schema-contract.spec.ts`, `tests/agent-tool-contracts.spec.ts`, and `tests/agent-runtime.spec.ts` for the native/frontend `audit_post` contract, canonical-text bounds, auditor allowlisting, and dry-run persistence.
-- Rust tests in `src-tauri/src/migrations/draft_ai_audits.rs` for migration ordering, revision triggers, run/finding constraints, retry release, and delete behavior.
+- Rust tests in `src-tauri/src/migrations/draft_ai_audits.rs`, `src-tauri/src/migrations/planner_draft_audits.rs`, and `src-tauri/src/planner_draft_audits.rs` for migration ordering and constraints plus transactional planner claim, failure, completion, and stale recovery.
 
 Run:
 

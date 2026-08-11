@@ -107,6 +107,17 @@ export type WorkflowStepStatus = (typeof WORKFLOW_STEP_STATUSES)[number];
 export type WorkflowEventType = (typeof WORKFLOW_EVENT_TYPES)[number];
 export type WorkflowArtifactType = (typeof WORKFLOW_ARTIFACT_TYPES)[number];
 
+export interface PlannerDraftAuditClaim {
+  executionId: number;
+  auditRunId: number;
+  agentRunId: number;
+  workflowRunId: number;
+  workflowStepId: number;
+  draftId: number;
+  draftVariantId: number;
+  contentRevision: number;
+}
+
 export interface WorkflowRun {
   id: number;
   campaign_id: number;

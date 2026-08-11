@@ -14,6 +14,7 @@ import {
   completeLinkedDraftSaveInTransaction,
   validateLinkedDraftSaveInTransaction,
 } from "@/workflows/draft-generation";
+import { reconcileStaleNativePlannerDraftAudits } from "@/workflows/draft-audit-commands";
 import {
   createDraftSchema,
   completeDraftAiAuditRunSchema,
@@ -47,6 +48,7 @@ import type {
   DraftAiAuditFinding,
   DraftAiAuditRun,
   DraftAiAuditRunStatus,
+  DraftAiAuditSnapshot,
   DraftGenerationRequest,
   DraftGenerationRequestStatus,
   EligibleDraftWorkflowOption,
@@ -131,6 +133,7 @@ interface DraftAiAuditRunRow {
   draft_variant_id: number;
   content_revision: number;
   agent_run_id: number | null;
+  workflow_step_execution_id: number | null;
   provider_key: DraftAiAuditRun["provider_key"];
   model_name: string;
   status: DraftAiAuditRunStatus;
@@ -140,16 +143,6 @@ interface DraftAiAuditRunRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
-}
-
-interface DraftAiAuditSnapshotRow {
-  draft_variant_id: number;
-  campaign_id: number;
-  content_revision: number;
-  hook: string;
-  body: string;
-  cta: string;
-  hashtags: string;
 }
 
 interface DraftCandidateRow {
@@ -1618,18 +1611,33 @@ export async function archiveDraft(id: number): Promise<void> {
 }
 
 export function buildCanonicalDraftAuditText(
-  variant: Pick<DraftAiAuditSnapshotRow, "hook" | "body" | "cta" | "hashtags">,
+  variant: Pick<DraftAiAuditSnapshot, "hook" | "body" | "cta" | "hashtags">,
 ): string {
   return [variant.hook, variant.body, variant.cta, variant.hashtags]
     .filter((segment) => segment.length > 0)
     .join("\n\n");
 }
 
-async function loadDraftAiAuditSnapshot(
+export function parseCanonicalDraftAuditText(
+  snapshot: Pick<DraftAiAuditSnapshot, "hook" | "body" | "cta" | "hashtags">,
+): string {
+  const canonicalText = canonicalAuditTextSchema.safeParse(
+    buildCanonicalDraftAuditText(snapshot),
+  );
+  if (!canonicalText.success) {
+    throw new Error(
+      canonicalText.error.issues[0]?.message ??
+        "Draft AI audit text does not satisfy the audit contract",
+    );
+  }
+  return canonicalText.data;
+}
+
+export async function loadDraftAiAuditSnapshot(
   db: LinkgoDatabase,
   draftVariantId: number,
-): Promise<DraftAiAuditSnapshotRow> {
-  const rows = await db.select<DraftAiAuditSnapshotRow[]>(
+): Promise<DraftAiAuditSnapshot> {
+  const rows = await db.select<DraftAiAuditSnapshot[]>(
     `SELECT
       dv.id AS draft_variant_id,
       d.campaign_id,
@@ -1685,7 +1693,7 @@ async function linkDraftAiAuditAgentRun(
   }
 }
 
-async function consumeCompletedDraftAiAudit(
+export async function consumeCompletedDraftAiAuditOutput(
   db: LinkgoDatabase,
   expected: {
     campaignId: number;
@@ -1748,7 +1756,7 @@ async function consumeCompletedDraftAiAudit(
   return output;
 }
 
-function boundDraftAiAuditError(caught: unknown): string {
+export function boundDraftAiAuditError(caught: unknown): string {
   const detail =
     caught instanceof Error ? caught.message : "Draft AI audit failed";
   if (detail.length <= 1000) return detail || "Draft AI audit failed";
@@ -1862,9 +1870,12 @@ export async function reconcileDraftAiAuditLifecycle(
   input: ReconcileDraftAiAuditLifecycleInput = {},
 ): Promise<ReconcileDraftAiAuditLifecycleResult> {
   const parsed = reconcileDraftAiAuditLifecycleSchema.parse(input);
+  const linked = await reconcileStaleNativePlannerDraftAudits({
+    limit: parsed.maxAuditRuns,
+  });
   const db = await getDb();
-  const failedAuditRunIds: number[] = [];
-  const failedAgentRunIds: number[] = [];
+  const failedAuditRunIds: number[] = [...linked.failedAuditRunIds];
+  const failedAgentRunIds: number[] = [...linked.failedAgentRunIds];
   let clearedApprovalCheckpointCount = 0;
   const reservationCutoff = `-${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes`;
   const executionCutoff = `-${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes`;
@@ -1880,6 +1891,7 @@ export async function reconcileDraftAiAuditLifecycle(
       FROM draft_ai_audit_runs dar
       LEFT JOIN agent_runs ar ON ar.id = dar.agent_run_id
       WHERE dar.status IN ('pending', 'running')
+        AND dar.workflow_step_execution_id IS NULL
         AND (
           (
             dar.agent_run_id IS NULL
@@ -1943,6 +1955,8 @@ export async function reconcileDraftAiAuditLifecycle(
       `SELECT ar.id
       FROM agent_runs ar
       WHERE ar.agent_role = 'auditor'
+        AND ar.workflow_run_id IS NULL
+        AND ar.workflow_step_id IS NULL
         AND ar.status IN ('queued', 'running', 'waiting_approval')
         AND datetime(ar.updated_at) <= datetime('now', $1)
         AND json_valid(ar.input_context_json) = 1
@@ -1980,6 +1994,8 @@ export async function reconcileDraftAiAuditLifecycle(
   return {
     failedAuditRunIds,
     failedAgentRunIds,
+    failedExecutionIds: linked.failedExecutionIds,
+    failedWorkflowRunIds: linked.failedWorkflowRunIds,
     clearedApprovalCheckpointCount,
   };
 }
@@ -1990,16 +2006,7 @@ export async function runDraftAiAudit(
   const parsed = runDraftAiAuditSchema.parse(input);
   const db = await getDb();
   const snapshot = await loadDraftAiAuditSnapshot(db, parsed.draftVariantId);
-  const canonicalText = canonicalAuditTextSchema.safeParse(
-    buildCanonicalDraftAuditText(snapshot),
-  );
-  if (!canonicalText.success) {
-    throw new Error(
-      canonicalText.error.issues[0]?.message ??
-        "Draft AI audit text does not satisfy the audit contract",
-    );
-  }
-  const text = canonicalText.data;
+  const text = parseCanonicalDraftAuditText(snapshot);
   const modelName =
     parsed.modelName || DEFAULT_AGENT_MODELS[parsed.providerKey];
   const auditRun = await startDraftAiAuditRun({
@@ -2035,7 +2042,7 @@ export async function runDraftAiAudit(
       agentRunId,
     });
     await startAgentRun({ id: agentRunId });
-    const output = await consumeCompletedDraftAiAudit(
+    const output = await consumeCompletedDraftAiAuditOutput(
       db,
       {
         campaignId: snapshot.campaign_id,

@@ -160,10 +160,19 @@ export function useWorkflows(): UseWorkflowsState {
       }
       activeActionRunIds.current.add(input.id);
       setActiveRunId(input.id);
+      const run = runs.find((candidate) => candidate.id === input.id);
+      const isPlannerAudit =
+        run?.autopilot_plan_id !== null &&
+        run?.currentStep?.step_key === "audit";
       try {
         await executeWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
-        if (input.scoring !== undefined) {
+        if (isPlannerAudit) {
+          toast.success("Saved variants audited", {
+            description:
+              "Every current revision was audited with its draft-generation provider and is ready for approval.",
+          });
+        } else if (input.scoring !== undefined) {
           toast.success("Workflow scoring updated", {
             description:
               "The attached batch and linked workflow state were refreshed.",
@@ -180,7 +189,7 @@ export function useWorkflows(): UseWorkflowsState {
         setActiveRunId((current) => (current === input.id ? null : current));
       }
     },
-    [loadRunsForCampaign, selectedCampaignId],
+    [loadRunsForCampaign, runs, selectedCampaignId],
   );
 
   const resumeRun = useCallback(
@@ -190,9 +199,19 @@ export function useWorkflows(): UseWorkflowsState {
       }
       activeActionRunIds.current.add(input.id);
       setActiveRunId(input.id);
+      const run = runs.find((candidate) => candidate.id === input.id);
+      const isPlannerAudit =
+        run?.autopilot_plan_id !== null &&
+        run?.currentStep?.step_key === "audit";
       try {
         await resumeWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
+        if (isPlannerAudit) {
+          toast.success("Variant audits resumed", {
+            description:
+              "Remaining current revisions were audited with the draft-generation provider.",
+          });
+        }
       } catch (caught) {
         toast.error("Workflow executor was not resumed", {
           description: getErrorMessage(caught),
@@ -203,7 +222,7 @@ export function useWorkflows(): UseWorkflowsState {
         setActiveRunId((current) => (current === input.id ? null : current));
       }
     },
-    [loadRunsForCampaign, selectedCampaignId],
+    [loadRunsForCampaign, runs, selectedCampaignId],
   );
 
   const setStepStatus = useCallback(

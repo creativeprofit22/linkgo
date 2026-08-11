@@ -185,8 +185,10 @@ mod tests {
             versions.windows(2).all(|pair| pair[0] < pair[1]),
             "migration versions must be strictly increasing: {versions:?}"
         );
-        assert_eq!(versions.last(), Some(&31));
-        assert_eq!(versions[versions.len() - 2], 30);
+        assert!(
+            versions.windows(2).any(|pair| pair == [30, 31]),
+            "draft AI audits must remain directly after planner draft generation: {versions:?}"
+        );
     }
 
     #[test]

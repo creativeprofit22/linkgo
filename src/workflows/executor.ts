@@ -13,6 +13,7 @@ import {
   startWorkflowRun,
   updateWorkflowStepExecution,
 } from "@/workflows/data";
+import { runPlannerDraftAuditExecutor } from "@/workflows/draft-audit";
 import {
   buildRelevanceScoringContext,
   claimPlannerScoringExecution,
@@ -164,6 +165,9 @@ export async function runContentPipelineExecutor(
   }
   if (initialStep?.step_key === "score" && run.autopilot_plan_id !== null) {
     return runPlannerScoringExecutor(run, input.scoring);
+  }
+  if (initialStep?.step_key === "audit" && run.autopilot_plan_id !== null) {
+    return runPlannerDraftAuditExecutor(run);
   }
   if (
     initialStep?.step_key === "score" &&

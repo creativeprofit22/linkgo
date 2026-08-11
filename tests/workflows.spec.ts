@@ -459,6 +459,356 @@ test("linked draft advances to audit only after operator save", async ({
   );
 });
 
+test("audits every current planner-saved draft revision before approval", async ({
+  page,
+}) => {
+  await preparePlannerSavedDraftAudit(page, 3);
+  await page.getByRole("button", { name: "Audit all saved variants" }).click();
+  await expect(page.getByText("Current step: Approve")).toBeVisible();
+
+  const state = await page.evaluate(() => {
+    const w = window as unknown as {
+      __LINKGO_SQL_DRAFT_VARIANTS__: () => Array<{
+        id: number;
+        hook: string;
+        body: string;
+        cta: string;
+        hashtags: string;
+        content_revision: number;
+      }>;
+      __LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__: () => Array<{
+        id: number;
+        draft_variant_id: number;
+        content_revision: number;
+        provider_key: string;
+        model_name: string;
+        status: string;
+      }>;
+      __LINKGO_SQL_DRAFT_AI_AUDIT_FINDINGS__: () => Array<{
+        audit_run_id: number;
+      }>;
+      __LINKGO_SQL_AGENT_RUNS__: () => Array<{
+        id: number;
+        agent_role: string;
+        provider_key: string;
+        model_name: string;
+        input_context_json: string;
+      }>;
+      __LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__: () => Array<{
+        executor_role: string;
+        attempt_count: number;
+        status: string;
+      }>;
+      __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{
+        status: string;
+        current_step_key: string;
+      }>;
+      __LINKGO_PROVIDER_COMMAND_CALLS__?: unknown[];
+    };
+    return {
+      variants: w.__LINKGO_SQL_DRAFT_VARIANTS__(),
+      audits: w.__LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__(),
+      findings: w.__LINKGO_SQL_DRAFT_AI_AUDIT_FINDINGS__(),
+      agents: w
+        .__LINKGO_SQL_AGENT_RUNS__()
+        .filter((x) => x.agent_role === "auditor"),
+      executions: w
+        .__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__()
+        .filter((x) => x.executor_role === "auditor"),
+      run: w.__LINKGO_SQL_WORKFLOW_RUNS__()[0],
+      calls: w.__LINKGO_PROVIDER_COMMAND_CALLS__ ?? [],
+    };
+  });
+  expect(state.audits).toHaveLength(3);
+  expect(
+    state.audits.every(
+      (row) =>
+        row.status === "completed" &&
+        row.provider_key === "dry_run" &&
+        row.model_name === "dry-run-local",
+    ),
+  ).toBe(true);
+  expect(state.findings).toHaveLength(18);
+  expect(state.executions.map((row) => row.attempt_count)).toEqual([1, 2, 3]);
+  expect(state.executions.every((row) => row.status === "completed")).toBe(
+    true,
+  );
+  expect(state.run).toMatchObject({
+    status: "waiting_approval",
+    current_step_key: "approve",
+  });
+  for (const agent of state.agents) {
+    const context = JSON.parse(agent.input_context_json) as {
+      auditRequest: {
+        draftVariantId: number;
+        contentRevision: number;
+        text: string;
+      };
+    };
+    const variant = state.variants.find(
+      (row) => row.id === context.auditRequest.draftVariantId,
+    );
+    expect(context.auditRequest).toMatchObject({
+      contentRevision: variant?.content_revision,
+      text: [variant?.hook, variant?.body, variant?.cta, variant?.hashtags]
+        .filter(Boolean)
+        .join("\n\n"),
+    });
+  }
+  expect(state.agents).toHaveLength(3);
+});
+
+test("resumes planner audits at the failed variant without re-auditing completed work", async ({
+  page,
+}) => {
+  await preparePlannerSavedDraftAudit(page, 3);
+  await configurePlannerAuditProvider(page, "fail_second");
+  await page.getByRole("button", { name: "Audit all saved variants" }).click();
+  await expect(
+    page.getByRole("button", { name: "Resume variant audits" }),
+  ).toBeVisible();
+  const failed = await readPlannerAuditState(page);
+  expect(failed.audits.map((row) => row.status)).toEqual([
+    "completed",
+    "failed",
+  ]);
+  expect(failed.executions.map((row) => row.status)).toEqual([
+    "completed",
+    "failed",
+  ]);
+  expect(failed.findings).toHaveLength(6);
+  expect(failed.calls).toHaveLength(4);
+
+  await configurePlannerAuditProvider(page, "success");
+  await page.getByRole("button", { name: "Resume variant audits" }).click();
+  await expect(page.getByText("Current step: Approve")).toBeVisible();
+  const resumed = await readPlannerAuditState(page);
+  expect(resumed.audits.map((row) => row.draft_variant_id)).toEqual([
+    failed.variants[0]?.id,
+    failed.variants[1]?.id,
+    failed.variants[1]?.id,
+    failed.variants[2]?.id,
+  ]);
+  expect(resumed.audits.map((row) => row.status)).toEqual([
+    "completed",
+    "failed",
+    "completed",
+    "completed",
+  ]);
+  expect(resumed.findings).toHaveLength(18);
+  expect(resumed.run).toMatchObject({
+    status: "waiting_approval",
+    current_step_key: "approve",
+  });
+  expect(
+    resumed.events.filter(
+      (row) =>
+        row.event_type === "step_completed" &&
+        row.summary === "Draft AI audits completed",
+    ),
+  ).toHaveLength(1);
+});
+
+test("re-audits only an edited revision and retains historical findings", async ({
+  page,
+}) => {
+  await preparePlannerSavedDraftAudit(page, 3);
+  await page.getByRole("button", { name: "Audit all saved variants" }).click();
+  await expect(page.getByText("Current step: Approve")).toBeVisible();
+  await page.evaluate(async () => {
+    const w = window as any;
+    const variant = w.__LINKGO_SQL_DRAFT_VARIANTS__()[1];
+    await w.__LINKGO_DRAFTS_TEST_API__.updateDraftVariant({
+      id: variant.id,
+      body: `${variant.body} Edited after the completed audit.`,
+    });
+    const run = w.__LINKGO_SQL_WORKFLOW_RUNS__()[0];
+    const audit = w
+      .__LINKGO_SQL_WORKFLOW_STEPS__()
+      .find((row: any) => row.step_key === "audit");
+    const approve = w
+      .__LINKGO_SQL_WORKFLOW_STEPS__()
+      .find((row: any) => row.step_key === "approve");
+    w.__LINKGO_SQL_MUTATE_WORKFLOW_RUN__(run.id, {
+      status: "failed",
+      current_step_key: "audit",
+      completed_at: null,
+    });
+    w.__LINKGO_SQL_MUTATE_WORKFLOW_STEP__(audit.id, {
+      status: "failed",
+      completed_at: null,
+    });
+    w.__LINKGO_SQL_MUTATE_WORKFLOW_STEP__(approve.id, {
+      status: "pending",
+      completed_at: null,
+    });
+  });
+  await openCampaigns(page);
+  await openWorkflows(page);
+  await page.getByRole("button", { name: "Resume variant audits" }).click();
+  await expect(page.getByText("Current step: Approve")).toBeVisible();
+  const state = await readPlannerAuditState(page);
+  expect(state.audits).toHaveLength(4);
+  expect(state.findings).toHaveLength(24);
+  const edited = state.variants[1];
+  expect(edited?.content_revision).toBe(2);
+  expect(
+    state.audits
+      .filter((row) => row.draft_variant_id === edited?.id)
+      .map((row) => row.content_revision),
+  ).toEqual([1, 2]);
+});
+
+test("reconciles stale linked claims idempotently and resume creates one replacement", async ({
+  page,
+}) => {
+  await preparePlannerSavedDraftAudit(page, 3);
+  const seeded = await page.evaluate(async () => {
+    const w = window as any;
+    const run = w.__LINKGO_SQL_WORKFLOW_RUNS__()[0];
+    const step = w
+      .__LINKGO_SQL_WORKFLOW_STEPS__()
+      .find((row: any) => row.step_key === "audit");
+    const draft = w.__LINKGO_SQL_DRAFTS__()[0];
+    const request = w.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()[0];
+    const claim = await w.__TAURI_INTERNALS__.invoke(
+      "linkgo_planner_draft_audit_claim",
+      {
+        input: {
+          workflowRunId: run.id,
+          workflowStepId: step.id,
+          campaignId: run.campaign_id,
+          draftId: draft.id,
+          draftGenerationRequestId: request.id,
+          providerKey: request.provider_key,
+          modelName: request.model_name || "dry-run-local",
+        },
+      },
+    );
+    const fresh = w.__LINKGO_SQL_CLONE_LINKED_AUDIT_AS_FRESH__(
+      claim.agentRunId,
+    );
+    w.__LINKGO_SQL_MUTATE_LINKED_AUDIT_ACTIVITY__(
+      claim.agentRunId,
+      "2000-01-01T00:00:00.000Z",
+    );
+    const first =
+      await w.__LINKGO_DRAFTS_TEST_API__.reconcileDraftAiAuditLifecycle();
+    const second =
+      await w.__LINKGO_DRAFTS_TEST_API__.reconcileDraftAiAuditLifecycle();
+    return { claim, fresh, first, second };
+  });
+  expect(seeded.first.failedAuditRunIds).toEqual([seeded.claim.auditRunId]);
+  expect(seeded.second.failedAuditRunIds).toEqual([]);
+  const reconciled = await readPlannerAuditState(page);
+  expect(
+    reconciled.audits.find((row) => row.id === seeded.fresh.auditRunId)?.status,
+  ).toBe("running");
+  expect(
+    reconciled.audits.find((row) => row.id === seeded.claim.auditRunId)?.status,
+  ).toBe("failed");
+  await openCampaigns(page);
+  await openWorkflows(page);
+  await page.getByRole("button", { name: "Resume variant audits" }).click();
+  await expect(page.getByText("Current step: Approve")).toBeVisible();
+  const resumed = await readPlannerAuditState(page);
+  expect(
+    resumed.audits.filter(
+      (row) => row.draft_variant_id === resumed.variants[0]?.id,
+    ),
+  ).toHaveLength(2);
+  expect(
+    resumed.audits.filter(
+      (row) =>
+        row.draft_variant_id === resumed.variants[0]?.id &&
+        row.status === "completed",
+    ),
+  ).toHaveLength(1);
+  expect(resumed.audits).toHaveLength(5);
+});
+
+test("rejects bad provenance and duplicate execution before provider calls or advancement", async ({
+  page,
+}) => {
+  await preparePlannerSavedDraftAudit(page, 3);
+  const result = await page.evaluate(async () => {
+    const w = window as any;
+    w.__LINKGO_PROVIDER_COMMAND_CALLS__ = [];
+    const run = w.__LINKGO_SQL_WORKFLOW_RUNS__()[0];
+    const request = w.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()[0];
+    const original = {
+      workflow_run_id: request.workflow_run_id,
+      campaign_id: request.campaign_id,
+    };
+    const capture = async (action: () => Promise<unknown>) => {
+      try {
+        await action();
+        return "";
+      } catch (error) {
+        return String(error);
+      }
+    };
+    w.__LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__(request.id, {
+      workflow_run_id: null,
+    });
+    const missing = await capture(() =>
+      w.__LINKGO_WORKFLOWS_TEST_API__.executeWorkflowRun({ id: run.id }),
+    );
+    w.__LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__(request.id, {
+      ...original,
+      campaign_id: 999,
+    });
+    const stale = await capture(() =>
+      w.__LINKGO_WORKFLOWS_TEST_API__.executeWorkflowRun({ id: run.id }),
+    );
+    w.__LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__(request.id, original);
+    const step = w
+      .__LINKGO_SQL_WORKFLOW_STEPS__()
+      .find((row: any) => row.step_key === "audit");
+    const draft = w.__LINKGO_SQL_DRAFTS__()[0];
+    await w.__TAURI_INTERNALS__.invoke("linkgo_planner_draft_audit_claim", {
+      input: {
+        workflowRunId: run.id,
+        workflowStepId: step.id,
+        campaignId: run.campaign_id,
+        draftId: draft.id,
+        draftGenerationRequestId: request.id,
+        providerKey: request.provider_key,
+        modelName: request.model_name || "dry-run-local",
+      },
+    });
+    const duplicate = await Promise.all([
+      capture(() =>
+        w.__LINKGO_WORKFLOWS_TEST_API__.executeWorkflowRun({ id: run.id }),
+      ),
+      capture(() =>
+        w.__LINKGO_WORKFLOWS_TEST_API__.executeWorkflowRun({ id: run.id }),
+      ),
+    ]);
+    return {
+      missing,
+      stale,
+      duplicate,
+      calls: w.__LINKGO_PROVIDER_COMMAND_CALLS__ ?? [],
+      run: w.__LINKGO_SQL_WORKFLOW_RUNS__()[0],
+      audits: w.__LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__(),
+    };
+  });
+  expect(result.missing).toContain("provenance");
+  expect(result.stale).toContain("provenance");
+  expect(
+    result.duplicate.every((message: string) =>
+      message.includes("already active"),
+    ),
+  ).toBe(true);
+  expect(result.calls).toHaveLength(0);
+  expect(result.run).toMatchObject({
+    status: "running",
+    current_step_key: "audit",
+  });
+  expect(result.audits).toHaveLength(1);
+});
+
 test("queries planner draft eligibility authoritatively", async ({ page }) => {
   await preparePlannerDraftWorkflow(page);
 
@@ -1951,6 +2301,164 @@ async function preparePlannerScoringWorkflow(
   await page.getByRole("button", { name: "Plan now" }).click();
   await expect(page.getByText("Plan #1 · Founder-led growth")).toBeVisible();
   await openWorkflows(page);
+}
+
+type PlannerAuditState = {
+  variants: Array<{ id: number; content_revision: number }>;
+  audits: Array<{
+    id: number;
+    draft_variant_id: number;
+    content_revision: number;
+    status: string;
+  }>;
+  findings: Array<{ audit_run_id: number }>;
+  executions: Array<{ executor_role: string; status: string }>;
+  run: { status: string; current_step_key: string };
+  events: Array<{ event_type: string; summary: string }>;
+  calls: unknown[];
+};
+
+async function readPlannerAuditState(page: Page): Promise<PlannerAuditState> {
+  return page.evaluate(() => {
+    const w = window as unknown as {
+      __LINKGO_SQL_DRAFT_VARIANTS__: () => PlannerAuditState["variants"];
+      __LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__: () => PlannerAuditState["audits"];
+      __LINKGO_SQL_DRAFT_AI_AUDIT_FINDINGS__: () => PlannerAuditState["findings"];
+      __LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__: () => PlannerAuditState["executions"];
+      __LINKGO_SQL_WORKFLOW_RUNS__: () => PlannerAuditState["run"][];
+      __LINKGO_SQL_WORKFLOW_EVENTS__: () => PlannerAuditState["events"];
+      __LINKGO_PROVIDER_COMMAND_CALLS__?: unknown[];
+    };
+    return {
+      variants: w.__LINKGO_SQL_DRAFT_VARIANTS__(),
+      audits: w.__LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__(),
+      findings: w.__LINKGO_SQL_DRAFT_AI_AUDIT_FINDINGS__(),
+      executions: w
+        .__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__()
+        .filter((row) => row.executor_role === "auditor"),
+      run: w.__LINKGO_SQL_WORKFLOW_RUNS__()[0]!,
+      events: w.__LINKGO_SQL_WORKFLOW_EVENTS__(),
+      calls: w.__LINKGO_PROVIDER_COMMAND_CALLS__ ?? [],
+    };
+  });
+}
+
+async function configurePlannerAuditProvider(
+  page: Page,
+  mode: "success" | "fail_second",
+): Promise<void> {
+  await page.evaluate((providerMode) => {
+    type ProviderRequest = {
+      input: {
+        request: {
+          runId: number;
+          campaignId: number;
+          messages: Array<{ role: string }>;
+          inputContext?: {
+            auditRequest?: {
+              draftVariantId: number;
+              contentRevision: number;
+              auditRunId: number;
+              text: string;
+            };
+          };
+        };
+      };
+    };
+    const w = window as unknown as {
+      __LINKGO_SQL_DRAFT_GENERATION_REQUESTS__: () => Array<{ id: number }>;
+      __LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__: (
+        id: number,
+        patch: Record<string, unknown>,
+      ) => void;
+      __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+        execute: (args: unknown) => unknown;
+      };
+      __LINKGO_PROVIDER_COMMAND_CALLS__?: unknown[];
+    };
+    const request = w.__LINKGO_SQL_DRAFT_GENERATION_REQUESTS__()[0];
+    if (!request) throw new Error("Saved generation request unavailable");
+    w.__LINKGO_SQL_MUTATE_DRAFT_GENERATION_REQUEST__(request.id, {
+      provider_key: "openai",
+      model_name: "gpt-4.1-mini",
+    });
+    let failures = 0;
+    w.__LINKGO_PROVIDER_COMMAND_CALLS__ = [];
+    w.__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__ = {
+      execute(args: unknown): unknown {
+        w.__LINKGO_PROVIDER_COMMAND_CALLS__ = [
+          ...(w.__LINKGO_PROVIDER_COMMAND_CALLS__ ?? []),
+          args,
+        ];
+        const providerRequest = (args as ProviderRequest).input.request;
+        const audit = providerRequest.inputContext?.auditRequest;
+        if (!audit) throw new Error("Audit request unavailable");
+        if (
+          providerMode === "fail_second" &&
+          audit.draftVariantId === 2 &&
+          failures++ < 2
+        ) {
+          throw new Error("Temporary injected auditor network failure");
+        }
+        if (
+          providerRequest.messages.some((message) => message.role === "tool")
+        ) {
+          return {
+            chunks: [
+              { type: "done", outputSummary: "Planner draft audit completed." },
+            ],
+          };
+        }
+        const ruleKeys = [
+          "hook",
+          "specificity",
+          "generic_language",
+          "authenticity",
+          "clarity",
+          "safety",
+        ];
+        return {
+          chunks: [
+            {
+              type: "tool_call",
+              providerToolCallId: `audit-${providerRequest.runId}`,
+              toolName: "audit_post",
+              input: {
+                campaignId: providerRequest.campaignId,
+                draftVariantId: audit.draftVariantId,
+                contentRevision: audit.contentRevision,
+                auditRunId: audit.auditRunId,
+                text: audit.text,
+                findings: ruleKeys.map((ruleKey) => ({
+                  ruleKey,
+                  severity: "pass",
+                  message: `Provider finding for ${ruleKey}.`,
+                })),
+              },
+            },
+            { type: "done", outputSummary: "Provider submitted audit." },
+          ],
+        };
+      },
+    };
+  }, mode);
+}
+
+async function preparePlannerSavedDraftAudit(
+  page: Page,
+  variants = 3,
+): Promise<void> {
+  await preparePlannerDraftWorkflow(page);
+  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+  await page.getByRole("button", { name: "Generate variants" }).click();
+  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await dialog.getByLabel("Provider").selectOption("dry_run");
+  await dialog.getByLabel("Variants").selectOption(String(variants));
+  await dialog.getByRole("button", { name: "Generate variants" }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: "Save as draft" }).click();
+  await openWorkflows(page);
+  await expect(page.getByText("Current step: Audit drafts")).toBeVisible();
 }
 
 async function preparePlannerDraftWorkflow(page: Page): Promise<void> {

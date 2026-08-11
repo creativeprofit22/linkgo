@@ -1561,7 +1561,10 @@ async function executeSql(
       }
     ).__TAURI_INTERNALS__;
     if (internals === undefined) throw new Error("Tauri mocks unavailable");
-    return internals.invoke("plugin:sql|execute", sqlArgs);
+    return internals.invoke("plugin:sql|execute", sqlArgs).then((result) => {
+      if (!Array.isArray(result)) return result;
+      return { rowsAffected: result[0], lastInsertId: result[1] };
+    });
   }, args);
 }
 

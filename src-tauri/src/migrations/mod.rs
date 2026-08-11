@@ -17,6 +17,7 @@ pub mod drafts;
 pub mod integrations;
 pub mod metric_refresh;
 pub mod metrics;
+pub mod planner_draft_audits;
 pub mod planner_draft_generation;
 pub mod playbooks;
 pub mod provider_parity;
@@ -57,6 +58,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(relevance_scoring::migrations());
     migrations.extend(planner_draft_generation::migrations());
     migrations.extend(draft_ai_audits::migrations());
+    migrations.extend(planner_draft_audits::migrations());
     migrations
 }
 

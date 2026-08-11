@@ -290,6 +290,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       completed_at: string | null;
       created_at: string;
       updated_at: string;
+      workflow_step_execution_id: number | null;
     };
 
     type DraftAiAuditFinding = {
@@ -4175,6 +4176,45 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (
         query.includes("FROM workflow_runs wr") &&
+        query.includes("dgr.created_draft_id") &&
+        query.includes("artifact_type = 'draft'")
+      ) {
+        const workflowRunId = Number(values[0] ?? 0);
+        const run = workflowRuns.find((row) => row.id === workflowRunId);
+        const auditStep = workflowSteps.find(
+          (row) =>
+            row.workflow_run_id === workflowRunId && row.step_key === "audit",
+        );
+        const artifact = workflowArtifacts.find(
+          (row) =>
+            row.workflow_run_id === workflowRunId &&
+            row.artifact_type === "draft",
+        );
+        const draft = drafts.find((row) => row.id === artifact?.artifact_id);
+        const requests = draftGenerationRequests.filter(
+          (row) => row.created_draft_id === draft?.id && row.status === "saved",
+        );
+        const plan = autopilotPlans.find(
+          (row) =>
+            row.workflow_run_id === workflowRunId && row.status === "planned",
+        );
+        if (!run || !auditStep || !artifact || !draft || !plan) return [];
+        return requests.map((request) => ({
+          campaign_id: run.campaign_id,
+          workflow_step_id: auditStep.id,
+          draft_id: draft.id,
+          request_id: request.id,
+          provider_key: request.provider_key,
+          model_name: request.model_name,
+          request_run_id: request.workflow_run_id,
+          request_step_id: request.workflow_step_id,
+          request_campaign_id: request.campaign_id,
+          created_draft_id: request.created_draft_id,
+          draft_campaign_id: draft.campaign_id,
+        }));
+      }
+      if (
+        query.includes("FROM workflow_runs wr") &&
         query.includes("c.name AS campaign_name")
       ) {
         return selectWorkflowRunJoin(values);
@@ -5699,6 +5739,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             values[2] === null || values[2] === undefined
               ? null
               : Number(values[2]),
+          workflow_step_execution_id: null,
           provider_key: values[3] as AgentProviderKey,
           model_name: String(values[4] ?? ""),
           status: "running",
@@ -8361,6 +8402,105 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     w.__LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__ = () => cloneRows(draftAiAuditRuns);
     w.__LINKGO_SQL_DRAFT_AI_AUDIT_FINDINGS__ = () =>
       cloneRows(draftAiAuditFindings);
+    w.__LINKGO_SQL_MUTATE_LINKED_AUDIT_ACTIVITY__ = (
+      agentRunId: number,
+      updatedAt: string,
+    ) => {
+      const agent = agentRuns.find((row) => row.id === agentRunId);
+      const audit = draftAiAuditRuns.find(
+        (row) => row.agent_run_id === agentRunId,
+      );
+      const execution = workflowStepExecutions.find(
+        (row) => row.id === audit?.workflow_step_execution_id,
+      );
+      if (!agent || !audit || !execution)
+        throw new Error("Linked audit was not found");
+      agent.updated_at = updatedAt;
+      audit.updated_at = updatedAt;
+      execution.updated_at = updatedAt;
+    };
+    w.__LINKGO_SQL_MUTATE_DRAFT_VARIANT__ = (
+      id: number,
+      patch: Partial<DraftVariant>,
+    ) => {
+      const variant = draftVariants.find((row) => row.id === id);
+      if (!variant) throw new Error("Draft variant was not found");
+      Object.assign(variant, patch, { updated_at: getNow() });
+    };
+    w.__LINKGO_SQL_MUTATE_WORKFLOW_STEP__ = (
+      id: number,
+      patch: Partial<WorkflowStep>,
+    ) => {
+      const step = workflowSteps.find((row) => row.id === id);
+      if (!step) throw new Error("Workflow step was not found");
+      Object.assign(step, patch, { updated_at: getNow() });
+    };
+    w.__LINKGO_SQL_CLONE_LINKED_AUDIT_AS_FRESH__ = (agentRunId: number) => {
+      const agent = agentRuns.find((row) => row.id === agentRunId);
+      const audit = draftAiAuditRuns.find(
+        (row) => row.agent_run_id === agentRunId,
+      );
+      const execution = workflowStepExecutions.find(
+        (row) => row.id === audit?.workflow_step_execution_id,
+      );
+      const step = workflowSteps.find(
+        (row) => row.id === agent?.workflow_step_id,
+      );
+      const run = workflowRuns.find((row) => row.id === agent?.workflow_run_id);
+      if (!agent || !audit || !execution || !step || !run) {
+        throw new Error("Linked audit was not found");
+      }
+      const now = getNow();
+      const clonedRunId = nextWorkflowRunId++;
+      const clonedStepId = nextWorkflowStepId++;
+      const clonedAgentId = nextAgentRunId++;
+      const clonedExecutionId = nextWorkflowStepExecutionId++;
+      const clonedAuditId = nextDraftAiAuditRunId++;
+      workflowRuns.push({
+        ...run,
+        id: clonedRunId,
+        created_at: now,
+        updated_at: now,
+      });
+      workflowSteps.push({
+        ...step,
+        id: clonedStepId,
+        workflow_run_id: clonedRunId,
+        created_at: now,
+        updated_at: now,
+      });
+      agentRuns.push({
+        ...agent,
+        id: clonedAgentId,
+        workflow_run_id: clonedRunId,
+        workflow_step_id: clonedStepId,
+        created_at: now,
+        updated_at: now,
+      });
+      workflowStepExecutions.push({
+        ...execution,
+        id: clonedExecutionId,
+        workflow_step_id: clonedStepId,
+        agent_run_id: clonedAgentId,
+        created_at: now,
+        updated_at: now,
+      });
+      draftAiAuditRuns.push({
+        ...audit,
+        id: clonedAuditId,
+        draft_variant_id: 999_000 + clonedAuditId,
+        agent_run_id: clonedAgentId,
+        workflow_step_execution_id: clonedExecutionId,
+        created_at: now,
+        updated_at: now,
+      });
+      return {
+        workflowRunId: clonedRunId,
+        auditRunId: clonedAuditId,
+        agentRunId: clonedAgentId,
+        executionId: clonedExecutionId,
+      };
+    };
     w.__LINKGO_SQL_SEED_DRAFT_AI_AUDIT_VARIANT__ = () => {
       const now = getNow();
       let campaign = campaigns[0];
@@ -8453,6 +8593,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           draft_variant_id: variant.id,
           content_revision: variant.content_revision,
           agent_run_id: null,
+          workflow_step_execution_id: null,
           provider_key: "dry_run",
           model_name: "recovery-fixture",
           status: "pending",
@@ -10187,6 +10328,533 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       });
     }
 
+    function plannerDraftAuditScope(workflowRunId: number) {
+      const run = workflowRuns.find((row) => row.id === workflowRunId);
+      const step = workflowSteps.find(
+        (row) =>
+          row.workflow_run_id === workflowRunId && row.step_key === "audit",
+      );
+      const draftStep = workflowSteps.find(
+        (row) =>
+          row.workflow_run_id === workflowRunId && row.step_key === "draft",
+      );
+      const artifact = workflowArtifacts.find(
+        (row) =>
+          row.workflow_run_id === workflowRunId &&
+          row.artifact_type === "draft",
+      );
+      const draft = drafts.find((row) => row.id === artifact?.artifact_id);
+      const requests = draftGenerationRequests.filter(
+        (row) => row.created_draft_id === draft?.id && row.status === "saved",
+      );
+      const request = requests[0];
+      const plan = autopilotPlans.find(
+        (row) =>
+          row.workflow_run_id === workflowRunId && row.status === "planned",
+      );
+      if (
+        !run ||
+        !step ||
+        !draftStep ||
+        !artifact ||
+        !draft ||
+        requests.length !== 1 ||
+        !request ||
+        !plan
+      ) {
+        throw new Error(
+          "Planner audit requires one saved draft artifact with request provenance",
+        );
+      }
+      if (
+        artifact.workflow_step_id !== draftStep.id ||
+        request.workflow_run_id !== run.id ||
+        request.workflow_step_id !== draftStep.id ||
+        request.campaign_id !== run.campaign_id ||
+        draft.campaign_id !== run.campaign_id ||
+        request.candidate_post_id !== draft.candidate_post_id ||
+        request.created_draft_id !== draft.id ||
+        run.current_step_key !== "audit" ||
+        !["running", "blocked", "failed"].includes(run.status) ||
+        !["pending", "running", "blocked", "failed"].includes(step.status)
+      ) {
+        throw new Error(
+          "Saved draft request provenance does not match the planner audit scope",
+        );
+      }
+      return { run, step, draftStep, artifact, draft, request };
+    }
+
+    function nativeAuditMutation<T>(mutation: () => T): Promise<T> {
+      const snapshot = createTransactionSnapshot();
+      try {
+        const result = mutation();
+        persistReloadSnapshot();
+        return Promise.resolve(result);
+      } catch (error) {
+        restoreTransactionSnapshot(snapshot);
+        return Promise.reject(error);
+      }
+    }
+
+    function claimNativePlannerDraftAudit(args?: unknown): Promise<unknown> {
+      return nativeAuditMutation(() => {
+        const input = nativeScoringInput<{
+          workflowRunId: number;
+          workflowStepId: number;
+          campaignId: number;
+          draftId: number;
+          draftGenerationRequestId: number;
+          providerKey: AgentProviderKey;
+          modelName: string;
+        }>(args);
+        const scope = plannerDraftAuditScope(input.workflowRunId);
+        if (
+          workflowStepExecutions.some(
+            (row) =>
+              row.workflow_step_id === scope.step.id &&
+              ["claimed", "running", "waiting_approval"].includes(row.status),
+          )
+        )
+          throw new Error("A planner draft audit execution is already active");
+        const provider = scope.request.provider_key;
+        const defaults: Partial<Record<AgentProviderKey, string>> = {
+          dry_run: "dry-run-local",
+          anthropic: "claude-sonnet-4-6",
+          openai: "gpt-4.1-mini",
+          gemini: "gemini-2.5-flash",
+          custom: "custom-model",
+        };
+        const model = scope.request.model_name.trim() || defaults[provider];
+        if (!model || model.length > 120)
+          throw new Error("Saved planner audit provider is invalid");
+        if (
+          input.workflowStepId !== scope.step.id ||
+          input.campaignId !== scope.run.campaign_id ||
+          input.draftId !== scope.draft.id ||
+          input.draftGenerationRequestId !== scope.request.id ||
+          input.providerKey !== provider ||
+          input.modelName !== model
+        )
+          throw new Error(
+            "Caller planner audit provenance does not match saved provenance",
+          );
+        const variant = draftVariants
+          .filter((row) => row.draft_id === scope.draft.id)
+          .sort((a, b) => a.variant_number - b.variant_number)
+          .find(
+            (row) =>
+              !draftAiAuditRuns.some(
+                (audit) =>
+                  audit.draft_variant_id === row.id &&
+                  audit.content_revision === row.content_revision &&
+                  audit.status === "completed",
+              ),
+          );
+        if (!variant)
+          throw new Error("All current draft revisions are already audited");
+        if (
+          draftAiAuditRuns.some(
+            (audit) =>
+              audit.draft_variant_id === variant.id &&
+              audit.content_revision === variant.content_revision &&
+              ["pending", "running"].includes(audit.status),
+          )
+        )
+          throw new Error(
+            "An active AI audit already exists for this draft revision",
+          );
+        const text = [variant.hook, variant.body, variant.cta, variant.hashtags]
+          .filter(Boolean)
+          .join("\n\n");
+        if (!text.trim() || text.length > 4000)
+          throw new Error(
+            "Draft AI audit text does not satisfy the audit contract",
+          );
+        const now = getNow();
+        const attempt =
+          Math.max(
+            0,
+            ...workflowStepExecutions
+              .filter((row) => row.workflow_step_id === scope.step.id)
+              .map((row) => row.attempt_count),
+          ) + 1;
+        const execution: WorkflowStepExecution = {
+          id: nextWorkflowStepExecutionId++,
+          workflow_step_id: scope.step.id,
+          agent_run_id: nextAgentRunId,
+          executor_role: "auditor",
+          attempt_count: attempt,
+          status: "running",
+          error_summary: "",
+          started_at: now,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        workflowStepExecutions.push(execution);
+        const audit: DraftAiAuditRun = {
+          id: nextDraftAiAuditRunId++,
+          draft_variant_id: variant.id,
+          content_revision: variant.content_revision,
+          agent_run_id: nextAgentRunId,
+          provider_key: provider,
+          model_name: model,
+          status: "running",
+          summary: "",
+          error_message: "",
+          started_at: now,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+          workflow_step_execution_id: execution.id,
+        };
+        draftAiAuditRuns.push(audit);
+        const agent: AgentRun = {
+          id: nextAgentRunId++,
+          campaign_id: scope.run.campaign_id,
+          workflow_run_id: scope.run.id,
+          workflow_step_id: scope.step.id,
+          agent_role: "auditor",
+          provider_key: provider,
+          model_name: model,
+          playbook_key: "linkedin_humanizer",
+          status: "queued",
+          input_summary: `Audit draft variant #${variant.id} revision ${variant.content_revision}.`,
+          input_context_json: JSON.stringify({
+            auditRequest: {
+              campaignId: scope.run.campaign_id,
+              draftVariantId: variant.id,
+              contentRevision: variant.content_revision,
+              auditRunId: audit.id,
+              text,
+            },
+            planner: {
+              workflowRunId: scope.run.id,
+              workflowStepId: scope.step.id,
+              draftId: scope.draft.id,
+              draftGenerationRequestId: scope.request.id,
+            },
+          }),
+          output_summary: "",
+          error_message: "",
+          iteration_count: 0,
+          started_at: null,
+          completed_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        agentRuns.push(agent);
+        agentRunEvents.push({
+          id: nextAgentRunEventId++,
+          agent_run_id: agent.id,
+          event_type: "run_created",
+          summary: "Agent run created for planner draft audit.",
+          created_at: now,
+        });
+        workflowArtifacts.push({
+          id: nextWorkflowArtifactId++,
+          workflow_run_id: scope.run.id,
+          workflow_step_id: scope.step.id,
+          artifact_type: "agent_run",
+          artifact_id: agent.id,
+          summary: `Auditor run for draft variant #${variant.id} revision ${variant.content_revision}`,
+          created_at: now,
+          updated_at: now,
+        });
+        const prior = scope.step.status;
+        scope.step.status = "running";
+        scope.step.error_message = "";
+        scope.step.completed_at = null;
+        scope.step.started_at ??= now;
+        scope.step.updated_at = now;
+        scope.run.status = "running";
+        scope.run.current_step_key = "audit";
+        scope.run.completed_at = null;
+        scope.run.updated_at = now;
+        addNativeWorkflowEvent(
+          scope.run.id,
+          scope.step.id,
+          prior === "pending" ? "step_started" : "step_resumed",
+          "Draft AI audit started",
+        );
+        return {
+          executionId: execution.id,
+          auditRunId: audit.id,
+          agentRunId: agent.id,
+          workflowRunId: scope.run.id,
+          workflowStepId: scope.step.id,
+          draftId: scope.draft.id,
+          draftVariantId: variant.id,
+          contentRevision: variant.content_revision,
+        };
+      });
+    }
+
+    function nativeAuditLink(agentRunId: number) {
+      const agent = agentRuns.find(
+        (row) => row.id === agentRunId && row.agent_role === "auditor",
+      );
+      const audit = draftAiAuditRuns.find(
+        (row) => row.agent_run_id === agentRunId,
+      );
+      const execution = workflowStepExecutions.find(
+        (row) =>
+          row.id === audit?.workflow_step_execution_id &&
+          row.agent_run_id === agentRunId,
+      );
+      const step = workflowSteps.find(
+        (row) => row.id === agent?.workflow_step_id && row.step_key === "audit",
+      );
+      const run = workflowRuns.find((row) => row.id === agent?.workflow_run_id);
+      if (!agent || !audit || !execution || !step || !run)
+        throw new Error("Planner draft auditor run was not found");
+      return { agent, audit, execution, step, run };
+    }
+
+    function failNativePlannerDraftAuditLink(
+      agentRunId: number,
+      reason: string,
+    ): void {
+      const link = nativeAuditLink(agentRunId);
+      const now = getNow();
+      if (!["pending", "running"].includes(link.audit.status))
+        throw new Error("Planner draft audit is no longer active");
+      link.audit.status = "failed";
+      link.audit.error_message = reason;
+      link.audit.completed_at = now;
+      link.audit.updated_at = now;
+      link.agent.status = "failed";
+      link.agent.error_message = reason;
+      link.agent.completed_at = now;
+      link.agent.updated_at = now;
+      link.execution.status = "failed";
+      link.execution.error_summary = reason;
+      link.execution.completed_at = now;
+      link.execution.updated_at = now;
+      link.step.status = "failed";
+      link.step.error_message = reason;
+      link.step.completed_at = now;
+      link.step.updated_at = now;
+      link.run.status = "failed";
+      link.run.current_step_key = "audit";
+      link.run.completed_at = now;
+      link.run.updated_at = now;
+      removeRows(
+        agentApprovalCheckpoints,
+        (row) => row.agent_run_id === agentRunId,
+      );
+      agentRunEvents.push({
+        id: nextAgentRunEventId++,
+        agent_run_id: agentRunId,
+        event_type: "run_failed",
+        summary: reason,
+        created_at: now,
+      });
+      addNativeWorkflowEvent(link.run.id, link.step.id, "step_failed", reason);
+    }
+
+    function completeNativePlannerDraftAudit(args?: unknown): Promise<unknown> {
+      return nativeAuditMutation(() => {
+        const input = nativeScoringInput<{
+          agentRunId: number;
+          summary: string;
+          findings: Array<{
+            ruleKey: string;
+            severity: DraftAuditSeverity;
+            message: string;
+          }>;
+        }>(args);
+        const rules = [
+          "hook",
+          "specificity",
+          "generic_language",
+          "authenticity",
+          "clarity",
+          "safety",
+        ];
+        if (
+          input.findings.length !== 6 ||
+          new Set(input.findings.map((row) => row.ruleKey)).size !== 6 ||
+          input.findings.some((row) => !rules.includes(row.ruleKey))
+        )
+          throw new Error(
+            "Audit findings must contain exactly all six required categories",
+          );
+        const link = nativeAuditLink(input.agentRunId);
+        const variant = draftVariants.find(
+          (row) => row.id === link.audit.draft_variant_id,
+        );
+        if (variant?.content_revision !== link.audit.content_revision)
+          throw new Error(
+            "Draft content changed before the planner audit completed",
+          );
+        if (
+          link.audit.status !== "running" ||
+          link.agent.status !== "completed" ||
+          link.execution.status !== "running"
+        )
+          throw new Error("Planner draft audit is no longer active");
+        const now = getNow();
+        for (const finding of input.findings)
+          draftAiAuditFindings.push({
+            id: nextDraftAiAuditFindingId++,
+            audit_run_id: link.audit.id,
+            rule_key: finding.ruleKey,
+            severity: finding.severity,
+            message: finding.message.trim().replace(/\s+/gu, " "),
+            created_at: now,
+          });
+        link.audit.status = "completed";
+        link.audit.summary = input.summary.trim();
+        link.audit.error_message = "";
+        link.audit.completed_at = now;
+        link.audit.updated_at = now;
+        link.agent.output_summary = link.audit.summary;
+        link.agent.updated_at = now;
+        link.execution.status = "completed";
+        link.execution.error_summary = "";
+        link.execution.completed_at = now;
+        link.execution.updated_at = now;
+        const draftIds = new Set(
+          workflowArtifacts
+            .filter(
+              (row) =>
+                row.workflow_run_id === link.run.id &&
+                row.artifact_type === "draft",
+            )
+            .map((row) => row.artifact_id),
+        );
+        const remaining = draftVariants.filter(
+          (row) =>
+            draftIds.has(row.draft_id) &&
+            !draftAiAuditRuns.some(
+              (audit) =>
+                audit.draft_variant_id === row.id &&
+                audit.content_revision === row.content_revision &&
+                audit.status === "completed",
+            ),
+        ).length;
+        if (remaining) {
+          link.step.status = "pending";
+          link.step.output_summary = `${remaining} current draft revision(s) remain to audit.`;
+          link.step.completed_at = null;
+          link.step.updated_at = now;
+          return { terminal: false };
+        }
+        const approve = workflowSteps.find(
+          (row) =>
+            row.workflow_run_id === link.run.id && row.step_key === "approve",
+        );
+        if (
+          !approve ||
+          !["pending", "blocked", "failed"].includes(approve.status) ||
+          link.run.current_step_key !== "audit" ||
+          link.run.status !== "running"
+        )
+          throw new Error("Planner workflow could not advance to approval");
+        link.step.status = "completed";
+        link.step.output_summary =
+          "All current draft revisions passed through AI audit.";
+        link.step.completed_at = now;
+        link.step.updated_at = now;
+        approve.status = "waiting_approval";
+        approve.started_at ??= now;
+        approve.completed_at = null;
+        approve.error_message = "";
+        approve.updated_at = now;
+        link.run.status = "waiting_approval";
+        link.run.current_step_key = "approve";
+        link.run.updated_at = now;
+        addNativeWorkflowEvent(
+          link.run.id,
+          link.step.id,
+          "step_completed",
+          "Draft AI audits completed",
+        );
+        addNativeWorkflowEvent(
+          link.run.id,
+          approve.id,
+          "step_waiting_approval",
+          "Drafts are waiting for approval",
+        );
+        return { terminal: true };
+      });
+    }
+
+    function failNativePlannerDraftAudit(args?: unknown): Promise<unknown> {
+      return nativeAuditMutation(() => {
+        const input = nativeScoringInput<{
+          agentRunId: number;
+          errorSummary: string;
+        }>(args);
+        failNativePlannerDraftAuditLink(
+          input.agentRunId,
+          input.errorSummary.trim().slice(0, 1000),
+        );
+        return null;
+      });
+    }
+
+    function reconcileNativePlannerDraftAudits(
+      args?: unknown,
+    ): Promise<unknown> {
+      return nativeAuditMutation(() => {
+        const limit = nativeScoringInput<{ limit?: number }>(args).limit ?? 25;
+        if (limit < 1 || limit > 100)
+          throw new Error("Reconcile limit is invalid");
+        const cutoff = Date.now() - 15 * 60 * 1000;
+        const links = draftAiAuditRuns
+          .flatMap((audit) => {
+            const agent = agentRuns.find(
+              (row) => row.id === audit.agent_run_id,
+            );
+            const execution = workflowStepExecutions.find(
+              (row) =>
+                row.id === audit.workflow_step_execution_id &&
+                row.agent_run_id === agent?.id,
+            );
+            return agent &&
+              execution &&
+              agent.agent_role === "auditor" &&
+              agent.workflow_run_id !== null &&
+              ["queued", "running", "waiting_approval", "completed"].includes(
+                agent.status,
+              ) &&
+              ["pending", "running"].includes(audit.status) &&
+              ["claimed", "running", "waiting_approval"].includes(
+                execution.status,
+              ) &&
+              Math.max(
+                Date.parse(agent.updated_at),
+                Date.parse(audit.updated_at),
+                Date.parse(execution.updated_at),
+              ) <= cutoff
+              ? [{ audit, agent, execution }]
+              : [];
+          })
+          .sort(
+            (a, b) =>
+              Date.parse(a.audit.updated_at) - Date.parse(b.audit.updated_at) ||
+              a.audit.id - b.audit.id,
+          )
+          .slice(0, limit);
+        for (const link of links)
+          failNativePlannerDraftAuditLink(
+            link.agent.id,
+            "Planner draft audit exceeded the 15-minute settlement window.",
+          );
+        return {
+          failedAuditRunIds: links.map((x) => x.audit.id),
+          failedAgentRunIds: links.map((x) => x.agent.id),
+          failedExecutionIds: links.map((x) => x.execution.id),
+          failedWorkflowRunIds: links.map(
+            (x) => x.agent.workflow_run_id as number,
+          ),
+        };
+      });
+    }
+
     function failNativeScoringAgentCommand(args?: unknown): Promise<unknown> {
       return runNativeScoringMutation(() => {
         const input = nativeScoringInput<{
@@ -10262,13 +10930,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         if (cmd === "linkgo_relevance_scoring_reconcile") {
           return reconcileNativeScoringCommand(args);
         }
+        if (cmd === "linkgo_planner_draft_audit_claim")
+          return claimNativePlannerDraftAudit(args);
+        if (cmd === "linkgo_planner_draft_audit_complete")
+          return completeNativePlannerDraftAudit(args);
+        if (cmd === "linkgo_planner_draft_audit_fail")
+          return failNativePlannerDraftAudit(args);
+        if (cmd === "linkgo_planner_draft_audit_reconcile_stale")
+          return reconcileNativePlannerDraftAudits(args);
         if (cmd === "linkgo_relevance_scoring_fail_agent") {
           return failNativeScoringAgentCommand(args);
         }
         if (cmd === "plugin:sql|select")
           return selectSqlWithCampaignDelay(args);
-        if (cmd === "plugin:sql|execute")
-          return Promise.resolve(executeSql(args));
+        if (cmd === "plugin:sql|execute") {
+          const result = executeSql(args);
+          return Promise.resolve([result.rowsAffected, result.lastInsertId]);
+        }
         if (cmd === "plugin:sql|close") return Promise.resolve(true);
         if (cmd === "plugin:sql|load") return Promise.resolve("");
         if (cmd === "plugin:autostart|is_enabled") {

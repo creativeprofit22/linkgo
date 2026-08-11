@@ -22,11 +22,11 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 | 4 Keyword + trend discovery           | **Partial**           | Structured operator-triggered suggestions exist; expansion from real posts and competitor/source imports does not.                                                                                                       |
 | 5 Relevance filtering                 | **Partial**           | Rules-first intake plus attended planner-linked connected-provider scoring, exact-set atomic writes, rationale, and optional low-score rejection exist; unattended/background scoring and a production connector remain. |
 | 6 Draft generation                    | **Implemented (6A)**  | Exactly 3–5 save-gated provider variants use fixed event, launch, idea, or community prompt routes and optional planner workflow provenance.                                                                             |
-| 7 Humanizer + audit                   | **Partial**           | Revision-scoped AI audit runtime and recovery exist; operator/workflow execution and enforced believable first-person specifics remain.                                                                                  |
+| 7 Humanizer + audit                   | **Partial**           | Revision-scoped AI audit runtime and attended planner-linked saved-draft workflow execution exist; enforced believable first-person specifics remain.                                                                    |
 | 8 Quality scoring loop                | **Not started**       | No persisted category scorecard, threshold rewrite, or automatic re-score loop exists. Manual edit and re-audit is only a foundation.                                                                                    |
 | 9 Content calendar                    | **Implemented**       | Purpose, angle, format, visual direction, CTA, and the approval bridge exist.                                                                                                                                            |
 | 10 Approval gate                      | **Partial**           | Durable human approvals and runtime continuation exist; shareable review links and wait URLs do not.                                                                                                                     |
-| 11 Durable workflow engine            | **Partial**           | Typed resumable steps, events, attempts, agent-run artifacts, and planner candidate-artifact flow exist; broader domain artifacts and owned background jobs remain.                                                      |
+| 11 Durable workflow engine            | **Partial**           | Typed resumable steps, events, attempts, agent-run artifacts, and planner candidate/draft/audit flow exist; approval/schedule/metric artifacts and owned background jobs remain.                                         |
 | 12 Publishing + scheduling            | **Partial**           | Native LinkedIn scheduling, retries, idempotency, and platform IDs exist; a destination abstraction and additional providers do not.                                                                                     |
 | 13 Comment/reply agent                | **Partial**           | Approval-gated manual variants and API posting exist; provider-generated comments and background work do not.                                                                                                            |
 | 14 LinkedIn API formatting            | **Partial**           | LittleText escaping and text limits exist; unified media/link preflight is incomplete.                                                                                                                                   |
@@ -47,7 +47,8 @@ Roadmap 3 remains **Partial / Blocked** until one compliant production source co
 4. **3D — Autopilot planner (complete):** Connector-neutral local source contracts and a bounded, idempotent native planner create linked scoring backlog/workflow work and exact candidate artifacts for active `auto_pilot` campaigns. Research is complete and score is pending.
 5. **5A — Planner-linked relevance scoring (complete slice):** An operator can confirm a connected provider, exact scope, threshold, and optional low-score rejection in Workflows. Exact score sets commit atomically and synchronize workflow/backlog state. The native planner remains model-free.
 6. **6A — Planner-linked draft generation (complete):** Route `event`, `launch`, `idea`, or `community`; generate exactly 3–5 provider-authored variants; keep linked work on `draft` until explicit save; then attach the draft artifact and start `audit`.
-7. **Production connector (blocked):** Complete Roadmap 3 with one remote source connector only after its API access, terms, permissions, and permitted use are verified.
+7. **7A — Planner-linked saved-draft AI audit (complete slice):** A human starts serial auditing of every variant's current revision in variant order with inherited generation provider/model provenance. Completed current revisions are skipped; failure and 15-minute stale recovery require explicit Resume. Final findings, audit completion, and the transition to human approval waiting settle atomically.
+8. **Production connector (blocked):** Complete Roadmap 3 with one remote source connector only after its API access, terms, permissions, and permitted use are verified.
 
 The safe default remains local structured source import. Arbitrary LinkedIn feed search, scraping, browser automation, and autonomous external actions are excluded.
 
@@ -119,9 +120,9 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 - Force believable first-person specifics.
 - Pattern: `Core-Mate/OpenGUI/server/apps/backend/src/modules/creator-agent/templates/platform-prompts.ts`.
 
-**Evidence:** Deterministic blockers and warnings are implemented. The callable, revision-scoped AI auditor reserves durable work before provider execution, validates exact `audit_post` identity and canonical text, atomically stores all six findings, rejects stale results, and reconciles interrupted audit/agent lifecycle state at startup.
+**Evidence:** Deterministic blockers and warnings are implemented. The callable, revision-scoped AI auditor reserves durable work before provider execution, validates exact `audit_post` identity and canonical text, atomically stores all six findings, rejects stale results, and reconciles interrupted audit/agent lifecycle state at startup. The planner-linked saved-draft slice adds Migration 32 and attended workflow ownership: every variant's current revision runs serially in variant order using the saved generation provider/model or that provider's default model. Completed current revisions are skipped. Failures stop durably until explicit **Resume variant audits**, while linked claims stale after 15 minutes are transactionally failed for the same Resume path. Claim, failure, and settlement are transactional; the final six findings, audit/execution completion, `audit` completion, and `approve` `waiting_approval` transition commit together. Warning and `block` findings remain human-review evidence rather than automatically blocking approval. Manual audits are unchanged.
 
-**Remaining:** Roadmap 7 remains **Partial** because AI audit has no operator UI or workflow-owned automatic execution, and believable first-person specifics are reported as findings rather than enforced before approval.
+**Remaining:** Roadmap 7 remains **Partial** because believable first-person specifics are reported as findings rather than enforced before approval. This slice does not automate approval, scheduling, publishing, rewriting, or other external actions.
 
 ## 8. Quality scoring loop — Not started
 
@@ -157,9 +158,9 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 - Patterns: `kaiban-ai/KaibanJS/packages/workflow/src/workflow.ts`, `jwynia/agent-skills/skills/tech/ai/mastra-hono/assets/workflow-template.ts`.
 - Keep long jobs resumable; expose step progress to UI.
 
-**Evidence:** Typed resumable steps, workflow events and attempts, agent-run artifacts, and planner-linked `candidate_post` artifact flow exist. Score claims reject duplicate active attempts and retain retry history.
+**Evidence:** Typed resumable steps, workflow events and attempts, agent-run artifacts, planner-linked `candidate_post` and saved `draft` artifact flow, and attended planner-owned AI audit execution exist. Score and audit claims reject duplicate active attempts and retain durable retry history.
 
-**Remaining:** Complete broader draft/approval/schedule/metric artifact flow and owned background jobs.
+**Remaining:** Complete approval/schedule/metric artifact flow and owned background jobs.
 
 ## 12. Publishing + scheduling — Partial
 

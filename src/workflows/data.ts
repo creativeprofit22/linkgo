@@ -457,10 +457,12 @@ export async function reconcileWorkflowAgentRunInTransaction(
       ws.*,
       wr.status AS run_status,
       wr.campaign_id,
-      c.status AS campaign_status
+      c.status AS campaign_status,
+      ap.id AS autopilot_plan_id
     FROM workflow_steps ws
     INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
     INNER JOIN campaigns c ON c.id = wr.campaign_id
+    LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
     WHERE ws.id = $1
     LIMIT 1`,
     [link.workflow_step_id],
@@ -471,6 +473,12 @@ export async function reconcileWorkflowAgentRunInTransaction(
     step.workflow_run_id !== link.workflow_run_id ||
     step.run_status === "cancelled"
   ) {
+    return false;
+  }
+
+  // Planner draft audits are settled atomically by their native complete/fail
+  // commands after the generic agent runtime has persisted provider output.
+  if (step.step_key === "audit" && step.autopilot_plan_id !== null) {
     return false;
   }
 

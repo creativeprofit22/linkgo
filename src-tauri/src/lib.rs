@@ -4,6 +4,7 @@ mod autopilot_planner;
 mod campaign_backlog;
 mod metric_refresh;
 mod migrations;
+mod planner_draft_audits;
 mod plugins;
 mod relevance_scoring;
 mod scheduler;
@@ -61,6 +62,10 @@ pub fn run() {
             relevance_scoring::linkgo_relevance_scoring_fail,
             relevance_scoring::linkgo_relevance_scoring_reconcile,
             relevance_scoring::linkgo_relevance_scoring_fail_agent,
+            planner_draft_audits::linkgo_planner_draft_audit_claim,
+            planner_draft_audits::linkgo_planner_draft_audit_complete,
+            planner_draft_audits::linkgo_planner_draft_audit_fail,
+            planner_draft_audits::linkgo_planner_draft_audit_reconcile_stale,
             scheduler::linkgo_scheduler_status,
             scheduler::linkgo_scheduler_start,
             scheduler::linkgo_scheduler_stop,

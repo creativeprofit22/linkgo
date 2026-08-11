@@ -78,6 +78,7 @@ export interface DraftAiAuditRun {
   draft_variant_id: number;
   content_revision: number;
   agent_run_id: number | null;
+  workflow_step_execution_id: number | null;
   provider_key: AgentProviderKey;
   model_name: string;
   status: DraftAiAuditRunStatus;
@@ -87,6 +88,16 @@ export interface DraftAiAuditRun {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DraftAiAuditSnapshot {
+  draft_variant_id: number;
+  campaign_id: number;
+  content_revision: number;
+  hook: string;
+  body: string;
+  cta: string;
+  hashtags: string;
 }
 
 export interface DraftAiAuditFinding {
@@ -120,6 +131,8 @@ export interface ReconcileDraftAiAuditLifecycleInput {
 export interface ReconcileDraftAiAuditLifecycleResult {
   failedAuditRunIds: number[];
   failedAgentRunIds: number[];
+  failedExecutionIds: number[];
+  failedWorkflowRunIds: number[];
   clearedApprovalCheckpointCount: number;
 }
 
@@ -131,16 +144,18 @@ export interface StartDraftAiAuditRunInput {
   modelName?: string;
 }
 
+export interface DraftAiAuditFindingInput {
+  ruleKey: DraftAiAuditRuleKey;
+  severity: DraftAuditSeverity;
+  message: string;
+}
+
 export interface CompleteDraftAiAuditRunInput {
   auditRunId: number;
   draftVariantId: number;
   contentRevision: number;
   summary?: string;
-  findings: Array<{
-    ruleKey: DraftAiAuditRuleKey;
-    severity: DraftAuditSeverity;
-    message: string;
-  }>;
+  findings: DraftAiAuditFindingInput[];
 }
 
 export interface FailDraftAiAuditRunInput {
@@ -148,6 +163,28 @@ export interface FailDraftAiAuditRunInput {
   draftVariantId: number;
   contentRevision: number;
   errorMessage: string;
+}
+
+export interface CompletePlannerDraftAuditInput {
+  agentRunId: number;
+  summary: string;
+  findings: DraftAiAuditFindingInput[];
+}
+
+export interface FailPlannerDraftAuditInput {
+  agentRunId: number;
+  errorSummary: string;
+}
+
+export interface ReconcileStalePlannerDraftAuditsInput {
+  limit?: number;
+}
+
+export interface ReconcileStalePlannerDraftAuditsResult {
+  failedAuditRunIds: number[];
+  failedAgentRunIds: number[];
+  failedExecutionIds: number[];
+  failedWorkflowRunIds: number[];
 }
 
 export type DraftVariantWithAudits = DraftVariant & {

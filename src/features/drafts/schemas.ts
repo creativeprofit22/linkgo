@@ -39,6 +39,7 @@ export const draftAiAuditRunRowSchema = z
     draft_variant_id: z.number().int().positive(),
     content_revision: z.number().int().positive(),
     agent_run_id: z.number().int().positive().nullable(),
+    workflow_step_execution_id: z.number().int().positive().nullable(),
     provider_key: agentProviderKeySchema,
     model_name: z.string().max(120),
     status: draftAiAuditRunStatusSchema,
@@ -138,12 +139,33 @@ export const completeDraftAiAuditRunSchema = z
   })
   .strict();
 
+export const completePlannerDraftAuditSchema = z
+  .object({
+    agentRunId: z.number().int().positive(),
+    summary: z.string().trim().min(1).max(1000),
+    findings: draftAiAuditFindingsSchema,
+  })
+  .strict();
+
 export const failDraftAiAuditRunSchema = z
   .object({
     auditRunId: z.number().int().positive(),
     draftVariantId: z.number().int().positive(),
     contentRevision: z.number().int().positive(),
     errorMessage: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+
+export const failPlannerDraftAuditSchema = z
+  .object({
+    agentRunId: z.number().int().positive(),
+    errorSummary: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+
+export const reconcileStalePlannerDraftAuditsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(100).default(25),
   })
   .strict();
 

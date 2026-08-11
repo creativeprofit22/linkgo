@@ -144,7 +144,10 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
           __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
         }
       ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
-    return calls.map((call) => call.query.trim().toLocaleUpperCase());
+    const normalized = calls.map((call) =>
+      call.query.trim().toLocaleUpperCase(),
+    );
+    return normalized.slice(normalized.lastIndexOf("BEGIN TRANSACTION"));
   });
 
   expect(stateCounts).toEqual({

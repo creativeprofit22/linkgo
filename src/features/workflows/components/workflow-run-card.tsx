@@ -79,6 +79,10 @@ export function WorkflowRunCard({
     run.autopilot_plan_id !== null &&
     run.currentStep?.step_key === "draft" &&
     !terminalStatuses.includes(run.status);
+  const plannerAuditStep =
+    run.autopilot_plan_id !== null &&
+    run.currentStep?.step_key === "audit" &&
+    !terminalStatuses.includes(run.status);
   const unscopedScoreStep =
     run.currentStep?.step_key === "score" && run.candidateScope === null;
   const visibleArtifacts = run.artifacts.filter((artifact) =>
@@ -132,6 +136,12 @@ export function WorkflowRunCard({
               <p className="text-muted-foreground text-xs">
                 This planner-linked draft step is save-only. Open Drafts,
                 generate variants, and save one to continue to audit.
+              </p>
+            ) : null}
+            {plannerAuditStep ? (
+              <p className="text-muted-foreground text-xs">
+                Audits every saved variant’s current revision, using the
+                provider and model inherited from draft generation.
               </p>
             ) : null}
             <p className="text-muted-foreground text-sm">
@@ -202,7 +212,13 @@ export function WorkflowRunCard({
                       disabled={actionPending}
                       onClick={() => void onExecuteRun({ id: run.id })}
                     >
-                      {actionPending ? "Running executor…" : "Run executor"}
+                      {actionPending
+                        ? plannerAuditStep
+                          ? "Auditing saved variants…"
+                          : "Running executor…"
+                        : plannerAuditStep
+                          ? "Audit all saved variants"
+                          : "Run executor"}
                     </Button>
                   ) : null}
                   {canResume ? (
@@ -213,7 +229,13 @@ export function WorkflowRunCard({
                       disabled={actionPending}
                       onClick={() => void onResumeRun({ id: run.id })}
                     >
-                      {actionPending ? "Resuming…" : "Resume executor"}
+                      {actionPending
+                        ? plannerAuditStep
+                          ? "Resuming variant audits…"
+                          : "Resuming…"
+                        : plannerAuditStep
+                          ? "Resume variant audits"
+                          : "Resume executor"}
                     </Button>
                   ) : null}
                 </>

@@ -380,6 +380,11 @@ async function createReadyDraftOnCurrentCampaign(
   await createDraft(page, variant);
   await page.getByRole("button", { name: "Select for review" }).first().click();
   await expect(getBadge(page, "Ready for review")).toBeVisible();
+  const auditPanel = page.getByRole("region", { name: /AI audit/ }).first();
+  await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
+  await expect(
+    auditPanel.getByText("Completed", { exact: true }),
+  ).toBeVisible();
 }
 
 async function addCandidate(page: Page, suffix: string): Promise<void> {
