@@ -4,15 +4,25 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ## Audit status
 
-**Audited:** July 31, 2026
+**Audited:** August 11, 2026
 
-**Verification:** Formatting, lint, production builds, all 212 Playwright tests, and all 121 Rust tests pass after Roadmap 5A. Desktop and 320-pixel relevance-scoring screenshots were reviewed.
+**Repository baseline:** Clean `main` at `2a79b10` (`feat(workflows): audit planner drafts before approval`) before this roadmap-only update. The schema is ordered through Migration 32.
+
+**Status summary:** 5 sections implemented, 14 partial (including one externally blocked), and 1 not started.
 
 - **Implemented:** Every core acceptance statement in the numbered item exists.
 - **Partial:** A usable foundation exists, but one or more explicit roadmap outcomes are missing.
 - **Not started:** The defining outcome does not exist, even if adjacent foundations do.
 - **Blocked:** Implementation requires product, legal, platform-access, or architecture approval.
-- **Next:** The partial item currently receiving implementation work.
+
+### Audit evidence
+
+- **Quality gate:** `bun run check` is not green because Prettier reports existing style issues in `src/agent/schemas.ts` and `docs/ROADMAP_MAPPING.md`. Independent runs passed ESLint, the TypeScript/Vite production build, all 270 Playwright tests, all 150 Rust tests, `cargo fmt --check`, and Clippy with warnings denied.
+- **Transaction integrity — critical:** Static inventory found 51 renderer-managed `BEGIN` blocks across 10 files: agent runtime (7), approvals (5), candidate policy (1), candidate queue (3), comments (7), drafts (13), metrics (3), safety (2), source imports (3), and workflows (7). Installed `@tauri-apps/plugin-sql` 2.4.0 dispatches each request through a SQLx pool, so separate `BEGIN`/write/`COMMIT` calls have no guaranteed connection affinity. The single-snapshot mock in `tests/helpers/tauri-mocks.ts` does not model that production boundary.
+- **Architecture drift:** `docs/ARCHITECTURE.md` says connection-affine multi-statement mutations use restricted native commands and that renderer code does not issue transaction control. The 51 renderer transaction blocks contradict that claim.
+- **Security posture:** No `dangerouslySetInnerHTML`, direct `innerHTML` assignment, `eval`, or `new Function` sink was found in frontend source. However, the default webview capability grants SQL load/select/execute access, while CSP permits arbitrary `http:` and `https:` connections; this increases the blast radius of any future renderer compromise.
+- **Roadmap/documentation drift:** Migrations 31–32 and the August revision-scoped audit work added operator audit controls, approval readiness enforcement, planner-linked serial audit execution, explicit resume, and stale recovery. `docs/ROADMAP_MAPPING.md` still says Section 7 lacks operator UI and workflow execution, and its summary predates these slices.
+- **External dependency:** Section 3 still requires one production source connector that passes LinkedIn/API terms, permissions, access, and permitted-use review. It is not an executable engineering item until that decision is supplied.
 
 | Roadmap                               | Status                | Evidence and remaining work                                                                                                                                                                                              |
 | ------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -21,7 +31,7 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 | 3 Campaign + autopilot queue          | **Partial / Blocked** | Campaigns, guarded connector-neutral local intake, recurring backlog planning, and the bounded idempotent Roadmap 3D local planner exist. One compliant production connector is the sole remaining access/terms blocker. |
 | 4 Keyword + trend discovery           | **Partial**           | Structured operator-triggered suggestions exist; expansion from real posts and competitor/source imports does not.                                                                                                       |
 | 5 Relevance filtering                 | **Partial**           | Rules-first intake plus attended planner-linked connected-provider scoring, exact-set atomic writes, rationale, and optional low-score rejection exist; unattended/background scoring and a production connector remain. |
-| 6 Draft generation                    | **Implemented (6A)**  | Exactly 3–5 save-gated provider variants use fixed event, launch, idea, or community prompt routes and optional planner workflow provenance.                                                                             |
+| 6 Draft generation                    | **Implemented**       | Exactly 3–5 save-gated provider variants use fixed event, launch, idea, or community prompt routes and optional planner workflow provenance.                                                                             |
 | 7 Humanizer + audit                   | **Partial**           | Revision-scoped AI audit runtime and attended planner-linked saved-draft workflow execution exist; enforced believable first-person specifics remain.                                                                    |
 | 8 Quality scoring loop                | **Not started**       | No persisted category scorecard, threshold rewrite, or automatic re-score loop exists. Manual edit and re-audit is only a foundation.                                                                                    |
 | 9 Content calendar                    | **Implemented**       | Purpose, angle, format, visual direction, CTA, and the approval bridge exist.                                                                                                                                            |
@@ -37,9 +47,17 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 | 19 Persistent task backlog            | **Implemented**       | One campaign-scoped cross-feature backlog now adds recurring due work, owner labels, lifecycle transitions, atomic successors, and bounded history to the durable feature stores.                                        |
 | 20 Error queue                        | **Partial**           | A fixable queue and transitions exist; rejected-draft and low-performance automatic items do not.                                                                                                                        |
 
-## Current delivery sequence: Roadmap 6
+## Priority queue
 
-Roadmap 3 remains **Partial / Blocked** until one compliant production source connector exists. Its local path is complete through bounded planning, attended scoring, and save-gated planner-linked draft generation.
+1. **P0 — Renderer transaction-integrity remediation:** Inventory every renderer-managed transaction, then migrate each atomic mutation to a capability-specific native command that owns a pinned SQLx connection. Add real-SQLite rollback and concurrency tests that bypass the Playwright transaction mock, and enforce a static rule that prevents new renderer-issued `BEGIN`, `COMMIT`, or `ROLLBACK`. Complete this before further autonomous workflow work.
+2. **P1 — Section 8 bounded quality loop:** After P0, persist the category scorecard, enforce the minimum threshold, and add a bounded rewrite/re-audit/re-score loop with terminal failure handling. Keep approval human-gated; no score may approve, schedule, publish, or comment.
+3. **P1 — Complete the CI Rust gate:** Add `cargo fmt --check` and Clippy with warnings denied to the release gate, then fix the two current Prettier failures so `bun run check` is genuinely green.
+4. **P1 — Minimize renderer capabilities:** Replace broad default SQL permissions with the smallest capability set compatible with native-command migration, and narrow CSP `connect-src` to documented provider/OAuth endpoints.
+5. **P2 — Synchronize documentation:** Correct `docs/ARCHITECTURE.md`, `docs/ROADMAP_MAPPING.md`, and README status language after the transaction boundary and current audit workflow are accurately represented.
+
+## Delivered campaign-to-audit sequence
+
+Roadmap 3 remains **Partial / Blocked** until one compliant production source connector exists. Its local path is complete through bounded planning, attended scoring, save-gated planner-linked draft generation, and attended revision-scoped audit execution.
 
 1. **3A — Local source import foundation (complete):** Bounded JSON import, per-row validation, shared candidate dedupe, durable batch outcomes, and reviewable rejection reasons.
 2. **3B — Candidate policy guardrails (complete):** Age, source, banned-topic, and already-contacted rules run before enforced intake can write candidate artifacts.
@@ -50,7 +68,7 @@ Roadmap 3 remains **Partial / Blocked** until one compliant production source co
 7. **7A — Planner-linked saved-draft AI audit (complete slice):** A human starts serial auditing of every variant's current revision in variant order with inherited generation provider/model provenance. Completed current revisions are skipped; failure and 15-minute stale recovery require explicit Resume. Final findings, audit completion, and the transition to human approval waiting settle atomically.
 8. **Production connector (blocked):** Complete Roadmap 3 with one remote source connector only after its API access, terms, permissions, and permitted use are verified.
 
-The safe default remains local structured source import. Arbitrary LinkedIn feed search, scraping, browser automation, and autonomous external actions are excluded.
+The safe default remains local structured source import. Arbitrary LinkedIn feed search, scraping, browser automation, autonomous external actions, and unattended model execution are excluded.
 
 ## 1. Agent runtime — Implemented
 
