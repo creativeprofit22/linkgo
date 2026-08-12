@@ -2306,6 +2306,7 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-single-instance",
  "tauri-plugin-sql",
+ "tempfile",
  "tokio",
  "tokio-util",
 ]

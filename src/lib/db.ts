@@ -95,7 +95,7 @@ export async function getDb(): Promise<LinkgoDatabase> {
   if (!IS_TAURI) return mockDb;
   if (!dbInstance) {
     const Database = (await import("@tauri-apps/plugin-sql")).default;
-    dbInstance = (await Database.load(DB_PATH)) as unknown as LinkgoDatabase;
+    dbInstance = Database.get(DB_PATH) as unknown as LinkgoDatabase;
   }
   return dbInstance;
 }

@@ -27,15 +27,12 @@ fn update_tray_menu(
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:linkgo.db", migrations::get_migrations())
-                .build(),
-        )
+        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(plugins::system_tray::init())
         .setup(|app| {
             let pool =
-                autopilot_planner::managed_pool(app.handle()).map_err(std::io::Error::other)?;
+                tauri::async_runtime::block_on(autopilot_planner::managed_pool(app.handle()))
+                    .map_err(std::io::Error::other)?;
             app.manage(pool);
             app.manage(autopilot_planner::AutopilotPlannerWorkerState::default());
             Ok(())

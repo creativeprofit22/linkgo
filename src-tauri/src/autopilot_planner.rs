@@ -9,7 +9,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::pin::Pin;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::{async_runtime::JoinHandle, AppHandle, State};
+use tauri::{async_runtime::JoinHandle, AppHandle, Manager, State};
 use tokio::sync::oneshot;
 use tokio::time::{interval_at, timeout, Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
@@ -932,15 +932,40 @@ fn create_runner_id(prefix: &str) -> String {
     format!("{prefix}-{}", unix_timestamp_millis())
 }
 
-pub(crate) fn managed_pool(app: &AppHandle) -> Result<SqlitePool, String> {
+pub(crate) async fn managed_pool(app: &AppHandle) -> Result<SqlitePool, String> {
+    let instances = app.state::<tauri_plugin_sql::DbInstances>();
+    let mut instances = instances.0.write().await;
+    if let Some(existing) = instances.remove("sqlite:linkgo.db") {
+        match existing {
+            tauri_plugin_sql::DbPool::Sqlite(pool) => pool.close().await,
+            #[allow(unreachable_patterns)]
+            _ => return Err("Linkgo database is not SQLite".to_string()),
+        }
+    }
+
+    let sqlite_path = app_sqlite_path(app)?;
+    if let Some(parent) = sqlite_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create Linkgo database directory: {error}"))?;
+    }
     let options = SqliteConnectOptions::new()
-        .filename(app_sqlite_path(app)?)
+        .filename(sqlite_path)
         .create_if_missing(true)
         .foreign_keys(true)
         .busy_timeout(Duration::from_secs(5));
-    Ok(SqlitePoolOptions::new()
-        .max_connections(4)
-        .connect_lazy_with(options))
+    crate::migrations::migrate_database(&options).await?;
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .map_err(|error| format!("Could not reopen Linkgo database: {error}"))?;
+    instances.insert(
+        "sqlite:linkgo.db".to_string(),
+        tauri_plugin_sql::DbPool::Sqlite(pool.clone()),
+    );
+    debug_assert_eq!(pool.options().get_max_connections(), 1);
+    Ok(pool)
 }
 
 fn current_worker(worker_state: &AutopilotPlannerWorkerState) -> (bool, Option<String>) {

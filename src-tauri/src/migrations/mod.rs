@@ -27,7 +27,13 @@ pub mod scheduler;
 pub mod source_imports;
 pub mod workflow_artifacts;
 pub mod workflows;
-use tauri_plugin_sql::Migration;
+use sqlx::{
+    migrate::{Migration as SqlxMigration, MigrationType, Migrator},
+    sqlite::SqliteConnectOptions,
+    Connection, SqliteConnection,
+};
+use std::borrow::Cow;
+use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub fn get_migrations() -> Vec<Migration> {
     let mut migrations = campaigns::migrations();
@@ -62,9 +68,121 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations
 }
 
+fn sqlx_migrator() -> Migrator {
+    let migrations = get_migrations()
+        .into_iter()
+        .filter_map(|migration| match migration.kind {
+            MigrationKind::Up => Some(SqlxMigration::new(
+                migration.version,
+                migration.description.into(),
+                MigrationType::ReversibleUp,
+                migration.sql.into(),
+                false,
+            )),
+            MigrationKind::Down => None,
+        })
+        .collect();
+
+    Migrator {
+        migrations: Cow::Owned(migrations),
+        ..Migrator::DEFAULT
+    }
+}
+
+pub async fn migrate_database(options: &SqliteConnectOptions) -> Result<(), String> {
+    let mut connection = SqliteConnection::connect_with(options)
+        .await
+        .map_err(|error| format!("Failed to open Linkgo database for migration: {error}"))?;
+
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut connection)
+        .await
+        .map_err(|error| format!("Failed to suspend foreign keys before migration: {error}"))?;
+    sqlx::query("PRAGMA legacy_alter_table = ON")
+        .execute(&mut connection)
+        .await
+        .map_err(|error| {
+            format!("Failed to protect child foreign keys during migration: {error}")
+        })?;
+
+    repair_provider_parity_references(&mut connection).await?;
+    sqlx_migrator()
+        .run(&mut connection)
+        .await
+        .map_err(|error| format!("Failed to migrate Linkgo database: {error}"))?;
+
+    sqlx::query("PRAGMA legacy_alter_table = OFF")
+        .execute(&mut connection)
+        .await
+        .map_err(|error| format!("Failed to restore ALTER TABLE behavior: {error}"))?;
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut connection)
+        .await
+        .map_err(|error| format!("Failed to restore foreign keys after migration: {error}"))?;
+
+    let violations: i64 = sqlx::query("PRAGMA foreign_key_check")
+        .fetch_all(&mut connection)
+        .await
+        .map_err(|error| format!("Failed to validate migrated foreign keys: {error}"))?
+        .len() as i64;
+    if violations != 0 {
+        return Err(format!(
+            "Linkgo database has {violations} foreign key violation(s) after migration"
+        ));
+    }
+
+    Ok(())
+}
+
+async fn repair_provider_parity_references(
+    connection: &mut SqliteConnection,
+) -> Result<(), String> {
+    let contaminated: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sqlite_schema
+         WHERE sql LIKE '%agent_runs_legacy_provider_parity%'",
+    )
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(|error| format!("Failed to inspect provider-parity foreign keys: {error}"))?;
+    if contaminated == 0 {
+        return Ok(());
+    }
+
+    sqlx::query("PRAGMA writable_schema = ON")
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| format!("Failed to enable provider-parity schema repair: {error}"))?;
+    let repair_result = sqlx::query(
+        "UPDATE sqlite_schema
+         SET sql = replace(
+             replace(sql, '\"agent_runs_legacy_provider_parity\"', 'agent_runs'),
+             'agent_runs_legacy_provider_parity', 'agent_runs'
+         )
+         WHERE sql LIKE '%agent_runs_legacy_provider_parity%'",
+    )
+    .execute(&mut *connection)
+    .await;
+    sqlx::query("PRAGMA writable_schema = OFF")
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| format!("Failed to disable provider-parity schema repair: {error}"))?;
+    repair_result
+        .map_err(|error| format!("Failed to repair provider-parity foreign keys: {error}"))?;
+    let schema_version: i64 = sqlx::query_scalar("PRAGMA schema_version")
+        .fetch_one(&mut *connection)
+        .await
+        .map_err(|error| format!("Failed to read SQLite schema version: {error}"))?;
+    sqlx::query(&format!("PRAGMA schema_version = {}", schema_version + 1))
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| format!("Failed to reload repaired SQLite schema: {error}"))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::get_migrations;
+    use super::{get_migrations, migrate_database};
     use sqlx::{
         migrate::{Migration as SqlxMigration, MigrationType, Migrator},
         sqlite::SqliteConnectOptions,
@@ -93,6 +211,154 @@ mod tests {
             migrations: Cow::Owned(migrations),
             ..Migrator::DEFAULT
         }
+    }
+
+    async fn open_fixture() -> (tempfile::TempDir, SqliteConnectOptions) {
+        let directory = tempfile::tempdir().expect("fixture directory should be created");
+        let options = SqliteConnectOptions::new()
+            .filename(directory.path().join("linkgo.db"))
+            .create_if_missing(true)
+            .foreign_keys(true);
+        (directory, options)
+    }
+
+    async fn assert_fixture_integrity(options: &SqliteConnectOptions) {
+        let mut connection = SqliteConnection::connect_with(options)
+            .await
+            .expect("migrated fixture should open");
+        let violations = sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&mut connection)
+            .await
+            .expect("foreign keys should be checkable");
+        assert!(violations.is_empty(), "foreign key violations detected");
+        for (table, expected) in [
+            ("agent_runs", 1_i64),
+            ("agent_tool_calls", 1),
+            ("agent_run_events", 1),
+            ("workflow_step_executions", 1),
+        ] {
+            let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+                .fetch_one(&mut connection)
+                .await
+                .expect("fixture row count should be queryable");
+            assert_eq!(count, expected, "{table} data changed during migration");
+        }
+        let contaminated: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_schema WHERE sql LIKE '%agent_runs_legacy_provider_parity%'",
+        )
+        .fetch_one(&mut connection)
+        .await
+        .expect("schema should be inspectable");
+        assert_eq!(contaminated, 0);
+        let provider: String =
+            sqlx::query_scalar("SELECT provider_key FROM agent_runs WHERE id = 1")
+                .fetch_one(&mut connection)
+                .await
+                .expect("provider should survive");
+        assert_eq!(provider, "gemini");
+    }
+
+    const PRE_21_FIXTURE: &str = r#"
+        INSERT INTO campaigns (id, name) VALUES (1, 'Fixture');
+        INSERT INTO workflow_runs (id, campaign_id, title, status) VALUES (1, 1, 'Fixture', 'running');
+        INSERT INTO workflow_steps (id, workflow_run_id, step_key, title, sort_order, status)
+        VALUES (1, 1, 'research', 'Research', 1, 'running');
+        INSERT INTO agent_runs
+          (id, campaign_id, workflow_run_id, workflow_step_id, agent_role, provider_key, status)
+        VALUES (1, 1, 1, 1, 'researcher', 'google', 'running');
+        INSERT INTO agent_tool_calls (id, agent_run_id, tool_name) VALUES (1, 1, 'research_posts');
+        INSERT INTO agent_run_events (id, agent_run_id, event_type, summary)
+        VALUES (1, 1, 'run_created', 'fixture');
+        INSERT INTO workflow_step_executions
+          (id, workflow_step_id, agent_run_id, executor_role)
+        VALUES (1, 1, 1, 'researcher');
+    "#;
+
+    fn fixture_migrator(max_version: i64) -> Migrator {
+        let migrations = get_migrations()
+            .into_iter()
+            .filter(|migration| migration.version <= max_version)
+            .filter_map(|migration| match migration.kind {
+                MigrationKind::Up => Some(SqlxMigration::new(
+                    migration.version,
+                    migration.description.into(),
+                    MigrationType::ReversibleUp,
+                    migration.sql.into(),
+                    false,
+                )),
+                MigrationKind::Down => None,
+            })
+            .collect();
+        Migrator {
+            migrations: Cow::Owned(migrations),
+            ..Migrator::DEFAULT
+        }
+    }
+
+    async fn prepare_pre_21_fixture(options: &SqliteConnectOptions) {
+        let mut connection = SqliteConnection::connect_with(options)
+            .await
+            .expect("fixture SQLite should open");
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(&mut connection)
+            .await
+            .expect("foreign keys should disable");
+        sqlx::query("PRAGMA legacy_alter_table = ON")
+            .execute(&mut connection)
+            .await
+            .expect("legacy rename should enable");
+        fixture_migrator(10)
+            .run(&mut connection)
+            .await
+            .expect("prerequisites should migrate");
+        sqlx::query(PRE_21_FIXTURE)
+            .execute(&mut connection)
+            .await
+            .expect("fixture rows should insert");
+    }
+
+    #[test]
+    fn migration_21_fixtures_preserve_fresh_normal_and_contaminated_databases() {
+        tauri::async_runtime::block_on(async {
+            let (_fresh_dir, fresh) = open_fixture().await;
+            migrate_database(&fresh)
+                .await
+                .expect("fresh database should migrate");
+            let mut fresh_connection = SqliteConnection::connect_with(&fresh).await.unwrap();
+            assert!(sqlx::query("PRAGMA foreign_key_check")
+                .fetch_all(&mut fresh_connection)
+                .await
+                .unwrap()
+                .is_empty());
+
+            let (_normal_dir, normal) = open_fixture().await;
+            prepare_pre_21_fixture(&normal).await;
+            migrate_database(&normal)
+                .await
+                .expect("normal pre-21 database should migrate");
+            assert_fixture_integrity(&normal).await;
+
+            let (_contaminated_dir, contaminated) = open_fixture().await;
+            prepare_pre_21_fixture(&contaminated).await;
+            let mut connection = SqliteConnection::connect_with(&contaminated).await.unwrap();
+            sqlx::query("PRAGMA foreign_keys = OFF")
+                .execute(&mut connection)
+                .await
+                .unwrap();
+            sqlx::query("PRAGMA legacy_alter_table = OFF")
+                .execute(&mut connection)
+                .await
+                .unwrap();
+            fixture_migrator(11)
+                .run(&mut connection)
+                .await
+                .expect("historical migration should apply");
+            drop(connection);
+            migrate_database(&contaminated)
+                .await
+                .expect("contaminated database should repair and migrate");
+            assert_fixture_integrity(&contaminated).await;
+        });
     }
 
     async fn assert_sql_rejected(connection: &mut SqliteConnection, sql: &str) {
