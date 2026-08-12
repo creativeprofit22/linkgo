@@ -10895,8 +10895,127 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       label: "main",
     };
 
+    const recordPublishAttemptCommand = (args: unknown) => {
+      const invokes = Number(w.__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ ?? 0);
+      w.__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ = invokes + 1;
+      const input = (
+        args as {
+          input?: {
+            approvalId?: number;
+            scheduleJobId?: number;
+            status?: PublishAttemptStatus;
+            externalPostUrl?: string;
+            platformPostId?: string;
+            errorMessage?: string;
+          };
+        }
+      )?.input;
+      const approval = approvals.find((row) => row.id === input?.approvalId);
+      if (approval === undefined) throw new Error("Approval was not found");
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      if (campaign?.status === "archived")
+        throw new Error("Campaign is archived");
+      if (!["approved", "scheduled", "published"].includes(approval.status)) {
+        throw new Error(
+          "Only approved, scheduled, or published posts can record publish attempts",
+        );
+      }
+      if (approval.status === "published" && input?.status !== "failed") {
+        throw new Error(
+          "Published approvals can only record failed follow-up attempts",
+        );
+      }
+      const scheduleJob =
+        input?.scheduleJobId === undefined
+          ? undefined
+          : scheduleJobs.find(
+              (row) =>
+                row.id === input.scheduleJobId &&
+                row.approval_id === input.approvalId,
+            );
+      if (input?.scheduleJobId !== undefined && scheduleJob === undefined) {
+        throw new Error("Schedule job was not found");
+      }
+
+      const now = new Date().toISOString();
+      const attempt: PublishAttempt = {
+        id: nextPublishAttemptId++,
+        approval_id: approval.id,
+        schedule_job_id: scheduleJob?.id ?? null,
+        platform: "linkedin",
+        status: input?.status ?? "failed",
+        external_post_url: input?.externalPostUrl ?? "",
+        platform_post_id: input?.platformPostId ?? "",
+        error_message: input?.errorMessage ?? "",
+        created_at: now,
+      };
+      publishAttempts.push(attempt);
+      if (attempt.status === "succeeded") {
+        approval.status = "published";
+        if (scheduleJob !== undefined) scheduleJob.status = "completed";
+      } else if (approval.status !== "published") {
+        approval.status = "approved";
+        if (scheduleJob !== undefined) scheduleJob.status = "failed";
+      }
+      safetyAuditEvents.push({
+        id: nextSafetyAuditEventId++,
+        campaign_id: approval.campaign_id,
+        subject_type: "publish_attempt",
+        subject_id: attempt.id,
+        event_type:
+          attempt.status === "succeeded"
+            ? "publish_succeeded"
+            : "publish_failed",
+        severity: attempt.status === "succeeded" ? "info" : "warning",
+        summary:
+          attempt.status === "succeeded"
+            ? "Publish attempt succeeded"
+            : "Publish attempt failed",
+        metadata_json: JSON.stringify({
+          approvalId: approval.id,
+          scheduleJobId: scheduleJob?.id ?? null,
+          errorMessage: attempt.error_message,
+        }),
+        created_at: now,
+      });
+      if (attempt.status === "failed") {
+        const errorItem: ErrorQueueItem = {
+          id: nextErrorQueueItemId++,
+          campaign_id: approval.campaign_id,
+          source_type: "publish_attempt",
+          source_id: attempt.id,
+          title: "Publish attempt failed",
+          detail: attempt.error_message,
+          severity: "error",
+          status: "open",
+          resolution_notes: "",
+          created_at: now,
+          updated_at: now,
+        };
+        errorQueueItems.push(errorItem);
+        safetyAuditEvents.push({
+          id: nextSafetyAuditEventId++,
+          campaign_id: approval.campaign_id,
+          subject_type: "error_queue_item",
+          subject_id: errorItem.id,
+          event_type: "error_item_created",
+          severity: "warning",
+          summary: "Error item created: Publish attempt failed",
+          metadata_json: JSON.stringify({
+            sourceType: "publish_attempt",
+            sourceId: attempt.id,
+          }),
+          created_at: now,
+        });
+      }
+      return Promise.resolve(attempt.id);
+    };
+
     w.__TAURI_INTERNALS__ = {
       invoke: (cmd: string, args?: unknown) => {
+        if (cmd === "linkgo_approval_record_publish_attempt") {
+          return recordPublishAttemptCommand(args);
+        }
         if (cmd === "linkgo_campaign_backlog_create") {
           return runCampaignBacklogCommand(() =>
             createCampaignBacklogCommand(args),

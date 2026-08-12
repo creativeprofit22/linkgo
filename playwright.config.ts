@@ -27,7 +27,7 @@ export default defineConfig({
   webServer: {
     command: `bun run build && bun run preview -- --host 127.0.0.1 --port ${previewPort}`,
     url: previewUrl,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120000,
     env: {
       VITE_PLAYWRIGHT: "true",

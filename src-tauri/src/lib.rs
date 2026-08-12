@@ -1,4 +1,5 @@
 mod agent_runtime;
+mod approvals;
 mod auth;
 mod autopilot_planner;
 mod campaign_backlog;
@@ -38,6 +39,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
+            approvals::linkgo_approval_record_publish_attempt,
             auth::commands::linkgo_auth_status,
             auth::commands::linkgo_auth_api_key,
             auth::commands::linkgo_auth_provider_secret,

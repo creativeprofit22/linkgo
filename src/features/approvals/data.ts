@@ -1,10 +1,10 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import { rejectAgentRunsForApprovalInTransaction } from "@/features/agent-runtime/data";
 import {
   assertApprovalCanPublishViaLinkedInSchema,
   cancelScheduleSchema,
   createApprovalSchema,
-  recordPublishAttemptSchema,
   scheduleApprovalSchema,
   setApprovalStatusSchema,
 } from "@/features/approvals/schemas";
@@ -986,154 +986,7 @@ export async function assertApprovalCanPublishViaLinkedIn(
 export async function recordPublishAttempt(
   input: RecordPublishAttemptInput,
 ): Promise<number> {
-  const parsed = recordPublishAttemptSchema.parse(input);
-  const db = await getDb();
-
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    const rows = await db.select<ApprovalCampaignRow[]>(
-      `SELECT
-        a.id,
-        a.campaign_id,
-        c.status AS campaign_status,
-        c.daily_post_limit,
-        a.status,
-        a.draft_id
-      FROM approvals a
-      INNER JOIN campaigns c ON c.id = a.campaign_id
-      WHERE a.id = $1
-      LIMIT 1`,
-      [parsed.approvalId],
-    );
-    const approval = rows[0];
-    if (approval === undefined) throw new Error("Approval was not found");
-    if (approval.campaign_status === "archived") {
-      throw new Error("Campaign is archived");
-    }
-    if (!["approved", "scheduled", "published"].includes(approval.status)) {
-      throw new Error(
-        "Only approved, scheduled, or published posts can record publish attempts",
-      );
-    }
-    if (approval.status === "published" && parsed.status !== "failed") {
-      throw new Error(
-        "Published approvals can only record failed follow-up attempts",
-      );
-    }
-
-    if (parsed.scheduleJobId !== undefined) {
-      const scheduleRows = await db.select<ScheduleValidationRow[]>(
-        `SELECT
-          sj.id,
-          sj.approval_id,
-          sj.status,
-          a.status AS approval_status,
-          a.campaign_id,
-          c.status AS campaign_status
-        FROM schedule_jobs sj
-        INNER JOIN approvals a ON a.id = sj.approval_id
-        INNER JOIN campaigns c ON c.id = a.campaign_id
-        WHERE sj.id = $1
-        LIMIT 1`,
-        [parsed.scheduleJobId],
-      );
-      const schedule = scheduleRows[0];
-      if (
-        schedule === undefined ||
-        schedule.approval_id !== parsed.approvalId
-      ) {
-        throw new Error("Schedule job was not found");
-      }
-    }
-
-    const result = await db.execute(
-      `INSERT INTO publish_attempts (
-        approval_id,
-        schedule_job_id,
-        platform,
-        status,
-        external_post_url,
-        platform_post_id,
-        error_message
-      ) VALUES ($1, $2, 'linkedin', $3, $4, $5, $6)`,
-      [
-        parsed.approvalId,
-        parsed.scheduleJobId ?? null,
-        parsed.status,
-        parsed.externalPostUrl,
-        parsed.platformPostId,
-        parsed.errorMessage,
-      ],
-    );
-
-    if (parsed.status === "succeeded") {
-      await db.execute(
-        `UPDATE approvals
-        SET status = 'published', updated_at = datetime('now')
-        WHERE id = $1`,
-        [parsed.approvalId],
-      );
-      if (parsed.scheduleJobId !== undefined) {
-        await db.execute(
-          `UPDATE schedule_jobs
-          SET status = 'completed', updated_at = datetime('now')
-          WHERE id = $1`,
-          [parsed.scheduleJobId],
-        );
-      }
-    }
-
-    if (parsed.status === "failed" && approval.status !== "published") {
-      await db.execute(
-        `UPDATE approvals
-        SET status = 'approved', updated_at = datetime('now')
-        WHERE id = $1`,
-        [parsed.approvalId],
-      );
-      if (parsed.scheduleJobId !== undefined) {
-        await db.execute(
-          `UPDATE schedule_jobs
-          SET status = 'failed', updated_at = datetime('now')
-          WHERE id = $1`,
-          [parsed.scheduleJobId],
-        );
-      }
-    }
-
-    await recordSafetyAuditEvent(db, {
-      campaignId: approval.campaign_id,
-      subjectType: "publish_attempt",
-      subjectId: result.lastInsertId,
-      eventType:
-        parsed.status === "succeeded" ? "publish_succeeded" : "publish_failed",
-      severity: parsed.status === "succeeded" ? "info" : "warning",
-      summary:
-        parsed.status === "succeeded"
-          ? "Publish attempt succeeded"
-          : "Publish attempt failed",
-      metadata: {
-        approvalId: approval.id,
-        scheduleJobId: parsed.scheduleJobId ?? null,
-        errorMessage: parsed.errorMessage,
-      },
-    });
-    if (parsed.status === "failed") {
-      await upsertErrorQueueItem(db, {
-        campaignId: approval.campaign_id,
-        sourceType: "publish_attempt",
-        sourceId: result.lastInsertId,
-        title: "Publish attempt failed",
-        detail: parsed.errorMessage,
-        severity: "error",
-      });
-    }
-
-    await db.execute("COMMIT");
-    return result.lastInsertId;
-  } catch (error) {
-    await rollbackApprovalTransaction(db);
-    throw error;
-  }
+  return invoke<number>("linkgo_approval_record_publish_attempt", { input });
 }
 
 export async function rollbackApprovalTransaction(

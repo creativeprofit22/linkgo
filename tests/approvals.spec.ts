@@ -415,6 +415,15 @@ test("published approvals reject duplicate successful publish attempts", async (
   await expect(getBadge(page, "Published")).toBeVisible();
 
   const beforeAttemptCount = await getPublishAttemptCount(page);
+  const invokesBeforeDuplicate = await page.evaluate(() =>
+    Number(
+      (
+        window as unknown as {
+          __LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__?: number;
+        }
+      ).__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ ?? 0,
+    ),
+  );
   await page.waitForFunction(() => "__LINKGO_APPROVAL_TEST_API__" in window);
   const result = await page.evaluate(async () => {
     const approvalTestApi = (
@@ -455,6 +464,19 @@ test("published approvals reject duplicate successful publish attempts", async (
     message: "Published approvals can only record failed follow-up attempts",
   });
   expect(afterRejectedSuccessCount).toBe(beforeAttemptCount);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Number(
+          (
+            window as unknown as {
+              __LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__?: number;
+            }
+          ).__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ ?? 0,
+        ),
+      ),
+    )
+    .toBe(invokesBeforeDuplicate + 1);
 
   const failedFollowUpResult = await page.evaluate(async () => {
     const approvalTestApi = (
@@ -491,6 +513,19 @@ test("published approvals reject duplicate successful publish attempts", async (
 
   expect(failedFollowUpResult).toEqual({ ok: true, message: "" });
   expect(afterFailedFollowUpCount).toBe(beforeAttemptCount + 1);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Number(
+          (
+            window as unknown as {
+              __LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__?: number;
+            }
+          ).__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ ?? 0,
+        ),
+      ),
+    )
+    .toBe(invokesBeforeDuplicate + 2);
 });
 
 test("cancelled schedules can be rescheduled with new details", async ({
