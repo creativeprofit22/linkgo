@@ -914,11 +914,13 @@ test("rejects checkpoint tool results without a preceding assistant call ID", as
       WHERE agent_run_id = $2`,
     values: [JSON.stringify(messages), checkpoint.agent_run_id],
   });
+  await executeSql(page, {
+    query: "UPDATE approvals SET status = $1 WHERE id = $2",
+    values: ["approved", checkpoint.approval_id],
+  });
 
-  expect(
-    await resumeRunThroughTestApi(page, checkpoint.agent_run_id),
-  ).toContain(
-    'Tool result ID \\"orphan-provider-call\\" does not match a preceding assistant tool call',
+  expect(await resumeRunThroughTestApi(page, checkpoint.agent_run_id)).toBe(
+    "Agent continuation could not be settled",
   );
   const counts = await getStateCounts(page);
   expect(counts.scheduleJobs).toBe(0);
@@ -963,6 +965,7 @@ test("approves and explicitly resumes a durable schedule metadata continuation",
   expect(counts.publishAttempts).toBe(0);
   expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
   expect((await getAgentToolCalls(page))[0]?.status).toBe("completed");
+  expect(await getContinuationSettlementInvokeCount(page)).toBe(1);
 });
 
 test("rejects custom continuation without a Base URL before checkpoint mutation", async ({
@@ -1239,6 +1242,7 @@ test("reload recovery skips an approved tool after a continuation provider failu
     status: "completed",
   });
   expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+  expect(await getContinuationSettlementInvokeCount(page)).toBe(2);
 });
 
 test("resume rejects unapproved, mismatched, and missing approvals without publishing", async ({
@@ -1252,15 +1256,15 @@ test("resume rejects unapproved, mismatched, and missing approvals without publi
   await page.getByRole("button", { name: "Start Dry run" }).click();
   await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
 
-  expect(await resumeRunThroughTestApi(page, 1)).toContain(
-    "must be approved before resume",
+  expect(await resumeRunThroughTestApi(page, 1)).toBe(
+    "Linked approval must be approved before resume",
   );
   await executeSql(page, {
     query: "UPDATE approvals SET status = $1 WHERE id = $2",
     values: ["changes_requested", 1],
   });
-  expect(await resumeRunThroughTestApi(page, 1)).toContain(
-    "must be approved before resume",
+  expect(await resumeRunThroughTestApi(page, 1)).toBe(
+    "Linked approval must be approved before resume",
   );
   await executeSql(page, {
     query: "UPDATE approvals SET status = $1 WHERE id = $2",
@@ -1270,15 +1274,15 @@ test("resume rejects unapproved, mismatched, and missing approvals without publi
     query: "UPDATE approvals SET campaign_id = $1 WHERE id = $2",
     values: [2, 1],
   });
-  expect(await resumeRunThroughTestApi(page, 1)).toContain(
-    "different campaign",
+  expect(await resumeRunThroughTestApi(page, 1)).toBe(
+    "Linked approval belongs to a different campaign",
   );
   await executeSql(page, {
     query: "DELETE FROM approvals WHERE id = $1",
     values: [1],
   });
-  expect(await resumeRunThroughTestApi(page, 1)).toContain(
-    "checkpoint was not found",
+  expect(await resumeRunThroughTestApi(page, 1)).toBe(
+    "Agent approval checkpoint was not found",
   );
 
   const counts = await getStateCounts(page);
@@ -1313,11 +1317,16 @@ test("double resume handles the approved tool once and keeps one history row", a
   expect(
     outcomes.filter((outcome) => outcome.status === "fulfilled"),
   ).toHaveLength(1);
-  expect(
-    outcomes.filter((outcome) => outcome.status === "rejected"),
-  ).toHaveLength(1);
-  expect(await resumeRunThroughTestApi(page, 1)).toContain(
-    "checkpoint was not found",
+  const rejected = outcomes.filter(
+    (outcome): outcome is PromiseRejectedResult =>
+      outcome.status === "rejected",
+  );
+  expect(rejected).toHaveLength(1);
+  expect(String(rejected[0]?.reason)).toContain(
+    "Agent continuation is already running",
+  );
+  expect(await resumeRunThroughTestApi(page, 1)).toBe(
+    "Agent approval checkpoint was not found",
   );
   expect(await getAgentToolCalls(page)).toHaveLength(1);
   expect((await getAgentToolCalls(page))[0]?.status).toBe("completed");
@@ -1526,6 +1535,7 @@ async function getAgentToolCalls(page: Page): Promise<
 async function getAgentApprovalCheckpoint(page: Page): Promise<{
   agent_run_id: number;
   pending_tool_call_id: number;
+  approval_id: number;
   phase: string;
   messages_json: string;
 }> {
@@ -1535,6 +1545,7 @@ async function getAgentApprovalCheckpoint(page: Page): Promise<{
         __LINKGO_SQL_AGENT_APPROVAL_CHECKPOINTS__?: () => Array<{
           agent_run_id: number;
           pending_tool_call_id: number;
+          approval_id: number;
           phase: string;
           messages_json: string;
         }>;
@@ -1577,6 +1588,19 @@ async function getLinkedInPublishInvokeCount(page: Page): Promise<number> {
         }
       ).__LINKGO_LINKEDIN_PUBLISH_INVOKES__ ?? 0,
     ),
+  );
+}
+
+async function getContinuationSettlementInvokeCount(
+  page: Page,
+): Promise<number> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __LINKGO_AGENT_CONTINUATION_SETTLEMENT_COUNT__?: () => number;
+        }
+      ).__LINKGO_AGENT_CONTINUATION_SETTLEMENT_COUNT__?.() ?? 0,
   );
 }
 

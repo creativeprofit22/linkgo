@@ -1,3 +1,4 @@
+mod agent_continuations;
 mod agent_runtime;
 mod approvals;
 mod auth;
@@ -40,6 +41,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
+            agent_continuations::linkgo_agent_settle_approved_continuation,
             approvals::linkgo_approval_record_publish_attempt,
             auth::commands::linkgo_auth_status,
             auth::commands::linkgo_auth_api_key,

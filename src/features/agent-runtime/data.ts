@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import {
   AGENT_TOOL_METADATA,
   agentConversationSchema,
@@ -5,13 +6,11 @@ import {
   getAgentToolRegistryForRole,
   buildAgentMessages,
   createConfiguredAgentProvider,
-  createToolResultMessage,
   getAgentPlaybook,
   getDefaultPlaybookForRole,
   runAgentLoop,
   schedulePostInputSchema,
   type AgentLoopResult,
-  type AgentMessage,
   type AgentModelRequest,
   type AgentPlaybookKey,
   type AgentProgressEvent,
@@ -32,6 +31,7 @@ import { isAgentProviderReady } from "@/features/agent-runtime/provider-readines
 import {
   agentInputContextSchema,
   agentRunApprovalCheckpointSchema,
+  approvedContinuationSettlementSchema,
   cancelAgentRunSchema,
   createAgentRunSchema,
   recordAgentRunEventSchema,
@@ -43,6 +43,7 @@ import {
 import type {
   AgentRun,
   AgentRunApprovalCheckpoint,
+  ApprovedContinuationSettlement,
   AgentRunEvent,
   AgentRunWithDetails,
   AgentToolCall,
@@ -925,203 +926,47 @@ export async function resumeAgentRun(
 
   try {
     const db = await getDb();
-    let run: AgentRunValidationRow;
-    let checkpoint: AgentRunApprovalCheckpoint;
-    let conversation: AgentMessage[];
-    let handledProviderToolCallIds: string[];
-    let committed = false;
+    const preflightRun = await getAgentRunValidation(db, parsed.id);
+    await assertProviderConnected(preflightRun.provider_key);
 
-    await db.execute("BEGIN IMMEDIATE");
-    try {
-      const checkpointRows = await db.select<AgentRunApprovalCheckpointRow[]>(
-        `SELECT cp.*, a.status AS approval_status
-        FROM agent_run_approval_checkpoints cp
-        INNER JOIN approvals a ON a.id = cp.approval_id
-        WHERE cp.agent_run_id = $1
-        LIMIT 1`,
-        [parsed.id],
-      );
-      const checkpointRow = checkpointRows[0];
-      if (checkpointRow === undefined) {
-        throw new Error("Agent approval checkpoint was not found");
-      }
-      checkpoint = parseApprovalCheckpoint(checkpointRow);
-      run = await getAgentRunValidation(db, parsed.id);
-
-      const pendingRows = await db.select<AgentToolCall[]>(
-        `SELECT * FROM agent_tool_calls
-        WHERE id = $1 AND agent_run_id = $2
-        LIMIT 1`,
-        [checkpoint.pending_tool_call_id, run.id],
-      );
-      const pendingTool = pendingRows[0];
-      if (pendingTool === undefined) {
-        throw new Error("Pending approval tool call was not found");
-      }
-      if (
-        pendingTool.tool_name !== "schedule_post" ||
-        pendingTool.requires_approval !== 1
-      ) {
-        throw new Error("Approval checkpoint does not reference schedule_post");
-      }
-      const scheduleInput = schedulePostInputSchema.parse(
-        JSON.parse(pendingTool.input_json),
-      );
-      if (
-        scheduleInput.campaignId !== run.campaign_id ||
-        scheduleInput.approvalId !== checkpoint.approval_id
-      ) {
-        throw new Error("Approval checkpoint does not match the run campaign");
-      }
-      const approval = await getApprovalLink(db, checkpoint.approval_id);
-      if (approval.campaign_id !== run.campaign_id) {
-        throw new Error("Linked approval belongs to a different campaign");
-      }
-      if (approval.status === "rejected") {
-        await rejectAgentRunsForApprovalInTransaction(
-          db,
-          approval.id,
-          "Approval rejected before continuation",
-        );
-        await db.execute("COMMIT");
-        committed = true;
-        throw new Error("Linked approval was rejected");
-      }
-      if (approval.status !== "approved") {
-        throw new Error("Linked approval must be approved before resume");
-      }
-      if (run.campaign_status === "archived") {
-        throw new Error("Campaign is archived");
-      }
-      if (!["waiting_approval", "running", "failed"].includes(run.status)) {
-        throw new Error("Agent run cannot resume from its current status");
-      }
-      await assertProviderConnected(run.provider_key);
-      await assertSafetyKillSwitchOff(db, {
-        campaignId: run.campaign_id,
-        subjectType: "agent_run",
-        subjectId: run.id,
-        summary: "Approved agent continuation",
-      });
-
-      const claimResult = await db.execute(
-        `UPDATE agent_runs
-        SET status = 'running',
-          completed_at = NULL,
-          error_message = '',
-          updated_at = datetime('now')
-        WHERE id = $1
-          AND status IN ('waiting_approval', 'running', 'failed')`,
-        [run.id],
-      );
-      if (claimResult.rowsAffected !== 1) {
-        throw new Error("Agent continuation could not be claimed");
-      }
-      await reconcileWorkflowAgentRunInTransaction(db, {
-        agentRunId: run.id,
-        status: "running",
-        outputSummary: run.output_summary,
-        errorMessage: "",
-      });
-
-      conversation = [...checkpoint.messages];
-      const request: AgentModelRequest = {
-        runId: run.id,
-        campaignId: run.campaign_id,
-        workflowRunId: run.workflow_run_id,
-        workflowStepId: run.workflow_step_id,
-        agentRole: run.agent_role,
-        inputSummary: run.input_summary,
-        messages: conversation,
-        ...(run.playbook_key
-          ? {
-              playbookKey: run.playbook_key,
-              playbookLabel:
-                getAgentPlaybook(run.playbook_key)?.label ?? run.playbook_key,
-            }
-          : {}),
-      };
-
-      if (checkpoint.phase === "waiting_approval") {
-        if (!["waiting_approval", "running"].includes(pendingTool.status)) {
-          throw new Error("Pending approval tool is not executable");
-        }
-        const rawOutput = await agentToolRegistry.schedule_post.execute(
-          scheduleInput,
-          {
-            request,
-            providerToolCallId: pendingTool.provider_tool_call_id,
-          },
-        );
-        const output =
-          agentToolRegistry.schedule_post.outputSchema.parse(rawOutput);
-        const toolUpdate = await db.execute(
-          `UPDATE agent_tool_calls
-          SET status = 'completed',
-            output_json = $1,
-            error_message = '',
-            completed_at = datetime('now')
-          WHERE id = $2
-            AND status IN ('waiting_approval', 'running')`,
-          [JSON.stringify(output), pendingTool.id],
-        );
-        if (toolUpdate.rowsAffected !== 1) {
-          throw new Error("Approved tool call was already handled");
-        }
-        conversation.push(
-          createToolResultMessage(
-            pendingTool.tool_name,
-            pendingTool.provider_tool_call_id,
-            output,
-          ),
-        );
-        conversation = agentConversationSchema.parse(conversation);
-        await db.execute(
-          `UPDATE agent_run_approval_checkpoints
-          SET phase = 'continuation_ready',
-            messages_json = $1,
-            updated_at = datetime('now')
-          WHERE agent_run_id = $2`,
-          [JSON.stringify(conversation), run.id],
-        );
-      } else if (pendingTool.status !== "completed") {
-        throw new Error("Continuation-ready tool call is not completed");
-      }
-
-      const handledRows = await db.select<
-        Array<{ provider_tool_call_id: string }>
-      >(
-        `SELECT provider_tool_call_id FROM agent_tool_calls
-        WHERE agent_run_id = $1 AND provider_tool_call_id <> ''`,
-        [run.id],
-      );
-      handledProviderToolCallIds = handledRows.map(
-        (row) => row.provider_tool_call_id,
-      );
-      await db.execute("COMMIT");
-      committed = true;
-    } catch (error) {
-      if (!committed) await rollbackAgentRuntimeTransaction(db);
-      throw error;
-    }
-
+    const settlement = approvedContinuationSettlementSchema.parse(
+      await invoke<ApprovedContinuationSettlement>(
+        "linkgo_agent_settle_approved_continuation",
+        { input: { agentRunId: parsed.id } },
+      ),
+    );
+    const run: AgentRunValidationRow = {
+      ...preflightRun,
+      id: settlement.agentRunId,
+      campaign_id: settlement.campaignId,
+      workflow_run_id: settlement.workflowRunId,
+      workflow_step_id: settlement.workflowStepId,
+      agent_role: settlement.agentRole,
+      provider_key: settlement.providerKey,
+      model_name: settlement.modelName,
+      playbook_key: settlement.playbookKey,
+      input_summary: settlement.inputSummary,
+      input_context_json: JSON.stringify(settlement.inputContext),
+      status: "running",
+    };
     const provider = createConfiguredAgentProvider(
-      run.provider_key,
-      run.model_name || undefined,
+      settlement.providerKey,
+      settlement.modelName || undefined,
     );
     const request: AgentModelRequest = {
-      runId: run.id,
-      campaignId: run.campaign_id,
-      workflowRunId: run.workflow_run_id,
-      workflowStepId: run.workflow_step_id,
-      agentRole: run.agent_role,
-      inputSummary: run.input_summary,
-      messages: conversation,
-      ...(run.playbook_key
+      runId: settlement.agentRunId,
+      campaignId: settlement.campaignId,
+      workflowRunId: settlement.workflowRunId,
+      workflowStepId: settlement.workflowStepId,
+      agentRole: settlement.agentRole,
+      inputSummary: settlement.inputSummary,
+      messages: settlement.messages,
+      ...(settlement.playbookKey
         ? {
-            playbookKey: run.playbook_key,
+            playbookKey: settlement.playbookKey,
             playbookLabel:
-              getAgentPlaybook(run.playbook_key)?.label ?? run.playbook_key,
+              getAgentPlaybook(settlement.playbookKey)?.label ??
+              settlement.playbookKey,
           }
         : {}),
     };
@@ -1130,8 +975,8 @@ export async function resumeAgentRun(
       tools: getAgentToolRegistryForRole(run.agent_role),
       request,
       maxTurns: 8,
-      initialTurnCount: checkpoint.iteration_count,
-      handledProviderToolCallIds,
+      initialTurnCount: settlement.iterationCount,
+      handledProviderToolCallIds: settlement.handledProviderToolCallIds,
       maxRetries: run.provider_key === "dry_run" ? 0 : 1,
       onProgress: (event) => recordProgressEvent(db, run.id, event),
     });

@@ -72,6 +72,26 @@ export const agentApprovalCheckpointPhaseSchema = z.enum([
   "continuation_ready",
 ]);
 
+export const approvedContinuationSettlementSchema = z
+  .object({
+    agentRunId: positiveIdSchema,
+    campaignId: positiveIdSchema,
+    workflowRunId: positiveIdSchema.nullable(),
+    workflowStepId: positiveIdSchema.nullable(),
+    agentRole: agentRoleSchema,
+    providerKey: agentProviderKeySchema,
+    modelName: z.string().max(120),
+    playbookKey: playbookKeySchema.or(z.literal("")),
+    inputSummary: z.string().max(1000),
+    inputContext: agentInputContextSchema,
+    messages: agentConversationSchema,
+    iterationCount: z.number().int().min(0).max(20),
+    handledProviderToolCallIds: z.array(z.string().max(200)),
+    checkpointPhase: z.literal("continuation_ready"),
+    recovered: z.boolean(),
+  })
+  .strict();
+
 export const resumeAgentRunResultSchema = z
   .object({
     status: z.enum(["completed", "waiting_approval", "failed"]),

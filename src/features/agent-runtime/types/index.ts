@@ -124,6 +124,25 @@ export interface ResumeAgentRunResult {
   errorMessage: string;
   checkpointPhase: AgentApprovalCheckpointPhase | null;
 }
+
+export interface ApprovedContinuationSettlement {
+  agentRunId: number;
+  campaignId: number;
+  workflowRunId: number | null;
+  workflowStepId: number | null;
+  agentRole: AgentRole;
+  providerKey: AgentProviderKey;
+  modelName: string;
+  playbookKey: AgentPlaybookKey | "";
+  inputSummary: string;
+  inputContext: AgentInputContext;
+  messages: AgentMessage[];
+  iterationCount: number;
+  handledProviderToolCallIds: string[];
+  checkpointPhase: "continuation_ready";
+  recovered: boolean;
+}
+
 export interface CancelAgentRunInput {
   id: number;
 }

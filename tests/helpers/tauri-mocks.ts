@@ -1115,6 +1115,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const workflowStepExecutions: WorkflowStepExecution[] = [];
     const agentRuns: AgentRun[] = [];
     const agentToolCalls: AgentToolCall[] = [];
+    let agentContinuationSettlementInvocations = Number(
+      sessionStorage.getItem("linkgo-agent-continuation-settlement-count") ??
+        "0",
+    );
+    const activeAgentContinuationSettlements = new Set<number>();
     const agentRunEvents: AgentRunEvent[] = [];
     const agentApprovalCheckpoints: AgentApprovalCheckpoint[] = [];
     const agentPlaybookOverrides: AgentPlaybookOverride[] = [];
@@ -9451,6 +9456,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return batchId;
     };
 
+    w.__LINKGO_AGENT_CONTINUATION_SETTLEMENT_COUNT__ = () =>
+      agentContinuationSettlementInvocations;
+
     w.__LINKGO_SQL_STATE_COUNTS__ = () => ({
       campaigns: campaigns.length,
       campaignBacklogItems: campaignBacklogItems.length,
@@ -11396,6 +11404,221 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         }
         if (cmd === "linkgo_auth_check")
           return Promise.resolve(getAuthStatusMock());
+        if (cmd === "linkgo_agent_settle_approved_continuation") {
+          agentContinuationSettlementInvocations += 1;
+          sessionStorage.setItem(
+            "linkgo-agent-continuation-settlement-count",
+            String(agentContinuationSettlementInvocations),
+          );
+          const input = (
+            args as { input?: { agentRunId?: number } } | undefined
+          )?.input;
+          const runId = Number(input?.agentRunId ?? 0);
+          if (activeAgentContinuationSettlements.has(runId)) {
+            throw new Error("Agent continuation is already running");
+          }
+          activeAgentContinuationSettlements.add(runId);
+          try {
+            const checkpoint = agentApprovalCheckpoints.find(
+              (row) => row.agent_run_id === runId,
+            );
+            if (!checkpoint)
+              throw new Error("Agent approval checkpoint was not found");
+            const run = agentRuns.find((row) => row.id === runId);
+            if (!run)
+              throw new Error(
+                "Agent run cannot resume from its current status",
+              );
+            const tool = agentToolCalls.find(
+              (row) =>
+                row.id === checkpoint.pending_tool_call_id &&
+                row.agent_run_id === runId,
+            );
+            if (!tool)
+              throw new Error("Pending approval tool call was not found");
+            if (
+              tool.tool_name !== "schedule_post" ||
+              tool.requires_approval !== 1
+            )
+              throw new Error(
+                "Approval checkpoint does not reference schedule_post",
+              );
+            let scheduleInput: {
+              campaignId?: number;
+              approvalId?: number;
+              scheduledFor?: string;
+              timezone?: string;
+            };
+            let messages: Array<Record<string, unknown>>;
+            let inputContext: Record<string, unknown>;
+            try {
+              scheduleInput = JSON.parse(
+                tool.input_json,
+              ) as typeof scheduleInput;
+              messages = JSON.parse(checkpoint.messages_json) as Array<
+                Record<string, unknown>
+              >;
+              inputContext = JSON.parse(run.input_context_json) as Record<
+                string,
+                unknown
+              >;
+              if (!Array.isArray(messages)) throw new Error("invalid messages");
+            } catch {
+              throw new Error("Agent continuation could not be settled");
+            }
+            const pendingMessageCalls = new Map<string, string>();
+            for (const message of messages) {
+              if (
+                message.role === "assistant" &&
+                typeof message.toolName === "string" &&
+                typeof message.providerToolCallId === "string"
+              ) {
+                pendingMessageCalls.set(
+                  message.providerToolCallId,
+                  message.toolName,
+                );
+              } else if (message.role === "tool") {
+                if (
+                  typeof message.toolName !== "string" ||
+                  typeof message.providerToolCallId !== "string" ||
+                  pendingMessageCalls.get(message.providerToolCallId) !==
+                    message.toolName
+                ) {
+                  throw new Error("Agent continuation could not be settled");
+                }
+                pendingMessageCalls.delete(message.providerToolCallId);
+              }
+            }
+            if (
+              scheduleInput.campaignId !== run.campaign_id ||
+              scheduleInput.approvalId !== checkpoint.approval_id
+            )
+              throw new Error(
+                "Approval checkpoint does not match the run campaign",
+              );
+            const approval = approvals.find(
+              (row) => row.id === checkpoint.approval_id,
+            );
+            if (!approval)
+              throw new Error("Agent continuation could not be settled");
+            if (approval.campaign_id !== run.campaign_id)
+              throw new Error(
+                "Linked approval belongs to a different campaign",
+              );
+            if (approval.status === "rejected") {
+              const linkedCheckpoints = agentApprovalCheckpoints.filter(
+                (row) => row.approval_id === approval.id,
+              );
+              for (const linkedCheckpoint of linkedCheckpoints) {
+                const linkedTool = agentToolCalls.find(
+                  (row) => row.id === linkedCheckpoint.pending_tool_call_id,
+                );
+                const linkedRun = agentRuns.find(
+                  (row) => row.id === linkedCheckpoint.agent_run_id,
+                );
+                if (linkedTool) {
+                  linkedTool.status = "rejected";
+                  linkedTool.error_message =
+                    "Approval rejected: Approval rejected before continuation";
+                  linkedTool.completed_at = getNow();
+                }
+                if (linkedRun) {
+                  linkedRun.status = "cancelled";
+                  linkedRun.error_message =
+                    "Approval rejected: Approval rejected before continuation";
+                  linkedRun.completed_at = getNow();
+                }
+              }
+              removeRows(
+                agentApprovalCheckpoints,
+                (row) => row.approval_id === approval.id,
+              );
+              throw new Error("Linked approval was rejected");
+            }
+            if (approval.status !== "approved")
+              throw new Error("Linked approval must be approved before resume");
+            const campaign = campaigns.find(
+              (row) => row.id === run.campaign_id,
+            );
+            if (campaign?.status === "archived")
+              throw new Error("Campaign is archived");
+            if (safetySettings.global_kill_switch === 1)
+              throw new Error("Global kill switch is enabled");
+
+            const recovered =
+              checkpoint.phase === "continuation_ready" &&
+              run.status === "failed";
+            if (
+              checkpoint.phase === "continuation_ready" &&
+              run.status === "running"
+            )
+              throw new Error("Agent continuation is already running");
+            if (
+              !recovered &&
+              (checkpoint.phase !== "waiting_approval" ||
+                run.status !== "waiting_approval")
+            )
+              throw new Error(
+                "Agent run cannot resume from its current status",
+              );
+            if (!recovered) {
+              if (!["waiting_approval", "running"].includes(tool.status))
+                throw new Error("Pending approval tool is not executable");
+              const output = {
+                scheduled: false,
+                approvalId: checkpoint.approval_id,
+                scheduledFor: scheduleInput.scheduledFor,
+                timezone: scheduleInput.timezone,
+                summary:
+                  "Approval confirmed for schedule metadata only; no schedule record or publish action was created.",
+              };
+              tool.status = "completed";
+              tool.output_json = JSON.stringify(output);
+              tool.error_message = "";
+              tool.completed_at = getNow();
+              messages.push({
+                role: "tool",
+                content: JSON.stringify(output),
+                toolName: "schedule_post",
+                providerToolCallId: tool.provider_tool_call_id,
+              });
+              checkpoint.phase = "continuation_ready";
+              checkpoint.messages_json = JSON.stringify(messages);
+              checkpoint.updated_at = getNow();
+            } else if (tool.status !== "completed") {
+              throw new Error("Approved tool call was already handled");
+            }
+            run.status = "running";
+            run.completed_at = null;
+            run.error_message = "";
+            run.updated_at = getNow();
+            return Promise.resolve({
+              agentRunId: run.id,
+              campaignId: run.campaign_id,
+              workflowRunId: run.workflow_run_id,
+              workflowStepId: run.workflow_step_id,
+              agentRole: run.agent_role,
+              providerKey: run.provider_key,
+              modelName: run.model_name,
+              playbookKey: run.playbook_key,
+              inputSummary: run.input_summary,
+              inputContext,
+              messages,
+              iterationCount: checkpoint.iteration_count,
+              handledProviderToolCallIds: agentToolCalls
+                .filter(
+                  (row) =>
+                    row.agent_run_id === run.id &&
+                    row.provider_tool_call_id !== "",
+                )
+                .map((row) => row.provider_tool_call_id),
+              checkpointPhase: "continuation_ready",
+              recovered,
+            });
+          } finally {
+            activeAgentContinuationSettlements.delete(runId);
+          }
+        }
         if (cmd === "linkgo_agent_provider_stream") {
           const input =
             (
