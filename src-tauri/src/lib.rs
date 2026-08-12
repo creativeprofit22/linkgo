@@ -1,5 +1,6 @@
 mod agent_continuations;
 mod agent_runtime;
+mod approval_scheduling;
 mod approvals;
 mod auth;
 mod autopilot_planner;
@@ -42,6 +43,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
             agent_continuations::linkgo_agent_settle_approved_continuation,
+            approval_scheduling::linkgo_approval_schedule,
+            approval_scheduling::linkgo_approval_cancel_schedule,
             approvals::linkgo_approval_record_publish_attempt,
             auth::commands::linkgo_auth_status,
             auth::commands::linkgo_auth_api_key,

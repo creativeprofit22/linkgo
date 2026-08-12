@@ -11181,8 +11181,195 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return Promise.resolve(attempt.id);
     };
 
+    const scheduleApprovalCommand = (args?: unknown) => {
+      const input = (
+        args as {
+          input?: {
+            approvalId?: number;
+            scheduledFor?: string;
+            timezone?: string;
+          };
+        }
+      )?.input;
+      const approval = approvals.find((row) => row.id === input?.approvalId);
+      if (!approval) throw new Error("Approval was not found");
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      if (campaign?.status === "archived")
+        throw new Error("Campaign is archived");
+      if (approval.status !== "approved")
+        throw new Error("Only approved posts can be scheduled");
+      const existing = scheduleJobs.find(
+        (row) => row.approval_id === approval.id,
+      );
+      if (existing && !["cancelled", "failed"].includes(existing.status)) {
+        throw new Error("Approval already has an active schedule job");
+      }
+      const scheduledFor = input?.scheduledFor ?? "";
+      const windowKey = scheduledFor.slice(0, 10);
+      const currentCount = scheduleJobs.filter((job) => {
+        const owner = approvals.find((row) => row.id === job.approval_id);
+        return (
+          owner?.campaign_id === approval.campaign_id &&
+          job.scheduled_for.slice(0, 10) === windowKey &&
+          ["scheduled", "completed"].includes(job.status)
+        );
+      }).length;
+      const limit = campaign?.daily_post_limit ?? 0;
+      const now = getNow();
+      if (safetySettings.global_kill_switch === 1) {
+        const summary = `Post scheduling blocked by global kill switch for ${windowKey}: ${currentCount}/${limit} used`;
+        safetyAuditEvents.push({
+          id: nextSafetyAuditEventId++,
+          campaign_id: approval.campaign_id,
+          subject_type: "schedule_job",
+          subject_id: existing?.id ?? null,
+          event_type: "schedule_blocked",
+          severity: "block",
+          summary: "Post scheduling blocked by global kill switch",
+          metadata_json: JSON.stringify({
+            reason: safetySettings.kill_switch_reason,
+          }),
+          created_at: now,
+        });
+        rateLimitEvents.push({
+          id: nextRateLimitEventId++,
+          campaign_id: approval.campaign_id,
+          action: "schedule_post",
+          window_key: windowKey,
+          limit_value: limit,
+          current_count: currentCount,
+          decision: "blocked",
+          summary,
+          created_at: now,
+        });
+        throw new Error(
+          safetySettings.kill_switch_reason
+            ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
+            : "Global kill switch is enabled",
+        );
+      }
+      const summary =
+        currentCount < limit
+          ? `Schedule allowed for ${windowKey}: ${currentCount}/${limit} used`
+          : `Daily post scheduling limit reached for ${windowKey}: ${currentCount}/${limit} used`;
+      if (currentCount >= limit) {
+        rateLimitEvents.push({
+          id: nextRateLimitEventId++,
+          campaign_id: approval.campaign_id,
+          action: "schedule_post",
+          window_key: windowKey,
+          limit_value: limit,
+          current_count: currentCount,
+          decision: "blocked",
+          summary,
+          created_at: now,
+        });
+        safetyAuditEvents.push({
+          id: nextSafetyAuditEventId++,
+          campaign_id: approval.campaign_id,
+          subject_type: "approval",
+          subject_id: approval.id,
+          event_type: "schedule_blocked",
+          severity: "block",
+          summary,
+          metadata_json: JSON.stringify({
+            windowKey,
+            limitValue: limit,
+            currentCount,
+          }),
+          created_at: now,
+        });
+        throw new Error(summary);
+      }
+      const idempotencyKey = `approval:${approval.id}:linkedin:${scheduledFor}`;
+      const job = existing ?? {
+        id: nextScheduleJobId++,
+        approval_id: approval.id,
+        platform: "linkedin" as const,
+        scheduled_for: scheduledFor,
+        timezone: input?.timezone ?? "local",
+        status: "scheduled" as const,
+        idempotency_key: idempotencyKey,
+        created_at: now,
+        updated_at: now,
+      };
+      if (!existing) scheduleJobs.push(job);
+      Object.assign(job, {
+        status: "scheduled",
+        scheduled_for: scheduledFor,
+        timezone: input?.timezone ?? "local",
+        idempotency_key: idempotencyKey,
+        updated_at: now,
+      });
+      approval.status = "scheduled";
+      approval.updated_at = now;
+      rateLimitEvents.push({
+        id: nextRateLimitEventId++,
+        campaign_id: approval.campaign_id,
+        action: "schedule_post",
+        window_key: windowKey,
+        limit_value: limit,
+        current_count: currentCount,
+        decision: "allowed",
+        summary,
+        created_at: now,
+      });
+      safetyAuditEvents.push({
+        id: nextSafetyAuditEventId++,
+        campaign_id: approval.campaign_id,
+        subject_type: "schedule_job",
+        subject_id: job.id,
+        event_type: "schedule_allowed",
+        severity: "info",
+        summary,
+        metadata_json: JSON.stringify({
+          approvalId: approval.id,
+          scheduledFor,
+        }),
+        created_at: now,
+      });
+      return Promise.resolve(job.id);
+    };
+
+    const cancelScheduleCommand = (args?: unknown) => {
+      const id = (args as { input?: { id?: number } })?.input?.id;
+      const job = scheduleJobs.find((row) => row.id === id);
+      if (!job) throw new Error("Schedule job was not found");
+      const approval = approvals.find((row) => row.id === job.approval_id);
+      const campaign = campaigns.find(
+        (row) => row.id === approval?.campaign_id,
+      );
+      if (campaign?.status === "archived")
+        throw new Error("Campaign is archived");
+      if (job.status === "completed")
+        throw new Error("Completed schedules cannot be cancelled");
+      const now = getNow();
+      job.status = "cancelled";
+      job.updated_at = now;
+      if (approval && approval.status !== "published") {
+        approval.status = "approved";
+        approval.updated_at = now;
+      }
+      safetyAuditEvents.push({
+        id: nextSafetyAuditEventId++,
+        campaign_id: approval?.campaign_id ?? null,
+        subject_type: "schedule_job",
+        subject_id: job.id,
+        event_type: "schedule_cancelled",
+        severity: "info",
+        summary: "Schedule cancelled",
+        metadata_json: JSON.stringify({ approvalId: approval?.id }),
+        created_at: now,
+      });
+      return Promise.resolve();
+    };
+
     w.__TAURI_INTERNALS__ = {
       invoke: (cmd: string, args?: unknown) => {
+        if (cmd === "linkgo_approval_schedule")
+          return scheduleApprovalCommand(args);
+        if (cmd === "linkgo_approval_cancel_schedule")
+          return cancelScheduleCommand(args);
         if (cmd === "linkgo_approval_record_publish_attempt") {
           return recordPublishAttemptCommand(args);
         }

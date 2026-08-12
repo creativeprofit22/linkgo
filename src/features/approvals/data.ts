@@ -27,10 +27,7 @@ import type {
 import type { CampaignStatus } from "@/features/campaigns/types";
 import { getAuditSeverity, mapDraftAudit } from "@/features/drafts/data";
 import {
-  assertSafetyKillSwitchOff,
   getSafetySettings,
-  getSchedulePostLimitDecision,
-  recordRateLimitEvent,
   recordSafetyAuditEvent,
   upsertErrorQueueItem,
 } from "@/features/safety/data";
@@ -100,15 +97,6 @@ interface ApprovalCampaignRow {
 
 interface PublishPreflightApprovalRow extends ApprovalCampaignRow {
   successful_publish_attempt_count: number;
-}
-
-interface ScheduleValidationRow {
-  id: number;
-  approval_id: number;
-  status: ScheduleJob["status"];
-  approval_status: ApprovalStatus;
-  campaign_id: number;
-  campaign_status: CampaignStatus;
 }
 
 interface CountRow {
@@ -640,267 +628,14 @@ export async function scheduleApproval(
   input: ScheduleApprovalInput,
 ): Promise<number> {
   const parsed = scheduleApprovalSchema.parse(input);
-  const db = await getDb();
-
-  await db.execute("BEGIN IMMEDIATE");
-  let committed = false;
-  try {
-    const rows = await db.select<ApprovalCampaignRow[]>(
-      `SELECT
-        a.id,
-        a.campaign_id,
-        c.status AS campaign_status,
-        c.daily_post_limit,
-        a.status,
-        a.draft_id
-      FROM approvals a
-      INNER JOIN campaigns c ON c.id = a.campaign_id
-      WHERE a.id = $1
-      LIMIT 1`,
-      [parsed.approvalId],
-    );
-    const approval = rows[0];
-    if (approval === undefined) throw new Error("Approval was not found");
-    if (approval.campaign_status === "archived") {
-      throw new Error("Campaign is archived");
-    }
-    if (approval.status !== "approved") {
-      throw new Error("Only approved posts can be scheduled");
-    }
-
-    const existingRows = await db.select<ScheduleJob[]>(
-      `SELECT * FROM schedule_jobs WHERE approval_id = $1 LIMIT 1`,
-      [parsed.approvalId],
-    );
-    const existingSchedule = existingRows[0];
-    if (
-      existingSchedule !== undefined &&
-      !["cancelled", "failed"].includes(existingSchedule.status)
-    ) {
-      throw new Error("Approval already has an active schedule job");
-    }
-
-    try {
-      await assertSafetyKillSwitchOff(db, {
-        campaignId: approval.campaign_id,
-        subjectType: "schedule_job",
-        subjectId: existingSchedule?.id ?? null,
-        summary: "Post scheduling",
-      });
-    } catch (error) {
-      const decision = await getSchedulePostLimitDecision(db, {
-        campaignId: approval.campaign_id,
-        scheduledFor: parsed.scheduledFor,
-        limitValue: approval.daily_post_limit,
-      });
-      await recordRateLimitEvent(db, {
-        campaignId: decision.campaignId,
-        action: "schedule_post",
-        windowKey: decision.windowKey,
-        limitValue: decision.limitValue,
-        currentCount: decision.currentCount,
-        decision: "blocked",
-        summary: `Post scheduling blocked by global kill switch for ${decision.windowKey}: ${decision.currentCount}/${decision.limitValue} used`,
-      });
-      await db.execute("COMMIT");
-      committed = true;
-      throw error;
-    }
-
-    const limitDecision = await getSchedulePostLimitDecision(db, {
-      campaignId: approval.campaign_id,
-      approvalId: approval.id,
-      scheduledFor: parsed.scheduledFor,
-      limitValue: approval.daily_post_limit,
-    });
-
-    if (!limitDecision.allowed) {
-      await recordRateLimitEvent(db, {
-        campaignId: limitDecision.campaignId,
-        action: "schedule_post",
-        windowKey: limitDecision.windowKey,
-        limitValue: limitDecision.limitValue,
-        currentCount: limitDecision.currentCount,
-        decision: "blocked",
-        summary: limitDecision.summary,
-      });
-      await recordSafetyAuditEvent(db, {
-        campaignId: limitDecision.campaignId,
-        subjectType: "approval",
-        subjectId: approval.id,
-        eventType: "schedule_blocked",
-        severity: "block",
-        summary: limitDecision.summary,
-        metadata: {
-          windowKey: limitDecision.windowKey,
-          limitValue: limitDecision.limitValue,
-          currentCount: limitDecision.currentCount,
-        },
-      });
-      await db.execute("COMMIT");
-      committed = true;
-      throw new Error(limitDecision.summary);
-    }
-
-    const idempotencyKey = `approval:${parsed.approvalId}:linkedin:${parsed.scheduledFor}`;
-    const scheduleJobId = existingSchedule?.id;
-    if (scheduleJobId === undefined) {
-      const result = await db.execute(
-        `INSERT INTO schedule_jobs (
-          approval_id,
-          platform,
-          scheduled_for,
-          timezone,
-          status,
-          idempotency_key,
-          updated_at
-        ) VALUES ($1, 'linkedin', $2, $3, 'scheduled', $4, datetime('now'))`,
-        [
-          parsed.approvalId,
-          parsed.scheduledFor,
-          parsed.timezone,
-          idempotencyKey,
-        ],
-      );
-      await db.execute(
-        `UPDATE approvals
-        SET status = 'scheduled', updated_at = datetime('now')
-        WHERE id = $1`,
-        [parsed.approvalId],
-      );
-      await recordRateLimitEvent(db, {
-        campaignId: limitDecision.campaignId,
-        action: "schedule_post",
-        windowKey: limitDecision.windowKey,
-        limitValue: limitDecision.limitValue,
-        currentCount: limitDecision.currentCount,
-        decision: "allowed",
-        summary: limitDecision.summary,
-      });
-      await recordSafetyAuditEvent(db, {
-        campaignId: approval.campaign_id,
-        subjectType: "schedule_job",
-        subjectId: result.lastInsertId,
-        eventType: "schedule_allowed",
-        severity: "info",
-        summary: limitDecision.summary,
-        metadata: {
-          approvalId: approval.id,
-          scheduledFor: parsed.scheduledFor,
-        },
-      });
-      await db.execute("COMMIT");
-      committed = true;
-      return result.lastInsertId;
-    }
-
-    await db.execute(
-      `UPDATE schedule_jobs
-      SET status = 'scheduled',
-        scheduled_for = $1,
-        timezone = $2,
-        idempotency_key = $3,
-        updated_at = datetime('now')
-      WHERE id = $4`,
-      [parsed.scheduledFor, parsed.timezone, idempotencyKey, scheduleJobId],
-    );
-
-    await db.execute(
-      `UPDATE approvals
-      SET status = 'scheduled', updated_at = datetime('now')
-      WHERE id = $1`,
-      [parsed.approvalId],
-    );
-    await recordRateLimitEvent(db, {
-      campaignId: limitDecision.campaignId,
-      action: "schedule_post",
-      windowKey: limitDecision.windowKey,
-      limitValue: limitDecision.limitValue,
-      currentCount: limitDecision.currentCount,
-      decision: "allowed",
-      summary: limitDecision.summary,
-    });
-    await recordSafetyAuditEvent(db, {
-      campaignId: approval.campaign_id,
-      subjectType: "schedule_job",
-      subjectId: scheduleJobId,
-      eventType: "schedule_allowed",
-      severity: "info",
-      summary: limitDecision.summary,
-      metadata: { approvalId: approval.id, scheduledFor: parsed.scheduledFor },
-    });
-    await db.execute("COMMIT");
-    committed = true;
-    return scheduleJobId;
-  } catch (error) {
-    if (!committed) {
-      await rollbackApprovalTransaction(db);
-    }
-    throw error;
-  }
+  return invoke<number>("linkgo_approval_schedule", { input: parsed });
 }
 
 export async function cancelSchedule(
   input: CancelScheduleInput,
 ): Promise<void> {
   const parsed = cancelScheduleSchema.parse(input);
-  const db = await getDb();
-
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    const rows = await db.select<ScheduleValidationRow[]>(
-      `SELECT
-        sj.id,
-        sj.approval_id,
-        sj.status,
-        a.status AS approval_status,
-        a.campaign_id,
-        c.status AS campaign_status
-      FROM schedule_jobs sj
-      INNER JOIN approvals a ON a.id = sj.approval_id
-      INNER JOIN campaigns c ON c.id = a.campaign_id
-      WHERE sj.id = $1
-      LIMIT 1`,
-      [parsed.id],
-    );
-    const schedule = rows[0];
-    if (schedule === undefined) throw new Error("Schedule job was not found");
-    if (schedule.campaign_status === "archived") {
-      throw new Error("Campaign is archived");
-    }
-    if (schedule.status === "completed") {
-      throw new Error("Completed schedules cannot be cancelled");
-    }
-
-    await db.execute(
-      `UPDATE schedule_jobs
-      SET status = 'cancelled', updated_at = datetime('now')
-      WHERE id = $1`,
-      [parsed.id],
-    );
-
-    if (schedule.approval_status !== "published") {
-      await db.execute(
-        `UPDATE approvals
-        SET status = 'approved', updated_at = datetime('now')
-        WHERE id = $1`,
-        [schedule.approval_id],
-      );
-    }
-    await recordSafetyAuditEvent(db, {
-      campaignId: schedule.campaign_id,
-      subjectType: "schedule_job",
-      subjectId: schedule.id,
-      eventType: "schedule_cancelled",
-      severity: "info",
-      summary: "Schedule cancelled",
-      metadata: { approvalId: schedule.approval_id },
-    });
-    await db.execute("COMMIT");
-  } catch (error) {
-    await rollbackApprovalTransaction(db);
-    throw error;
-  }
+  await invoke("linkgo_approval_cancel_schedule", { input: parsed });
 }
 
 export async function assertApprovalCanPublishViaLinkedIn(

@@ -52,6 +52,8 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
 
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
+  await countSchedulingInvokes(page);
+  await countLinkedInPublishInvokes(page);
 
   await page.getByRole("button", { name: "Schedule", exact: true }).click();
   await page.getByLabel("Scheduled for").fill("2026-06-25T14:30");
@@ -59,6 +61,8 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   await page.getByRole("button", { name: "Schedule approval" }).click();
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
   await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
+  expect(await getSchedulingInvokeCount(page)).toBe(1);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
 
   await page.getByRole("button", { name: "Mark published" }).click();
   await page
@@ -703,6 +707,36 @@ function getBadge(page: Page, label: string): Locator {
   return page
     .locator("span")
     .filter({ hasText: new RegExp(`^${label}$`, "u") });
+}
+
+async function countSchedulingInvokes(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __TAURI_INTERNALS__?: {
+        invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+      };
+      __LINKGO_SCHEDULING_INVOKES__?: number;
+    };
+    const internals = target.__TAURI_INTERNALS__;
+    if (internals === undefined) return;
+    const originalInvoke = internals.invoke.bind(internals);
+    target.__LINKGO_SCHEDULING_INVOKES__ = 0;
+    internals.invoke = (cmd: string, args?: unknown) => {
+      if (cmd === "linkgo_approval_schedule") {
+        target.__LINKGO_SCHEDULING_INVOKES__ =
+          (target.__LINKGO_SCHEDULING_INVOKES__ ?? 0) + 1;
+      }
+      return originalInvoke(cmd, args);
+    };
+  });
+}
+
+async function getSchedulingInvokeCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __LINKGO_SCHEDULING_INVOKES__?: number })
+        .__LINKGO_SCHEDULING_INVOKES__ ?? 0,
+  );
 }
 
 async function countLinkedInPublishInvokes(page: Page): Promise<void> {
