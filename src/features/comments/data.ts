@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import {
   createCommentThreadSchema,
@@ -14,7 +15,6 @@ import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
 import {
   getCommentLimitDecision,
   recordRateLimitEvent,
-  upsertErrorQueueItem,
 } from "@/features/safety/data";
 import type { SafetySettings } from "@/features/safety/types";
 import type {
@@ -1009,103 +1009,5 @@ export async function recordCommentAttempt(
   input: RecordCommentAttemptInput,
 ): Promise<number> {
   const parsed = recordCommentAttemptSchema.parse(input);
-  const db = await getDb();
-
-  await db.execute("BEGIN IMMEDIATE");
-  let committed = false;
-  try {
-    const thread = await ensureThreadMutable(db, parsed.commentThreadId);
-    if (thread.status !== "approved") {
-      throw new Error("Only approved comments can record posting attempts");
-    }
-
-    if (parsed.status === "succeeded") {
-      await assertSelectedVariantReady(db, parsed.commentThreadId);
-      try {
-        await assertKillSwitchAllowsComment(db, thread);
-      } catch (error) {
-        await db.execute("COMMIT");
-        committed = true;
-        throw error;
-      }
-      const decision = await getCommentLimitDecision(db, {
-        campaignId: thread.campaign_id,
-        limitValue: thread.daily_comment_limit,
-      });
-      if (!decision.allowed) {
-        await recordRateLimitEvent(db, {
-          campaignId: decision.campaignId,
-          action: "comment",
-          windowKey: decision.windowKey,
-          limitValue: decision.limitValue,
-          currentCount: decision.currentCount,
-          decision: "blocked",
-          summary: decision.summary,
-        });
-        await db.execute("COMMIT");
-        committed = true;
-        throw new Error(decision.summary);
-      }
-
-      await recordRateLimitEvent(db, {
-        campaignId: decision.campaignId,
-        action: "comment",
-        windowKey: decision.windowKey,
-        limitValue: decision.limitValue,
-        currentCount: decision.currentCount,
-        decision: "allowed",
-        summary: decision.summary,
-      });
-    }
-
-    const result = await db.execute(
-      `INSERT INTO comment_attempts (
-        comment_thread_id,
-        platform,
-        status,
-        external_comment_url,
-        platform_comment_id,
-        idempotency_key,
-        error_message
-      ) VALUES ($1, 'linkedin', $2, $3, $4, $5, $6)`,
-      [
-        parsed.commentThreadId,
-        parsed.status,
-        parsed.externalCommentUrl,
-        parsed.platformCommentId,
-        parsed.idempotencyKey,
-        parsed.errorMessage,
-      ],
-    );
-
-    if (parsed.status === "succeeded") {
-      await db.execute(
-        `UPDATE comment_threads
-        SET status = 'posted', posted_at = datetime('now'), updated_at = datetime('now')
-        WHERE id = $1`,
-        [parsed.commentThreadId],
-      );
-    } else {
-      await db.execute(
-        `UPDATE comment_threads
-        SET updated_at = datetime('now')
-        WHERE id = $1`,
-        [parsed.commentThreadId],
-      );
-      await upsertErrorQueueItem(db, {
-        campaignId: thread.campaign_id,
-        sourceType: "manual",
-        sourceId: parsed.commentThreadId,
-        title: "Comment attempt failed",
-        detail: parsed.errorMessage,
-        severity: "error",
-      });
-    }
-
-    await db.execute("COMMIT");
-    return result.lastInsertId;
-  } catch (error) {
-    if (!committed) await rollbackCommentTransaction(db);
-    throw error;
-  }
+  return invoke<number>("linkgo_comment_record_attempt", { input: parsed });
 }

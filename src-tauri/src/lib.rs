@@ -3,6 +3,7 @@ mod approvals;
 mod auth;
 mod autopilot_planner;
 mod campaign_backlog;
+mod comments;
 mod metric_refresh;
 mod migrations;
 mod planner_draft_audits;
@@ -53,6 +54,7 @@ pub fn run() {
             campaign_backlog::linkgo_campaign_backlog_create,
             campaign_backlog::linkgo_campaign_backlog_update,
             campaign_backlog::linkgo_campaign_backlog_set_status,
+            comments::linkgo_comment_record_attempt,
             autopilot_planner::linkgo_autopilot_planner_status,
             autopilot_planner::linkgo_autopilot_planner_start,
             autopilot_planner::linkgo_autopilot_planner_stop,

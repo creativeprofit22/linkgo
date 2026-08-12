@@ -10895,6 +10895,168 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       label: "main",
     };
 
+    const recordCommentAttemptCommand = (args: unknown) => {
+      const invokes = Number(w.__LINKGO_COMMENT_RECORD_ATTEMPT_INVOKES__ ?? 0);
+      w.__LINKGO_COMMENT_RECORD_ATTEMPT_INVOKES__ = invokes + 1;
+      const input = (
+        args as {
+          input?: {
+            commentThreadId?: number;
+            status?: CommentAttemptStatus;
+            externalCommentUrl?: string;
+            platformCommentId?: string;
+            idempotencyKey?: string;
+            errorMessage?: string;
+          };
+        }
+      )?.input;
+      if (
+        input?.idempotencyKey &&
+        commentAttempts.some(
+          (attempt) => attempt.idempotency_key === input.idempotencyKey,
+        )
+      ) {
+        throw new Error("Comment attempt was already recorded");
+      }
+      const thread = commentThreads.find(
+        (row) => row.id === input?.commentThreadId,
+      );
+      if (!thread) throw new Error("Comment thread was not found");
+      const campaign = campaigns.find((row) => row.id === thread.campaign_id);
+      if (campaign?.status === "archived")
+        throw new Error("Campaign is archived");
+      if (thread.status !== "approved") {
+        throw new Error("Only approved comments can record posting attempts");
+      }
+      if (input?.status === "succeeded") {
+        const selected = commentVariants.filter(
+          (variant) =>
+            variant.comment_thread_id === thread.id &&
+            variant.status === "selected",
+        );
+        if (selected.length === 0)
+          throw new Error("Choose one comment variant before review");
+        if (selected.length > 1)
+          throw new Error("Choose exactly one selected comment variant");
+        if (
+          commentAudits.some(
+            (audit) =>
+              audit.comment_variant_id === selected[0]?.id &&
+              audit.severity === "block",
+          )
+        ) {
+          throw new Error("Blocked comment variants cannot be reviewed");
+        }
+        if (safetySettings.global_kill_switch === 1) {
+          throw new Error(
+            safetySettings.kill_switch_reason
+              ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
+              : "Global kill switch is enabled",
+          );
+        }
+        const today = getNow().slice(0, 10);
+        const currentCount = commentAttempts.filter((attempt) => {
+          const attemptThread = commentThreads.find(
+            (row) => row.id === attempt.comment_thread_id,
+          );
+          return (
+            attemptThread?.campaign_id === thread.campaign_id &&
+            attempt.status === "succeeded" &&
+            attempt.created_at.slice(0, 10) === today
+          );
+        }).length;
+        const limit = campaign?.daily_comment_limit ?? 0;
+        if (currentCount >= limit) {
+          const summary = `Daily comment limit reached for ${today}: ${currentCount}/${limit} used`;
+          rateLimitEvents.push({
+            id: nextRateLimitEventId++,
+            campaign_id: thread.campaign_id,
+            action: "comment",
+            window_key: today,
+            limit_value: limit,
+            current_count: currentCount,
+            decision: "blocked",
+            summary,
+            created_at: getNow(),
+          });
+          throw new Error(summary);
+        }
+        rateLimitEvents.push({
+          id: nextRateLimitEventId++,
+          campaign_id: thread.campaign_id,
+          action: "comment",
+          window_key: today,
+          limit_value: limit,
+          current_count: currentCount,
+          decision: "allowed",
+          summary: `Comment allowed for ${today}: ${currentCount}/${limit} used`,
+          created_at: getNow(),
+        });
+      }
+      const now = getNow();
+      const attempt: CommentAttempt = {
+        id: nextCommentAttemptId++,
+        comment_thread_id: thread.id,
+        platform: "linkedin",
+        status: input?.status ?? "failed",
+        external_comment_url: input?.externalCommentUrl ?? "",
+        platform_comment_id: input?.platformCommentId ?? "",
+        idempotency_key: input?.idempotencyKey ?? "",
+        error_message: input?.errorMessage ?? "",
+        created_at: now,
+      };
+      commentAttempts.push(attempt);
+      thread.updated_at = now;
+      if (attempt.status === "succeeded") {
+        thread.status = "posted";
+        thread.posted_at = now;
+      } else {
+        let errorItem = errorQueueItems.find(
+          (item) =>
+            item.source_type === "manual" &&
+            item.source_id === thread.id &&
+            ["open", "in_progress", "awaiting_review"].includes(item.status),
+        );
+        const eventType = errorItem
+          ? "error_item_updated"
+          : "error_item_created";
+        if (errorItem) {
+          errorItem.detail = attempt.error_message;
+          errorItem.updated_at = now;
+        } else {
+          errorItem = {
+            id: nextErrorQueueItemId++,
+            campaign_id: thread.campaign_id,
+            source_type: "manual",
+            source_id: thread.id,
+            title: "Comment attempt failed",
+            detail: attempt.error_message,
+            severity: "error",
+            status: "open",
+            resolution_notes: "",
+            created_at: now,
+            updated_at: now,
+          };
+          errorQueueItems.push(errorItem);
+        }
+        safetyAuditEvents.push({
+          id: nextSafetyAuditEventId++,
+          campaign_id: thread.campaign_id,
+          subject_type: "error_queue_item",
+          subject_id: errorItem.id,
+          event_type: eventType,
+          severity: "warning",
+          summary: `Error item ${eventType === "error_item_created" ? "created" : "updated"}: Comment attempt failed`,
+          metadata_json: JSON.stringify({
+            sourceType: "manual",
+            sourceId: thread.id,
+          }),
+          created_at: now,
+        });
+      }
+      return Promise.resolve(attempt.id);
+    };
+
     const recordPublishAttemptCommand = (args: unknown) => {
       const invokes = Number(w.__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ ?? 0);
       w.__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ = invokes + 1;
@@ -11015,6 +11177,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       invoke: (cmd: string, args?: unknown) => {
         if (cmd === "linkgo_approval_record_publish_attempt") {
           return recordPublishAttemptCommand(args);
+        }
+        if (cmd === "linkgo_comment_record_attempt") {
+          return recordCommentAttemptCommand(args);
         }
         if (cmd === "linkgo_campaign_backlog_create") {
           return runCampaignBacklogCommand(() =>

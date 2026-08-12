@@ -99,7 +99,10 @@ test("A rejected comment thread moves to History with Cancel disabled", async ({
   await createCommentThread(page, cleanComment());
   await page.getByRole("button", { name: "Select", exact: true }).click();
   await page.getByRole("button", { name: "Submit for review" }).click();
-  await page.getByRole("button", { name: "Reject", exact: true }).last().click();
+  await page
+    .getByRole("button", { name: "Reject", exact: true })
+    .last()
+    .click();
 
   const history = page.locator("section.space-y-3").filter({
     has: page.getByRole("heading", { name: "History", exact: true }),
@@ -146,7 +149,9 @@ test("LinkedIn API comment failure records failed attempt and Safety error", asy
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "api-failure");
   await page.evaluate(() => {
-    (window as unknown as { __LINKGO_LINKEDIN_COMMENT_ERROR__?: string }).__LINKGO_LINKEDIN_COMMENT_ERROR__ =
+    (
+      window as unknown as { __LINKGO_LINKEDIN_COMMENT_ERROR__?: string }
+    ).__LINKGO_LINKEDIN_COMMENT_ERROR__ =
       "LinkedIn Community Management access or w_member_social_feed scope required";
   });
 
@@ -201,6 +206,27 @@ test("A clean variant can be reviewed approved and manually recorded posted", as
   expect(attempts).toEqual(
     expect.arrayContaining([expect.objectContaining({ status: "succeeded" })]),
   );
+  expect(await getCommentRecordAttemptInvokeCount(page)).toBe(1);
+});
+
+test("Duplicate comment attempt returns a stable domain error", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createApprovedComment(page, "duplicate-attempt");
+  const attempt = {
+    commentThreadId: 1,
+    status: "failed" as const,
+    idempotencyKey: "comment-thread:1:linkedin:test-duplicate",
+    errorMessage: "Injected retryable failure",
+  };
+
+  expect(await recordCommentAttemptViaDataApi(page, attempt)).toBe("");
+  expect(await recordCommentAttemptViaDataApi(page, attempt)).toBe(
+    "Comment attempt was already recorded",
+  );
+  expect(await getCommentRecordAttemptInvokeCount(page)).toBe(2);
+  expect(await getCommentAttempts(page)).toHaveLength(1);
 });
 
 test("Daily comment cap blocks a second same-day successful posted attempt", async ({
@@ -291,10 +317,15 @@ test("Daily comment cap blocks API posting before native invoke", async ({
     .fill("https://www.linkedin.com/feed/update/comment-one/");
   await page.getByRole("button", { name: "Record attempt" }).click();
 
-  await createShortlistedCandidate(page, "api-cap-two", { campaignExists: true });
+  await createShortlistedCandidate(page, "api-cap-two", {
+    campaignExists: true,
+  });
   await openComments(page);
   await createCommentThread(page, secondCleanComment());
-  await page.getByRole("button", { name: "Select", exact: true }).first().click();
+  await page
+    .getByRole("button", { name: "Select", exact: true })
+    .first()
+    .click();
   await page.getByRole("button", { name: "Submit for review" }).first().click();
   await page.getByRole("button", { name: "Approve" }).first().click();
   await resetCommentPublishInvokeCount(page);
@@ -313,7 +344,9 @@ test("Unresolvable target hides API posting and keeps manual fallback", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await createShortlistedCandidate(page, "unresolved", { unresolvableUrl: true });
+  await createShortlistedCandidate(page, "unresolved", {
+    unresolvableUrl: true,
+  });
   await openComments(page);
   await createCommentThread(page, cleanComment());
   await page.getByRole("button", { name: "Select", exact: true }).click();
@@ -633,12 +666,23 @@ async function getErrorQueueItems(page: Page): Promise<ErrorQueueItemRow[]> {
   });
 }
 
-async function getCommentPublishInvokeCount(page: Page): Promise<number> {
+async function getCommentRecordAttemptInvokeCount(page: Page): Promise<number> {
   return page.evaluate(() =>
     Number(
       (
-        window as unknown as { __LINKGO_LINKEDIN_COMMENT_INVOKES__?: number }
-      ).__LINKGO_LINKEDIN_COMMENT_INVOKES__ ?? 0,
+        window as unknown as {
+          __LINKGO_COMMENT_RECORD_ATTEMPT_INVOKES__?: number;
+        }
+      ).__LINKGO_COMMENT_RECORD_ATTEMPT_INVOKES__ ?? 0,
+    ),
+  );
+}
+
+async function getCommentPublishInvokeCount(page: Page): Promise<number> {
+  return page.evaluate(() =>
+    Number(
+      (window as unknown as { __LINKGO_LINKEDIN_COMMENT_INVOKES__?: number })
+        .__LINKGO_LINKEDIN_COMMENT_INVOKES__ ?? 0,
     ),
   );
 }
@@ -667,11 +711,14 @@ async function publishCommentViaLinkedInDataApi(
     const api = (
       window as unknown as {
         __LINKGO_LINKEDIN_ACTIONS_TEST_API__?: {
-          publishLinkedInComment: (input: typeof publishInput) => Promise<unknown>;
+          publishLinkedInComment: (
+            input: typeof publishInput,
+          ) => Promise<unknown>;
         };
       }
     ).__LINKGO_LINKEDIN_ACTIONS_TEST_API__;
-    if (api === undefined) return "LinkedIn actions test API was not initialized";
+    if (api === undefined)
+      return "LinkedIn actions test API was not initialized";
     try {
       await api.publishLinkedInComment(publishInput);
       return "";
@@ -687,6 +734,7 @@ async function recordCommentAttemptViaDataApi(
     commentThreadId: number;
     status: "succeeded" | "failed";
     externalCommentUrl?: string;
+    idempotencyKey?: string;
     errorMessage?: string;
   },
 ): Promise<string> {
