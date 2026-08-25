@@ -17,7 +17,12 @@ import {
   setDraftVariantStatus,
   updateDraft as updateDraftRecord,
   updateDraftVariant,
+  reconcileStaleDraftQuality,
 } from "@/features/drafts/data";
+import {
+  runDraftQualityLoop,
+  resumeDraftQualityLoop,
+} from "@/features/drafts/quality-loop";
 import type {
   CreateDraftInput,
   DraftGenerationRequest,
@@ -25,6 +30,8 @@ import type {
   DraftWithDetails,
   GenerateDraftVariantsInput,
   RunDraftAiAuditInput,
+  ClaimDraftQualityInput,
+  ContinueDraftQualityInput,
   SaveGeneratedDraftInput,
   SetDraftVariantStatusInput,
   UpdateDraftInput,
@@ -48,6 +55,9 @@ interface UseDraftsState {
   setVariantStatus: (input: SetDraftVariantStatusInput) => Promise<void>;
   archiveDraft: (id: number) => Promise<void>;
   runDraftAiAudit: (input: RunDraftAiAuditInput) => Promise<void>;
+  qualityPendingVariantIds: ReadonlySet<number>;
+  runQualityLoop: (input: ClaimDraftQualityInput) => Promise<void>;
+  resumeQualityLoop: (input: ContinueDraftQualityInput) => Promise<void>;
   generateDraft: (input: GenerateDraftVariantsInput) => Promise<void>;
   saveGenerationRequest: (input: SaveGeneratedDraftInput) => Promise<void>;
   dismissGenerationRequest: (id: number) => Promise<void>;
@@ -80,6 +90,9 @@ export function useDrafts(): UseDraftsState {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [qualityPendingVariantIds, setQualityPendingVariantIds] = useState<
+    ReadonlySet<number>
+  >(new Set());
   const latestDraftsLoadRequest = useRef(0);
   const latestCampaignLoadRequest = useRef(0);
 
@@ -124,6 +137,7 @@ export function useDrafts(): UseDraftsState {
     setLoading(true);
     setError(null);
     try {
+      await reconcileStaleDraftQuality();
       const loadedCampaigns = await listCampaigns();
       if (requestId !== latestDraftsLoadRequest.current) return;
 
@@ -252,6 +266,43 @@ export function useDrafts(): UseDraftsState {
     [loadDraftsForCampaign, selectedCampaignId],
   );
 
+  const runQuality = useCallback(
+    async (
+      input: ClaimDraftQualityInput | ContinueDraftQualityInput,
+      resume: boolean,
+    ) => {
+      const variantId = input.draftVariantId;
+      setQualityPendingVariantIds((current) => new Set(current).add(variantId));
+      try {
+        if (resume)
+          await resumeDraftQualityLoop(input as ContinueDraftQualityInput);
+        else await runDraftQualityLoop(input);
+        toast.success("Draft quality loop completed");
+      } catch (caught) {
+        toast.error("Draft quality loop stopped", {
+          description: getErrorMessage(caught),
+        });
+        throw caught;
+      } finally {
+        setQualityPendingVariantIds((current) => {
+          const next = new Set(current);
+          next.delete(variantId);
+          return next;
+        });
+        await loadDraftsForCampaign(selectedCampaignId);
+      }
+    },
+    [loadDraftsForCampaign, selectedCampaignId],
+  );
+  const runQualityLoop = useCallback(
+    (input: ClaimDraftQualityInput) => runQuality(input, false),
+    [runQuality],
+  );
+  const resumeQualityLoop = useCallback(
+    (input: ContinueDraftQualityInput) => runQuality(input, true),
+    [runQuality],
+  );
+
   const generateDraft = useCallback(
     async (input: GenerateDraftVariantsInput) => {
       try {
@@ -323,6 +374,9 @@ export function useDrafts(): UseDraftsState {
       setVariantStatus,
       archiveDraft,
       runDraftAiAudit,
+      qualityPendingVariantIds,
+      runQualityLoop,
+      resumeQualityLoop,
       generateDraft,
       saveGenerationRequest,
       dismissGenerationRequest,
@@ -344,6 +398,9 @@ export function useDrafts(): UseDraftsState {
       setVariantStatus,
       archiveDraft,
       runDraftAiAudit,
+      qualityPendingVariantIds,
+      runQualityLoop,
+      resumeQualityLoop,
       generateDraft,
       saveGenerationRequest,
       dismissGenerationRequest,

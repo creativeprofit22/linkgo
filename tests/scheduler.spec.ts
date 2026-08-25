@@ -192,6 +192,26 @@ async function createReadyDraft(
   await expect(
     auditPanel.getByText("Completed", { exact: true }),
   ).toBeVisible();
+  await page.evaluate(async () => {
+    const api = (
+      window as unknown as {
+        __LINKGO_DRAFTS_TEST_API__: {
+          listDrafts: () => Promise<
+            Array<{ variants: Array<{ id: number; status: string }> }>
+          >;
+          runDraftQualityLoop: (input: {
+            draftVariantId: number;
+          }) => Promise<unknown>;
+        };
+      }
+    ).__LINKGO_DRAFTS_TEST_API__;
+    const drafts = await api.listDrafts();
+    const variantId = drafts[0]?.variants.find(
+      (candidate) => candidate.status === "selected",
+    )?.id;
+    if (variantId === undefined) throw new Error("Selected variant was not found");
+    await api.runDraftQualityLoop({ draftVariantId: variantId });
+  });
 }
 
 async function openQueue(page: Page): Promise<void> {

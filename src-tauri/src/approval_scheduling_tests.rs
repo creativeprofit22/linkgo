@@ -93,7 +93,7 @@ async fn concurrent_schedule_has_one_winner_and_no_duplicates() {
         let pool = pool.clone();
         async move { schedule_approval(&pool, input()).await }
     });
-    let outcomes = vec![first.await.unwrap(), second.await.unwrap()];
+    let outcomes = [first.await.unwrap(), second.await.unwrap()];
     assert_eq!(outcomes.iter().filter(|result| result.is_ok()).count(), 1);
     assert_eq!(
         outcomes

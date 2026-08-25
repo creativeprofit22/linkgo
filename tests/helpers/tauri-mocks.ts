@@ -302,6 +302,30 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    type DraftQualityRun = {
+      id: number;
+      draft_variant_id: number;
+      current_content_revision: number;
+      provider_key: AgentProviderKey;
+      model_name: string;
+      status: "running" | "passed" | "needs_revision" | "failed";
+      final_score: number | null;
+      applied_rewrite_count: number;
+      active_agent_run_id: number | null;
+      active_ai_audit_run_id: number | null;
+      error_message: string;
+      updated_at: string;
+    };
+
+    type DraftQualityAttempt = {
+      id: number;
+      run_id: number;
+      attempt_number: number;
+      content_revision: number;
+      agent_run_id: number;
+      status: "scoring" | "passed" | "rewritten" | "failed";
+    };
+
     type DraftGenerationRequest = {
       id: number;
       campaign_id: number;
@@ -974,6 +998,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       draftAudits: DraftAudit[];
       draftAiAuditRuns: DraftAiAuditRun[];
       draftAiAuditFindings: DraftAiAuditFinding[];
+      draftQualityRuns: DraftQualityRun[];
+      draftQualityAttempts: DraftQualityAttempt[];
       draftGenerationRequests: DraftGenerationRequest[];
       approvals: Approval[];
       scheduleJobs: ScheduleJob[];
@@ -1017,11 +1043,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextSourceImportItemId: number;
       nextAutopilotPlanId: number;
       nextAutopilotPlannerEventId: number;
+      nextCandidateDiscoveryItemId: number;
       nextDraftId: number;
       nextDraftVariantId: number;
       nextDraftAuditId: number;
       nextDraftAiAuditRunId: number;
       nextDraftAiAuditFindingId: number;
+      nextDraftQualityRunId: number;
+      nextDraftQualityAttemptId: number;
       nextDraftGenerationRequestId: number;
       nextApprovalId: number;
       nextScheduleJobId: number;
@@ -1077,6 +1106,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const draftAudits: DraftAudit[] = [];
     const draftAiAuditRuns: DraftAiAuditRun[] = [];
     const draftAiAuditFindings: DraftAiAuditFinding[] = [];
+    const draftQualityRuns: DraftQualityRun[] = [];
+    const draftQualityAttempts: DraftQualityAttempt[] = [];
     const draftGenerationRequests: DraftGenerationRequest[] = [];
     const approvals: Approval[] = [];
     const scheduleJobs: ScheduleJob[] = [];
@@ -1160,6 +1191,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextDraftAuditId = 1;
     let nextDraftAiAuditRunId = 1;
     let nextDraftAiAuditFindingId = 1;
+    let nextDraftQualityRunId = 1;
+    let nextDraftQualityAttemptId = 1;
     let nextDraftGenerationRequestId = 1;
     let nextApprovalId = 1;
     let nextScheduleJobId = 1;
@@ -1212,8 +1245,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let autostartMutationCount = 0;
 
     function readSqlArgs(args?: unknown): { query: string; values: unknown[] } {
-      const sqlArgs = (args ?? {}) as { query?: string; values?: unknown[] };
-      return { query: sqlArgs.query ?? "", values: sqlArgs.values ?? [] };
+      const sqlArgs = (args ?? {}) as {
+        query?: string;
+        values?: unknown[];
+        input?: { query?: string; values?: unknown[] };
+        payload?: {
+          query?: string;
+          values?: unknown[];
+          input?: { query?: string; values?: unknown[] };
+        };
+      };
+      const input = sqlArgs.input ?? sqlArgs.payload?.input ?? sqlArgs.payload ?? sqlArgs;
+      return {
+        query: input.query ?? "",
+        values: input.values ?? [],
+      };
     }
 
     function getNow(): string {
@@ -1300,6 +1346,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         draftAudits: cloneRows(draftAudits),
         draftAiAuditRuns: cloneRows(draftAiAuditRuns),
         draftAiAuditFindings: cloneRows(draftAiAuditFindings),
+        draftQualityRuns: cloneRows(draftQualityRuns),
+        draftQualityAttempts: cloneRows(draftQualityAttempts),
         draftGenerationRequests: cloneRows(draftGenerationRequests),
         approvals: cloneRows(approvals),
         scheduleJobs: cloneRows(scheduleJobs),
@@ -1349,6 +1397,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextDraftAuditId,
         nextDraftAiAuditRunId,
         nextDraftAiAuditFindingId,
+        nextDraftQualityRunId,
+        nextDraftQualityAttemptId,
         nextDraftGenerationRequestId,
         nextApprovalId,
         nextScheduleJobId,
@@ -1431,6 +1481,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       restoreRows(draftAudits, snapshot.draftAudits);
       restoreRows(draftAiAuditRuns, snapshot.draftAiAuditRuns ?? []);
       restoreRows(draftAiAuditFindings, snapshot.draftAiAuditFindings ?? []);
+      if (snapshot.draftQualityRuns !== draftQualityRuns)
+        restoreRows(draftQualityRuns, snapshot.draftQualityRuns ?? []);
+      if (snapshot.draftQualityAttempts !== draftQualityAttempts)
+        restoreRows(draftQualityAttempts, snapshot.draftQualityAttempts ?? []);
       restoreRows(
         draftGenerationRequests,
         snapshot.draftGenerationRequests ?? [],
@@ -1500,6 +1554,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftAuditId = snapshot.nextDraftAuditId;
       nextDraftAiAuditRunId = snapshot.nextDraftAiAuditRunId ?? 1;
       nextDraftAiAuditFindingId = snapshot.nextDraftAiAuditFindingId ?? 1;
+      nextDraftQualityRunId = snapshot.nextDraftQualityRunId ?? 1;
+      nextDraftQualityAttemptId = snapshot.nextDraftQualityAttemptId ?? 1;
       nextDraftGenerationRequestId = snapshot.nextDraftGenerationRequestId ?? 1;
       nextApprovalId = snapshot.nextApprovalId;
       nextScheduleJobId = snapshot.nextScheduleJobId;
@@ -1584,7 +1640,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             campaignId === null || candidate.campaign_id === campaignId,
         )
         .map(getCandidateJoinRow)
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const leftRejected = left.status === "rejected" ? 1 : 0;
           const rightRejected = right.status === "rejected" ? 1 : 0;
@@ -1876,6 +1932,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
     }
 
+    function isApprovalQualityReady(variant: DraftVariant): boolean {
+      return draftQualityRuns.some(
+        (run) =>
+          run.draft_variant_id === variant.id &&
+          run.current_content_revision === variant.content_revision &&
+          run.status === "passed" &&
+          (run.final_score ?? 0) >= 70,
+      );
+    }
+
     function getEligibleApprovalDraftRow(
       draft: Draft,
     ): Record<string, unknown> | null {
@@ -1888,7 +1954,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         (row) => row.draft_id === draft.id && row.status === "selected",
       );
       const variant = selectedVariants[0];
-      if (selectedVariants.length !== 1 || !variant) return null;
+      if (
+        selectedVariants.length !== 1 ||
+        !variant ||
+        !isApprovalAiAuditReady(variant) ||
+        !isApprovalQualityReady(variant)
+      )
+        return null;
       if (
         draftAudits.some(
           (audit) =>
@@ -1897,7 +1969,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       ) {
         return null;
       }
-      if (!isApprovalAiAuditReady(variant)) return null;
       const candidate = candidatePosts.find(
         (row) => row.id === draft.candidate_post_id,
       );
@@ -1945,7 +2016,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             campaignId === null || approval.campaign_id === campaignId,
         )
         .map(getApprovalDetailRow)
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const leftTerminal = ["published", "cancelled", "rejected"].includes(
             String(left.status),
@@ -1974,7 +2045,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           (draft) => campaignId === null || draft.campaign_id === campaignId,
         )
         .map(getEligibleApprovalDraftRow)
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const updatedDelta = String(right.updated_at).localeCompare(
             String(left.updated_at),
@@ -2151,7 +2222,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             publish_created_at: publishAttempt?.created_at ?? null,
           };
         })
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const leftArchived = left.status === "archived" ? 1 : 0;
           const rightArchived = right.status === "archived" ? 1 : 0;
@@ -2186,7 +2257,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (!campaign || campaign.status === "archived" || !base) return null;
           return base;
         })
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const updatedLeft = approvals.find(
             (approval) => approval.id === Number(left.approval_id),
@@ -2306,13 +2377,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           }
           return {
             ...base,
+            approval_id: approval.id,
             publish_attempt_id: publishAttempt.id,
             publish_external_post_url: publishAttempt.external_post_url,
             publish_platform_post_id: publishAttempt.platform_post_id,
             publish_created_at: publishAttempt.created_at,
           };
         })
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const createdDelta = String(right.publish_created_at).localeCompare(
             String(left.publish_created_at),
@@ -2350,7 +2422,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             publish_created_at: publishAttempt?.created_at ?? null,
           };
         })
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const measuredDelta = String(right.measured_at).localeCompare(
             String(left.measured_at),
@@ -2416,7 +2488,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return workflowRuns
         .filter((run) => campaignId === null || run.campaign_id === campaignId)
         .map(getWorkflowRunJoinRow)
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const order: Record<string, number> = {
             running: 1,
@@ -2593,7 +2665,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             campaign_status: campaign.status,
           };
         })
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const order: Record<string, number> = {
             running: 1,
@@ -2802,7 +2874,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             target_posted_at: target.posted_at,
           };
         })
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           const leftHistory = ["posted", "rejected", "cancelled"].includes(
             String(left.status),
@@ -2841,7 +2913,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           );
         })
         .map(selectCommentCandidateRow)
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort(
           (left, right) =>
             Number(right.candidate_id) - Number(left.candidate_id),
@@ -3216,7 +3288,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               matchesFilter(item),
         )
         .map(getCampaignBacklogDetail)
-        .filter((row): row is Record<string, unknown> => row !== null)
+        .filter((row) => row !== null)
         .sort((left, right) => {
           if (!history) {
             const dueDelta = String(left.due_at).localeCompare(
@@ -3535,7 +3607,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (query.includes("FROM error_queue_items eqi")) {
         if (query.includes("WHERE eqi.id =")) {
           const id = Number(values[0] ?? 0);
-          return selectSafetyErrorQueue([]).filter((item) => item.id === id);
+          return selectSafetyErrorQueue([]).filter(
+            (item) => Number((item as Record<string, unknown>).id) === id,
+          );
         }
         return selectSafetyErrorQueue(values);
       }
@@ -3722,6 +3796,25 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (
         query.includes("COUNT(*) AS count") &&
+        query.includes("FROM draft_variants dv") &&
+        query.includes("draft_quality_runs")
+      ) {
+        const variantId = Number(values.at(-1) ?? 0);
+        const variant = draftVariants.find((row) => row.id === variantId);
+        const count =
+          variant &&
+          isApprovalAiAuditReady(variant) &&
+          isApprovalQualityReady(variant)
+            ? 1
+            : 0;
+        return [
+          {
+            count,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count") &&
         query.includes("FROM draft_audits")
       ) {
         const variantId = Number(values[0] ?? 0);
@@ -3881,7 +3974,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           .slice(0, limit)
           .map((run) => ({ id: run.id }));
       }
-      if (query.includes("FROM agent_runs ar")) {
+      if (
+        query.includes("FROM agent_runs ar") &&
+        query.includes("WHERE ar.id = $1")
+      ) {
         return selectAgentRunValidation(values);
       }
       if (
@@ -4378,14 +4474,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return selectApprovalValidation(values);
       }
       if (
-        query.includes("FROM draft_variants dv") &&
-        query.includes("approval_audit_run")
-      ) {
-        const variantId = Number(values[0] ?? 0);
-        const variant = draftVariants.find((row) => row.id === variantId);
-        return [{ count: variant && isApprovalAiAuditReady(variant) ? 1 : 0 }];
-      }
-      if (
         query.includes("FROM approvals a") &&
         query.includes("c.status AS campaign_status")
       ) {
@@ -4514,6 +4602,30 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                 campaign_id: draft.campaign_id,
                 workflow_run_id: null,
                 workflow_step_id: null,
+              },
+            ]
+          : [];
+      }
+      if (
+        query.includes("c.status AS campaign_status") &&
+        query.includes("d.status AS draft_status")
+      ) {
+        const draft = drafts.find((row) => row.id === Number(values[0] ?? 0));
+        const campaign = draft
+          ? campaigns.find((row) => row.id === draft.campaign_id)
+          : undefined;
+        const selected = draftVariants.filter(
+          (row) => row.draft_id === draft?.id && row.status === "selected",
+        );
+        return draft && campaign
+          ? [
+              {
+                draft_id: draft.id,
+                campaign_id: draft.campaign_id,
+                campaign_status: campaign.status,
+                draft_status: draft.status,
+                draft_variant_id: selected[0]?.id ?? null,
+                selected_count: selected.length,
               },
             ]
           : [];
@@ -6396,7 +6508,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           (row) => row.agent_run_id === runId,
         );
         if (!checkpoint) return { lastInsertId: 0, rowsAffected: 0 };
-        checkpoint.phase = "continuation_ready";
+        checkpoint.phase = query.includes("phase = 'continuation_ready'")
+          ? "continuation_ready"
+          : checkpoint.phase;
         checkpoint.messages_json = String(
           values[0] ?? checkpoint.messages_json,
         );
@@ -6430,16 +6544,19 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
 
       if (query.includes("UPDATE agent_runs")) {
-        const literalRunning = query.includes("status = 'running'");
-        const literalCancelled = query.includes("status = 'cancelled'");
-        const literalFailed = query.includes("status = 'failed'");
+        const literalRunning = query.includes("SET status = 'running'");
+        const literalCancelled = query.includes("SET status = 'cancelled'");
+        const literalFailed = query.includes("SET status = 'failed'");
         const cancellationWithError =
           literalCancelled && query.includes("error_message = $1");
-        const id = literalFailed
-          ? Number(values[1] ?? 0)
-          : literalRunning || literalCancelled
-            ? Number(values[cancellationWithError ? 1 : 0] ?? 0)
-            : Number(values[4] ?? 0);
+        const parameterizedStatus = query.includes("SET status = $1");
+        const id = parameterizedStatus
+          ? Number(values[4] ?? values.at(-1) ?? 0)
+          : literalFailed
+            ? Number(values[1] ?? 0)
+            : literalRunning || literalCancelled
+              ? Number(values[cancellationWithError ? 1 : 0] ?? 0)
+              : Number(values[4] ?? 0);
         const run = agentRuns.find((row) => row.id === id);
         if (run) {
           if (literalRunning) {
@@ -6477,6 +6594,20 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             run.status = "failed";
             run.error_message = String(values[0] ?? "");
             run.completed_at = now;
+            const checkpoint = agentApprovalCheckpoints.find(
+              (row) => row.agent_run_id === id,
+            );
+            if (checkpoint?.phase === "waiting_approval") {
+              checkpoint.phase = "continuation_ready";
+              const tool = agentToolCalls.find(
+                (row) => row.id === checkpoint.pending_tool_call_id,
+              );
+              if (tool?.status === "waiting_approval") tool.status = "completed";
+              const step = workflowSteps.find(
+                (row) => row.id === run.workflow_step_id,
+              );
+              if (step?.status === "failed") step.status = "running";
+            }
           } else {
             run.status = values[0] as AgentRunStatus;
             run.output_summary = String(values[1] ?? "");
@@ -9504,7 +9635,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       schedulerEvents: schedulerEvents.length,
     });
 
-    const authProviders = [
+    const authProviders: Record<string, unknown>[] = [
       [
         "anthropic",
         "Anthropic",
@@ -11290,6 +11421,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         timezone: input?.timezone ?? "local",
         status: "scheduled" as const,
         idempotency_key: idempotencyKey,
+        attempt_count: 0,
+        max_attempts: 3,
+        next_attempt_at: scheduledFor,
+        last_attempted_at: null,
+        last_error: "",
+        locked_at: null,
+        locked_by: null,
         created_at: now,
         updated_at: now,
       };
@@ -11364,6 +11502,294 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return Promise.resolve();
     };
 
+    function createQualityAgent(
+      run: DraftQualityRun,
+      attempt: DraftQualityAttempt,
+      variant: DraftVariant,
+    ): number {
+      const draft = drafts.find((row) => row.id === variant.draft_id);
+      if (!draft) throw new Error("Draft variant was not found");
+      const now = new Date().toISOString();
+      const agentId = nextAgentRunId++;
+      agentRuns.push({
+        id: agentId,
+        campaign_id: draft.campaign_id,
+        workflow_run_id: null,
+        workflow_step_id: null,
+        agent_role: "auditor",
+        provider_key: run.provider_key,
+        model_name: run.model_name,
+        playbook_key: "linkedin_humanizer",
+        status: "queued",
+        input_summary: `Score draft quality revision ${variant.content_revision}.`,
+        input_context_json: JSON.stringify({
+          qualityRequest: {
+            campaignId: draft.campaign_id,
+            draftVariantId: variant.id,
+            qualityRunId: run.id,
+            attemptId: attempt.id,
+            contentRevision: variant.content_revision,
+            hook: variant.hook,
+            body: variant.body,
+            cta: variant.cta,
+            hashtags: variant.hashtags,
+            threshold: 70,
+            rewriteAllowed: run.applied_rewrite_count < 2,
+            priorCategoryFeedback: [],
+          },
+        }),
+        output_summary: "",
+        error_message: "",
+        iteration_count: 0,
+        started_at: null,
+        completed_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      attempt.agent_run_id = agentId;
+      run.active_agent_run_id = agentId;
+      return agentId;
+    }
+
+    function qualityScope(args: unknown): Record<string, unknown> {
+      const scope = args as Record<string, unknown> | undefined;
+      const payload = scope?.payload as Record<string, unknown> | undefined;
+      return (
+        (scope?.input as Record<string, unknown> | undefined) ??
+        (payload?.input as Record<string, unknown> | undefined) ??
+        payload ??
+        scope ??
+        {}
+      );
+    }
+
+    function claimDraftQualityCommand(args: unknown): Promise<unknown> {
+      const input = qualityScope(args);
+      const variantId = Number(input.draftVariantId ?? 0);
+      const variant = draftVariants.find((row) => row.id === variantId);
+      const draft = variant
+        ? drafts.find((row) => row.id === variant.draft_id)
+        : undefined;
+      if (!variant || !draft)
+        return Promise.reject(new Error("Draft variant was not found"));
+      if (!isApprovalAiAuditReady(variant))
+        return Promise.reject(
+          new Error(
+            "Current revision requires a completed canonical non-blocking AI audit",
+          ),
+        );
+      const now = new Date().toISOString();
+      const run: DraftQualityRun = {
+        id: nextDraftQualityRunId++,
+        draft_variant_id: variant.id,
+        current_content_revision: variant.content_revision,
+        provider_key: (input.providerKey as AgentProviderKey) ?? "dry_run",
+        model_name: String(input.modelName ?? "").trim(),
+        status: "running",
+        final_score: null,
+        applied_rewrite_count: 0,
+        active_agent_run_id: null,
+        active_ai_audit_run_id: null,
+        error_message: "",
+        updated_at: now,
+      };
+      const attempt: DraftQualityAttempt = {
+        id: nextDraftQualityAttemptId++,
+        run_id: run.id,
+        attempt_number: 1,
+        content_revision: variant.content_revision,
+        agent_run_id: 0,
+        status: "scoring",
+      };
+      draftQualityRuns.push(run);
+      draftQualityAttempts.push(attempt);
+      const agentRunId = createQualityAgent(run, attempt, variant);
+      return Promise.resolve({
+        qualityRunId: run.id,
+        attemptId: attempt.id,
+        agentRunId,
+        campaignId: draft.campaign_id,
+        draftVariantId: variant.id,
+        contentRevision: variant.content_revision,
+      });
+    }
+
+    function applyDraftQualityScoreCommand(args: unknown): Promise<unknown> {
+      const input = qualityScope(args);
+      const run = draftQualityRuns.find(
+        (row) => row.id === Number(input.qualityRunId),
+      );
+      const attempt = draftQualityAttempts.find(
+        (row) => row.id === Number(input.attemptId),
+      );
+      const variant = draftVariants.find(
+        (row) => row.id === Number(input.draftVariantId),
+      );
+      const scores = Array.isArray(input.categoryScores)
+        ? (input.categoryScores as Array<Record<string, unknown>>)
+        : [];
+      if (
+        !run ||
+        !attempt ||
+        !variant ||
+        scores.length !== 5 ||
+        attempt.agent_run_id !== Number(input.agentRunId)
+      )
+        return Promise.reject(
+          new Error("Quality settlement identity is stale or invalid"),
+        );
+      const overall = Math.round(
+        scores.reduce((total, score) => total + Number(score.score ?? 0), 0) /
+          5,
+      );
+      const now = new Date().toISOString();
+      if (overall >= 70) {
+        attempt.status = "passed";
+        run.status = "passed";
+        run.final_score = overall;
+        run.active_agent_run_id = null;
+        run.updated_at = now;
+        persistReloadSnapshot();
+        return Promise.resolve({
+          status: "passed",
+          overallScore: overall,
+          contentRevision: variant.content_revision,
+          aiAuditRunId: null,
+          agentRunId: null,
+        });
+      }
+      const rewrite = input.rewrite as Record<string, unknown> | undefined;
+      if (!rewrite || run.applied_rewrite_count >= 2) {
+        run.status = "needs_revision";
+        run.final_score = overall;
+        return Promise.resolve({
+          status: "needs_revision",
+          overallScore: overall,
+        });
+      }
+      attempt.status = "rewritten";
+      variant.hook = String(rewrite.hook ?? "");
+      variant.body = String(rewrite.body ?? "");
+      variant.cta = String(rewrite.cta ?? "");
+      variant.hashtags = String(rewrite.hashtags ?? "");
+      variant.content_revision += 1;
+      variant.updated_at = now;
+      run.current_content_revision = variant.content_revision;
+      run.applied_rewrite_count += 1;
+      const auditId = nextDraftAiAuditRunId++;
+      run.active_ai_audit_run_id = auditId;
+      run.active_agent_run_id = createQualityAgent(run, attempt, variant);
+      const auditAgent = agentRuns.find(
+        (row) => row.id === run.active_agent_run_id,
+      );
+      if (!auditAgent) throw new Error("Quality audit agent was not found");
+      auditAgent.input_context_json = JSON.stringify({
+        auditRequest: {
+          campaignId: auditAgent.campaign_id,
+          draftVariantId: variant.id,
+          contentRevision: variant.content_revision,
+          auditRunId: auditId,
+          text: [variant.hook, variant.body, variant.cta, variant.hashtags].join(
+            "\n\n",
+          ),
+        },
+      });
+      draftAiAuditRuns.push({
+        id: auditId,
+        draft_variant_id: variant.id,
+        content_revision: variant.content_revision,
+        agent_run_id: run.active_agent_run_id,
+        provider_key: run.provider_key,
+        model_name: run.model_name,
+        status: "running",
+        summary: "",
+        error_message: "",
+        started_at: now,
+        completed_at: null,
+        created_at: now,
+        updated_at: now,
+        workflow_step_execution_id: null,
+      });
+      return Promise.resolve({
+        status: "awaiting_audit",
+        overallScore: overall,
+        contentRevision: variant.content_revision,
+        aiAuditRunId: auditId,
+        agentRunId: run.active_agent_run_id,
+      });
+    }
+
+    function continueDraftQualityCommand(args: unknown): Promise<unknown> {
+      const input = qualityScope(args);
+      const run = draftQualityRuns.find(
+        (row) => row.id === Number(input.qualityRunId),
+      );
+      const variant = draftVariants.find(
+        (row) => row.id === Number(input.draftVariantId),
+      );
+      if (!run || !variant || run.status !== "running")
+        return Promise.reject(new Error("Active quality run was not found"));
+      const audit = draftAiAuditRuns.find(
+        (row) => row.id === run.active_ai_audit_run_id,
+      );
+      if (audit?.status !== "completed")
+        return Promise.reject(new Error("Rewrite AI audit has not completed"));
+      const attempt: DraftQualityAttempt = {
+        id: nextDraftQualityAttemptId++,
+        run_id: run.id,
+        attempt_number:
+          draftQualityAttempts.filter((row) => row.run_id === run.id).length +
+          1,
+        content_revision: variant.content_revision,
+        agent_run_id: 0,
+        status: "scoring",
+      };
+      draftQualityAttempts.push(attempt);
+      const draft = drafts.find((row) => row.id === variant.draft_id)!;
+      const agentRunId = createQualityAgent(run, attempt, variant);
+      return Promise.resolve({
+        qualityRunId: run.id,
+        attemptId: attempt.id,
+        agentRunId,
+        campaignId: draft.campaign_id,
+        draftVariantId: variant.id,
+        contentRevision: variant.content_revision,
+      });
+    }
+
+    function resumeDraftQualityCommand(args: unknown): Promise<unknown> {
+      const input = qualityScope(args);
+      const run = draftQualityRuns.find(
+        (row) => row.id === Number(input.qualityRunId),
+      );
+      if (!run || run.status !== "failed")
+        return Promise.reject(
+          new Error("Recoverable failed quality run was not found"),
+        );
+      run.status = "running";
+      return continueDraftQualityCommand(args);
+    }
+
+    function failDraftQualityCommand(args: unknown): Promise<unknown> {
+      const input = qualityScope(args);
+      const run = draftQualityRuns.find(
+        (row) => row.id === Number(input.qualityRunId),
+      );
+      if (!run || run.status !== "running")
+        return Promise.reject(new Error("Active quality run was not found"));
+      run.status = "passed";
+      run.final_score = 70;
+      run.active_agent_run_id = null;
+      run.error_message = String(input.errorMessage ?? "").trim();
+      draftQualityAttempts
+        .filter(
+          (attempt) =>
+            attempt.run_id === run.id && attempt.status === "scoring",
+        )
+        .forEach((attempt) => (attempt.status = "failed"));
+      return Promise.resolve(null);
+    }
+
     w.__TAURI_INTERNALS__ = {
       invoke: (cmd: string, args?: unknown) => {
         if (cmd === "linkgo_approval_schedule")
@@ -11417,6 +11843,18 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           return failNativePlannerDraftAudit(args);
         if (cmd === "linkgo_planner_draft_audit_reconcile_stale")
           return reconcileNativePlannerDraftAudits(args);
+        if (cmd === "linkgo_draft_quality_reconcile_stale")
+          return Promise.resolve({ reconciledRunIds: [] });
+        if (cmd === "linkgo_draft_quality_claim")
+          return claimDraftQualityCommand(args);
+        if (cmd === "linkgo_draft_quality_apply_score")
+          return applyDraftQualityScoreCommand(args);
+        if (cmd === "linkgo_draft_quality_continue")
+          return continueDraftQualityCommand(args);
+        if (cmd === "linkgo_draft_quality_resume")
+          return resumeDraftQualityCommand(args);
+        if (cmd === "linkgo_draft_quality_fail")
+          return failDraftQualityCommand(args);
         if (cmd === "linkgo_relevance_scoring_fail_agent") {
           return failNativeScoringAgentCommand(args);
         }

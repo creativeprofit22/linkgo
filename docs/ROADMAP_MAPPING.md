@@ -1,8 +1,12 @@
 # Roadmap Mapping
 
-This document maps `roadmap.md` to implementation slices. The roadmap audit dated July 31, 2026 is the source of truth: Roadmaps 1, 9, 18, and 19 are implemented; Roadmap 8 is not started; the remaining items are partial. Roadmap 3 remains partial and blocked after completed slices 3A, 3B, 3C, and 3D; one compliant production source connector is the sole remaining gate.
+This document maps `roadmap.md` to implementation slices. Roadmaps 1, 9, 18, and 19 are implemented; Roadmap 8 is Partial (8A); the remaining items are partial. Roadmap 3 remains partial and blocked after completed slices 3A, 3B, 3C, and 3D; one compliant production source connector is the sole remaining gate.
 
 ## Delivered slices and partial foundations
+
+### Roadmap 8A attended draft quality loop
+
+Migration 33 adds durable quality runs, immutable attempts, and five canonical category scores. The Drafts UI exposes an explicit confirmation-gated loop after canonical AI audit readiness, a fixed threshold of 70, at most two rewrites, automatic deterministic/AI re-audit and re-score, stale recovery, and explicit resume. New approval creation requires the current revision to pass both AI audit and quality threshold. Planner/background quality ownership, configurable thresholds, and any automatic approval/publish action are excluded.
 
 ### Campaigns slice
 

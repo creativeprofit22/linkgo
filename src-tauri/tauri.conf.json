@@ -10,7 +10,9 @@
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
-  "plugins": {},
+  "plugins": {
+    "sql": {}
+  },
   "app": {
     "windows": [
       {

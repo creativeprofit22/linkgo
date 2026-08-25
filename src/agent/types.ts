@@ -11,6 +11,7 @@ export const AGENT_TOOL_NAMES = [
   "score_relevance",
   "draft_post",
   "audit_post",
+  "score_draft_quality",
   "schedule_post",
   "collect_metrics",
 ] as const;

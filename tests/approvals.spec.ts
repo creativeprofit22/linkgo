@@ -34,6 +34,7 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, reservedCharacterVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -84,6 +85,7 @@ test("publishes an approved approval through mocked LinkedIn OAuth action", asyn
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, reservedCharacterVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -124,6 +126,7 @@ test("records a failed LinkedIn OAuth publish attempt and error queue item", asy
     ).__LINKGO_LINKEDIN_PUBLISH_ERROR__ = "LinkedIn API rejected the post.";
   });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -158,6 +161,7 @@ test("records invalid empty LinkedIn OAuth publish result as a failed attempt", 
     };
   });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -179,6 +183,7 @@ test("global kill switch hides LinkedIn OAuth publish action", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -206,6 +211,7 @@ test("LinkedIn OAuth publish rechecks approval state before submitting", async (
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await countLinkedInPublishInvokes(page);
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -233,6 +239,7 @@ test("LinkedIn OAuth publish preflight blocks duplicate successes and stale sche
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await countLinkedInPublishInvokes(page);
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -282,6 +289,7 @@ test("LinkedIn OAuth publish rechecks kill switch before submitting", async ({
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await countLinkedInPublishInvokes(page);
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -352,6 +360,7 @@ test("successful publish attempts require a LinkedIn URL or platform ID", async 
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -382,6 +391,7 @@ test("successful publish attempts require a LinkedIn URL or platform ID", async 
 test("failed publish attempts require a failure reason", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -404,6 +414,7 @@ test("published approvals reject duplicate successful publish attempts", async (
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -537,6 +548,7 @@ test("cancelled schedules can be rescheduled with new details", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -568,6 +580,7 @@ test("failed scheduled publish attempts can be rescheduled with new details", as
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -600,6 +613,7 @@ for (const { state, eligible } of approvalAiAuditCases) {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await createReadyDraft(page, cleanVariant());
     await setApprovalAiAuditState(page, state);
+    if (state === "passing") await makeDraftApprovalEligible(page);
 
     const result = await checkApprovalReadiness(page);
 
@@ -608,7 +622,7 @@ for (const { state, eligible } of approvalAiAuditCases) {
     expect(result.error).toBe(
       eligible
         ? ""
-        : "Selected variant requires a completed current-revision AI audit with six canonical non-blocking findings",
+        : "Selected variant requires both a completed current-revision AI audit with six canonical non-blocking findings and a passed quality score of at least 70",
     );
   });
 }
@@ -637,6 +651,7 @@ test("request changes moves the linked draft back to needs revision", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -652,6 +667,7 @@ test("archived campaign approvals hide mutation controls with restore guidance",
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
 
@@ -1022,6 +1038,29 @@ async function createReadyDraft(
   await expect(
     auditPanel.getByText("Completed", { exact: true }),
   ).toBeVisible();
+}
+
+async function makeDraftApprovalEligible(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const api = (
+      window as unknown as {
+        __LINKGO_DRAFTS_TEST_API__: {
+          listDrafts: () => Promise<
+            Array<{ variants: Array<{ id: number; status: string }> }>
+          >;
+          runDraftQualityLoop: (input: {
+            draftVariantId: number;
+          }) => Promise<unknown>;
+        };
+      }
+    ).__LINKGO_DRAFTS_TEST_API__;
+    const drafts = await api.listDrafts();
+    const variantId = drafts[0]?.variants.find(
+      (candidate) => candidate.status === "selected",
+    )?.id;
+    if (variantId === undefined) throw new Error("Selected variant was not found");
+    await api.runDraftQualityLoop({ draftVariantId: variantId });
+  });
 }
 
 async function openQueue(page: Page): Promise<void> {

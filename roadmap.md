@@ -4,11 +4,11 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ## Audit status
 
-**Audited:** August 11, 2026
+**Audited:** August 25, 2026
 
-**Repository baseline:** Clean `main` at `2a79b10` (`feat(workflows): audit planner drafts before approval`) before this roadmap-only update. The schema is ordered through Migration 32.
+**Repository baseline:** `main` at `009187f` (`chore(db): enforce renderer transaction allowlist`) plus the current uncommitted Section 8A implementation. The schema is ordered through Migration 33. Audit-only scratch logs were excluded.
 
-**Status summary:** 5 sections implemented, 14 partial (including one externally blocked), and 1 not started.
+**Status summary:** 5 sections implemented, 15 partial (including one externally blocked), and 0 not started.
 
 - **Implemented:** Every core acceptance statement in the numbered item exists.
 - **Partial:** A usable foundation exists, but one or more explicit roadmap outcomes are missing.
@@ -17,12 +17,13 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ### Audit evidence
 
-- **Quality gate:** `bun run check` is not green because Prettier reports existing style issues in `src/agent/schemas.ts` and `docs/ROADMAP_MAPPING.md`. Independent runs passed ESLint, the TypeScript/Vite production build, all 270 Playwright tests, all 150 Rust tests, `cargo fmt --check`, and Clippy with warnings denied.
-- **Transaction integrity — critical:** Static inventory found 51 renderer-managed `BEGIN` blocks across 10 files: agent runtime (7), approvals (5), candidate policy (1), candidate queue (3), comments (7), drafts (13), metrics (3), safety (2), source imports (3), and workflows (7). Installed `@tauri-apps/plugin-sql` 2.4.0 dispatches each request through a SQLx pool, so separate `BEGIN`/write/`COMMIT` calls have no guaranteed connection affinity. The single-snapshot mock in `tests/helpers/tauri-mocks.ts` does not model that production boundary.
-- **Architecture drift:** `docs/ARCHITECTURE.md` says connection-affine multi-statement mutations use restricted native commands and that renderer code does not issue transaction control. The 51 renderer transaction blocks contradict that claim.
-- **Security posture:** No `dangerouslySetInnerHTML`, direct `innerHTML` assignment, `eval`, or `new Function` sink was found in frontend source. However, the default webview capability grants SQL load/select/execute access, while CSP permits arbitrary `http:` and `https:` connections; this increases the blast radius of any future renderer compromise.
-- **Roadmap/documentation drift:** Migrations 31–32 and the August revision-scoped audit work added operator audit controls, approval readiness enforcement, planner-linked serial audit execution, explicit resume, and stale recovery. `docs/ROADMAP_MAPPING.md` still says Section 7 lacks operator UI and workflow execution, and its summary predates these slices.
-- **External dependency:** Section 3 still requires one production source connector that passes LinkedIn/API terms, permissions, access, and permitted-use review. It is not an executable engineering item until that decision is supplied.
+- **Quality gate — failing:** ESLint, TypeScript/Vite build, renderer-transaction guard, and `cargo fmt --check` pass. The current tree fails `cargo test` because the Migration 32 order assertion still expects `[31, 32]` after Migration 33; Clippy reports three `useless_vec` errors in new draft-quality tests; Playwright has one real prompt-contract failure, while the remaining browser tests could not run because the expected Chromium binary is missing locally. Repository LF content is Prettier-clean; local `core.autocrlf=true` causes false formatting failures on checked-out CRLF files.
+- **Transaction integrity — unresolved P0:** The static guard prevents growth but allowlists 105 control statements, including 46 renderer-managed `BEGIN` blocks across 10 files: agent runtime (6), approvals (2), candidate policy (1), candidate queue (3), comments (6), drafts (13), metrics (3), safety (2), source imports (3), and workflows (7). Separate plugin-SQL calls still lack guaranteed connection affinity; the existing mock still cannot prove production rollback or concurrency behavior.
+- **Security boundary — high priority:** Both `main` and `settings` webviews retain SQL load/select/execute plus webview-creation permissions, and CSP still permits arbitrary `http:` and `https:` connections. An unused native command can return AI provider secrets to renderer code. Custom provider Base URLs are accepted without URL, HTTPS, or private-network validation, allowing native requests to operator-supplied destinations.
+- **Supply chain:** `bun audit --production` reports 6 advisories (4 high, 2 moderate) in the Vite/PostCSS/Nanoid build chain. `cargo audit` reports 4 vulnerabilities (`quick-xml` twice, `rkyv`, and `rsa`) plus 20 warnings. Reachability and safe upgrades still require dependency-tree review; CI does not run either audit, pin actions to commit SHAs, or scan repository history for secrets.
+- **Positive controls:** No frontend HTML/eval sink was found. Provider secrets normally stay native, model-selected tools are replaced by native schemas and allowlisted, draft text is explicitly treated as untrusted content, credentials use the OS keyring by default, and LinkedIn publishing/commenting remain human approval-gated.
+- **Roadmap/documentation drift:** Section 8A now exists but is not releasable until its failing Rust, Clippy, and prompt-contract tests pass. `docs/ARCHITECTURE.md` still denies renderer transaction control, while README omits the quality loop.
+- **External dependency:** Section 3 still requires one production source connector that passes LinkedIn/API terms, permissions, access, and permitted-use review. It remains blocked on that decision.
 
 | Roadmap                               | Status                | Evidence and remaining work                                                                                                                                                                                              |
 | ------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -33,7 +34,7 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 | 5 Relevance filtering                 | **Partial**           | Rules-first intake plus attended planner-linked connected-provider scoring, exact-set atomic writes, rationale, and optional low-score rejection exist; unattended/background scoring and a production connector remain. |
 | 6 Draft generation                    | **Implemented**       | Exactly 3–5 save-gated provider variants use fixed event, launch, idea, or community prompt routes and optional planner workflow provenance.                                                                             |
 | 7 Humanizer + audit                   | **Partial**           | Revision-scoped AI audit runtime and attended planner-linked saved-draft workflow execution exist; enforced believable first-person specifics remain.                                                                    |
-| 8 Quality scoring loop                | **Not started**       | No persisted category scorecard, threshold rewrite, or automatic re-score loop exists. Manual edit and re-audit is only a foundation.                                                                                    |
+| 8 Quality scoring loop                | **Partial (8A)**      | Migration 33 persists five-category scorecards and an attended, bounded rewrite/re-audit/re-score loop with a fixed 70 threshold and two-rewrite cap. Planner/background ownership remains.                              |
 | 9 Content calendar                    | **Implemented**       | Purpose, angle, format, visual direction, CTA, and the approval bridge exist.                                                                                                                                            |
 | 10 Approval gate                      | **Partial**           | Durable human approvals and runtime continuation exist; shareable review links and wait URLs do not.                                                                                                                     |
 | 11 Durable workflow engine            | **Partial**           | Typed resumable steps, events, attempts, agent-run artifacts, and planner candidate/draft/audit flow exist; approval/schedule/metric artifacts and owned background jobs remain.                                         |
@@ -49,11 +50,12 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ## Priority queue
 
-1. **P0 — Renderer transaction-integrity remediation:** Inventory every renderer-managed transaction, then migrate each atomic mutation to a capability-specific native command that owns a pinned SQLx connection. Add real-SQLite rollback and concurrency tests that bypass the Playwright transaction mock, and enforce a static rule that prevents new renderer-issued `BEGIN`, `COMMIT`, or `ROLLBACK`. Complete this before further autonomous workflow work.
-2. **P1 — Section 8 bounded quality loop:** After P0, persist the category scorecard, enforce the minimum threshold, and add a bounded rewrite/re-audit/re-score loop with terminal failure handling. Keep approval human-gated; no score may approve, schedule, publish, or comment.
-3. **P1 — Complete the CI Rust gate:** Add `cargo fmt --check` and Clippy with warnings denied to the release gate, then fix the two current Prettier failures so `bun run check` is genuinely green.
-4. **P1 — Minimize renderer capabilities:** Replace broad default SQL permissions with the smallest capability set compatible with native-command migration, and narrow CSP `connect-src` to documented provider/OAuth endpoints.
-5. **P2 — Synchronize documentation:** Correct `docs/ARCHITECTURE.md`, `docs/ROADMAP_MAPPING.md`, and README status language after the transaction boundary and current audit workflow are accurately represented.
+1. **P0 — Restore the release gate:** Fix the Migration 32 order assertion, three draft-quality Clippy errors, and auditor prompt-contract regression. Install the pinned Playwright Chromium and rerun all 273 tests plus the complete `bun run check`; do not mark Section 8A complete before this passes.
+2. **P0 — Finish renderer transaction remediation:** Treat the allowlist as a freeze, not completion. Migrate all 46 atomic mutations to capability-specific native commands with pinned SQLx connections, add real-SQLite rollback/concurrency tests, and reduce the allowlist to zero before autonomous workflow expansion.
+3. **P1 — Close renderer secret and network exposure:** Remove the unused provider-secret command, validate custom Base URLs at native ingress (HTTPS by default; explicit local-development exception), split main/settings capabilities, remove renderer SQL access after migration, and narrow CSP `connect-src` to required origins.
+4. **P1 — Remediate and gate dependencies:** Trace the Bun/Rust advisory paths, upgrade or document unreachable exceptions, add dependency and repository-history secret scans to CI, and pin third-party GitHub Actions by commit SHA.
+5. **P2 — Complete Section 8 ownership:** After the gate and security work, add planner/background ownership and policy-driven quality execution while preserving human approval gates.
+6. **P2 — Synchronize documentation:** Correct architecture transaction claims, roadmap mapping, README feature status, and CI verification notes after implementation matches them.
 
 ## Delivered campaign-to-audit sequence
 
@@ -142,13 +144,15 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 
 **Remaining:** Roadmap 7 remains **Partial** because believable first-person specifics are reported as findings rather than enforced before approval. This slice does not automate approval, scheduling, publishing, rewriting, or other external actions.
 
-## 8. Quality scoring loop — Not started
+## 8. Quality scoring loop — Partial (8A)
 
 - Score hook, authenticity, platform fit, specificity, narrative structure.
 - Pattern: `Deodat-Lawson/LaunchStack/packages/features/src/marketing-pipeline/generator.ts`.
 - If below threshold, rewrite automatically and re-score.
 
-**Remaining:** Persist the category scorecard and implement the threshold-driven rewrite and automatic re-score loop. Manual edit and re-audit does not complete this item.
+**Evidence:** Migration 33 persists revision-scoped runs, immutable attempts, and all five canonical category scores. An explicit operator action scores against 70, allows at most two atomic rewrites, re-runs the current AI audit, re-scores serially, supports stale recovery/resume, and gates new approvals without approving or publishing.
+
+**Remaining:** Add planner/background ownership and policy-driven automatic execution while preserving human approval gates.
 
 ## 9. Content calendar — Implemented
 

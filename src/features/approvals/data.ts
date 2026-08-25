@@ -144,6 +144,12 @@ function getApprovalAiAuditReadySql(variantAlias: string): string {
         WHERE blocking_audit_finding.audit_run_id = approval_audit_run.id
           AND blocking_audit_finding.severity = 'block'
       )
+  ) AND EXISTS (
+    SELECT 1 FROM draft_quality_runs approval_quality_run
+    WHERE approval_quality_run.draft_variant_id = ${variantAlias}.id
+      AND approval_quality_run.current_content_revision = ${variantAlias}.content_revision
+      AND approval_quality_run.status = 'passed'
+      AND approval_quality_run.final_score >= 70
   )`;
 }
 
@@ -425,7 +431,6 @@ export async function createApproval(
 ): Promise<number> {
   const parsed = createApprovalSchema.parse(input);
   const db = await getDb();
-
   await db.execute("BEGIN TRANSACTION");
   try {
     const draftRows = await db.select<ApprovalValidationRow[]>(
@@ -465,7 +470,7 @@ export async function createApproval(
     );
     if ((aiAuditReadyRows[0]?.count ?? 0) !== 1) {
       throw new Error(
-        "Selected variant requires a completed current-revision AI audit with six canonical non-blocking findings",
+        "Selected variant requires both a completed current-revision AI audit with six canonical non-blocking findings and a passed quality score of at least 70",
       );
     }
 

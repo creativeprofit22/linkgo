@@ -9,6 +9,8 @@ import {
   researchPostsOutputSchema,
   schedulePostInputSchema,
   schedulePostOutputSchema,
+  scoreDraftQualityInputSchema,
+  scoreDraftQualityOutputSchema,
   scoreRelevanceInputSchema,
   scoreRelevanceOutputSchema,
   type AuditPostInput,
@@ -16,6 +18,7 @@ import {
   type DraftPostInput,
   type ResearchPostsInput,
   type SchedulePostInput,
+  type ScoreDraftQualityInput,
   type ScoreRelevanceInput,
 } from "@/agent/schemas";
 import {
@@ -70,6 +73,15 @@ export const AGENT_TOOL_METADATA = [
     stepKeys: ["audit"],
   },
   {
+    name: "score_draft_quality",
+    label: "Score draft quality",
+    description:
+      "Scores the exact draft revision across five quality categories and proposes one evidence-grounded rewrite only when below the fixed threshold.",
+    roadmapSection: "8",
+    requiresApproval: false,
+    stepKeys: ["audit"],
+  },
+  {
     name: "schedule_post",
     label: "Schedule post",
     description:
@@ -93,7 +105,7 @@ export const AGENT_ROLE_TOOL_NAMES = {
   researcher: ["research_posts"],
   scorer: ["score_relevance"],
   drafter: ["draft_post"],
-  auditor: ["audit_post"],
+  auditor: ["audit_post", "score_draft_quality"],
   scheduler: ["schedule_post"],
   analyst: ["collect_metrics"],
 } as const satisfies Record<AgentRole, readonly AgentToolName[]>;
@@ -192,6 +204,51 @@ export const agentToolRegistry = {
       return {
         findings: input.findings,
         summary: `Accepted ${input.findings.length} provider-authored audit findings.`,
+      };
+    },
+  },
+  score_draft_quality: {
+    ...getToolMetadata("score_draft_quality"),
+    inputSchema: scoreDraftQualityInputSchema,
+    outputSchema: scoreDraftQualityOutputSchema,
+    execute: async (
+      input: ScoreDraftQualityInput,
+      context: AgentToolExecutionContext,
+    ) => {
+      if (input.campaignId !== context.request.campaignId) {
+        throw new Error(
+          "score_draft_quality campaignId must match the agent run campaign",
+        );
+      }
+      const trusted = context.request.inputContext?.qualityRequest;
+      const qualityRequest =
+        typeof trusted === "object" && trusted !== null
+          ? (trusted as Record<string, unknown>)
+          : {};
+      for (const [field, actual] of [
+        ["draftVariantId", input.draftVariantId],
+        ["qualityRunId", input.qualityRunId],
+        ["attemptId", input.attemptId],
+        ["contentRevision", input.contentRevision],
+      ] as const) {
+        if (
+          qualityRequest[field] !== undefined &&
+          qualityRequest[field] !== actual
+        ) {
+          throw new Error(
+            `score_draft_quality ${field} must match the trusted quality request`,
+          );
+        }
+      }
+      return {
+        campaignId: input.campaignId,
+        draftVariantId: input.draftVariantId,
+        qualityRunId: input.qualityRunId,
+        attemptId: input.attemptId,
+        contentRevision: input.contentRevision,
+        categoryScores: input.categoryScores,
+        rewrite: input.rewrite,
+        summary: `Accepted five evidence-grounded quality scores for revision ${input.contentRevision}.`,
       };
     },
   },

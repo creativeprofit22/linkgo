@@ -346,6 +346,103 @@ export const auditPostOutputSchema = z
   })
   .strict();
 
+export const DRAFT_QUALITY_CATEGORY_KEYS = [
+  "hook_strength",
+  "authenticity",
+  "linkedin_fit",
+  "specificity",
+  "narrative_structure",
+] as const;
+
+const draftQualityCategoryScoreSchema = z
+  .object({
+    categoryKey: z.enum(DRAFT_QUALITY_CATEGORY_KEYS),
+    score: z.number().int().min(0).max(100),
+    feedback: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+
+const draftQualityCategoryScoresSchema = z
+  .array(draftQualityCategoryScoreSchema)
+  .length(DRAFT_QUALITY_CATEGORY_KEYS.length)
+  .superRefine((scores, context) => {
+    if (
+      new Set(scores.map((score) => score.categoryKey)).size !==
+      DRAFT_QUALITY_CATEGORY_KEYS.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Exactly one score per quality category is required",
+      });
+    }
+  });
+
+const qualityRewriteSchema = z
+  .object({
+    hook: z.string().trim().min(1).max(500),
+    body: z.string().trim().min(1).max(3000),
+    cta: z.string().trim().max(500),
+    hashtags: z.string().trim().max(300),
+  })
+  .strict();
+
+export const scoreDraftQualityInputSchema = z
+  .object({
+    campaignId: positiveIdSchema,
+    draftVariantId: positiveIdSchema,
+    qualityRunId: positiveIdSchema,
+    attemptId: positiveIdSchema,
+    contentRevision: positiveIdSchema,
+    hook: z.string().max(500),
+    body: z.string().max(3000),
+    cta: z.string().max(500),
+    hashtags: z.string().max(300),
+    threshold: z.literal(70),
+    rewriteAllowed: z.boolean(),
+    priorCategoryFeedback: z
+      .array(
+        z
+          .object({
+            categoryKey: z.enum(DRAFT_QUALITY_CATEGORY_KEYS),
+            feedback: z.string().trim().min(1).max(1000),
+          })
+          .strict(),
+      )
+      .max(5),
+    categoryScores: draftQualityCategoryScoresSchema,
+    rewrite: qualityRewriteSchema.optional(),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    const overall = Math.round(
+      input.categoryScores.reduce((sum, category) => sum + category.score, 0) /
+        5,
+    );
+    const rewriteRequired = overall < input.threshold && input.rewriteAllowed;
+    if (rewriteRequired !== (input.rewrite !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["rewrite"],
+        message: rewriteRequired
+          ? "A complete rewrite is required below threshold"
+          : "Rewrite output is not allowed for this score",
+      });
+    }
+  });
+
+export const scoreDraftQualityOutputSchema = z
+  .object({
+    campaignId: positiveIdSchema,
+    draftVariantId: positiveIdSchema,
+    qualityRunId: positiveIdSchema,
+    attemptId: positiveIdSchema,
+    contentRevision: positiveIdSchema,
+    categoryScores: draftQualityCategoryScoresSchema,
+    rewrite: qualityRewriteSchema.optional(),
+    summary: summarySchema,
+  })
+  .strict();
+
 export const schedulePostInputSchema = z
   .object({
     campaignId: positiveIdSchema,
@@ -388,6 +485,7 @@ export const agentToolInputSchemas = {
   score_relevance: scoreRelevanceInputSchema,
   draft_post: draftPostInputSchema,
   audit_post: auditPostInputSchema,
+  score_draft_quality: scoreDraftQualityInputSchema,
   schedule_post: schedulePostInputSchema,
   collect_metrics: collectMetricsInputSchema,
 } as const;
@@ -397,6 +495,7 @@ export const agentToolOutputSchemas = {
   score_relevance: scoreRelevanceOutputSchema,
   draft_post: draftPostOutputSchema,
   audit_post: auditPostOutputSchema,
+  score_draft_quality: scoreDraftQualityOutputSchema,
   schedule_post: schedulePostOutputSchema,
   collect_metrics: collectMetricsOutputSchema,
 } as const;
@@ -409,6 +508,12 @@ export type DraftPostInput = z.infer<typeof draftPostInputSchema>;
 export type DraftPostOutput = z.infer<typeof draftPostOutputSchema>;
 export type AuditPostInput = z.infer<typeof auditPostInputSchema>;
 export type AuditPostOutput = z.infer<typeof auditPostOutputSchema>;
+export type ScoreDraftQualityInput = z.infer<
+  typeof scoreDraftQualityInputSchema
+>;
+export type ScoreDraftQualityOutput = z.infer<
+  typeof scoreDraftQualityOutputSchema
+>;
 export type SchedulePostInput = z.infer<typeof schedulePostInputSchema>;
 export type SchedulePostOutput = z.infer<typeof schedulePostOutputSchema>;
 export type CollectMetricsInput = z.infer<typeof collectMetricsInputSchema>;

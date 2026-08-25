@@ -56,28 +56,32 @@ async fn insert_rate_limit_event(
     Ok(())
 }
 
+struct SafetyAuditEvent<'a> {
+    campaign_id: i64,
+    subject_type: &'a str,
+    subject_id: Option<i64>,
+    event_type: &'a str,
+    severity: &'a str,
+    summary: &'a str,
+    metadata: serde_json::Value,
+}
+
 async fn insert_safety_audit(
     connection: &mut SqliteConnection,
-    campaign_id: i64,
-    subject_type: &str,
-    subject_id: Option<i64>,
-    event_type: &str,
-    severity: &str,
-    summary: &str,
-    metadata: serde_json::Value,
+    event: SafetyAuditEvent<'_>,
 ) -> Result<(), String> {
     sqlx::query(
         "INSERT INTO safety_audit_events (
             campaign_id, subject_type, subject_id, event_type, severity, summary, metadata_json
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     )
-    .bind(campaign_id)
-    .bind(subject_type)
-    .bind(subject_id)
-    .bind(event_type)
-    .bind(severity)
-    .bind(summary)
-    .bind(metadata.to_string())
+    .bind(event.campaign_id)
+    .bind(event.subject_type)
+    .bind(event.subject_id)
+    .bind(event.event_type)
+    .bind(event.severity)
+    .bind(event.summary)
+    .bind(event.metadata.to_string())
     .execute(&mut *connection)
     .await
     .map_err(|_| STORAGE_ERROR.to_string())?;
@@ -177,13 +181,15 @@ async fn execute_schedule(
         let audit_summary = "Post scheduling blocked by global kill switch";
         insert_safety_audit(
             connection,
-            approval.campaign_id,
-            "schedule_job",
-            existing_id,
-            "schedule_blocked",
-            "block",
-            audit_summary,
-            json!({ "reason": reason }),
+            SafetyAuditEvent {
+                campaign_id: approval.campaign_id,
+                subject_type: "schedule_job",
+                subject_id: existing_id,
+                event_type: "schedule_blocked",
+                severity: "block",
+                summary: audit_summary,
+                metadata: json!({ "reason": reason }),
+            },
         )
         .await?;
         let rate_summary = format!(
@@ -231,17 +237,19 @@ async fn execute_schedule(
         .await?;
         insert_safety_audit(
             connection,
-            approval.campaign_id,
-            "approval",
-            Some(approval.id),
-            "schedule_blocked",
-            "block",
-            &summary,
-            json!({
-                "windowKey": window_key,
-                "limitValue": approval.daily_post_limit,
-                "currentCount": current_count,
-            }),
+            SafetyAuditEvent {
+                campaign_id: approval.campaign_id,
+                subject_type: "approval",
+                subject_id: Some(approval.id),
+                event_type: "schedule_blocked",
+                severity: "block",
+                summary: &summary,
+                metadata: json!({
+                    "windowKey": window_key,
+                    "limitValue": approval.daily_post_limit,
+                    "currentCount": current_count,
+                }),
+            },
         )
         .await?;
         return Ok(Settlement::Rejected(summary));
@@ -297,13 +305,15 @@ async fn execute_schedule(
     .await?;
     insert_safety_audit(
         connection,
-        approval.campaign_id,
-        "schedule_job",
-        Some(schedule_job_id),
-        "schedule_allowed",
-        "info",
-        &summary,
-        json!({ "approvalId": approval.id, "scheduledFor": input.scheduled_for }),
+        SafetyAuditEvent {
+            campaign_id: approval.campaign_id,
+            subject_type: "schedule_job",
+            subject_id: Some(schedule_job_id),
+            event_type: "schedule_allowed",
+            severity: "info",
+            summary: &summary,
+            metadata: json!({ "approvalId": approval.id, "scheduledFor": input.scheduled_for }),
+        },
     )
     .await?;
     Ok(Settlement::Accepted(schedule_job_id))
@@ -371,13 +381,15 @@ async fn execute_cancel(
     }
     insert_safety_audit(
         connection,
-        campaign_id,
-        "schedule_job",
-        Some(input.id),
-        "schedule_cancelled",
-        "info",
-        "Schedule cancelled",
-        json!({ "approvalId": approval_id }),
+        SafetyAuditEvent {
+            campaign_id,
+            subject_type: "schedule_job",
+            subject_id: Some(input.id),
+            event_type: "schedule_cancelled",
+            severity: "info",
+            summary: "Schedule cancelled",
+            metadata: json!({ "approvalId": approval_id }),
+        },
     )
     .await?;
     Ok(Settlement::Accepted(()))

@@ -132,7 +132,9 @@ export function AiAuditPanel({
       setAttemptError(
         error instanceof Error
           ? error.message
-          : "The AI audit could not be started.",
+          : typeof error === "string" && error.trim() !== ""
+            ? error
+            : "The AI audit could not be started.",
       );
     } finally {
       runLock.current = false;

@@ -31,6 +31,9 @@ export function DraftsView(): React.ReactNode {
     setVariantStatus,
     archiveDraft,
     runDraftAiAudit,
+    qualityPendingVariantIds,
+    runQualityLoop,
+    resumeQualityLoop,
   } = useDrafts();
 
   const summary = getDraftSummary(drafts);
@@ -179,6 +182,13 @@ export function DraftsView(): React.ReactNode {
                   onSetVariantStatus={setVariantStatus}
                   onArchiveDraft={archiveDraft}
                   onRunAiAudit={runDraftAiAudit}
+                  qualityPendingVariantIds={qualityPendingVariantIds}
+                  onRunQuality={(draftVariantId) =>
+                    runQualityLoop({ draftVariantId })
+                  }
+                  onResumeQuality={(draftVariantId, qualityRunId) =>
+                    resumeQualityLoop({ draftVariantId, qualityRunId })
+                  }
                 />
               ))}
             </div>

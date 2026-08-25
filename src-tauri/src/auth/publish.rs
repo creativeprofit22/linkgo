@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqliteConnectOptions, Row, SqlitePool};
+use sqlx::{Row, SqlitePool};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
@@ -173,9 +173,9 @@ pub(crate) fn app_sqlite_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 pub(crate) async fn sqlite_pool(app: &AppHandle) -> Result<SqlitePool, String> {
-    SqlitePool::connect_with(SqliteConnectOptions::new().filename(app_sqlite_path(app)?))
-        .await
-        .map_err(|_| "Could not open Linkgo database".to_string())
+    app.try_state::<SqlitePool>()
+        .map(|pool| pool.inner().clone())
+        .ok_or_else(|| "Linkgo database is not initialized".to_string())
 }
 
 pub(crate) async fn load_publish_preflight(

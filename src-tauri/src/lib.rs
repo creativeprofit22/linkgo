@@ -6,6 +6,7 @@ mod auth;
 mod autopilot_planner;
 mod campaign_backlog;
 mod comments;
+mod draft_quality;
 mod metric_refresh;
 mod migrations;
 mod planner_draft_audits;
@@ -57,6 +58,12 @@ pub fn run() {
             campaign_backlog::linkgo_campaign_backlog_update,
             campaign_backlog::linkgo_campaign_backlog_set_status,
             comments::linkgo_comment_record_attempt,
+            draft_quality::linkgo_draft_quality_claim,
+            draft_quality::linkgo_draft_quality_apply_score,
+            draft_quality::linkgo_draft_quality_continue,
+            draft_quality::linkgo_draft_quality_fail,
+            draft_quality::linkgo_draft_quality_reconcile_stale,
+            draft_quality::linkgo_draft_quality_resume,
             autopilot_planner::linkgo_autopilot_planner_status,
             autopilot_planner::linkgo_autopilot_planner_start,
             autopilot_planner::linkgo_autopilot_planner_stop,

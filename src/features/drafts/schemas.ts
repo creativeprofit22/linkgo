@@ -3,6 +3,9 @@ import { AGENT_PLAYBOOK_KEYS } from "@/agent/playbooks";
 import {
   DRAFT_AI_AUDIT_RULE_KEYS,
   DRAFT_CONTENT_INTENTS,
+  DRAFT_QUALITY_ATTEMPT_STATUSES,
+  DRAFT_QUALITY_CATEGORY_KEYS,
+  DRAFT_QUALITY_RUN_STATUSES,
 } from "@/features/drafts/types";
 import { z } from "zod";
 
@@ -168,6 +171,91 @@ export const reconcileStalePlannerDraftAuditsSchema = z
     limit: z.number().int().min(1).max(100).default(25),
   })
   .strict();
+
+export const draftQualityCategoryKeySchema = z.enum(
+  DRAFT_QUALITY_CATEGORY_KEYS,
+);
+export const draftQualityRunStatusSchema = z.enum(DRAFT_QUALITY_RUN_STATUSES);
+export const draftQualityAttemptStatusSchema = z.enum(
+  DRAFT_QUALITY_ATTEMPT_STATUSES,
+);
+
+export const draftQualityCategoryScoreInputSchema = z
+  .object({
+    categoryKey: draftQualityCategoryKeySchema,
+    score: z.number().int().min(0).max(100),
+    feedback: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+
+export const draftQualityCategoryScoresSchema = z
+  .array(draftQualityCategoryScoreInputSchema)
+  .length(DRAFT_QUALITY_CATEGORY_KEYS.length)
+  .superRefine((scores, context) => {
+    if (
+      new Set(scores.map((score) => score.categoryKey)).size !==
+      DRAFT_QUALITY_CATEGORY_KEYS.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "categoryScores must contain exactly one score for every quality category",
+      });
+    }
+  });
+
+export const draftQualityRewriteSchema = z
+  .object({
+    hook: z.string().trim().min(1).max(500),
+    body: z.string().trim().min(1).max(3000),
+    cta: z.string().trim().max(500),
+    hashtags: z.string().trim().max(300),
+  })
+  .strict();
+
+export const draftQualityScoreInputSchema = z
+  .object({
+    campaignId: z.number().int().positive(),
+    draftVariantId: z.number().int().positive(),
+    qualityRunId: z.number().int().positive(),
+    attemptId: z.number().int().positive(),
+    contentRevision: z.number().int().positive(),
+    hook: z.string().max(500),
+    body: z.string().max(3000),
+    cta: z.string().max(500),
+    hashtags: z.string().max(300),
+    threshold: z.literal(70),
+    rewriteAllowed: z.boolean(),
+    priorCategoryFeedback: z
+      .array(
+        z
+          .object({
+            categoryKey: draftQualityCategoryKeySchema,
+            feedback: z.string().trim().min(1).max(1000),
+          })
+          .strict(),
+      )
+      .max(DRAFT_QUALITY_CATEGORY_KEYS.length),
+    categoryScores: draftQualityCategoryScoresSchema,
+    rewrite: draftQualityRewriteSchema.optional(),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    const overall = Math.round(
+      input.categoryScores.reduce((total, item) => total + item.score, 0) /
+        DRAFT_QUALITY_CATEGORY_KEYS.length,
+    );
+    const requiresRewrite = overall < input.threshold && input.rewriteAllowed;
+    if (requiresRewrite !== (input.rewrite !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["rewrite"],
+        message: requiresRewrite
+          ? "A complete rewrite is required below threshold while rewriting is allowed"
+          : "A rewrite is only allowed below threshold while another rewrite is available",
+      });
+    }
+  });
 
 export const draftVariantInputSchema = z.object({
   hook: z.string().trim().max(500).default(""),

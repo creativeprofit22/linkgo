@@ -38,6 +38,37 @@ export type DraftAiAuditRunStatus =
   | "failed"
   | "cancelled";
 
+export const DRAFT_QUALITY_CATEGORY_KEYS = [
+  "hook_strength",
+  "authenticity",
+  "linkedin_fit",
+  "specificity",
+  "narrative_structure",
+] as const;
+export const DRAFT_QUALITY_THRESHOLD = 70 as const;
+export const DRAFT_QUALITY_MAXIMUM_REWRITES = 2 as const;
+export const DRAFT_QUALITY_RUN_STATUSES = [
+  "pending",
+  "running",
+  "passed",
+  "needs_revision",
+  "failed",
+  "cancelled",
+] as const;
+export const DRAFT_QUALITY_ATTEMPT_STATUSES = [
+  "scoring",
+  "scored",
+  "rewritten",
+  "passed",
+  "failed",
+] as const;
+
+export type DraftQualityCategoryKey =
+  (typeof DRAFT_QUALITY_CATEGORY_KEYS)[number];
+export type DraftQualityRunStatus = (typeof DRAFT_QUALITY_RUN_STATUSES)[number];
+export type DraftQualityAttemptStatus =
+  (typeof DRAFT_QUALITY_ATTEMPT_STATUSES)[number];
+
 export interface Draft {
   id: number;
   campaign_id: number;
@@ -113,6 +144,120 @@ export interface DraftVariantAiAudit {
   status: DraftAiAuditRunStatus | null;
   run: DraftAiAuditRun | null;
   findings: DraftAiAuditFinding[];
+}
+
+export interface DraftQualityRun {
+  id: number;
+  draft_variant_id: number;
+  starting_content_revision: number;
+  current_content_revision: number;
+  provider_key: AgentProviderKey;
+  model_name: string;
+  threshold: typeof DRAFT_QUALITY_THRESHOLD;
+  maximum_rewrite_count: typeof DRAFT_QUALITY_MAXIMUM_REWRITES;
+  applied_rewrite_count: number;
+  status: DraftQualityRunStatus;
+  final_score: number | null;
+  summary: string;
+  error_message: string;
+  active_agent_run_id: number | null;
+  active_ai_audit_run_id: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DraftQualityAttempt {
+  id: number;
+  run_id: number;
+  attempt_number: number;
+  content_revision: number;
+  input_hook: string;
+  input_body: string;
+  input_cta: string;
+  input_hashtags: string;
+  rewritten_hook: string | null;
+  rewritten_body: string | null;
+  rewritten_cta: string | null;
+  rewritten_hashtags: string | null;
+  overall_score: number | null;
+  status: DraftQualityAttemptStatus;
+  agent_run_id: number | null;
+  ai_audit_run_id: number | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface DraftQualityCategoryScore {
+  id: number;
+  attempt_id: number;
+  category_key: DraftQualityCategoryKey;
+  score: number;
+  feedback: string;
+  created_at: string;
+}
+
+export interface DraftQualityScorecard {
+  run: DraftQualityRun;
+  attempts: Array<
+    DraftQualityAttempt & { categoryScores: DraftQualityCategoryScore[] }
+  >;
+}
+
+export interface DraftQualityRewrite {
+  hook: string;
+  body: string;
+  cta: string;
+  hashtags: string;
+}
+
+export interface DraftQualityScoreInput {
+  campaignId: number;
+  draftVariantId: number;
+  qualityRunId: number;
+  attemptId: number;
+  contentRevision: number;
+  hook: string;
+  body: string;
+  cta: string;
+  hashtags: string;
+  threshold: typeof DRAFT_QUALITY_THRESHOLD;
+  rewriteAllowed: boolean;
+  priorCategoryFeedback: Array<{
+    categoryKey: DraftQualityCategoryKey;
+    feedback: string;
+  }>;
+  categoryScores: Array<{
+    categoryKey: DraftQualityCategoryKey;
+    score: number;
+    feedback: string;
+  }>;
+  rewrite?: DraftQualityRewrite;
+}
+
+export interface ClaimDraftQualityInput {
+  draftVariantId: number;
+  providerKey?: AgentProviderKey;
+  modelName?: string;
+}
+
+export interface ApplyDraftQualityScoreInput extends DraftQualityScoreInput {
+  agentRunId: number;
+}
+
+export interface ContinueDraftQualityInput {
+  qualityRunId: number;
+  draftVariantId: number;
+}
+
+export interface FailDraftQualityInput extends ContinueDraftQualityInput {
+  errorMessage: string;
+}
+
+export interface ReconcileDraftQualityResult {
+  reconciledRunIds: number[];
 }
 
 export interface RunDraftAiAuditInput {
@@ -191,6 +336,7 @@ export type DraftVariantWithAudits = DraftVariant & {
   audits: DraftAuditFinding[];
   auditSeverity: DraftAuditSeverity;
   aiAudit: DraftVariantAiAudit;
+  qualityScorecard: DraftQualityScorecard | null;
 };
 
 export type DraftWithDetails = Draft & {

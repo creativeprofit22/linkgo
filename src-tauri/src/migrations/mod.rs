@@ -13,6 +13,7 @@ pub mod comments;
 pub mod content_calendar;
 pub mod draft_ai_audits;
 pub mod draft_generation;
+pub mod draft_quality;
 pub mod drafts;
 pub mod integrations;
 pub mod metric_refresh;
@@ -65,6 +66,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(planner_draft_generation::migrations());
     migrations.extend(draft_ai_audits::migrations());
     migrations.extend(planner_draft_audits::migrations());
+    migrations.extend(draft_quality::migrations());
     migrations
 }
 

@@ -15,11 +15,11 @@ The feature stores:
 
 Creating a draft marks the source candidate as `drafted` in the Candidate Queue.
 
-AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. A saved planner-linked draft can then be audited through an explicit human-triggered workflow action; ad-hoc/manual AI audits retain their existing callable data/runtime API. Neither path performs AI rewrites, creates or grants approval, schedules, publishes, scrapes LinkedIn, or automates comments.
+AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. AI audit remains explicit. After a canonical non-blocking current-revision audit, the operator may confirm **Run quality loop**: five categories are scored against 70, with at most two automatic evidence-grounded rewrites. Every rewrite increments `content_revision`, regenerates deterministic findings, and is AI-audited before automatic re-scoring. Interrupted/failed work is durable and only continues through **Resume quality loop**. The loop never approves, schedules, publishes, scrapes, or comments.
 
 ## Schema
 
-Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, Migration 30 in `planner_draft_generation.rs`, Migration 31 in `draft_ai_audits.rs`, and Migration 32 in `planner_draft_audits.rs`.
+Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, Migration 30 in `planner_draft_generation.rs`, Migration 31 in `draft_ai_audits.rs`, Migration 32 in `planner_draft_audits.rs`, and Migration 33 in `draft_quality.rs`.
 
 Tables:
 
@@ -29,6 +29,9 @@ Tables:
 - `draft_generation_requests`
 - `draft_ai_audit_runs`
 - `draft_ai_audit_findings`
+- `draft_quality_runs`
+- `draft_quality_attempts`
+- `draft_quality_category_scores`
 
 Key constraints:
 

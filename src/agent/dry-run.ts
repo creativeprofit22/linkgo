@@ -151,6 +151,66 @@ function buildToolCall(request: AgentModelRequest): {
       },
     };
   }
+  if (
+    request.agentRole === "auditor" &&
+    request.inputContext?.qualityRequest !== undefined
+  ) {
+    const quality = request.inputContext.qualityRequest as Record<
+      string,
+      unknown
+    >;
+    const rewriteAllowed = Boolean(quality.rewriteAllowed);
+    const isRewritten =
+      typeof quality.hook === "string" &&
+      quality.hook.startsWith("Rewritten: ");
+    const score = rewriteAllowed && !isRewritten ? 62 : 78;
+    return {
+      providerToolCallId: `dry-run-${request.runId}-tool-call-2`,
+      toolName: "score_draft_quality",
+      input: {
+        campaignId: request.campaignId,
+        draftVariantId: Number(quality.draftVariantId),
+        qualityRunId: Number(quality.qualityRunId),
+        attemptId: Number(quality.attemptId),
+        contentRevision: Number(quality.contentRevision),
+        hook: typeof quality.hook === "string" ? quality.hook : "",
+        body: typeof quality.body === "string" ? quality.body : "",
+        cta: typeof quality.cta === "string" ? quality.cta : "",
+        hashtags: typeof quality.hashtags === "string" ? quality.hashtags : "",
+        threshold: 70,
+        rewriteAllowed,
+        priorCategoryFeedback: Array.isArray(quality.priorCategoryFeedback)
+          ? quality.priorCategoryFeedback
+          : [],
+        categoryScores: [
+          "hook_strength",
+          "authenticity",
+          "linkedin_fit",
+          "specificity",
+          "narrative_structure",
+        ].map((categoryKey) => ({
+          categoryKey,
+          score,
+          feedback:
+            rewriteAllowed && !isRewritten
+              ? `Dry-run ${categoryKey.replace(/_/gu, " ")} needs one attended rewrite before approval.`
+              : `Dry-run ${categoryKey.replace(/_/gu, " ")} meets the attended quality threshold using supplied evidence.`,
+        })),
+        ...(rewriteAllowed && !isRewritten
+          ? {
+              rewrite: {
+                hook: `Rewritten: ${typeof quality.hook === "string" ? quality.hook : ""}`,
+                body: `${typeof quality.body === "string" ? quality.body : ""}\n\nA concrete operator lesson makes the point easier to trust.`,
+                cta:
+                  typeof quality.cta === "string" ? quality.cta : "Review it.",
+                hashtags:
+                  typeof quality.hashtags === "string" ? quality.hashtags : "",
+              },
+            }
+          : {}),
+      },
+    };
+  }
   if (request.agentRole === "auditor") {
     const auditDetails = getAuditRequestDetails(request);
     const findingMessages: Record<

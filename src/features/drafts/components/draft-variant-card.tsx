@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { AiAuditPanel } from "@/features/drafts/components/ai-audit-panel";
 import { AuditFindingList } from "@/features/drafts/components/audit-finding-list";
+import { QualityScorecardPanel } from "@/features/drafts/components/quality-scorecard-panel";
 import {
   DraftAuditSeverityBadge,
   DraftVariantStatusBadge,
@@ -30,6 +31,9 @@ interface DraftVariantCardProps {
   onUpdateVariant: (input: UpdateDraftVariantInput) => Promise<void>;
   onSetVariantStatus: (input: SetDraftVariantStatusInput) => Promise<void>;
   onRunAiAudit: (input: RunDraftAiAuditInput) => Promise<void>;
+  qualityPending: boolean;
+  onRunQuality: (variantId: number) => Promise<void>;
+  onResumeQuality: (variantId: number, runId: number) => Promise<void>;
 }
 
 interface VariantEditorState {
@@ -55,6 +59,9 @@ export function DraftVariantCard({
   onUpdateVariant,
   onSetVariantStatus,
   onRunAiAudit,
+  qualityPending,
+  onRunQuality,
+  onResumeQuality,
 }: DraftVariantCardProps): React.ReactNode {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -188,6 +195,12 @@ export function DraftVariantCard({
           audit={variant.aiAudit}
           variantId={variant.id}
           onRun={onRunAiAudit}
+        />
+        <QualityScorecardPanel
+          variant={variant}
+          pending={qualityPending}
+          onRun={() => onRunQuality(variant.id)}
+          onResume={(runId) => onResumeQuality(variant.id, runId)}
         />
       </CardContent>
 

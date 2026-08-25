@@ -2,6 +2,14 @@
 
 ## Current schema
 
+### Draft quality tables (Migration 33)
+
+`draft_quality_runs` owns one revision-scoped attended quality lifecycle per variant, including provider/model, fixed threshold `70`, two-rewrite cap, active agent/audit links, final score, terminal summary/error, and timestamps. A partial unique index permits exactly one `pending` or `running` run per variant; revision and stale-active indexes support current scorecard reads and 15-minute recovery.
+
+`draft_quality_attempts` appends immutable input snapshots for each scoring attempt. Unique `(run_id, attempt_number)`, bounded attempts 1–3, optional all-or-none rewritten fields, score/status checks, and cascading ownership preserve history. An attempt can link one durable auditor agent run and one AI re-audit.
+
+`draft_quality_category_scores` stores exactly one bounded score and feedback row per canonical category (`hook_strength`, `authenticity`, `linkedin_fit`, `specificity`, `narrative_structure`) through unique `(attempt_id, category_key)`. Foreign keys cascade runs → attempts → scores. Triggers reject future revisions and mutation of run/attempt scope.
+
 ### `app_settings`
 
 Stores singleton local app preferences mirrored from OS-level integration state.

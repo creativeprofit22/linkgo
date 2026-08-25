@@ -11,6 +11,12 @@ Linkgo is a Tauri v2 desktop app with a React frontend and local SQLite database
 - `src/workflows/` owns durable orchestration contracts, workflow state-machine data access, and resumable run history.
 - `src/agent/` owns tool schemas, provider interfaces, dry-run provider logic, and model-loop adapters. `src/agent/index.ts` is the public runtime contract boundary; UI imports `src/features/agent-runtime`, not runtime loop internals.
 
+## Attended draft quality loop
+
+The Draft variant UI starts a bounded quality loop only after a completed canonical non-blocking current-revision AI audit. Native Tauri commands own all multi-statement writes in one immediate SQLx transaction: claim, score settlement, rewrite/revision increment, deterministic audit regeneration, re-audit reservation, continuation, failure, resume, and stale reconciliation.
+
+Provider calls are serial and outside transactions. Strict schemas and echoed campaign/variant/run/attempt/revision identity are validated before settlement. A score below 70 permits at most two evidence-grounded rewrites; each is AI-audited before re-scoring. Failure, stale content, blocking audit, exhaustion, or missing rewrite ends durably without approval or external action. Claims older than 15 minutes become explicitly resumable. New approvals require a passed current-revision quality run with score at least 70.
+
 ## Tauri boundary
 
 Rust code should only handle work that needs OS integration, app lifecycle, plugins, native credential access, local background workers, or durable migrations.

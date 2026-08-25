@@ -32,6 +32,17 @@ test("creates a draft with two variants and shows audit output", async ({
   await expect(
     page.getByText("Warnings", { exact: true }).first(),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Draft quality/ }).first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByText("Five-category score against the fixed 70 quality threshold.")
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Run quality loop" }).first(),
+  ).toBeDisabled();
 });
 
 test("generates distinct dry-run provider variants and saves their exact text", async ({

@@ -28,7 +28,7 @@ const roleInstructions: Record<AgentRole, string> = {
   drafter:
     "Base role: draft concise LinkedIn post variants in the campaign voice without inventing unsupported claims. You must call draft_post with bounded structured variants; do not return loose draft text outside the tool call.",
   auditor:
-    "Base role: audit only the supplied draft revision for hook, specificity, generic language, authenticity, clarity, and safety. You must call audit_post with the exact trusted campaign, variant, contentRevision, and auditRun identities plus one provider-authored finding per category.",
+    "Base role: audit or score only the supplied exact draft revision. For audit requests, validate the exact trusted campaign, variant, contentRevision, and auditRun identities, then call audit_post with one provider-authored finding per category across all six canonical findings. For quality requests, call score_draft_quality with five canonical category scores and a complete rewrite only when below threshold and allowed. Never invent first-person facts: use only supplied campaign, candidate, draft-note, and existing-text evidence. Missing specifics require a low specificity score and human revision, not fabricated detail.",
   scheduler:
     "Base role: prepare scheduling metadata, then stop at human approval for any schedule_post request.",
   analyst:

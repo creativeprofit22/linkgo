@@ -23,6 +23,7 @@ import type {
   SaveGeneratedDraftInput,
   StartDraftAiAuditRunInput,
   UpdateDraftVariantInput,
+  ClaimDraftQualityInput,
 } from "@/features/drafts/types";
 import { IS_TAURI } from "@/lib/env";
 import type {
@@ -92,6 +93,7 @@ type DraftTestApi = {
   saveGeneratedDraft: (input: SaveGeneratedDraftInput) => Promise<number>;
   startDraftAiAuditRun: (input: StartDraftAiAuditRunInput) => Promise<unknown>;
   updateDraftVariant: (input: UpdateDraftVariantInput) => Promise<void>;
+  runDraftQualityLoop: (input: ClaimDraftQualityInput) => Promise<unknown>;
 };
 
 type WorkflowTestApi = {
@@ -161,20 +163,25 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
       startDraftAiAuditRun,
       updateDraftVariant,
     }) => {
-      (
-        window as unknown as { __LINKGO_DRAFTS_TEST_API__?: DraftTestApi }
-      ).__LINKGO_DRAFTS_TEST_API__ = {
-        completeDraftAiAuditRun,
-        createDraft,
-        listDrafts,
-        listEligibleDraftWorkflowOptions,
-        failDraftAiAuditRun,
-        reconcileDraftAiAuditLifecycle,
-        runDraftAiAudit,
-        saveGeneratedDraft,
-        startDraftAiAuditRun,
-        updateDraftVariant,
-      };
+      void import("@/features/drafts/quality-loop").then(
+        ({ runDraftQualityLoop }) => {
+          (
+            window as unknown as { __LINKGO_DRAFTS_TEST_API__?: DraftTestApi }
+          ).__LINKGO_DRAFTS_TEST_API__ = {
+            completeDraftAiAuditRun,
+            createDraft,
+            listDrafts,
+            listEligibleDraftWorkflowOptions,
+            failDraftAiAuditRun,
+            reconcileDraftAiAuditLifecycle,
+            runDraftAiAudit,
+            saveGeneratedDraft,
+            startDraftAiAuditRun,
+            updateDraftVariant,
+            runDraftQualityLoop,
+          };
+        },
+      );
     },
   );
   void import("@/workflows/data").then(

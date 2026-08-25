@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { DEFAULT_AGENT_MODELS } from "@/agent/providers";
 import {
   auditPostInputSchema,
@@ -6,7 +7,6 @@ import {
   draftPostInputSchema,
   draftPostOutputSchema,
 } from "@/agent/schemas";
-import { createAgentRun, startAgentRun } from "@/features/agent-runtime/data";
 import { getDb, type LinkgoDatabase } from "@/lib/db";
 import {
   blockLinkedDraftGenerationInTransaction,
@@ -69,6 +69,15 @@ import type {
   SaveGeneratedDraftInput,
   SetDraftVariantStatusInput,
   StartDraftAiAuditRunInput,
+  ApplyDraftQualityScoreInput,
+  ClaimDraftQualityInput,
+  ContinueDraftQualityInput,
+  DraftQualityAttempt,
+  DraftQualityCategoryScore,
+  DraftQualityRun,
+  DraftQualityScorecard,
+  FailDraftQualityInput,
+  ReconcileDraftQualityResult,
   UpdateDraftInput,
   UpdateDraftVariantInput,
 } from "@/features/drafts/types";
@@ -460,6 +469,7 @@ export function mapDraftVariant(
     audits,
     auditSeverity: getAuditSeverity(audits),
     aiAudit,
+    qualityScorecard: null,
   };
 }
 
@@ -1047,6 +1057,8 @@ export async function generateDraftVariants(
   );
 
   try {
+    const { createAgentRun, startAgentRun } =
+      await import("@/features/agent-runtime/data");
     const agentRunId = await createAgentRun({
       campaignId: candidate.campaign_id,
       ...(linkedScope === null
@@ -1269,6 +1281,51 @@ export async function dismissDraftGenerationRequest(id: number): Promise<void> {
   }
 }
 
+export async function claimDraftQuality(
+  input: ClaimDraftQualityInput,
+): Promise<{
+  qualityRunId: number;
+  attemptId: number;
+  agentRunId: number;
+  campaignId: number;
+  draftVariantId: number;
+  contentRevision: number;
+}> {
+  return invoke("linkgo_draft_quality_claim", {
+    input: { providerKey: "dry_run", modelName: "dry-run-local", ...input },
+  });
+}
+
+export async function applyDraftQualityScore(
+  input: ApplyDraftQualityScoreInput,
+): Promise<unknown> {
+  return invoke("linkgo_draft_quality_apply_score", { input });
+}
+
+export async function continueDraftQuality(
+  input: ContinueDraftQualityInput,
+): Promise<unknown> {
+  return invoke("linkgo_draft_quality_continue", { input });
+}
+
+export async function resumeDraftQuality(
+  input: ContinueDraftQualityInput,
+): Promise<unknown> {
+  return invoke("linkgo_draft_quality_resume", { input });
+}
+
+export async function failDraftQuality(
+  input: FailDraftQualityInput,
+): Promise<void> {
+  await invoke("linkgo_draft_quality_fail", { input });
+}
+
+export async function reconcileStaleDraftQuality(
+  limit = 25,
+): Promise<ReconcileDraftQualityResult> {
+  return invoke("linkgo_draft_quality_reconcile_stale", { input: { limit } });
+}
+
 export async function listDrafts(
   campaignId?: number,
 ): Promise<DraftWithDetails[]> {
@@ -1379,6 +1436,60 @@ export async function listDrafts(
     aiAuditFindingsByRunId.set(findingRow.audit_run_id, runFindings);
   }
 
+  const qualityRunRows =
+    variantIds.length === 0
+      ? []
+      : await db.select<DraftQualityRun[]>(
+          `SELECT dqr.* FROM draft_quality_runs dqr
+     INNER JOIN draft_variants dv ON dv.id=dqr.draft_variant_id
+     WHERE dqr.draft_variant_id IN (${getPlaceholders(variantIds)})
+       AND dqr.current_content_revision=dv.content_revision ORDER BY dqr.id DESC`,
+          variantIds,
+        );
+  const currentQualityRunByVariantId = new Map<number, DraftQualityRun>();
+  for (const run of qualityRunRows)
+    if (!currentQualityRunByVariantId.has(run.draft_variant_id))
+      currentQualityRunByVariantId.set(run.draft_variant_id, run);
+  const qualityRunIds = [...currentQualityRunByVariantId.values()].map(
+    (run) => run.id,
+  );
+  const qualityAttempts =
+    qualityRunIds.length === 0
+      ? []
+      : await db.select<DraftQualityAttempt[]>(
+          `SELECT * FROM draft_quality_attempts WHERE run_id IN (${getPlaceholders(qualityRunIds)}) ORDER BY attempt_number`,
+          qualityRunIds,
+        );
+  const qualityAttemptIds = qualityAttempts.map((attempt) => attempt.id);
+  const qualityScores =
+    qualityAttemptIds.length === 0
+      ? []
+      : await db.select<DraftQualityCategoryScore[]>(
+          `SELECT * FROM draft_quality_category_scores WHERE attempt_id IN (${getPlaceholders(qualityAttemptIds)}) ORDER BY category_key`,
+          qualityAttemptIds,
+        );
+  const qualityScoresByAttemptId = new Map<
+    number,
+    DraftQualityCategoryScore[]
+  >();
+  for (const score of qualityScores)
+    qualityScoresByAttemptId.set(score.attempt_id, [
+      ...(qualityScoresByAttemptId.get(score.attempt_id) ?? []),
+      score,
+    ]);
+  const qualityAttemptsByRunId = new Map<
+    number,
+    DraftQualityScorecard["attempts"]
+  >();
+  for (const attempt of qualityAttempts)
+    qualityAttemptsByRunId.set(attempt.run_id, [
+      ...(qualityAttemptsByRunId.get(attempt.run_id) ?? []),
+      {
+        ...attempt,
+        categoryScores: qualityScoresByAttemptId.get(attempt.id) ?? [],
+      },
+    ]);
+
   const auditsByVariantId = new Map<number, DraftAuditFinding[]>();
   for (const auditRow of auditRows) {
     const audits = auditsByVariantId.get(auditRow.draft_variant_id) ?? [];
@@ -1398,8 +1509,8 @@ export async function listDrafts(
   for (const variantRow of variantRows) {
     const variants = variantsByDraftId.get(variantRow.draft_id) ?? [];
     const currentAiAuditRun = currentAiAuditRunByVariantId.get(variantRow.id);
-    variants.push(
-      mapDraftVariant(
+    variants.push({
+      ...mapDraftVariant(
         variantRow,
         auditsByVariantId.get(variantRow.id) ?? [],
         mapCurrentDraftAiAudit(
@@ -1409,7 +1520,13 @@ export async function listDrafts(
             : (aiAuditFindingsByRunId.get(currentAiAuditRun.id) ?? []),
         ),
       ),
-    );
+      qualityScorecard: (() => {
+        const run = currentQualityRunByVariantId.get(variantRow.id);
+        return run === undefined
+          ? null
+          : { run, attempts: qualityAttemptsByRunId.get(run.id) ?? [] };
+      })(),
+    });
     variantsByDraftId.set(variantRow.draft_id, variants);
   }
 
@@ -2018,6 +2135,8 @@ export async function runDraftAiAudit(
   let agentRunId: number | null = null;
 
   try {
+    const { createAgentRun, startAgentRun } =
+      await import("@/features/agent-runtime/data");
     agentRunId = await createAgentRun({
       campaignId: snapshot.campaign_id,
       agentRole: "auditor",

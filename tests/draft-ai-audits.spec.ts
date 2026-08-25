@@ -349,7 +349,9 @@ test("rejects research_posts from an auditor before any candidate mutation", asy
   );
   expect(providerArgs).toMatchObject({
     input: {
-      tools: [expect.objectContaining({ name: "audit_post" })],
+      tools: expect.arrayContaining([
+        expect.objectContaining({ name: "audit_post" }),
+      ]),
     },
   });
 });
