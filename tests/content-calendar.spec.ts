@@ -208,6 +208,7 @@ async function openApprovals(page: Page): Promise<void> {
 
 async function createApprovedPost(page: Page): Promise<void> {
   await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
   await page.getByRole("button", { name: "Approve", exact: true }).click();
@@ -230,6 +231,30 @@ async function createReadyDraft(
   await expect(
     auditPanel.getByText("Completed", { exact: true }),
   ).toBeVisible();
+}
+
+async function makeDraftApprovalEligible(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const api = (
+      window as unknown as {
+        __LINKGO_DRAFTS_TEST_API__: {
+          listDrafts: () => Promise<
+            Array<{ variants: Array<{ id: number; status: string }> }>
+          >;
+          runDraftQualityLoop: (input: {
+            draftVariantId: number;
+          }) => Promise<unknown>;
+        };
+      }
+    ).__LINKGO_DRAFTS_TEST_API__;
+    const drafts = await api.listDrafts();
+    const variantId = drafts[0]?.variants.find(
+      (candidate) => candidate.status === "selected",
+    )?.id;
+    if (variantId === undefined)
+      throw new Error("Selected variant was not found");
+    await api.runDraftQualityLoop({ draftVariantId: variantId });
+  });
 }
 
 async function openQueue(page: Page): Promise<void> {

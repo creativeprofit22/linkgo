@@ -199,6 +199,9 @@ test("rejects count-mismatched and malformed provider arrays atomically", async 
     page.getByText("Draft variants were not generated").last(),
   ).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(
+    page.getByText("Draft variants were not generated").last(),
+  ).toBeHidden();
 
   await generateDraftVariants(page, "Custom API", false);
   await expect(
