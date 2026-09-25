@@ -9,6 +9,7 @@ import {
 } from "@/features/approvals/components/approval-status-badge";
 import { PublishLinkedInDialog } from "@/features/approvals/components/publish-linkedin-dialog";
 import { RecordPublishAttemptDialog } from "@/features/approvals/components/record-publish-attempt-dialog";
+import { RejectApprovalDialog } from "@/features/approvals/components/reject-approval-dialog";
 import { ScheduleApprovalDialog } from "@/features/approvals/components/schedule-approval-dialog";
 import {
   composeLinkedInCommentary,
@@ -54,9 +55,15 @@ export function ApprovalCard({
   const canReject =
     !isArchivedCampaign &&
     ["needs_review", "changes_requested"].includes(approval.status);
+  // Readiness can be revoked without a stored status change (for example a
+  // newer AI audit run on the same revision). mapApproval already displays such
+  // approvals as changes_requested; outbound actions also check readiness
+  // directly, and natively before any write or LinkedIn call.
+  const isReady = approval.readyForApproval;
   const canSchedule =
     !isArchivedCampaign &&
     !killSwitchEnabled &&
+    isReady &&
     approval.status === "approved" &&
     (!approval.scheduleJob ||
       ["cancelled", "failed"].includes(approval.scheduleJob.status));
@@ -69,8 +76,16 @@ export function ApprovalCard({
   );
   const canRecordPublish =
     !isArchivedCampaign && ["approved", "scheduled"].includes(approval.status);
+  // A failed outcome is recorded even when readiness was lost after approval;
+  // natively it then moves the approval to changes_requested (see approvals.rs).
+  const canRecordFailure =
+    !isArchivedCampaign &&
+    ["approved", "scheduled"].includes(approval.storedStatus);
   const canPublishViaLinkedIn =
-    canRecordPublish && !killSwitchEnabled && !hasSuccessfulPublishAttempt;
+    canRecordPublish &&
+    isReady &&
+    !killSwitchEnabled &&
+    !hasSuccessfulPublishAttempt;
   const scheduleBlockedByKillSwitch =
     !isArchivedCampaign &&
     killSwitchEnabled &&
@@ -81,16 +96,6 @@ export function ApprovalCard({
     approval.linkedAgentRunCount === 1
       ? "1 linked waiting run will be cancelled and its resumable checkpoint removed."
       : `${approval.linkedAgentRunCount} linked waiting runs will be cancelled and their resumable checkpoints removed.`;
-
-  function rejectApproval(): void {
-    if (
-      window.confirm(
-        `Reject this approval? ${linkedAgentRunConsequence} The draft will stay in local history.`,
-      )
-    ) {
-      void onSetStatus({ id: approval.id, status: "rejected" });
-    }
-  }
 
   function cancelScheduleJob(): void {
     const scheduleJob = approval.scheduleJob;
@@ -146,8 +151,13 @@ export function ApprovalCard({
               <Button
                 type="button"
                 size="sm"
+                disabled={!approval.readyForApproval}
                 onClick={() =>
-                  void onSetStatus({ id: approval.id, status: "approved" })
+                  void onSetStatus({
+                    id: approval.id,
+                    status: "approved",
+                    contentRevision: approval.currentContentRevision,
+                  })
                 }
               >
                 Approve
@@ -169,14 +179,11 @@ export function ApprovalCard({
               </Button>
             )}
             {canReject && (
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                onClick={rejectApproval}
-              >
-                Reject
-              </Button>
+              <RejectApprovalDialog
+                approvalId={approval.id}
+                linkedAgentRunConsequence={linkedAgentRunConsequence}
+                onSetStatus={onSetStatus}
+              />
             )}
             {canSchedule && (
               <ScheduleApprovalDialog
@@ -200,41 +207,62 @@ export function ApprovalCard({
                 Cancel schedule
               </Button>
             )}
-            {canRecordPublish && (
-              <>
-                <RecordPublishAttemptDialog
-                  approvalId={approval.id}
-                  scheduleJobId={approval.scheduleJob?.id}
-                  initialStatus="succeeded"
-                  triggerLabel="Mark published"
-                  onRecord={onRecordPublishAttempt}
-                />
-                {canPublishViaLinkedIn && (
-                  <PublishLinkedInDialog
-                    approval={approval}
-                    commentary={escapedCommentary}
-                    onPublishResult={onRecordPublishAttempt}
-                  />
-                )}
-                <RecordPublishAttemptDialog
-                  approvalId={approval.id}
-                  scheduleJobId={approval.scheduleJob?.id}
-                  initialStatus="failed"
-                  triggerLabel="Record failure"
-                  onRecord={onRecordPublishAttempt}
-                />
-              </>
+            {canRecordPublish && isReady && (
+              <RecordPublishAttemptDialog
+                approvalId={approval.id}
+                scheduleJobId={approval.scheduleJob?.id}
+                initialStatus="succeeded"
+                triggerLabel="Mark published"
+                onRecord={onRecordPublishAttempt}
+              />
+            )}
+            {canPublishViaLinkedIn && (
+              <PublishLinkedInDialog
+                approval={approval}
+                commentary={escapedCommentary}
+                onPublishResult={onRecordPublishAttempt}
+              />
+            )}
+            {canRecordFailure && (
+              <RecordPublishAttemptDialog
+                approvalId={approval.id}
+                scheduleJobId={approval.scheduleJob?.id}
+                initialStatus="failed"
+                triggerLabel="Record failure"
+                onRecord={onRecordPublishAttempt}
+              />
             )}
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {(!approval.readyForApproval || approval.contentChanged) && (
+          <p role="status" className="text-muted-foreground text-sm">
+            {approval.contentChanged
+              ? "Content changed or historical review revision is unknown. This content is not approved. "
+              : "This revision is not ready for approval. "}
+            {approval.readyForApproval
+              ? "Current checks pass. Review this revision and approve it again."
+              : "Run a current AI audit and quality check in Drafts before approving."}
+          </p>
+        )}
         <div className="grid gap-4 lg:grid-cols-2">
-          <TextBlock label="Selected variant" value={rawCommentary} />
+          <TextBlock
+            label="Selected variant"
+            value={
+              approval.status === "published" && approval.contentChanged
+                ? "Reviewed content unavailable; the published record is historical."
+                : rawCommentary
+            }
+          />
           <TextBlock
             label="Escaped LinkedIn preview"
-            value={escapedCommentary}
+            value={
+              approval.status === "published" && approval.contentChanged
+                ? "Reviewed content unavailable."
+                : escapedCommentary
+            }
           />
         </div>
 

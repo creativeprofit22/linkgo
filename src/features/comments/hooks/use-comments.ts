@@ -5,7 +5,7 @@ import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import {
   createCommentThread,
   listCommentEligibleCandidates,
-  listCommentThreads,
+  listCommentThreadPage,
   recordCommentAttempt,
   setCommentThreadStatus,
   setCommentVariantStatus,
@@ -29,6 +29,8 @@ interface UseCommentsState {
   campaigns: CampaignWithKeywords[];
   selectedCampaignId: number | null;
   commentThreads: CommentThreadWithDetails[];
+  /** Threads matching the campaign before the native list cap. */
+  commentThreadTotalCount: number;
   eligibleCandidates: CommentEligibleCandidate[];
   loading: boolean;
   error: string | null;
@@ -66,6 +68,7 @@ export function useComments(): UseCommentsState {
   const [commentThreads, setCommentThreads] = useState<
     CommentThreadWithDetails[]
   >([]);
+  const [commentThreadTotalCount, setCommentThreadTotalCount] = useState(0);
   const [eligibleCandidates, setEligibleCandidates] = useState<
     CommentEligibleCandidate[]
   >([]);
@@ -79,15 +82,17 @@ export function useComments(): UseCommentsState {
     async (campaignId: number | null) => {
       if (campaignId === null) {
         setCommentThreads([]);
+        setCommentThreadTotalCount(0);
         setEligibleCandidates([]);
         return;
       }
 
-      const [loadedThreads, loadedCandidates] = await Promise.all([
-        listCommentThreads(campaignId),
+      const [loadedThreadPage, loadedCandidates] = await Promise.all([
+        listCommentThreadPage(campaignId),
         listCommentEligibleCandidates(campaignId),
       ]);
-      setCommentThreads(loadedThreads);
+      setCommentThreads(loadedThreadPage.items);
+      setCommentThreadTotalCount(loadedThreadPage.totalCount);
       setEligibleCandidates(loadedCandidates);
     },
     [],
@@ -232,6 +237,7 @@ export function useComments(): UseCommentsState {
       campaigns,
       selectedCampaignId,
       commentThreads,
+      commentThreadTotalCount,
       eligibleCandidates,
       loading,
       error,
@@ -250,6 +256,7 @@ export function useComments(): UseCommentsState {
       campaigns,
       selectedCampaignId,
       commentThreads,
+      commentThreadTotalCount,
       eligibleCandidates,
       loading,
       error,

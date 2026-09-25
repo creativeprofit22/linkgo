@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeCommand } from "@/lib/tauri";
 
 import {
   campaignBacklogFiltersSchema,
@@ -27,128 +27,40 @@ import type {
   SetCampaignBacklogItemStatusInput,
   UpdateCampaignBacklogItemInput,
 } from "@/features/campaign-backlog/types";
-import { getDb } from "@/lib/db";
-
-const HISTORY_LIMIT = 100;
+import { campaignBacklogDashboardSnapshotSchema } from "@/features/campaign-backlog/record-schemas";
 
 async function invokeBacklogCommand<TResult>(
   command: string,
   input: unknown,
 ): Promise<TResult> {
   try {
-    return await invoke<TResult>(command, { input });
+    return await invokeCommand<TResult>(command, { input });
   } catch (error) {
     throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
-function addFilter(
-  clauses: string[],
-  values: unknown[],
-  column: string,
-  value: unknown,
-): void {
-  values.push(value);
-  clauses.push(`${column} = $${values.length}`);
-}
-
+/**
+ * Backlog dashboard read natively (`planning_reads.rs`): items, open-work
+ * summary and total count from one snapshot. Open items are capped at 500;
+ * history keeps its 100-row cap.
+ */
 export async function getCampaignBacklogDashboard(
   filters: CampaignBacklogFilters,
 ): Promise<CampaignBacklogDashboard> {
   const parsed = campaignBacklogFiltersSchema.parse(filters);
-  const db = await getDb();
-  const clauses: string[] = [];
-  const values: unknown[] = [];
-
-  if (parsed.campaignId !== null) {
-    addFilter(clauses, values, "cbi.campaign_id", parsed.campaignId);
-  }
-  if (parsed.owner !== "all") {
-    addFilter(clauses, values, "cbi.owner_type", parsed.owner);
-  }
-
-  const sharedWhere =
-    clauses.length === 0 ? "" : `AND ${clauses.join(" AND ")}`;
-  const statusClause =
-    parsed.view === "open"
-      ? "cbi.status IN ('pending', 'in_progress', 'blocked')"
-      : "cbi.status IN ('completed', 'cancelled')";
-  const orderClause =
-    parsed.view === "open"
-      ? "cbi.due_at ASC, cbi.id ASC"
-      : "COALESCE(cbi.completed_at, cbi.cancelled_at) DESC, cbi.id DESC";
-  const historyIndexClause =
-    parsed.view === "history"
-      ? `INDEXED BY ${
-          parsed.campaignId === null
-            ? "idx_campaign_backlog_history_terminal_at"
-            : "idx_campaign_backlog_campaign_history_terminal_at"
-        }`
-      : "";
-  const limitClause = parsed.view === "history" ? `LIMIT ${HISTORY_LIMIT}` : "";
-
-  const [items, summaryRows, totalRows] = await Promise.all([
-    db.select<CampaignBacklogItemDetail[]>(
-      `SELECT
-          cbi.*,
-          c.name AS campaign_name,
-          c.status AS campaign_status,
-          ap.id AS autopilot_plan_id,
-          ap.source_import_batch_id,
-          ap.workflow_run_id,
-          wr.status AS linked_workflow_status,
-          score_step.status AS linked_score_step_status
-       FROM campaign_backlog_items AS cbi ${historyIndexClause}
-       INNER JOIN campaigns c ON c.id = cbi.campaign_id
-       LEFT JOIN autopilot_plans ap ON ap.campaign_backlog_item_id = cbi.id
-       LEFT JOIN workflow_runs wr ON wr.id = ap.workflow_run_id
-       LEFT JOIN workflow_steps score_step
-         ON score_step.workflow_run_id = wr.id
-        AND score_step.step_key = 'score'
-       WHERE ${statusClause} ${sharedWhere}
-       ORDER BY ${orderClause}
-       ${limitClause}`,
-      values,
-    ),
-    db.select<
-      Array<{
-        due_now: number;
-        in_progress: number;
-        blocked: number;
-        linkgo_owned: number;
-      }>
-    >(
-      `SELECT
-         COALESCE(SUM(CASE WHEN cbi.due_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') THEN 1 ELSE 0 END), 0) AS due_now,
-         COALESCE(SUM(CASE WHEN cbi.status = 'in_progress' THEN 1 ELSE 0 END), 0) AS in_progress,
-         COALESCE(SUM(CASE WHEN cbi.status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
-         COALESCE(SUM(CASE WHEN cbi.owner_type = 'linkgo' THEN 1 ELSE 0 END), 0) AS linkgo_owned
-       FROM campaign_backlog_items cbi
-       WHERE cbi.status IN ('pending', 'in_progress', 'blocked') ${sharedWhere}`,
-      values,
-    ),
-    db.select<Array<{ total_items: number }>>(
-      "SELECT COUNT(*) AS total_items FROM campaign_backlog_items",
-    ),
-  ]);
-
-  const summary = summaryRows[0] ?? {
-    due_now: 0,
-    in_progress: 0,
-    blocked: 0,
-    linkgo_owned: 0,
-  };
-  return {
-    items,
-    summary: {
-      dueNow: summary.due_now,
-      inProgress: summary.in_progress,
-      blocked: summary.blocked,
-      linkgoOwned: summary.linkgo_owned,
-    },
-    totalItems: totalRows[0]?.total_items ?? 0,
-    asOf: new Date().toISOString(),
-  };
+  const snapshot = campaignBacklogDashboardSnapshotSchema.parse(
+    await invokeCommand("linkgo_campaign_backlog_dashboard", {
+      input: {
+        ...(parsed.campaignId === null
+          ? {}
+          : { campaignId: parsed.campaignId }),
+        owner: parsed.owner,
+        view: parsed.view,
+      },
+    }),
+  );
+  return { ...snapshot, asOf: new Date().toISOString() };
 }
 
 export async function createCampaignBacklogItem(

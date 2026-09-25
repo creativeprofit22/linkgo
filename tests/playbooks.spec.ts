@@ -81,34 +81,28 @@ test("shows commenter as operator guidance only without autonomous posting", asy
   ).toHaveCount(0);
 });
 
-test("mock SQLite rejects invalid playbook override rows", async ({ page }) => {
+test("native override command rejects invalid playbook overrides", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expect(
-    executeSql(page, {
-      query: `INSERT INTO agent_playbook_overrides (
-        playbook_key,
-        enabled,
-        custom_instructions,
-        updated_at
-      ) VALUES ($1, $2, $3, datetime('now'))`,
-      values: ["bad_playbook", 1, "Allowed size"],
+    upsertOverride(page, {
+      playbookKey: "bad_playbook",
+      enabled: true,
+      customInstructions: "Allowed size",
     }),
-  ).rejects.toThrow("CHECK constraint failed: playbook_key");
+  ).rejects.toThrow("Unknown playbook");
 
   await expect(
-    executeSql(page, {
-      query: `INSERT INTO agent_playbook_overrides (
-        playbook_key,
-        enabled,
-        custom_instructions,
-        updated_at
-      ) VALUES ($1, $2, $3, datetime('now'))`,
-      values: ["linkedin_writer", 1, "x".repeat(2001)],
+    upsertOverride(page, {
+      playbookKey: "linkedin_writer",
+      enabled: true,
+      customInstructions: "x".repeat(2001),
     }),
-  ).rejects.toThrow(
-    "CHECK constraint failed: length(custom_instructions) <= 2000",
-  );
+  ).rejects.toThrow("Custom instructions must be at most 2000 characters");
+
+  expect(await getPlaybookOverrides(page)).toEqual([]);
 });
 
 async function openPlaybooks(page: Page): Promise<void> {
@@ -124,11 +118,11 @@ function getPlaybookCard(page: Page, label: string): Locator {
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
 }
 
-async function executeSql(
+async function upsertOverride(
   page: Page,
-  args: { query: string; values: unknown[] },
+  input: { playbookKey: string; enabled: boolean; customInstructions: string },
 ): Promise<unknown> {
-  return page.evaluate((sqlArgs) => {
+  return page.evaluate((commandInput) => {
     const internals = (
       window as unknown as {
         __TAURI_INTERNALS__?: {
@@ -137,8 +131,10 @@ async function executeSql(
       }
     ).__TAURI_INTERNALS__;
     if (internals === undefined) throw new Error("Tauri mocks unavailable");
-    return internals.invoke("plugin:sql|execute", sqlArgs);
-  }, args);
+    return internals.invoke("linkgo_playbook_override_upsert", {
+      input: commandInput,
+    });
+  }, input);
 }
 
 async function getPlaybookOverrides(page: Page): Promise<

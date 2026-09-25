@@ -122,6 +122,19 @@ export interface SetErrorQueueItemStatusInput {
   resolutionNotes?: string;
 }
 
+/** Native result of `linkgo_safety_set_global_kill_switch`. */
+export interface GlobalKillSwitchResult {
+  enabled: boolean;
+  reason: string;
+}
+
+/** Native result of `linkgo_safety_set_error_queue_item_status`. */
+export interface ErrorQueueItemStatusResult {
+  id: number;
+  previousStatus: ErrorQueueStatus;
+  status: ErrorQueueStatus;
+}
+
 export interface RecordSafetyAuditEventInput {
   campaignId?: number | null;
   subjectType: SafetyAuditSubjectType;
@@ -132,16 +145,6 @@ export interface RecordSafetyAuditEventInput {
   metadata?: unknown;
 }
 
-export interface RecordRateLimitEventInput {
-  campaignId: number;
-  action: RateLimitAction;
-  windowKey: string;
-  limitValue: number;
-  currentCount: number;
-  decision: RateLimitDecision;
-  summary: string;
-}
-
 export interface UpsertErrorQueueItemInput {
   campaignId?: number | null;
   sourceType: ErrorQueueSourceType;
@@ -150,35 +153,3 @@ export interface UpsertErrorQueueItemInput {
   detail?: string;
   severity?: ErrorQueueSeverity;
 }
-
-export interface SafetyKillSwitchContext {
-  campaignId?: number | null;
-  subjectType: SafetyAuditSubjectType;
-  subjectId?: number | null;
-  summary: string;
-}
-
-export interface AssertSchedulePostLimitInput {
-  campaignId: number;
-  scheduledFor: string;
-  approvalId?: number;
-  limitValue?: number;
-}
-
-export interface AssertCommentLimitInput {
-  campaignId: number;
-  commentedAt?: string;
-  commentThreadId?: number;
-  limitValue?: number;
-}
-
-export interface SchedulePostLimitDecision {
-  campaignId: number;
-  windowKey: string;
-  limitValue: number;
-  currentCount: number;
-  allowed: boolean;
-  summary: string;
-}
-
-export type CommentLimitDecision = SchedulePostLimitDecision;

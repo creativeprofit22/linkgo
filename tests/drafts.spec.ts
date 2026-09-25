@@ -852,12 +852,24 @@ async function configureAiAuditStates(page: Page): Promise<void> {
         providerKey: "openai",
         modelName: "gpt-audit-2026",
       });
+      // The auditor's own persisted output is what native completion reads.
+      await (
+        window as unknown as {
+          __TAURI_INTERNALS__: {
+            invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+          };
+        }
+      ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+        input: {
+          auditRunId: completedRun.id,
+          summary: "The draft is specific, useful, and ready for review.",
+          findings: findings,
+        },
+      });
       await data.completeDraftAiAuditRun({
         auditRunId: completedRun.id,
         draftVariantId: variantIds[2],
         contentRevision: 1,
-        summary: "The draft is specific, useful, and ready for review.",
-        findings,
       });
 
       const failedRun = await data.startDraftAiAuditRun({

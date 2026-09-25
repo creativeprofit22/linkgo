@@ -49,7 +49,7 @@ A successful Linkgo comment attempt blocks intake when its target has the same n
 
 ## Manual and enforced paths
 
-`createCandidateInTransaction(db, input, { enforcePolicy: true })` is the required path for local source imports and every connector that feeds the Roadmap 3D planner boundary. Policy evaluation happens before target, candidate, or dedupe writes.
+The evaluator is native (`evaluate_intake_policy` in `src-tauri/src/candidate_policy.rs`) and is the required path for local source imports and every connector that feeds the Roadmap 3D planner boundary. Policy evaluation happens before target, candidate, or dedupe writes, inside the row's pinned transaction. It ports the former renderer evaluator exactly: WHATWG URL parsing (`url` crate, `src-tauri/src/js_url.rs`), NFKC + lowercase topic matching with JS whitespace and Unicode letter/number boundaries (`unicode-normalization`), and V8-compatible ISO-8601 parsing including calendar and offset checks. Parity tests pin each helper to outputs recorded from the old JS on Node 22.
 
 `createCandidate(input)` intentionally omits enforcement. `Add candidate` is an attended override for an operator deliberately capturing historical or exceptional material. It is not an autopilot-safe path.
 
@@ -59,9 +59,12 @@ A successful Linkgo comment attempt blocks intake when its target has the same n
 
 - `getCandidateIntakePolicy(campaignId)`
 - `updateCandidateIntakePolicy(input)`
-- `evaluateCandidateIntakePolicy(db, subject, now?)`
 
-Updates reject missing or archived campaigns and atomically upsert the age limit and replace normalized topic rows. The optional evaluator clock exists for deterministic testing; production uses the current instant.
+Updates reject missing or archived campaigns and atomically upsert the age limit and replace normalized topic rows. Policy evaluation is native: `evaluate_intake_policy` in `src-tauri/src/candidate_policy.rs` takes an injected `now_ms` so tests stay deterministic; production passes the current instant.
+
+`updateCandidateIntakePolicy` calls the native `linkgo_candidate_policy_update` command (`src-tauri/src/candidate_policy.rs`). Native NFKC-normalises and single-spaces topics itself (the renderer schema does the same for form feedback) and validates the canonical shape (1–365 days, ≤ 25 topics of 1–80 chars, no case-insensitive duplicates), checks the campaign exists and is not archived, and writes the policy, topic replacement and saved-policy read on one pinned `BEGIN IMMEDIATE` connection. Real-SQLite tests: `src-tauri/src/candidate_policy_tests.rs`.
+
+`getCandidateIntakePolicy` calls the native `linkgo_candidate_policy_get` command, which takes a positive `campaignId` and rejects unknown fields. It returns the saved policy, or the 30-day default with no topics and null timestamps when none is saved. The policy row and its banned topics are read in one transaction, so a read that runs during an update sees either the old policy or the new one, never a mix. The renderer has no direct SQL access to the policy tables.
 
 ## UI
 

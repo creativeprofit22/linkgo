@@ -497,7 +497,7 @@ async function setMetricRefreshEnabled(
       }
     ).__TAURI_INTERNALS__?.invoke;
     if (!invoke) throw new Error("Tauri mock invoke was not initialized");
-    await invoke("plugin:sql|execute", {
+    await invoke("__linkgo_test_sql|execute", {
       db: "sqlite:linkgo.db",
       query: "UPDATE metric_refresh_settings SET enabled = $1",
       values: [nextEnabled ? 1 : 0],
@@ -518,7 +518,7 @@ async function setGlobalKillSwitch(
       }
     ).__TAURI_INTERNALS__?.invoke;
     if (!invoke) throw new Error("Tauri mock invoke was not initialized");
-    await invoke("plugin:sql|execute", {
+    await invoke("__linkgo_test_sql|execute", {
       db: "sqlite:linkgo.db",
       query:
         "UPDATE safety_settings SET global_kill_switch = $1, kill_switch_reason = $2",

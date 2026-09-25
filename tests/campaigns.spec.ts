@@ -1,5 +1,34 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  createCampaignSchema,
+  updateCampaignSchema,
+} from "../src/features/campaigns/schemas";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+
+test("campaign update schema keeps omitted fields omitted", () => {
+  expect(updateCampaignSchema.parse({ id: 1, status: "paused" })).toEqual({
+    id: 1,
+    status: "paused",
+  });
+  expect(updateCampaignSchema.parse({ id: 1, name: " x " })).toEqual({
+    id: 1,
+    name: "x",
+  });
+});
+
+test("campaign create schema still fills defaults", () => {
+  expect(createCampaignSchema.parse({ name: "x" })).toEqual({
+    name: "x",
+    product: "",
+    audience: "",
+    voice: "",
+    tone: "",
+    autoPilot: false,
+    dailyPostLimit: 1,
+    dailyCommentLimit: 5,
+    keywords: [],
+  });
+});
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -14,11 +43,10 @@ test("new campaign dialog opens and creates a campaign", async ({ page }) => {
     const calls =
       (
         window as unknown as {
-          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+          __LINKGO_NATIVE_CAMPAIGN_CALLS__?: Array<{ cmd: string }>;
         }
-      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
-    return calls.filter((call) => call.query.includes("INSERT INTO campaigns"))
-      .length;
+      ).__LINKGO_NATIVE_CAMPAIGN_CALLS__ ?? [];
+    return calls.filter((call) => call.cmd === "linkgo_campaign_create").length;
   });
 
   expect(campaignInsertCount).toBeGreaterThan(0);
@@ -64,14 +92,10 @@ test("campaign card edit action updates campaign context", async ({ page }) => {
     const calls =
       (
         window as unknown as {
-          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+          __LINKGO_NATIVE_CAMPAIGN_CALLS__?: Array<{ cmd: string }>;
         }
-      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
-    return calls.filter(
-      (call) =>
-        call.query.includes("UPDATE campaigns SET") &&
-        !call.query.includes("UPDATE campaigns SET status"),
-    ).length;
+      ).__LINKGO_NATIVE_CAMPAIGN_CALLS__ ?? [];
+    return calls.filter((call) => call.cmd === "linkgo_campaign_update").length;
   });
 
   expect(campaignUpdateCount).toBeGreaterThan(0);
@@ -83,6 +107,97 @@ test("campaign card edit action updates campaign context", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("AI LinkedIn", { exact: true })).toBeVisible();
   await expect(page.getByText("3 posts/day · 7 comments/day")).toBeVisible();
+});
+
+test("creating a campaign with an existing name shows the duplicate-name error", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+
+  const dialog = await submitNewCampaign(page, "Founder-led growth");
+
+  await expect(page.getByText("Campaign was not created")).toBeVisible();
+  await expect(
+    page.getByText("A campaign with this name already exists"),
+  ).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole("heading", { name: "Founder-led growth" }),
+  ).toHaveCount(1);
+});
+
+test("renaming a campaign to an existing name shows the duplicate-name error", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await createCampaign(page, "Second campaign");
+
+  await page
+    .getByRole("button", { name: "Open Second campaign actions" })
+    .click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit Second campaign" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByLabel("Name").fill("Founder-led growth");
+  await dialog.getByRole("button", { name: "Save changes" }).click();
+
+  await expect(page.getByText("Campaign was not updated")).toBeVisible();
+  await expect(
+    page.getByText("A campaign with this name already exists"),
+  ).toBeVisible();
+  await expect(dialog).toBeVisible();
+});
+
+test("campaign text inputs cap length at the schema limits", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "New campaign" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New campaign" });
+
+  await expect(dialog.getByLabel("Name")).toHaveAttribute("maxlength", "120");
+  await expect(dialog.getByLabel("Product")).toHaveAttribute(
+    "maxlength",
+    "500",
+  );
+  await expect(dialog.getByLabel("Tone")).toHaveAttribute("maxlength", "240");
+});
+
+test("too many keywords shows a readable error without calling native", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "New campaign" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New campaign" });
+
+  await dialog.getByLabel("Name").fill("Keyword overload");
+  const keywords = Array.from({ length: 31 }, (_, index) => `kw${index}`);
+  await dialog.getByLabel("Manual keywords").fill(keywords.join(", "));
+  await dialog.getByRole("button", { name: "Create campaign" }).click();
+
+  const alert = dialog.getByRole("alert");
+  await expect(alert).toHaveText(
+    "Up to 30 keywords, each at most 80 characters.",
+  );
+  await expect(page.getByText('"code"')).toHaveCount(0);
+  await expect(page.getByText("too_big")).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+
+  const createCount = await page.evaluate(() => {
+    const calls =
+      (
+        window as unknown as {
+          __LINKGO_NATIVE_CAMPAIGN_CALLS__?: Array<{ cmd: string }>;
+        }
+      ).__LINKGO_NATIVE_CAMPAIGN_CALLS__ ?? [];
+    return calls.filter((call) => call.cmd === "linkgo_campaign_create").length;
+  });
+  expect(createCount).toBe(0);
 });
 
 test("campaign card status actions activate pause archive and restore", async ({
@@ -112,15 +227,15 @@ test("campaign card status actions activate pause archive and restore", async ({
     const calls =
       (
         window as unknown as {
-          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{
-            query: string;
-            values: unknown[];
+          __LINKGO_NATIVE_CAMPAIGN_CALLS__?: Array<{
+            cmd: string;
+            input: { status?: string };
           }>;
         }
-      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
+      ).__LINKGO_NATIVE_CAMPAIGN_CALLS__ ?? [];
     return calls
-      .filter((call) => call.query.includes("UPDATE campaigns SET status"))
-      .map((call) => call.values[0]);
+      .filter((call) => call.cmd === "linkgo_campaign_status_set")
+      .map((call) => call.input.status);
   });
 
   expect(statusUpdates).toEqual(["active", "paused", "archived", "draft"]);
@@ -133,13 +248,21 @@ async function expectCampaignStatus(
   await expect(page.getByText(status, { exact: true })).toBeVisible();
 }
 
-async function createCampaign(page: Page): Promise<void> {
+async function createCampaign(
+  page: Page,
+  name = "Founder-led growth",
+): Promise<void> {
+  const dialog = await submitNewCampaign(page, name);
+  await expect(dialog).toBeHidden();
+}
+
+async function submitNewCampaign(page: Page, name: string): Promise<Locator> {
   await page.getByRole("button", { name: "New campaign" }).first().click();
   await expect(
     page.getByRole("dialog", { name: "New campaign" }),
   ).toBeVisible();
 
-  await page.getByLabel("Name").fill("Founder-led growth");
+  await page.getByLabel("Name").fill(name);
   await page
     .getByLabel("Product")
     .fill("A local-first LinkedIn operations cockpit");
@@ -156,5 +279,5 @@ async function createCampaign(page: Page): Promise<void> {
   await page.getByLabel("Local autopilot planner").click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await dialog.getByRole("button", { name: "Create campaign" }).click();
-  await expect(dialog).toBeHidden();
+  return dialog;
 }

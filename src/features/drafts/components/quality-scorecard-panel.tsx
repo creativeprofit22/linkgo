@@ -35,8 +35,18 @@ export function QualityScorecardPanel({
     variant.aiAudit.status === "completed" &&
     variant.aiAudit.findings.length === 6 &&
     variant.aiAudit.findings.every((finding) => finding.severity !== "block");
+  // Native resume allocates MAX(attempt_number) + 1, capped at three.
+  const lastAttemptNumber = Math.max(
+    0,
+    ...(scorecard?.attempts.map((attempt) => attempt.attempt_number) ?? []),
+  );
+  const currentRun = run?.current_content_revision === variant.content_revision;
   const recoverable =
-    run?.status === "failed" || run?.status === "needs_revision";
+    run?.status === "failed" && currentRun && lastAttemptNumber < 3;
+  const terminal =
+    run !== undefined &&
+    (run.status === "needs_revision" ||
+      (run.status === "failed" && !recoverable));
   const label =
     pending || run?.status === "running"
       ? "Running"
@@ -105,7 +115,14 @@ export function QualityScorecardPanel({
         </div>
       )}
       <div aria-live="polite" className="mt-4">
-        {!ready && run === undefined && (
+        {terminal && (
+          <p className="text-muted-foreground mb-3 text-sm">
+            {currentRun
+              ? "This quality run cannot resume. Edit the draft, re-audit the current revision, then re-score with Run quality loop."
+              : "This quality run belongs to an older revision. Re-audit the current draft, then re-score with Run quality loop."}
+          </p>
+        )}
+        {!ready && (run === undefined || recoverable || terminal) && (
           <p className="text-muted-foreground mb-3 text-sm">
             Complete the current revision’s canonical AI audit with no blocking
             findings first.
@@ -150,7 +167,7 @@ export function QualityScorecardPanel({
           <Button
             type="button"
             size="sm"
-            disabled={pending}
+            disabled={pending || !ready}
             onClick={() => void onResume(run.id)}
           >
             {pending ? (

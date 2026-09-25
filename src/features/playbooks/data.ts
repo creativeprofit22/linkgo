@@ -3,9 +3,9 @@ import {
   listAgentPlaybookDefinitions,
   type AgentPlaybookKey,
 } from "@/agent/playbooks";
-import { getDb } from "@/lib/db";
+import { invokeCommand } from "@/lib/tauri";
 import {
-  agentPlaybookOverrideSchema,
+  agentPlaybookOverrideListSchema,
   playbookKeySchema,
   updatePlaybookOverrideSchema,
 } from "@/features/playbooks/schemas";
@@ -22,18 +22,10 @@ function mapOverrideByKey(
   return new Map(rows.map((row) => [row.playbook_key, row]));
 }
 
+/** Override persistence is owned natively (`src-tauri/src/playbooks.rs`). */
 async function listOverrideRows(): Promise<AgentPlaybookOverride[]> {
-  const db = await getDb();
-  const rows = await db.select<AgentPlaybookOverride[]>(
-    `SELECT
-      playbook_key,
-      enabled,
-      custom_instructions,
-      updated_at
-    FROM agent_playbook_overrides
-    ORDER BY playbook_key ASC`,
-  );
-  return rows.map((row) => agentPlaybookOverrideSchema.parse(row));
+  const rows = await invokeCommand("linkgo_playbook_override_list");
+  return agentPlaybookOverrideListSchema.parse(rows);
 }
 
 export async function listPlaybooks(): Promise<AgentPlaybookView[]> {
@@ -56,24 +48,13 @@ export async function updatePlaybookOverride(
   input: UpdatePlaybookOverrideInput,
 ): Promise<void> {
   const parsed = updatePlaybookOverrideSchema.parse(input);
-  const db = await getDb();
-  await db.execute(
-    `INSERT INTO agent_playbook_overrides (
-      playbook_key,
-      enabled,
-      custom_instructions,
-      updated_at
-    ) VALUES ($1, $2, $3, datetime('now'))
-    ON CONFLICT(playbook_key) DO UPDATE SET
-      enabled = excluded.enabled,
-      custom_instructions = excluded.custom_instructions,
-      updated_at = datetime('now')`,
-    [
-      parsed.playbookKey,
-      parsed.enabled ? 1 : 0,
-      parsed.customInstructions.trim(),
-    ],
-  );
+  await invokeCommand<null>("linkgo_playbook_override_upsert", {
+    input: {
+      playbookKey: parsed.playbookKey,
+      enabled: parsed.enabled,
+      customInstructions: parsed.customInstructions,
+    },
+  });
 }
 
 export async function getPlaybookPromptForRuntime(

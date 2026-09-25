@@ -90,6 +90,12 @@ export type CommentThreadWithDetails = CommentThread & {
   auditSeverity: CommentAuditSeverity;
 };
 
+/** A capped thread list; `totalCount` counts every match before the cap. */
+export interface CommentThreadListPage {
+  items: CommentThreadWithDetails[];
+  totalCount: number;
+}
+
 export interface CommentEligibleCandidate extends CommentTargetSnapshot {
   campaign_id: number;
   campaign_name: string;

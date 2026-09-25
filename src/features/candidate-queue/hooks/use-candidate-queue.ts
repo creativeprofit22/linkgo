@@ -6,7 +6,7 @@ import {
   createCandidate,
   deleteCandidate,
   dismissDiscoveryItem as dismissDiscoveryItemRecord,
-  listCandidates,
+  listCandidatePage,
   listDiscoveryItems,
   promoteDiscoveryItem as promoteDiscoveryItemRecord,
   runCandidateDiscovery,
@@ -28,6 +28,8 @@ import type {
 
 interface UseCandidateQueueState {
   candidates: CandidateWithTarget[];
+  /** Candidates matching the campaign before the native list cap. */
+  candidateTotalCount: number;
   discoveryItems: CandidateDiscoveryItem[];
   campaigns: CampaignWithKeywords[];
   selectedCampaignId: number | null;
@@ -63,6 +65,7 @@ function getDefaultCampaignId(
 
 export function useCandidateQueue(): UseCandidateQueueState {
   const [candidates, setCandidates] = useState<CandidateWithTarget[]>([]);
+  const [candidateTotalCount, setCandidateTotalCount] = useState(0);
   const [discoveryItems, setDiscoveryItems] = useState<
     CandidateDiscoveryItem[]
   >([]);
@@ -80,8 +83,8 @@ export function useCandidateQueue(): UseCandidateQueueState {
       if (campaignId === null) return;
 
       try {
-        const [loadedCandidates, loadedDiscoveryItems] = await Promise.all([
-          listCandidates(campaignId),
+        const [loadedPage, loadedDiscoveryItems] = await Promise.all([
+          listCandidatePage(campaignId),
           listDiscoveryItems(campaignId),
         ]);
         if (
@@ -90,7 +93,8 @@ export function useCandidateQueue(): UseCandidateQueueState {
         ) {
           return;
         }
-        setCandidates(loadedCandidates);
+        setCandidates(loadedPage.items);
+        setCandidateTotalCount(loadedPage.totalCount);
         setDiscoveryItems(loadedDiscoveryItems);
       } catch (caught) {
         if (
@@ -117,6 +121,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
       setError(null);
       if (clearExisting || campaignId === null) {
         setCandidates([]);
+        setCandidateTotalCount(0);
         setDiscoveryItems([]);
       }
       await loadCandidatesForCampaign(campaignId, requestId);
@@ -148,6 +153,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
       selectedCampaignIdRef.current = nextCampaignId;
       setSelectedCampaignId(nextCampaignId);
       setCandidates([]);
+      setCandidateTotalCount(0);
       setDiscoveryItems([]);
       await loadCandidatesForCampaign(nextCampaignId, requestId);
     } catch (caught) {
@@ -301,6 +307,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
   return useMemo(
     () => ({
       candidates,
+      candidateTotalCount,
       discoveryItems,
       campaigns,
       selectedCampaignId,
@@ -319,6 +326,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
     }),
     [
       candidates,
+      candidateTotalCount,
       discoveryItems,
       campaigns,
       selectedCampaignId,

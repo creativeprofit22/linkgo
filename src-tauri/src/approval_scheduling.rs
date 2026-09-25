@@ -1,27 +1,105 @@
+use chrono::NaiveDateTime;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::{Row, SqliteConnection, SqlitePool};
 use tauri::State;
 
+use crate::approval_review::{is_ready_at_revision, STALE_APPROVAL_ERROR};
+use crate::approval_transaction::{insert_safety_audit, settle, SafetyAuditEvent, Settlement};
+
 const STORAGE_ERROR: &str = "Could not settle approval schedule";
+const INVALID_SCHEDULED_FOR: &str = "Scheduled time must be a valid date";
+const MAX_SCHEDULE_TEXT_CHARS: usize = 80;
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScheduleApprovalInput {
     pub approval_id: i64,
     pub scheduled_for: String,
+    #[serde(default)]
     pub timezone: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CancelScheduleInput {
     pub id: i64,
 }
 
-enum Settlement<T> {
-    Accepted(T),
-    Rejected(String),
+/// Accepts `YYYY-MM-DD[T ]HH:MM[:SS[.fff]]` with an optional `Z` or
+/// `[+-]HH:MM` suffix: the subset SQLite `date()` parses, with a real
+/// calendar date. `date(?1) IS NOT NULL` is re-checked in the transaction.
+fn is_supported_timestamp(value: &str) -> bool {
+    let (local, offset) = if let Some(local) = value.strip_suffix('Z') {
+        (local, None)
+    } else if value.len() > 6 && matches!(value.as_bytes()[value.len() - 6], b'+' | b'-') {
+        let (local, offset) = value.split_at(value.len() - 6);
+        (local, Some(&offset[1..]))
+    } else {
+        (value, None)
+    };
+    if let Some(offset) = offset {
+        let bytes = offset.as_bytes();
+        let valid = bytes.len() == 5
+            && bytes[2] == b':'
+            && [0, 1, 3, 4].iter().all(|&i| bytes[i].is_ascii_digit())
+            && offset[..2].parse::<u8>().is_ok_and(|hours| hours <= 23)
+            && offset[3..].parse::<u8>().is_ok_and(|minutes| minutes <= 59);
+        if !valid {
+            return false;
+        }
+    }
+    let bytes = local.as_bytes();
+    // chrono's %Y also accepts signs and other widths; SQLite needs 4 digits.
+    if !local.is_ascii() || bytes.len() < 16 || !bytes[..4].iter().all(u8::is_ascii_digit) {
+        return false;
+    }
+    [
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S%.f",
+    ]
+    .iter()
+    .any(|format| NaiveDateTime::parse_from_str(local, format).is_ok())
+}
+
+/// Native mirror of `scheduleApprovalSchema`; runs before any transaction.
+pub(crate) fn validate_schedule(
+    input: ScheduleApprovalInput,
+) -> Result<ScheduleApprovalInput, String> {
+    if input.approval_id <= 0 {
+        return Err("Approval id must be a positive integer".to_string());
+    }
+    let scheduled_for = input.scheduled_for.trim();
+    if scheduled_for.chars().count() > MAX_SCHEDULE_TEXT_CHARS {
+        return Err("Scheduled time must be 80 characters or fewer".to_string());
+    }
+    if !is_supported_timestamp(scheduled_for) {
+        return Err(INVALID_SCHEDULED_FOR.to_string());
+    }
+    let timezone = input.timezone.trim();
+    if timezone.chars().count() > MAX_SCHEDULE_TEXT_CHARS {
+        return Err("Timezone must be 80 characters or fewer".to_string());
+    }
+    Ok(ScheduleApprovalInput {
+        approval_id: input.approval_id,
+        scheduled_for: scheduled_for.to_string(),
+        timezone: if timezone.is_empty() {
+            "local".to_string()
+        } else {
+            timezone.to_string()
+        },
+    })
+}
+
+fn validate_cancel(input: CancelScheduleInput) -> Result<CancelScheduleInput, String> {
+    if input.id <= 0 {
+        return Err("Schedule job id must be a positive integer".to_string());
+    }
+    Ok(input)
 }
 
 struct ApprovalState {
@@ -56,44 +134,24 @@ async fn insert_rate_limit_event(
     Ok(())
 }
 
-struct SafetyAuditEvent<'a> {
-    campaign_id: i64,
-    subject_type: &'a str,
-    subject_id: Option<i64>,
-    event_type: &'a str,
-    severity: &'a str,
-    summary: &'a str,
-    metadata: serde_json::Value,
-}
-
-async fn insert_safety_audit(
-    connection: &mut SqliteConnection,
-    event: SafetyAuditEvent<'_>,
-) -> Result<(), String> {
-    sqlx::query(
-        "INSERT INTO safety_audit_events (
-            campaign_id, subject_type, subject_id, event_type, severity, summary, metadata_json
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-    )
-    .bind(event.campaign_id)
-    .bind(event.subject_type)
-    .bind(event.subject_id)
-    .bind(event.event_type)
-    .bind(event.severity)
-    .bind(event.summary)
-    .bind(event.metadata.to_string())
-    .execute(&mut *connection)
-    .await
-    .map_err(|_| STORAGE_ERROR.to_string())?;
-    Ok(())
-}
-
 async fn execute_schedule(
     connection: &mut SqliteConnection,
     input: ScheduleApprovalInput,
 ) -> Result<Settlement<i64>, String> {
+    // The daily limit counts by SQLite `date()`; a value it cannot parse would
+    // count zero and bypass the limit, so reject it before any write.
+    let Some(window_key) = sqlx::query_scalar::<_, Option<String>>("SELECT date(?1)")
+        .bind(&input.scheduled_for)
+        .fetch_one(&mut *connection)
+        .await
+        .map_err(|_| STORAGE_ERROR.to_string())?
+    else {
+        return Ok(Settlement::Rejected(INVALID_SCHEDULED_FOR.to_string()));
+    };
+
     let row = sqlx::query(
-        "SELECT a.id, a.campaign_id, a.status, c.status AS campaign_status, c.daily_post_limit
+        "SELECT a.id, a.campaign_id, a.status, a.reviewed_content_revision,
+                c.status AS campaign_status, c.daily_post_limit
          FROM approvals a
          INNER JOIN campaigns c ON c.id = a.campaign_id
          WHERE a.id = ?1 LIMIT 1",
@@ -127,6 +185,15 @@ async fn execute_schedule(
             "Only approved posts can be scheduled".to_string(),
         ));
     }
+    // The human-approved revision must still be the current, ready content:
+    // stale edits, current block findings and missing or failing AI audit and
+    // quality evidence all reject here before any write.
+    let reviewed_revision: Option<i64> = row
+        .try_get("reviewed_content_revision")
+        .map_err(|_| STORAGE_ERROR.to_string())?;
+    if !is_ready_at_revision(connection, approval.id, reviewed_revision, STORAGE_ERROR).await? {
+        return Ok(Settlement::Rejected(STALE_APPROVAL_ERROR.to_string()));
+    }
 
     let existing =
         sqlx::query("SELECT id, status FROM schedule_jobs WHERE approval_id = ?1 LIMIT 1")
@@ -156,12 +223,6 @@ async fn execute_schedule(
     .fetch_one(&mut *connection)
     .await
     .map_err(|_| STORAGE_ERROR.to_string())?;
-    let window_key = input
-        .scheduled_for
-        .trim()
-        .chars()
-        .take(10)
-        .collect::<String>();
     let current_count = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM schedule_jobs sj
          INNER JOIN approvals a ON a.id = sj.approval_id
@@ -190,6 +251,7 @@ async fn execute_schedule(
                 summary: audit_summary,
                 metadata: json!({ "reason": reason }),
             },
+            STORAGE_ERROR,
         )
         .await?;
         let rate_summary = format!(
@@ -250,6 +312,7 @@ async fn execute_schedule(
                     "currentCount": current_count,
                 }),
             },
+            STORAGE_ERROR,
         )
         .await?;
         return Ok(Settlement::Rejected(summary));
@@ -314,6 +377,7 @@ async fn execute_schedule(
             summary: &summary,
             metadata: json!({ "approvalId": approval.id, "scheduledFor": input.scheduled_for }),
         },
+        STORAGE_ERROR,
     )
     .await?;
     Ok(Settlement::Accepted(schedule_job_id))
@@ -390,54 +454,18 @@ async fn execute_cancel(
             summary: "Schedule cancelled",
             metadata: json!({ "approvalId": approval_id }),
         },
+        STORAGE_ERROR,
     )
     .await?;
     Ok(Settlement::Accepted(()))
-}
-
-async fn settle<T>(
-    pool: &SqlitePool,
-    operation: impl for<'a> FnOnce(
-        &'a mut SqliteConnection,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Settlement<T>, String>> + Send + 'a>,
-    >,
-) -> Result<T, String> {
-    let mut connection = pool
-        .acquire()
-        .await
-        .map_err(|_| STORAGE_ERROR.to_string())?;
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *connection)
-        .await
-        .map_err(|_| STORAGE_ERROR.to_string())?;
-    match operation(&mut connection).await {
-        Ok(outcome) => {
-            if sqlx::query("COMMIT")
-                .execute(&mut *connection)
-                .await
-                .is_err()
-            {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(STORAGE_ERROR.to_string());
-            }
-            match outcome {
-                Settlement::Accepted(value) => Ok(value),
-                Settlement::Rejected(error) => Err(error),
-            }
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            Err(error)
-        }
-    }
 }
 
 pub(crate) async fn schedule_approval(
     pool: &SqlitePool,
     input: ScheduleApprovalInput,
 ) -> Result<i64, String> {
-    settle(pool, move |connection| {
+    let input = validate_schedule(input)?;
+    settle(pool, STORAGE_ERROR, move |connection| {
         Box::pin(execute_schedule(connection, input))
     })
     .await
@@ -447,7 +475,8 @@ pub(crate) async fn cancel_schedule(
     pool: &SqlitePool,
     input: CancelScheduleInput,
 ) -> Result<(), String> {
-    settle(pool, move |connection| {
+    let input = validate_cancel(input)?;
+    settle(pool, STORAGE_ERROR, move |connection| {
         Box::pin(execute_cancel(connection, input))
     })
     .await

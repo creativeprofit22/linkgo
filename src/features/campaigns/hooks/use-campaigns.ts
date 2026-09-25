@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   createCampaign,
   listCampaigns,
@@ -25,6 +26,12 @@ interface UseCampaignsState {
 }
 
 function getErrorMessage(error: unknown): string {
+  if (error instanceof z.ZodError) {
+    const issue = error.issues[0];
+    if (!issue) return "Campaign input is invalid";
+    const path = issue.path.map(String).join(".");
+    return path ? `${path}: ${issue.message}` : issue.message;
+  }
   return error instanceof Error ? error.message : "Unexpected campaign error";
 }
 

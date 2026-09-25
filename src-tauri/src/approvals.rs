@@ -3,8 +3,16 @@ use serde_json::json;
 use sqlx::{Row, SqliteConnection, SqlitePool};
 use tauri::State;
 
+use crate::approval_review::{is_ready_at_revision, STALE_APPROVAL_ERROR};
+
+const STORAGE_ERROR: &str = "Could not record publish attempt";
+const MAX_EXTERNAL_POST_URL_CHARS: usize = 1000;
+const MAX_PLATFORM_POST_ID_CHARS: usize = 200;
+const MAX_ERROR_MESSAGE_CHARS: usize = 1000;
+
+/// Mirrors `recordPublishAttemptSchema` in `src/features/approvals/schemas.ts`.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RecordPublishAttemptInput {
     pub approval_id: i64,
     pub schedule_job_id: Option<i64>,
@@ -17,22 +25,91 @@ pub struct RecordPublishAttemptInput {
     pub error_message: String,
 }
 
+/// Normalized, validated publish attempt: ids positive, strings trimmed and
+/// bounded, and success/failure evidence present.
+#[derive(Debug)]
+pub(crate) struct ValidPublishAttempt {
+    approval_id: i64,
+    schedule_job_id: Option<i64>,
+    status: &'static str,
+    external_post_url: String,
+    platform_post_id: String,
+    error_message: String,
+}
+
+fn bounded_text(value: &str, max: usize, label: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.chars().count() > max {
+        return Err(format!("{label} must be {max} characters or fewer"));
+    }
+    Ok(trimmed.to_string())
+}
+
+pub(crate) fn validate_record_publish_attempt(
+    input: RecordPublishAttemptInput,
+) -> Result<ValidPublishAttempt, String> {
+    if input.approval_id <= 0 {
+        return Err("Approval id must be a positive integer".to_string());
+    }
+    if matches!(input.schedule_job_id, Some(id) if id <= 0) {
+        return Err("Schedule job id must be a positive integer".to_string());
+    }
+    let status = match input.status.as_str() {
+        "succeeded" => "succeeded",
+        "failed" => "failed",
+        _ => return Err("Publish attempt status must be succeeded or failed".to_string()),
+    };
+    let external_post_url = bounded_text(
+        &input.external_post_url,
+        MAX_EXTERNAL_POST_URL_CHARS,
+        "LinkedIn post URL",
+    )?;
+    if !(external_post_url.is_empty()
+        || external_post_url.starts_with("https://www.linkedin.com/")
+        || external_post_url.starts_with("https://linkedin.com/"))
+    {
+        return Err("LinkedIn post URL must start with https://www.linkedin.com/".to_string());
+    }
+    let platform_post_id = bounded_text(
+        &input.platform_post_id,
+        MAX_PLATFORM_POST_ID_CHARS,
+        "Platform post ID",
+    )?;
+    let error_message = bounded_text(
+        &input.error_message,
+        MAX_ERROR_MESSAGE_CHARS,
+        "Failure reason",
+    )?;
+    if status == "failed" && error_message.is_empty() {
+        return Err("Failure reason is required for failed attempts".to_string());
+    }
+    if status == "succeeded" && external_post_url.is_empty() && platform_post_id.is_empty() {
+        return Err("LinkedIn URL or platform post ID is required for success".to_string());
+    }
+    Ok(ValidPublishAttempt {
+        approval_id: input.approval_id,
+        schedule_job_id: input.schedule_job_id,
+        status,
+        external_post_url,
+        platform_post_id,
+        error_message,
+    })
+}
+
 struct ApprovalState {
     id: i64,
     campaign_id: i64,
     status: String,
+    reviewed_content_revision: Option<i64>,
 }
 
 async fn execute_record_publish_attempt(
     connection: &mut SqliteConnection,
-    input: &RecordPublishAttemptInput,
+    input: &ValidPublishAttempt,
 ) -> Result<i64, String> {
-    if input.status != "succeeded" && input.status != "failed" {
-        return Err("Publish attempt status must be succeeded or failed".to_string());
-    }
-
     let row = sqlx::query(
-        "SELECT a.id, a.campaign_id, c.status AS campaign_status, a.status
+        "SELECT a.id, a.campaign_id, c.status AS campaign_status, a.status,
+                a.reviewed_content_revision
          FROM approvals a
          INNER JOIN campaigns c ON c.id = a.campaign_id
          WHERE a.id = ?1
@@ -53,6 +130,9 @@ async fn execute_record_publish_attempt(
             .try_get("campaign_id")
             .map_err(|error| error.to_string())?,
         status: row.try_get("status").map_err(|error| error.to_string())?,
+        reviewed_content_revision: row
+            .try_get("reviewed_content_revision")
+            .map_err(|error| error.to_string())?,
     };
 
     if campaign_status == "archived" {
@@ -83,6 +163,25 @@ async fn execute_record_publish_attempt(
         }
     }
 
+    // Readiness gate, checked before any write. A success requires the variant
+    // to still be ready at the reviewed revision (the `published` transition
+    // trigger requires it too), so the operator gets a domain error rather
+    // than a storage failure. A failure is always recorded so it stays visible
+    // in the error queue; if the approval is no longer ready it is revoked to
+    // `changes_requested` instead of returned to `approved`, which the
+    // transition trigger would refuse.
+    let ready = approval.status == "published"
+        || is_ready_at_revision(
+            connection,
+            approval.id,
+            approval.reviewed_content_revision,
+            STORAGE_ERROR,
+        )
+        .await?;
+    if input.status == "succeeded" && !ready {
+        return Err(STALE_APPROVAL_ERROR.to_string());
+    }
+
     let attempt_id = sqlx::query(
         "INSERT INTO publish_attempts (
             approval_id, schedule_job_id, platform, status, external_post_url,
@@ -91,7 +190,7 @@ async fn execute_record_publish_attempt(
     )
     .bind(input.approval_id)
     .bind(input.schedule_job_id)
-    .bind(&input.status)
+    .bind(input.status)
     .bind(&input.external_post_url)
     .bind(&input.platform_post_id)
     .bind(&input.error_message)
@@ -118,13 +217,16 @@ async fn execute_record_publish_attempt(
             .map_err(|error| error.to_string())?;
         }
     } else if approval.status != "published" {
-        sqlx::query(
-            "UPDATE approvals SET status = 'approved', updated_at = datetime('now') WHERE id = ?1",
-        )
-        .bind(input.approval_id)
-        .execute(&mut *connection)
-        .await
-        .map_err(|error| error.to_string())?;
+        sqlx::query("UPDATE approvals SET status = ?2, updated_at = datetime('now') WHERE id = ?1")
+            .bind(input.approval_id)
+            .bind(if ready {
+                "approved"
+            } else {
+                "changes_requested"
+            })
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| error.to_string())?;
         if let Some(schedule_job_id) = input.schedule_job_id {
             sqlx::query(
                 "UPDATE schedule_jobs SET status = 'failed', updated_at = datetime('now') WHERE id = ?1",
@@ -207,10 +309,11 @@ async fn execute_record_publish_attempt(
     Ok(attempt_id)
 }
 
-async fn record_publish_attempt(
+pub(crate) async fn record_publish_attempt(
     pool: &SqlitePool,
     input: RecordPublishAttemptInput,
 ) -> Result<i64, String> {
+    let input = validate_record_publish_attempt(input)?;
     let mut connection = pool.acquire().await.map_err(|error| error.to_string())?;
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *connection)
@@ -265,7 +368,11 @@ mod tests {
             .expect("test pool should connect");
         pool.execute(
             "CREATE TABLE campaigns (id INTEGER PRIMARY KEY, status TEXT NOT NULL);
-             CREATE TABLE approvals (id INTEGER PRIMARY KEY, campaign_id INTEGER NOT NULL, status TEXT NOT NULL, updated_at TEXT);
+             CREATE TABLE approvals (id INTEGER PRIMARY KEY, campaign_id INTEGER NOT NULL, draft_id INTEGER NOT NULL DEFAULT 1, draft_variant_id INTEGER NOT NULL DEFAULT 1, reviewed_content_revision INTEGER DEFAULT 1, status TEXT NOT NULL, updated_at TEXT);
+             CREATE TABLE draft_variants (id INTEGER PRIMARY KEY, content_revision INTEGER NOT NULL);
+             CREATE TABLE approval_ready_variants (draft_variant_id INTEGER, draft_id INTEGER, campaign_id INTEGER, content_revision INTEGER);
+             INSERT INTO draft_variants VALUES (1, 1);
+             INSERT INTO approval_ready_variants VALUES (1, 1, 1, 1);
              CREATE TABLE schedule_jobs (id INTEGER PRIMARY KEY, approval_id INTEGER NOT NULL, status TEXT NOT NULL, updated_at TEXT);
              CREATE TABLE publish_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL, schedule_job_id INTEGER, platform TEXT NOT NULL, status TEXT NOT NULL, external_post_url TEXT NOT NULL, platform_post_id TEXT NOT NULL, error_message TEXT NOT NULL);
              CREATE TABLE safety_audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER, subject_type TEXT NOT NULL, subject_id INTEGER, event_type TEXT NOT NULL, severity TEXT NOT NULL, summary TEXT NOT NULL, metadata_json TEXT NOT NULL);
@@ -304,6 +411,135 @@ mod tests {
             }
             .to_string(),
         }
+    }
+
+    fn validation_error(input: RecordPublishAttemptInput) -> String {
+        validate_record_publish_attempt(input).unwrap_err()
+    }
+
+    #[test]
+    fn validation_trims_and_accepts_linkedin_evidence() {
+        let mut raw = input("succeeded");
+        raw.external_post_url = "  https://linkedin.com/feed/update/urn:li:share:1/  ".to_string();
+        raw.platform_post_id = "  post-1 ".to_string();
+        let valid = validate_record_publish_attempt(raw).unwrap();
+        assert_eq!(
+            valid.external_post_url,
+            "https://linkedin.com/feed/update/urn:li:share:1/"
+        );
+        assert_eq!(valid.platform_post_id, "post-1");
+    }
+
+    #[test]
+    fn validation_rejects_non_linkedin_url() {
+        for url in [
+            "https://example.com/x",
+            "http://www.linkedin.com/posts/test",
+            "https://www.linkedin.com.evil.test/x",
+            "javascript:alert(1)",
+        ] {
+            let mut raw = input("succeeded");
+            raw.external_post_url = url.to_string();
+            assert_eq!(
+                validation_error(raw),
+                "LinkedIn post URL must start with https://www.linkedin.com/",
+                "{url}"
+            );
+        }
+    }
+
+    #[test]
+    fn validation_rejects_over_length_fields() {
+        let mut raw = input("succeeded");
+        raw.external_post_url = format!("https://www.linkedin.com/{}", "a".repeat(1000));
+        assert_eq!(
+            validation_error(raw),
+            "LinkedIn post URL must be 1000 characters or fewer"
+        );
+
+        let mut raw = input("succeeded");
+        raw.platform_post_id = "p".repeat(201);
+        assert_eq!(
+            validation_error(raw),
+            "Platform post ID must be 200 characters or fewer"
+        );
+
+        let mut raw = input("failed");
+        raw.error_message = "e".repeat(1001);
+        assert_eq!(
+            validation_error(raw),
+            "Failure reason must be 1000 characters or fewer"
+        );
+
+        // Limits count characters, not bytes, and apply after trimming.
+        let mut raw = input("failed");
+        raw.error_message = format!("  {}  ", "é".repeat(1000));
+        assert!(validate_record_publish_attempt(raw).is_ok());
+    }
+
+    #[test]
+    fn validation_rejects_whitespace_only_success() {
+        let mut raw = input("succeeded");
+        raw.external_post_url = "   ".to_string();
+        raw.platform_post_id = "\t\n".to_string();
+        assert_eq!(
+            validation_error(raw),
+            "LinkedIn URL or platform post ID is required for success"
+        );
+    }
+
+    #[test]
+    fn validation_rejects_empty_reason_failure() {
+        let mut raw = input("failed");
+        raw.error_message = "   ".to_string();
+        assert_eq!(
+            validation_error(raw),
+            "Failure reason is required for failed attempts"
+        );
+    }
+
+    #[test]
+    fn validation_rejects_bad_ids_and_status() {
+        let mut raw = input("succeeded");
+        raw.approval_id = 0;
+        assert_eq!(
+            validation_error(raw),
+            "Approval id must be a positive integer"
+        );
+        let mut raw = input("succeeded");
+        raw.schedule_job_id = Some(-1);
+        assert_eq!(
+            validation_error(raw),
+            "Schedule job id must be a positive integer"
+        );
+        assert_eq!(
+            validation_error(input("pending")),
+            "Publish attempt status must be succeeded or failed"
+        );
+    }
+
+    #[test]
+    fn input_rejects_unknown_fields() {
+        let error = serde_json::from_value::<RecordPublishAttemptInput>(json!({
+            "approvalId": 1,
+            "status": "succeeded",
+            "platformPostId": "post-1",
+            "extra": true,
+        }))
+        .unwrap_err();
+        assert!(error.to_string().contains("unknown field"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn invalid_input_writes_nothing() {
+        let pool = test_pool().await;
+        seed_scheduled(&pool).await;
+        let mut raw = input("succeeded");
+        raw.external_post_url = "https://example.com/x".to_string();
+        assert!(record_publish_attempt(&pool, raw).await.is_err());
+        assert_eq!(count(&pool, "publish_attempts").await, 0);
+        assert_eq!(count(&pool, "safety_audit_events").await, 0);
+        assert_eq!(approval_status(&pool).await, "scheduled");
     }
 
     #[tokio::test]
@@ -385,6 +621,67 @@ mod tests {
                 .unwrap(),
             "scheduled"
         );
+    }
+
+    async fn count(pool: &SqlitePool, table: &str) -> i64 {
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn approval_status(pool: &SqlitePool) -> String {
+        sqlx::query_scalar("SELECT status FROM approvals WHERE id = 1")
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    // Readiness is modelled as a table here; the real view is exercised by the
+    // migrated-database tests in approval_review_tests.rs.
+    #[tokio::test]
+    async fn unready_success_is_rejected_before_any_write() {
+        let pool = test_pool().await;
+        seed_scheduled(&pool).await;
+        pool.execute("DELETE FROM approval_ready_variants")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            record_publish_attempt(&pool, input("succeeded"))
+                .await
+                .unwrap_err(),
+            STALE_APPROVAL_ERROR
+        );
+        assert_eq!(count(&pool, "publish_attempts").await, 0);
+        assert_eq!(count(&pool, "safety_audit_events").await, 0);
+        assert_eq!(approval_status(&pool).await, "scheduled");
+    }
+
+    #[tokio::test]
+    async fn unready_failure_is_recorded_and_revokes_approval() {
+        let pool = test_pool().await;
+        seed_scheduled(&pool).await;
+        pool.execute("DELETE FROM approval_ready_variants")
+            .await
+            .unwrap();
+
+        record_publish_attempt(&pool, input("failed"))
+            .await
+            .expect("failed attempts stay recordable");
+        assert_eq!(count(&pool, "publish_attempts").await, 1);
+        assert_eq!(count(&pool, "error_queue_items").await, 1);
+        assert_eq!(approval_status(&pool).await, "changes_requested");
+    }
+
+    #[tokio::test]
+    async fn ready_failure_returns_approval_to_approved() {
+        let pool = test_pool().await;
+        seed_scheduled(&pool).await;
+        record_publish_attempt(&pool, input("failed"))
+            .await
+            .unwrap();
+        assert_eq!(approval_status(&pool).await, "approved");
     }
 
     #[tokio::test]

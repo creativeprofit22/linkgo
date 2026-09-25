@@ -41,7 +41,34 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/restrict-template-expressions": "off",
-      "react-hooks/set-state-in-effect": "off"
+      "react-hooks/set-state-in-effect": "off",
+      // Persistence is native-owned: the renderer calls feature-specific
+      // commands through `@/lib/tauri`, never SQL.
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@tauri-apps/plugin-sql",
+              message:
+                "Renderer SQL is not allowed; add a feature-specific native command.",
+            },
+            {
+              name: "@/lib/db",
+              message:
+                "The renderer database helper was removed; use a feature-specific native command.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Literal[value=/^plugin:sql\\|/]",
+          message:
+            "Renderer SQL plugin commands are not allowed; add a feature-specific native command.",
+        },
+      ],
     },
-  }
+  },
 );

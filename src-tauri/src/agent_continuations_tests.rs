@@ -28,8 +28,11 @@ async fn test_pool() -> SqlitePool {
         CREATE TABLE agent_run_approval_checkpoints (agent_run_id INTEGER PRIMARY KEY, pending_tool_call_id INTEGER NOT NULL, approval_id INTEGER NOT NULL, phase TEXT NOT NULL, messages_json TEXT NOT NULL, iteration_count INTEGER NOT NULL, updated_at TEXT);
         CREATE TABLE agent_run_events (id INTEGER PRIMARY KEY AUTOINCREMENT, agent_run_id INTEGER NOT NULL, event_type TEXT NOT NULL, summary TEXT NOT NULL);
         CREATE TABLE workflow_step_executions (agent_run_id INTEGER, workflow_step_id INTEGER, status TEXT, error_summary TEXT, completed_at TEXT, updated_at TEXT);
-        CREATE TABLE workflow_steps (id INTEGER PRIMARY KEY, workflow_run_id INTEGER, status TEXT, output_summary TEXT, error_message TEXT, started_at TEXT, completed_at TEXT, updated_at TEXT);
-        CREATE TABLE workflow_runs (id INTEGER PRIMARY KEY, status TEXT, completed_at TEXT, updated_at TEXT);").await.unwrap();
+        CREATE TABLE workflow_steps (id INTEGER PRIMARY KEY, workflow_run_id INTEGER, step_key TEXT NOT NULL DEFAULT 'draft', title TEXT NOT NULL DEFAULT 'Step', sort_order INTEGER NOT NULL DEFAULT 1, status TEXT, output_summary TEXT, error_message TEXT, started_at TEXT, completed_at TEXT, updated_at TEXT);
+        CREATE TABLE workflow_runs (id INTEGER PRIMARY KEY, status TEXT, current_step_key TEXT, started_at TEXT, completed_at TEXT, updated_at TEXT);
+        CREATE TABLE workflow_events (id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_run_id INTEGER NOT NULL, workflow_step_id INTEGER, event_type TEXT NOT NULL, summary TEXT NOT NULL);
+        CREATE TABLE autopilot_plans (id INTEGER PRIMARY KEY, workflow_run_id INTEGER, campaign_backlog_item_id INTEGER, status TEXT);
+        CREATE TABLE campaign_backlog_items (id INTEGER PRIMARY KEY, owner_type TEXT, work_type TEXT, recurrence TEXT, status TEXT, completed_at TEXT, cancelled_at TEXT, updated_at TEXT);").await.unwrap();
     pool
 }
 
@@ -229,5 +232,145 @@ async fn rejected_approval_cancellation_commits_atomically() {
         )
         .await,
         2
+    );
+    assert_eq!(
+        scalar_string(&pool, "SELECT error_message FROM agent_runs WHERE id=1").await,
+        "Approval rejected: Approval rejected before continuation"
+    );
+    assert_eq!(
+        scalar_string(
+            &pool,
+            "SELECT summary FROM agent_run_events WHERE agent_run_id=1"
+        )
+        .await,
+        "Agent run cancelled after approval rejection: Approval rejected before continuation"
+    );
+}
+
+async fn seed_workflow_link(pool: &SqlitePool, step_status: &str) {
+    pool.execute(
+        "INSERT INTO workflow_runs VALUES (1, 'waiting_approval', 'schedule', datetime('now'), NULL, datetime('now'));
+         INSERT INTO workflow_steps VALUES (1, 1, 'draft', 'Draft', 1, 'completed', '', '', NULL, NULL, NULL);
+         UPDATE agent_runs SET workflow_run_id = 1, workflow_step_id = 2 WHERE id = 1;
+         INSERT INTO workflow_step_executions VALUES (1, 2, 'waiting_approval', '', NULL, NULL);",
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO workflow_steps VALUES (2, 1, 'schedule', 'Schedule', 2, ?1, '', '', NULL, NULL, NULL)",
+    )
+    .bind(step_status)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn reject_in_transaction(pool: &SqlitePool, detail: &str) -> Result<(), String> {
+    let mut connection = pool.acquire().await.unwrap();
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *connection)
+        .await
+        .unwrap();
+    let result = reject_linked_continuations(&mut connection, 1, detail).await;
+    let end = if result.is_ok() { "COMMIT" } else { "ROLLBACK" };
+    sqlx::query(end).execute(&mut *connection).await.unwrap();
+    result
+}
+
+#[tokio::test]
+async fn operator_rejection_projects_detail_and_step_blocked_event() {
+    let pool = test_pool().await;
+    seed(&pool, "waiting_approval", "waiting_approval", "rejected").await;
+    seed_workflow_link(&pool, "waiting_approval").await;
+    reject_in_transaction(&pool, "Tone is off").await.unwrap();
+
+    assert_eq!(
+        scalar_string(&pool, "SELECT error_message FROM agent_tool_calls").await,
+        "Approval rejected: Tone is off"
+    );
+    assert_eq!(
+        scalar_string(&pool, "SELECT summary FROM agent_run_events").await,
+        "Agent run cancelled after approval rejection: Tone is off"
+    );
+    assert_eq!(
+        scalar_string(&pool, "SELECT status FROM workflow_step_executions").await,
+        "cancelled"
+    );
+    assert_eq!(
+        scalar_string(&pool, "SELECT status FROM workflow_steps WHERE id=2").await,
+        "blocked"
+    );
+    assert_eq!(
+        scalar_string(
+            &pool,
+            "SELECT event_type || ':' || summary FROM workflow_events WHERE workflow_step_id=2"
+        )
+        .await,
+        "step_blocked:Schedule blocked"
+    );
+    assert_eq!(
+        scalar_string(
+            &pool,
+            "SELECT status || ':' || current_step_key FROM workflow_runs"
+        )
+        .await,
+        "blocked:schedule"
+    );
+    assert_eq!(
+        scalar_count(&pool, "SELECT COUNT(*) FROM agent_run_approval_checkpoints").await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn already_blocked_step_does_not_duplicate_event() {
+    let pool = test_pool().await;
+    seed(&pool, "waiting_approval", "waiting_approval", "rejected").await;
+    seed_workflow_link(&pool, "blocked").await;
+    reject_in_transaction(&pool, "Tone is off").await.unwrap();
+    assert_eq!(
+        scalar_count(&pool, "SELECT COUNT(*) FROM workflow_events").await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn cancelled_workflow_run_is_not_reprojected() {
+    let pool = test_pool().await;
+    seed(&pool, "waiting_approval", "waiting_approval", "rejected").await;
+    seed_workflow_link(&pool, "waiting_approval").await;
+    pool.execute("UPDATE workflow_runs SET status = 'cancelled'")
+        .await
+        .unwrap();
+    reject_in_transaction(&pool, "Tone is off").await.unwrap();
+    assert_eq!(
+        scalar_string(&pool, "SELECT status FROM workflow_steps WHERE id=2").await,
+        "waiting_approval"
+    );
+    assert_eq!(
+        scalar_string(&pool, "SELECT status FROM agent_runs").await,
+        "cancelled"
+    );
+}
+
+#[tokio::test]
+async fn late_workflow_event_failure_rolls_back_rejection() {
+    let pool = test_pool().await;
+    seed(&pool, "waiting_approval", "waiting_approval", "rejected").await;
+    seed_workflow_link(&pool, "waiting_approval").await;
+    pool.execute("CREATE TRIGGER fail_event BEFORE INSERT ON workflow_events BEGIN SELECT RAISE(ABORT, 'private'); END;").await.unwrap();
+    assert_eq!(
+        reject_in_transaction(&pool, "Tone is off")
+            .await
+            .unwrap_err(),
+        SETTLEMENT_ERROR
+    );
+    assert_eq!(
+        scalar_string(&pool, "SELECT status FROM agent_runs").await,
+        "waiting_approval"
+    );
+    assert_eq!(
+        scalar_count(&pool, "SELECT COUNT(*) FROM agent_run_approval_checkpoints").await,
+        1
     );
 }

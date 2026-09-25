@@ -31,6 +31,7 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Completed-current revision skipping, durable explicit Resume after failure, and transactional 15-minute stale linked-claim recovery.
 - Atomic final findings/audit settlement, `audit` completion, and transition to `approve` waiting; finding severity does not auto-approve or auto-block human review.
 - Local SQLite persistence through Tauri migrations, including Migration 32's optional unique audit-to-step-execution link.
+- Native ownership of run mutations (`src-tauri/src/workflows.rs`): `linkgo_workflow_create_run`, `_start_run`, `_resume_run`, `_set_step_status`, `_cancel_run`, `_add_note` and `_create_artifact` each re-read the run, step and campaign and write on one pinned `BEGIN IMMEDIATE` connection, including the step-transition matrix, run-status projection, planner scoring-backlog sync and the planner draft save-only rule. `_resume_run` reconciles a waiting step from its linked agent run and returns `{ linkedAgentIsActive }`; the renderer then decides whether to continue execution. Real-SQLite tests: `src-tauri/src/workflows_tests.rs`.
 
 ## Intentionally not implemented
 
@@ -76,6 +77,16 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 6. For a planner-linked saved draft at `audit`, a human starts or explicitly resumes the dedicated serial variant auditor described below.
 7. The executor stops at `approve` and approval-gated `schedule_post` calls.
 8. Resume executor continues from other failed or blocked steps.
+
+The renderer has no SQL access to workflow tables. `src-tauri/src/workflow_store.rs` owns the reads and step-execution writes:
+
+- `linkgo_workflow_run_list` returns up to 200 runs with their steps, the newest 100 events per run and artifacts, all read in one transaction. Events were previously unbounded.
+- `linkgo_workflow_run_validation` returns the single run row the executor checks.
+- `linkgo_workflow_step_execution_create` checks the step exists and that any agent run belongs to the same workflow. The database's one-active-execution rule means two claims on the same step at once leave exactly one execution.
+- `linkgo_workflow_step_execution_update` checks agent-run ownership. Error text is bounded to 2,000 characters rather than rejected, so a failure is never lost.
+- `linkgo_workflow_planner_scoring_scope` and `linkgo_workflow_planner_draft_audit_scope` are read-only, capped scope reads. The planner executors keep their validation rules and messages.
+
+No provider call runs inside these transactions. Tests: `src-tauri/src/workflow_store_tests.rs`.
 
 ## Planner-created lifecycle
 

@@ -40,6 +40,10 @@ A successful change shows either `Launch on login enabled` or `Launch on login d
 
 A failed change keeps the prior state and shows `Launch-on-login setting was not changed`.
 
+## Persistence
+
+The OS autostart state is read and changed through the autostart plugin first, never inside a database transaction. Native commands in `src-tauri/src/settings.rs` then mirror it into the singleton `app_settings` row: `linkgo_settings_launch_on_login_sync` (recreates a missing row, stores the OS state and sync time, and keeps or replaces the last error) and `linkgo_settings_launch_on_login_error_record` (error text bounded to 500 UTF-16 units). Each runs in one transaction. The renderer has no direct SQL access to this table.
+
 ## Exclusions
 
 - No hidden startup args in this slice.

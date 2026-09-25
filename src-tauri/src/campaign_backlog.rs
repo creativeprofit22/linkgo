@@ -22,6 +22,9 @@ pub struct CreateCampaignBacklogItemInput {
     pub owner_type: String,
     pub due_at: String,
     pub recurrence: String,
+    // Renderer contract key is `recurrenceTimeZone` (camelCase of the column
+    // would be `recurrenceTimezone`).
+    #[serde(rename = "recurrenceTimeZone")]
     pub recurrence_timezone: String,
 }
 
@@ -36,6 +39,7 @@ pub struct UpdateCampaignBacklogItemInput {
     pub owner_type: String,
     pub due_at: String,
     pub recurrence: String,
+    #[serde(rename = "recurrenceTimeZone")]
     pub recurrence_timezone: String,
 }
 
@@ -569,6 +573,35 @@ mod tests {
     use crate::migrations;
     use sqlx::{sqlite::SqlitePoolOptions, Executor, SqlitePool};
     use tauri_plugin_sql::MigrationKind;
+
+    #[test]
+    fn backlog_inputs_deserialize_renderer_payloads() {
+        let create: CreateCampaignBacklogItemInput = serde_json::from_value(serde_json::json!({
+            "campaignId": 1,
+            "workType": "research",
+            "title": "Item",
+            "details": "",
+            "ownerType": "operator",
+            "dueAt": "2026-09-25T00:00:00.000Z",
+            "recurrence": "daily",
+            "recurrenceTimeZone": "America/New_York"
+        }))
+        .expect("renderer create payload should deserialize");
+        assert_eq!(create.recurrence_timezone, "America/New_York");
+
+        let update: UpdateCampaignBacklogItemInput = serde_json::from_value(serde_json::json!({
+            "id": 1,
+            "workType": "research",
+            "title": "Item",
+            "details": "",
+            "ownerType": "operator",
+            "dueAt": "2026-09-25T00:00:00.000Z",
+            "recurrence": "none",
+            "recurrenceTimeZone": ""
+        }))
+        .expect("renderer update payload should deserialize");
+        assert_eq!(update.recurrence_timezone, "");
+    }
 
     async fn migrated_pool(_test_name: &str) -> SqlitePool {
         let options = SqliteConnectOptions::new()

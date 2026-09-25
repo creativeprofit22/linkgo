@@ -1,4 +1,9 @@
+import type { InvokeArgs } from "@tauri-apps/api/core";
 import { IS_TEST, IS_TAURI } from "@/lib/env";
+import {
+  invokeCommand as invokeNativeCommand,
+  toNativeCommandError,
+} from "@/lib/tauri";
 import { AUTH_PROVIDERS } from "@/features/integrations/providers";
 import {
   authProgressEventSchema,
@@ -60,10 +65,15 @@ function getInjectedInvoke(): InvokeFn | null {
 
 async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
   const injected = getInjectedInvoke();
-  if (injected) return injected(cmd, args);
+  if (injected) {
+    try {
+      return await injected(cmd, args);
+    } catch (error: unknown) {
+      throw toNativeCommandError(error);
+    }
+  }
   if (!IS_TAURI) return null;
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke(cmd, args as Record<string, unknown> | undefined);
+  return invokeNativeCommand(cmd, args as InvokeArgs | undefined);
 }
 
 export async function getAuthStatus(): Promise<AuthStatus> {

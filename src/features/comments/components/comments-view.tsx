@@ -1,4 +1,5 @@
 import { AlertCircle, MessageCircle, Target } from "lucide-react";
+import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CommentThreadCard } from "@/features/comments/components/comment-thread-card";
@@ -11,6 +12,7 @@ export function CommentsView(): React.ReactNode {
     campaigns,
     selectedCampaignId,
     commentThreads,
+    commentThreadTotalCount,
     eligibleCandidates,
     loading,
     error,
@@ -26,7 +28,9 @@ export function CommentsView(): React.ReactNode {
     recordAttempt,
   } = useComments();
 
-  const summary = getCommentSummary(commentThreads);
+  const summary = getCommentSummary(commentThreads, commentThreadTotalCount);
+  // Status counts come from the capped rows; label them if truncated.
+  const shownSuffix = summary.truncated ? " (shown)" : "";
   const selectedCampaign =
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
@@ -117,12 +121,24 @@ export function CommentsView(): React.ReactNode {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard label="Total" value={String(summary.total)} />
             <SummaryCard
-              label="Needs review"
+              label={`Needs review${shownSuffix}`}
               value={String(summary.needsReview)}
             />
-            <SummaryCard label="Approved" value={String(summary.approved)} />
-            <SummaryCard label="Posted" value={String(summary.posted)} />
+            <SummaryCard
+              label={`Approved${shownSuffix}`}
+              value={String(summary.approved)}
+            />
+            <SummaryCard
+              label={`Posted${shownSuffix}`}
+              value={String(summary.posted)}
+            />
           </div>
+
+          <ListTruncationNotice
+            shownCount={commentThreads.length}
+            totalCount={commentThreadTotalCount}
+            noun="comment threads"
+          />
 
           {commentThreads.length === 0 ? (
             <EmptyComments />
@@ -180,14 +196,19 @@ export function CommentsView(): React.ReactNode {
   );
 }
 
-function getCommentSummary(threads: CommentThreadWithDetails[]): {
+function getCommentSummary(
+  threads: CommentThreadWithDetails[],
+  totalCount: number,
+): {
   total: number;
+  truncated: boolean;
   needsReview: number;
   approved: number;
   posted: number;
 } {
   return {
-    total: threads.length,
+    total: Math.max(totalCount, threads.length),
+    truncated: totalCount > threads.length,
     needsReview: threads.filter((thread) => thread.status === "needs_review")
       .length,
     approved: threads.filter((thread) => thread.status === "approved").length,

@@ -11,7 +11,7 @@ import {
   generateDraftVariants,
   listDraftGenerationRequests,
   listEligibleDraftWorkflowOptions,
-  listDrafts,
+  listDraftPage,
   runDraftAiAudit as runDraftAiAuditRecord,
   saveGeneratedDraft,
   setDraftVariantStatus,
@@ -40,6 +40,8 @@ import type {
 
 interface UseDraftsState {
   drafts: DraftWithDetails[];
+  /** Drafts matching the campaign before the native list cap. */
+  draftTotalCount: number;
   generationRequests: DraftGenerationRequest[];
   campaigns: CampaignWithKeywords[];
   candidates: CandidateWithTarget[];
@@ -77,6 +79,7 @@ function getDefaultCampaignId(
 
 export function useDrafts(): UseDraftsState {
   const [drafts, setDrafts] = useState<DraftWithDetails[]>([]);
+  const [draftTotalCount, setDraftTotalCount] = useState(0);
   const [generationRequests, setGenerationRequests] = useState<
     DraftGenerationRequest[]
   >([]);
@@ -102,6 +105,7 @@ export function useDrafts(): UseDraftsState {
       if (campaignId === null) {
         setCandidates([]);
         setDrafts([]);
+        setDraftTotalCount(0);
         setGenerationRequests([]);
         setEligibleWorkflowOptions([]);
         return;
@@ -110,19 +114,20 @@ export function useDrafts(): UseDraftsState {
       try {
         const [
           loadedCandidates,
-          loadedDrafts,
+          loadedDraftPage,
           loadedGenerationRequests,
           loadedEligibleWorkflowOptions,
         ] = await Promise.all([
           listCandidates(campaignId),
-          listDrafts(campaignId),
+          listDraftPage(campaignId),
           listDraftGenerationRequests(campaignId),
           listEligibleDraftWorkflowOptions(campaignId),
         ]);
         if (requestId !== latestCampaignLoadRequest.current) return;
 
         setCandidates(loadedCandidates);
-        setDrafts(loadedDrafts);
+        setDrafts(loadedDraftPage.items);
+        setDraftTotalCount(loadedDraftPage.totalCount);
         setGenerationRequests(loadedGenerationRequests);
         setEligibleWorkflowOptions(loadedEligibleWorkflowOptions);
       } catch (caught) {
@@ -359,6 +364,7 @@ export function useDrafts(): UseDraftsState {
   return useMemo(
     () => ({
       drafts,
+      draftTotalCount,
       generationRequests,
       campaigns,
       candidates,
@@ -383,6 +389,7 @@ export function useDrafts(): UseDraftsState {
     }),
     [
       drafts,
+      draftTotalCount,
       generationRequests,
       campaigns,
       candidates,

@@ -1,4 +1,5 @@
 import { AlertCircle, FileText, Target } from "lucide-react";
+import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AddDraftDialog } from "@/features/drafts/components/add-draft-dialog";
@@ -14,6 +15,7 @@ import type {
 export function DraftsView(): React.ReactNode {
   const {
     drafts,
+    draftTotalCount,
     generationRequests,
     campaigns,
     candidates,
@@ -36,7 +38,9 @@ export function DraftsView(): React.ReactNode {
     resumeQualityLoop,
   } = useDrafts();
 
-  const summary = getDraftSummary(drafts);
+  const summary = getDraftSummary(drafts, draftTotalCount);
+  // Status/variant counts come from the capped rows; label them if truncated.
+  const shownSuffix = summary.truncated ? " (shown)" : "";
   const activeGenerationRequests = generationRequests.filter(
     isActiveGenerationRequest,
   );
@@ -136,15 +140,15 @@ export function DraftsView(): React.ReactNode {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard label="Total drafts" value={String(summary.total)} />
             <SummaryCard
-              label="Ready for review"
+              label={`Ready for review${shownSuffix}`}
               value={String(summary.readyForReview)}
             />
             <SummaryCard
-              label="Blocked variants"
+              label={`Blocked variants${shownSuffix}`}
               value={String(summary.blockedVariants)}
             />
             <SummaryCard
-              label="Selected variants"
+              label={`Selected variants${shownSuffix}`}
               value={String(summary.selectedVariants)}
             />
             <SummaryCard
@@ -152,6 +156,12 @@ export function DraftsView(): React.ReactNode {
               value={String(activeGenerationRequests.length)}
             />
           </div>
+
+          <ListTruncationNotice
+            shownCount={drafts.length}
+            totalCount={draftTotalCount}
+            noun="drafts"
+          />
 
           {activeGenerationRequests.length > 0 && (
             <div className="space-y-4">
@@ -203,15 +213,20 @@ function isActiveGenerationRequest(request: DraftGenerationRequest): boolean {
   return ["pending", "generated", "failed"].includes(request.status);
 }
 
-function getDraftSummary(drafts: DraftWithDetails[]): {
+function getDraftSummary(
+  drafts: DraftWithDetails[],
+  totalCount: number,
+): {
   total: number;
+  truncated: boolean;
   readyForReview: number;
   blockedVariants: number;
   selectedVariants: number;
 } {
   const variants = drafts.flatMap((draft) => draft.variants);
   return {
-    total: drafts.length,
+    total: Math.max(totalCount, drafts.length),
+    truncated: totalCount > drafts.length,
     readyForReview: drafts.filter(
       (draft) => draft.status === "ready_for_review",
     ).length,

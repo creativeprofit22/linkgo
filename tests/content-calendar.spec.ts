@@ -397,12 +397,12 @@ async function markScheduleCompletedAndApprovalApproved(
           };
         }
       ).__TAURI_INTERNALS__?.invoke;
-      await invoke?.("plugin:sql|execute", {
+      await invoke?.("__linkgo_test_sql|execute", {
         query:
           "UPDATE schedule_jobs SET status = 'completed', updated_at = datetime('now') WHERE id = $1",
         values: [scheduleJobId],
       });
-      await invoke?.("plugin:sql|execute", {
+      await invoke?.("__linkgo_test_sql|execute", {
         query:
           "UPDATE approvals SET status = 'approved', updated_at = datetime('now') WHERE id = $1",
         values: [approvalId],
@@ -424,7 +424,7 @@ async function archiveCampaignThroughMockSql(
         };
       }
     ).__TAURI_INTERNALS__?.invoke;
-    await invoke?.("plugin:sql|execute", {
+    await invoke?.("__linkgo_test_sql|execute", {
       query:
         "UPDATE campaigns SET status = $1, updated_at = datetime('now') WHERE id = $2",
       values: ["archived", campaignId],

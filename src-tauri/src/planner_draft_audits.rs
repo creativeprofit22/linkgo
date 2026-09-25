@@ -1,17 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{Row, SqliteConnection, SqlitePool};
-use std::collections::HashSet;
 use tauri::State;
 
-const REQUIRED_RULES: [&str; 6] = [
-    "hook",
-    "specificity",
-    "generic_language",
-    "authenticity",
-    "clarity",
-    "safety",
-];
 const STALE_MINUTES: i64 = 15;
 
 #[derive(Debug, Deserialize)]
@@ -45,20 +36,12 @@ pub struct CompletePlannerDraftAuditPayload {
     pub terminal: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PlannerDraftAuditFindingInput {
-    pub rule_key: String,
-    pub severity: String,
-    pub message: String,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Identity only: findings and summary are read natively from the linked
+/// auditor's own persisted `audit_post` output.
 pub struct CompletePlannerDraftAuditInput {
     pub agent_run_id: i64,
-    pub summary: String,
-    pub findings: Vec<PlannerDraftAuditFindingInput>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,26 +109,6 @@ fn default_agent_model(provider: &str) -> Option<&'static str> {
         "custom" => Some("custom-model"),
         _ => None,
     }
-}
-
-fn validate_findings(findings: &[PlannerDraftAuditFindingInput]) -> Result<(), String> {
-    if findings.len() != REQUIRED_RULES.len() {
-        return Err("Audit findings must contain exactly all six required categories".to_string());
-    }
-    let mut rules = HashSet::new();
-    for finding in findings {
-        if !REQUIRED_RULES.contains(&finding.rule_key.as_str()) || !rules.insert(&finding.rule_key)
-        {
-            return Err(
-                "Audit findings must contain exactly all six required categories".to_string(),
-            );
-        }
-        if !matches!(finding.severity.as_str(), "pass" | "warning" | "block") {
-            return Err("Audit finding severity is invalid".to_string());
-        }
-        bounded(&finding.message, 500, "Audit finding message")?;
-    }
-    Ok(())
 }
 
 async fn begin_immediate(
@@ -418,8 +381,6 @@ async fn complete_on_connection(
     input: CompletePlannerDraftAuditInput,
     inject_fault: bool,
 ) -> Result<CompletePlannerDraftAuditPayload, String> {
-    validate_findings(&input.findings)?;
-    let summary = bounded(&input.summary, 1000, "Audit summary")?;
     let link = load_link(connection, input.agent_run_id).await?;
     let current: i64 =
         sqlx::query_scalar("SELECT content_revision FROM draft_variants WHERE id=?1")
@@ -436,8 +397,23 @@ async fn complete_on_connection(
     if active != 1 {
         return Err("Planner draft audit is no longer active".to_string());
     }
-    for finding in &input.findings {
-        sqlx::query("INSERT INTO draft_ai_audit_findings (audit_run_id,rule_key,severity,message) VALUES (?1,?2,?3,?4)").bind(link.audit_run_id).bind(&finding.rule_key).bind(&finding.severity).bind(bounded(&finding.message,500,"Audit finding message")?).execute(&mut *connection).await.map_err(db_error("Could not persist planner audit finding"))?;
+    let snapshot = crate::draft_ai_audits::load_snapshot(connection, link.draft_variant_id).await?;
+    if snapshot.content_revision != link.content_revision {
+        return Err("Draft content changed before the planner audit completed".to_string());
+    }
+    let (summary, findings) = crate::draft_ai_audits::read_auditor_output(
+        connection,
+        &crate::draft_ai_audits::AuditRequest {
+            audit_run_id: link.audit_run_id,
+            agent_run_id: link.agent_run_id,
+            draft_variant_id: link.draft_variant_id,
+            content_revision: link.content_revision,
+            snapshot: &snapshot,
+        },
+    )
+    .await?;
+    for finding in &findings {
+        sqlx::query("INSERT INTO draft_ai_audit_findings (audit_run_id,rule_key,severity,message) VALUES (?1,?2,?3,?4)").bind(link.audit_run_id).bind(&finding.rule_key).bind(&finding.severity).bind(&finding.message).execute(&mut *connection).await.map_err(db_error("Could not persist planner audit finding"))?;
     }
     if inject_fault {
         return Err("Injected planner draft audit settlement fault".to_string());
@@ -740,15 +716,36 @@ mod tests {
         }
     }
 
-    fn findings() -> Vec<PlannerDraftAuditFindingInput> {
-        REQUIRED_RULES
+    /// Completes the auditor agent with one audit_post call that answers its
+    /// stored audit request (findings authored in the input, preserved in
+    /// the output), as the renderer tool loop persists it.
+    async fn record_auditor(pool: &SqlitePool, agent_run_id: i64) {
+        let context: String =
+            sqlx::query_scalar("SELECT input_context_json FROM agent_runs WHERE id=?1")
+                .bind(agent_run_id)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        let context: serde_json::Value = serde_json::from_str(&context).unwrap();
+        let findings: Vec<serde_json::Value> = crate::draft_ai_audits::RULE_KEYS
             .iter()
-            .map(|rule| PlannerDraftAuditFindingInput {
-                rule_key: (*rule).to_string(),
-                severity: "pass".to_string(),
-                message: format!("{rule} passed"),
-            })
-            .collect()
+            .map(|rule| json!({"ruleKey": rule, "severity": "pass", "message": format!("{rule} passed")}))
+            .collect();
+        let mut input = context["auditRequest"].clone();
+        input["findings"] = json!(findings);
+        let output = json!({"summary": "Audit complete", "findings": findings});
+        sqlx::query("INSERT INTO agent_tool_calls (agent_run_id,provider_tool_call_id,tool_name,status,requires_approval,input_json,output_json) VALUES (?1,'c1','audit_post','completed',0,?2,?3)")
+            .bind(agent_run_id)
+            .bind(input.to_string())
+            .bind(output.to_string())
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE agent_runs SET status='completed' WHERE id=?1")
+            .bind(agent_run_id)
+            .execute(pool)
+            .await
+            .unwrap();
     }
 
     #[test]
@@ -815,17 +812,11 @@ mod tests {
             let one = claim_with_pool(&pool, claim_input(&pool, run_id).await)
                 .await
                 .unwrap();
-            sqlx::query("UPDATE agent_runs SET status='completed' WHERE id=?1")
-                .bind(one.agent_run_id)
-                .execute(&pool)
-                .await
-                .unwrap();
+            record_auditor(&pool, one.agent_run_id).await;
             complete_with_pool_and_fault(
                 &pool,
                 CompletePlannerDraftAuditInput {
                     agent_run_id: one.agent_run_id,
-                    summary: "First complete".into(),
-                    findings: findings(),
                 },
                 false,
             )
@@ -842,17 +833,11 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(two.draft_variant_id, 32);
-            sqlx::query("UPDATE agent_runs SET status='completed' WHERE id=?1")
-                .bind(two.agent_run_id)
-                .execute(&pool)
-                .await
-                .unwrap();
+            record_auditor(&pool, two.agent_run_id).await;
             complete_with_pool_and_fault(
                 &pool,
                 CompletePlannerDraftAuditInput {
                     agent_run_id: two.agent_run_id,
-                    summary: "All complete".into(),
-                    findings: findings(),
                 },
                 false,
             )
@@ -882,17 +867,11 @@ mod tests {
             let claim = claim_with_pool(&pool, claim_input(&pool, run_id).await)
                 .await
                 .unwrap();
-            sqlx::query("UPDATE agent_runs SET status='completed' WHERE id=?1")
-                .bind(claim.agent_run_id)
-                .execute(&pool)
-                .await
-                .unwrap();
+            record_auditor(&pool, claim.agent_run_id).await;
             let error = complete_with_pool_and_fault(
                 &pool,
                 CompletePlannerDraftAuditInput {
                     agent_run_id: claim.agent_run_id,
-                    summary: "Complete".into(),
-                    findings: findings(),
                 },
                 true,
             )

@@ -1,0 +1,187 @@
+{
+  "messages": {
+    "required_text": {
+      "pass": "This variant has draft text to review.",
+      "block": "Add a hook or body before this variant can be reviewed."
+    },
+    "total_length": {
+      "pass": "This variant stays under the 3,000 character limit.",
+      "block": "Keep the combined hook, body, CTA, and hashtags under 3,000 characters."
+    },
+    "external_link": {
+      "pass": "No external link was found in the hook, body, or CTA.",
+      "block": "Remove external links from the hook, body, and CTA before review."
+    },
+    "hashtag_limit": {
+      "pass": "This variant uses five or fewer hashtags.",
+      "block": "Use five or fewer hashtags."
+    },
+    "weak_hook": {
+      "warning": "Strengthen the hook with a specific, curiosity-driving opening."
+    },
+    "specificity": {
+      "warning": "Add a number or first-person signal so the draft feels specific."
+    }
+  },
+  "cases": [
+    {
+      "name": "clean",
+      "rewrite": {
+        "hook": "We learned 3 lessons from a concrete experiment",
+        "body": "Our team compared the results.",
+        "cta": "Compare your results.",
+        "hashtags": "#Quality"
+      },
+      "expected": [
+        ["external_link", "pass"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"],
+        ["total_length", "pass"]
+      ]
+    },
+    {
+      "name": "external-link",
+      "rewrite": {
+        "hook": "We learned 3 lessons from a concrete experiment",
+        "body": "Read HTTPS://example.com for our results.",
+        "cta": "",
+        "hashtags": ""
+      },
+      "expected": [
+        ["external_link", "block"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"],
+        ["total_length", "pass"]
+      ]
+    },
+    {
+      "name": "six-hashtags",
+      "rewrite": {
+        "hook": "We learned 3 lessons from a concrete experiment",
+        "body": "Our team compared the results.",
+        "cta": "",
+        "hashtags": "#é #中 #𝒜 #² #_ #-"
+      },
+      "expected": [
+        ["hashtag_limit", "block"],
+        ["external_link", "pass"],
+        ["required_text", "pass"],
+        ["total_length", "pass"]
+      ]
+    },
+    {
+      "name": "combined-over-limit",
+      "rewrite": {
+        "hook": "We learned 3 lessons from a concrete experiment",
+        "body": "x",
+        "cta": "",
+        "hashtags": ""
+      },
+      "bodyRepeat": 2960,
+      "expected": [
+        ["total_length", "block"],
+        ["external_link", "pass"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"]
+      ]
+    },
+    {
+      "name": "utf16-over-limit",
+      "rewrite": {
+        "hook": "We learned 3 lessons from a concrete experiment",
+        "body": "😀",
+        "cta": "",
+        "hashtags": ""
+      },
+      "bodyRepeat": 1480,
+      "expected": [
+        ["total_length", "block"],
+        ["external_link", "pass"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"]
+      ]
+    },
+    {
+      "name": "exact-limit-trim",
+      "rewrite": {
+        "hook": "\uFEFFI\u00a0",
+        "body": "x",
+        "cta": "",
+        "hashtags": ""
+      },
+      "bodyRepeat": 2999,
+      "expected": [
+        ["weak_hook", "warning"],
+        ["external_link", "pass"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"],
+        ["total_length", "pass"]
+      ]
+    },
+    {
+      "name": "warnings",
+      "rewrite": {
+        "hook": "EXCITED TO share a surprisingly long opening today",
+        "body": "Signals without any concrete evidence.",
+        "cta": "",
+        "hashtags": "#\u0345 #\u05b0 #\u2160"
+      },
+      "expected": [
+        ["specificity", "warning"],
+        ["weak_hook", "warning"],
+        ["external_link", "pass"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"],
+        ["total_length", "pass"]
+      ]
+    },
+    {
+      "name": "ascii-digit-and-word-semantics",
+      "rewrite": {
+        "hook": "A surprisingly long opening without concrete detail",
+        "body": "٥ teaméweé",
+        "cta": "WWW.example.com",
+        "hashtags": ""
+      },
+      "expected": [
+        ["external_link", "block"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"],
+        ["total_length", "pass"]
+      ]
+    },
+    {
+      "name": "empty",
+      "checkerOnly": true,
+      "rewrite": {
+        "hook": "\uFEFF\u00a0",
+        "body": "\t\n",
+        "cta": "",
+        "hashtags": ""
+      },
+      "expected": [
+        ["required_text", "block"],
+        ["specificity", "warning"],
+        ["weak_hook", "warning"],
+        ["external_link", "pass"],
+        ["hashtag_limit", "pass"],
+        ["total_length", "pass"]
+      ]
+    },
+    {
+      "name": "link-in-hashtags-only",
+      "rewrite": {
+        "hook": "We learned 3 lessons from a concrete experiment",
+        "body": "Our team compared the results.",
+        "cta": "",
+        "hashtags": "https://example.com #one#two #three #four #five"
+      },
+      "expected": [
+        ["external_link", "pass"],
+        ["hashtag_limit", "pass"],
+        ["required_text", "pass"],
+        ["total_length", "pass"]
+      ]
+    }
+  ]
+}

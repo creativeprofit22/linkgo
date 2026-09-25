@@ -5,6 +5,38 @@ test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
 });
 
+async function sqlExecuteCallCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (
+        (
+          window as unknown as {
+            __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+          }
+        ).__LINKGO_SQL_EXECUTE_CALLS__ ?? []
+      ).length,
+  );
+}
+
+/** Renderer transaction statements issued since `from` (native owns them now). */
+async function rendererTransactionCallsSince(
+  page: Page,
+  from: number,
+): Promise<string[]> {
+  return page.evaluate((start) => {
+    const calls =
+      (
+        window as unknown as {
+          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
+        }
+      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
+    return calls
+      .slice(start)
+      .map((call) => call.query.trim().toLocaleUpperCase())
+      .filter((query) => /^(BEGIN|COMMIT|ROLLBACK)/u.test(query));
+  }, from);
+}
+
 test("creates a campaign then adds and shows a candidate", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
@@ -110,6 +142,7 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
       window as unknown as { __LINKGO_FAIL_DEDUPE_KEY_TYPE__?: string }
     ).__LINKGO_FAIL_DEDUPE_KEY_TYPE__ = "content_hash";
   });
+  const callsBeforeCreate = await sqlExecuteCallCount(page);
   await addCandidate(page, { expectSuccess: false });
 
   await expect(page.getByText("Candidate was not added")).toBeVisible();
@@ -137,27 +170,17 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
           dedupeKeys: counts.dedupeKeys,
         };
   });
-  const transactionCalls = await page.evaluate(() => {
-    const calls =
-      (
-        window as unknown as {
-          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
-        }
-      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
-    const normalized = calls.map((call) =>
-      call.query.trim().toLocaleUpperCase(),
-    );
-    return normalized.slice(normalized.lastIndexOf("BEGIN TRANSACTION"));
-  });
+  const transactionCalls = await rendererTransactionCallsSince(
+    page,
+    callsBeforeCreate,
+  );
 
   expect(stateCounts).toEqual({
     targetPosts: 0,
     candidatePosts: 0,
     dedupeKeys: 0,
   });
-  expect(transactionCalls).toContain("BEGIN TRANSACTION");
-  expect(transactionCalls).toContain("ROLLBACK");
-  expect(transactionCalls).not.toContain("COMMIT");
+  expect(transactionCalls).toEqual([]);
 });
 
 test("archived campaigns disable discovery and scoring actions", async ({
@@ -578,6 +601,7 @@ test("failed discovery promotion rolls back generated keyword", async ({
       window as unknown as { __LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__?: boolean }
     ).__LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__ = true;
   });
+  const callsBeforePromote = await sqlExecuteCallCount(page);
   await page.getByRole("button", { name: "Promote keyword" }).first().click();
 
   await expect(page.getByText("Suggestion was not promoted")).toBeVisible();
@@ -599,18 +623,6 @@ test("failed discovery promotion rolls back generated keyword", async ({
         }>;
       }
     ).__LINKGO_SQL_CANDIDATE_DISCOVERY_ITEMS__;
-    const calls =
-      (
-        window as unknown as {
-          __LINKGO_SQL_EXECUTE_CALLS__?: Array<{ query: string }>;
-        }
-      ).__LINKGO_SQL_EXECUTE_CALLS__ ?? [];
-    const transactionCalls = calls.map((call) =>
-      call.query.trim().toLocaleUpperCase(),
-    );
-    const promotionTransactionCalls = transactionCalls.slice(
-      transactionCalls.lastIndexOf("BEGIN TRANSACTION"),
-    );
     return {
       generatedKeywords:
         getKeywords?.().filter((keyword) => keyword.source === "generated")
@@ -618,17 +630,14 @@ test("failed discovery promotion rolls back generated keyword", async ({
       founderLedStatus: getDiscoveryItems?.().find(
         (item) => item.keyword === "founder-led content",
       )?.status,
-      promotionTransactionCalls,
     };
   });
 
   expect(rollbackState.generatedKeywords).toBe(0);
   expect(rollbackState.founderLedStatus).toBe("suggested");
-  expect(rollbackState.promotionTransactionCalls).toContain(
-    "BEGIN TRANSACTION",
+  expect(await rendererTransactionCallsSince(page, callsBeforePromote)).toEqual(
+    [],
   );
-  expect(rollbackState.promotionTransactionCalls).toContain("ROLLBACK");
-  expect(rollbackState.promotionTransactionCalls).not.toContain("COMMIT");
 });
 
 test("dry-run scoring applies rationale and can auto-reject new low scores", async ({
@@ -663,6 +672,28 @@ test("dry-run scoring applies rationale and can auto-reject new low scores", asy
     page.getByText("Rejected", { exact: true }).first(),
   ).toBeVisible();
 });
+
+test("shows the uncapped total and a notice when the list is truncated", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_SQL_SEED_CANDIDATES__: (id: number, count: number) => void;
+      }
+    ).__LINKGO_SQL_SEED_CANDIDATES__(1, 503);
+  });
+  await openQueue(page);
+
+  await expect(page.getByTestId("list-truncation-notice")).toHaveText(
+    /Showing the first 500 of 503 candidates/u,
+  );
+  await expect(page.getByText("503", { exact: true })).toBeVisible();
+  await expect(page.getByText("Scored (shown)", { exact: true })).toBeVisible();
+});
+
 async function openQueue(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Queue/ }).click();
   await expect(

@@ -28,11 +28,15 @@ test("keeps Xiaomi docs URL in frontend and native provider catalogs", () => {
   expect(nativeXiaomiDocsUrl).toBe(frontendXiaomiDocsUrl);
 });
 
-test("connects API-key provider without rendering secrets", async ({ page }) => {
+test("connects API-key provider without rendering secrets", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Integrations/ }).click();
 
-  await expect(page.getByRole("heading", { name: "Integrations" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Integrations" }),
+  ).toBeVisible();
   for (const provider of [
     "Anthropic",
     "Xiaomi (MiMo)",
@@ -76,7 +80,9 @@ test("requires Base URL before saving Custom API key", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Custom API connection" });
   await expect(dialog.getByLabel("Base URL override (required)")).toBeVisible();
   await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
-  await expect(dialog.getByRole("button", { name: "Save API key" })).toBeDisabled();
+  await expect(
+    dialog.getByRole("button", { name: "Save API key" }),
+  ).toBeDisabled();
 
   await dialog
     .getByLabel("Base URL override (required)")
@@ -86,7 +92,9 @@ test("requires Base URL before saving Custom API key", async ({ page }) => {
   ).toBeEnabled();
 });
 
-test("rejects direct Custom API key save without Base URL", async ({ page }) => {
+test("rejects direct Custom API key save without Base URL", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => "__LINKGO_INTEGRATIONS_TEST_API__" in window,
@@ -130,7 +138,9 @@ test("rejects direct Custom API key save without Base URL", async ({ page }) => 
   });
 });
 
-test("starts LinkedIn OAuth manual code flow and disconnects", async ({ page }) => {
+test("starts LinkedIn OAuth manual code flow and disconnects", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Integrations/ }).click();
 

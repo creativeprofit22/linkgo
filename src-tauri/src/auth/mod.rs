@@ -14,6 +14,8 @@ pub const REFRESH_SKEW_SECONDS: i64 = 60;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthMethod {
+    // snake_case would emit "o_auth"; the renderer contract is "oauth".
+    #[serde(rename = "oauth", alias = "o_auth")]
     OAuth,
     ApiKey,
 }

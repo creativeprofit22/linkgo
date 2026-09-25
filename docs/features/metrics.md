@@ -66,8 +66,18 @@ Native commands:
 - `linkgo_metric_refresh_start`
 - `linkgo_metric_refresh_stop`
 - `linkgo_metric_refresh_tick`
+- `linkgo_metrics_record_post_metric` — backs `recordPostMetric`; returns `{ id }`.
+- `linkgo_metrics_create_campaign_memory` — backs `createCampaignMemory`; returns `{ id }`.
+- `linkgo_metrics_set_campaign_memory_status` — backs `setCampaignMemoryStatus`; returns `{ id }`.
 
-Validation uses Zod schemas in `src/features/metrics/schemas.ts`.
+Validation uses Zod schemas in `src/features/metrics/schemas.ts`; the native commands (`src-tauri/src/metrics.rs`) re-validate bounds and reject unknown fields. Each mutation re-reads ownership (approval or post metric belongs to the stated campaign, campaign not archived, approval published with a successful publish attempt) and writes its row plus the `learning_events` entry on one pinned `BEGIN IMMEDIATE` connection, so any failure rolls back both. Real-SQLite tests: `src-tauri/src/metrics_tests.rs`.
+
+Reads are native too (`src-tauri/src/metrics_reads.rs`); the renderer has no direct SQL access to metrics tables. Each read takes an optional positive `campaignId` and rejects unknown fields.
+
+- `linkgo_metrics_eligible_approvals`, `linkgo_metrics_post_metrics_list`, `linkgo_metrics_campaign_memory_list` and `linkgo_metrics_learning_events_list` return up to 500 rows each.
+- `linkgo_metrics_refresh_dashboard` returns the refresh settings, up to 500 jobs, the 20 newest events and the summary counts, all read in one transaction.
+
+Response shapes are checked by strict schemas in `src/features/metrics/record-schemas.ts`. Tests: `src-tauri/src/metrics_reads_tests.rs`.
 
 ## Lifecycle rules
 

@@ -10,6 +10,15 @@ export type ApprovalStatus =
   | "published"
   | "cancelled";
 
+/**
+ * Statuses `setApprovalStatus` accepts. `scheduled` and `published` are set
+ * only by scheduling and publish-attempt recording.
+ */
+export type ReviewApprovalStatus = Exclude<
+  ApprovalStatus,
+  "scheduled" | "published"
+>;
+
 export type ScheduleJobStatus =
   | "scheduled"
   | "cancelled"
@@ -23,6 +32,7 @@ export interface Approval {
   campaign_id: number;
   draft_id: number;
   draft_variant_id: number;
+  reviewed_content_revision: number | null;
   status: ApprovalStatus;
   reviewer_notes: string;
   approved_at: string | null;
@@ -90,6 +100,15 @@ export interface ApprovalDraftSnapshot {
 }
 
 export type ApprovalWithDetails = Approval & {
+  /**
+   * Status as stored. `status` displays an approved/scheduled approval that is
+   * no longer ready as `changes_requested`; the stored value still decides
+   * which native commands accept it (a failed publish attempt is recordable).
+   */
+  storedStatus: ApprovalStatus;
+  currentContentRevision: number;
+  readyForApproval: boolean;
+  contentChanged: boolean;
   linkedAgentRunCount: number;
   scheduleJob: ScheduleJob | null;
   publishAttempts: PublishAttempt[];
@@ -108,7 +127,12 @@ export interface CreateApprovalInput {
 
 export interface SetApprovalStatusInput {
   id: number;
-  status: ApprovalStatus;
+  status: ReviewApprovalStatus;
+  /**
+   * Only used when `status` is "approved", where it is required: the revision
+   * actually displayed to the reviewer. Ignored for every other status.
+   */
+  contentRevision?: number;
   reviewerNotes?: string;
 }
 

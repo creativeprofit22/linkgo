@@ -39,6 +39,21 @@ export const candidateIntakePolicyCampaignIdSchema = z
   .int()
   .positive();
 
+/** Native result of `linkgo_candidate_policy_update`. */
+export const candidateIntakePolicyResultSchema = z
+  .object({
+    campaign_id: candidateIntakePolicyCampaignIdSchema,
+    max_post_age_days: z
+      .number()
+      .int()
+      .min(MIN_MAX_POST_AGE_DAYS)
+      .max(MAX_MAX_POST_AGE_DAYS),
+    banned_topics: z.array(z.string()).max(MAX_BANNED_TOPICS),
+    created_at: z.string().nullable(),
+    updated_at: z.string().nullable(),
+  })
+  .strict();
+
 export const updateCandidateIntakePolicySchema = z
   .object({
     campaignId: candidateIntakePolicyCampaignIdSchema,

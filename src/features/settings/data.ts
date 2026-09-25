@@ -1,6 +1,7 @@
-import { getDb } from "@/lib/db";
 import { IS_TAURI, IS_TEST } from "@/lib/env";
+import { invokeCommand } from "@/lib/tauri";
 import {
+  appSettingsRowSchema,
   launchOnLoginSettingsSchema,
   setLaunchOnLoginSchema,
 } from "@/features/settings/schemas";
@@ -89,55 +90,34 @@ function toSettings(
   });
 }
 
-async function ensureAppSettingsRow(): Promise<AppSettingsRow> {
-  const db = await getDb();
-  await db.execute(`INSERT OR IGNORE INTO app_settings (id) VALUES (1)`);
-  const rows = await db.select<AppSettingsRow[]>(
-    `SELECT * FROM app_settings WHERE id = 1 LIMIT 1`,
-  );
-  const settings = rows[0];
-  if (settings === undefined) throw new Error("App settings were not found");
-  return settings;
-}
-
-async function updateLaunchOnLoginMirror(
-  enabled: boolean,
-  lastError: string,
+/**
+ * Persists the OS autostart state in the singleton settings row natively
+ * (`src-tauri/src/settings.rs`). The OS plugin call happens before this, never
+ * inside the database transaction. `lastError: undefined` keeps the stored
+ * error.
+ */
+async function syncLaunchOnLoginMirror(
+  osEnabled: boolean,
+  lastError: string | undefined,
 ): Promise<AppSettingsRow> {
-  const db = await getDb();
-  await db.execute(
-    `UPDATE app_settings
-      SET launch_on_login_enabled = $1,
-        launch_on_login_last_synced_at = $2,
-        launch_on_login_last_error = $3,
-        updated_at = $2
-      WHERE id = 1`,
-    [enabled ? 1 : 0, new Date().toISOString(), lastError],
-  );
-  return ensureAppSettingsRow();
+  const row = await invokeCommand("linkgo_settings_launch_on_login_sync", {
+    input: { osEnabled, ...(lastError === undefined ? {} : { lastError }) },
+  });
+  return appSettingsRowSchema.parse(row);
 }
 
 async function storeLaunchOnLoginError(error: unknown): Promise<void> {
-  const db = await getDb();
-  await db.execute(
-    `UPDATE app_settings
-      SET launch_on_login_last_error = $1,
-        updated_at = $2
-      WHERE id = 1`,
-    [getSafeErrorMessage(error), new Date().toISOString()],
-  );
+  await invokeCommand<null>("linkgo_settings_launch_on_login_error_record", {
+    input: { message: getSafeErrorMessage(error) },
+  });
 }
 
 export async function getLaunchOnLoginSettings(): Promise<LaunchOnLoginSettings> {
   if (!IS_TAURI && !IS_TEST) return toDisabledSettings();
 
-  const row = await ensureAppSettingsRow();
   const autostart = await getAutostartApi();
   const osEnabled = await autostart.isEnabled();
-  const syncedRow = await updateLaunchOnLoginMirror(
-    osEnabled,
-    row.launch_on_login_last_error,
-  );
+  const syncedRow = await syncLaunchOnLoginMirror(osEnabled, undefined);
   return toSettings(syncedRow, osEnabled);
 }
 
@@ -161,7 +141,7 @@ export async function setLaunchOnLogin(
 
   try {
     const osEnabled = await autostart.isEnabled();
-    const syncedRow = await updateLaunchOnLoginMirror(osEnabled, "");
+    const syncedRow = await syncLaunchOnLoginMirror(osEnabled, "");
     return toSettings(syncedRow, osEnabled);
   } catch (error) {
     await storeLaunchOnLoginError(error);

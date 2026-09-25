@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { assertApprovalCanPublishViaLinkedIn } from "@/features/approvals/data";
+import { PUBLISH_ERROR_MESSAGE_MAX_CHARS } from "@/features/approvals/schemas";
 import type {
   ApprovalWithDetails,
   RecordPublishAttemptInput,
@@ -30,6 +31,16 @@ const CONFIRMATION_TEXT = "Publish now";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "LinkedIn publish failed";
+}
+
+function truncateErrorMessage(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed === "") return "LinkedIn publish failed";
+  if (trimmed.length <= PUBLISH_ERROR_MESSAGE_MAX_CHARS) return trimmed;
+  // Length is counted in UTF-16 units (as Zod does); never split a surrogate.
+  let head = trimmed.slice(0, PUBLISH_ERROR_MESSAGE_MAX_CHARS - 1);
+  if (/[\uD800-\uDBFF]$/.test(head)) head = head.slice(0, -1);
+  return `${head.trimEnd()}…`;
 }
 
 function getPublishScheduleJobId(
@@ -83,7 +94,9 @@ export function PublishLinkedInDialog({
               status: "failed",
               externalPostUrl: "",
               platformPostId: "",
-              errorMessage: message,
+              // Provider/OAuth errors can be long; truncate so the failure is
+              // still recorded instead of rejected by the length limit.
+              errorMessage: truncateErrorMessage(message),
             });
             toast.error("LinkedIn publish failed", { description: message });
           } catch (recordError) {

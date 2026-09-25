@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
-const TRANSACTION_PREFIX = /^\s*(BEGIN|COMMIT|ROLLBACK)\b/i;
+const TRANSACTION_PREFIX = /^\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
 
 function normalizePath(filePath) {
   return filePath.split(path.sep).join("/");
@@ -162,20 +162,11 @@ export function createSignatures(sites) {
     .sort();
 }
 
-export function compareSignatures(discovered, allowlisted, errors = []) {
-  const remaining = new Map();
-  for (const signature of allowlisted) {
-    remaining.set(signature, (remaining.get(signature) ?? 0) + 1);
-  }
-  const unexpected = [];
-  for (const signature of discovered) {
-    const count = remaining.get(signature) ?? 0;
-    if (count === 0) unexpected.push(signature);
-    else remaining.set(signature, count - 1);
-  }
+// Zero tolerance: renderer code may not manage transactions at all.
+export function evaluateSignatures(discovered, errors = []) {
   return {
-    ok: unexpected.length === 0 && errors.length === 0,
-    unexpected,
+    ok: discovered.length === 0 && errors.length === 0,
+    unexpected: [...discovered],
     errors,
   };
 }
@@ -196,36 +187,63 @@ async function sourceFilesUnder(directory) {
   return files;
 }
 
+/**
+ * Renderer SQL access is forbidden outright: no SQL plugin import, no removed
+ * database helper import, and no `plugin:sql|*` command text. Persistence
+ * goes through feature-specific native commands.
+ */
+const FORBIDDEN_SQL_ACCESS = [
+  {
+    pattern: /["'`]@tauri-apps\/plugin-sql["'`]/,
+    label: "@tauri-apps/plugin-sql import",
+  },
+  { pattern: /["'`]@\/lib\/db["'`]/, label: "@/lib/db import" },
+  { pattern: /plugin:sql\|/, label: "plugin:sql command" },
+];
+
+export function scanSqlAccess(relativePath, sourceText) {
+  const findings = [];
+  const lines = sourceText.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    for (const { pattern, label } of FORBIDDEN_SQL_ACCESS) {
+      if (pattern.test(line)) {
+        findings.push(
+          `${normalizePath(relativePath)}:${index + 1} renderer SQL access (${label})`,
+        );
+      }
+    }
+  });
+  return findings;
+}
+
 export async function scanRendererTransactions(rootDirectory) {
   const files = await sourceFilesUnder(path.join(rootDirectory, "src"));
   const sites = [];
   const errors = [];
   for (const filePath of files) {
-    const result = scanSourceText(
-      path.relative(rootDirectory, filePath),
-      await fs.readFile(filePath, "utf8"),
-    );
+    const relativePath = path.relative(rootDirectory, filePath);
+    const sourceText = await fs.readFile(filePath, "utf8");
+    const result = scanSourceText(relativePath, sourceText);
     sites.push(...result.sites);
     errors.push(...result.errors);
+    errors.push(...scanSqlAccess(relativePath, sourceText));
   }
   return { signatures: createSignatures(sites), errors };
 }
 
-export function formatComparison(discovered, allowlisted, comparison) {
-  const lines = [
-    `Renderer transaction sites: ${discovered.length} current, ${allowlisted.length} allowlisted.`,
-  ];
+export function formatComparison(discovered, comparison) {
+  const lines = [`Renderer transaction sites: ${discovered.length} current.`];
   if (comparison.errors.length) {
     lines.push("Dynamic transaction SQL is forbidden:");
     lines.push(...comparison.errors.map((error) => `  - ${error}`));
   }
   if (comparison.unexpected.length) {
-    lines.push("Unexpected renderer-managed transaction entries:");
+    lines.push("Forbidden renderer-managed transaction entries:");
     lines.push(...comparison.unexpected.map((signature) => `  - ${signature}`));
   }
   if (!comparison.ok) {
     lines.push(
-      "Migrate each mutation to a native, connection-affine command; do not expand the allowlist for new transaction sites.",
+      "Renderer transactions are forbidden; move the mutation into a feature-scoped native command.",
     );
   }
   return lines.join("\n");
@@ -235,25 +253,10 @@ async function main() {
   const rootDirectory = path.resolve(
     fileURLToPath(new URL("..", import.meta.url)),
   );
-  const allowlistPath = path.join(
-    rootDirectory,
-    "scripts",
-    "renderer-transaction-allowlist.json",
-  );
-  const allowlisted = JSON.parse(await fs.readFile(allowlistPath, "utf8"));
-  if (
-    !Array.isArray(allowlisted) ||
-    !allowlisted.every((item) => typeof item === "string")
-  ) {
-    throw new TypeError(
-      "Renderer transaction allowlist must be an array of strings.",
-    );
-  }
-
   const { signatures, errors } = await scanRendererTransactions(rootDirectory);
-  const comparison = compareSignatures(signatures, allowlisted, errors);
+  const comparison = evaluateSignatures(signatures, errors);
   console[comparison.ok ? "log" : "error"](
-    formatComparison(signatures, allowlisted, comparison),
+    formatComparison(signatures, comparison),
   );
   if (!comparison.ok) process.exitCode = 1;
 }

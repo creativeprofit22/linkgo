@@ -1,6 +1,12 @@
-import { invoke } from "@tauri-apps/api/core";
-import { getDb, type LinkgoDatabase } from "@/lib/db";
+import { invokeCommand } from "@/lib/tauri";
+import { z } from "zod";
 import {
+  commentEligibleCandidateListSchema,
+  commentThreadsSnapshotSchema,
+} from "@/features/comments/record-schemas";
+import {
+  commentMutationResultSchema,
+  commentPublishPreflightSchema,
   createCommentThreadSchema,
   recordCommentAttemptSchema,
   setCommentThreadStatusSchema,
@@ -10,19 +16,13 @@ import {
 } from "@/features/comments/schemas";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import type { CandidateStatus } from "@/features/candidate-queue/types";
-import { escapeLinkedInLittleText } from "@/features/approvals/linkedin-format";
-import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
-import {
-  getCommentLimitDecision,
-  recordRateLimitEvent,
-} from "@/features/safety/data";
-import type { SafetySettings } from "@/features/safety/types";
 import type {
   CommentAttempt,
   CommentAuditFinding,
   CommentAuditSeverity,
   CommentEligibleCandidate,
   CommentThread,
+  CommentThreadListPage,
   CommentThreadStatus,
   CommentThreadWithDetails,
   CommentVariant,
@@ -98,19 +98,11 @@ interface CommentCandidateRow {
   target_posted_at: string | null;
 }
 
-interface CommentThreadValidationRow {
-  id: number;
-  campaign_id: number;
-  candidate_post_id: number;
-  status: CommentThreadStatus;
-  campaign_status: CampaignStatus;
-  daily_comment_limit: number;
-}
-
-interface CommentPublishValidationRow extends CommentThreadValidationRow {
-  target_url: string;
-  target_platform_resource_urn: string;
-}
+const SEVERITY_RANK: Record<CommentAuditSeverity, number> = {
+  block: 0,
+  warning: 1,
+  pass: 2,
+};
 
 interface CommentPublishPreflightInput {
   commentThreadId: number;
@@ -119,65 +111,21 @@ interface CommentPublishPreflightInput {
   idempotencyKey: string;
 }
 
-interface SelectedVariantRow extends CommentVariantRow {
-  blocked_count: number;
+const optionalCampaignIdSchema = z.number().int().positive().optional();
+
+function campaignInput(campaignId?: number): { campaignId?: number } {
+  const parsed = optionalCampaignIdSchema.parse(campaignId);
+  return parsed === undefined ? {} : { campaignId: parsed };
 }
 
-interface CountRow {
-  count: number;
-}
-
-const SEVERITY_RANK: Record<CommentAuditSeverity, number> = {
-  block: 0,
-  warning: 1,
-  pass: 2,
-};
-
-const TERMINAL_THREAD_STATUSES: CommentThreadStatus[] = [
-  "posted",
-  "rejected",
-  "cancelled",
-];
-
-function createFinding(
-  ruleKey: string,
-  severity: CommentAuditSeverity,
-  message: string,
-): CommentAuditFinding {
-  return { rule_key: ruleKey, severity, message };
-}
-
-function getPlaceholders(ids: number[]): string {
-  return ids.map((_, index) => `$${index + 1}`).join(", ");
-}
-
-function rollbackCommentTransaction(db: LinkgoDatabase): Promise<void> {
-  return db.execute("ROLLBACK").then(
-    () => undefined,
-    () => undefined,
-  );
-}
-
-function countHashtags(body: string): number {
-  return body.match(/#[\p{L}\p{N}_-]+/gu)?.length ?? 0;
-}
-
-function hasExternalLink(body: string): boolean {
-  return /https?:\/\/|www\./iu.test(body);
-}
-
-function hasSpecificitySignal(body: string): boolean {
-  return (
-    /\d/u.test(body) ||
-    /[“"][^”"]+[”"]/u.test(body) ||
-    /\b(i|we|my|our|i've|we've|i’m|we’re|i'd|we'd)\b/iu.test(body)
-  );
-}
-
-function isGenericReply(body: string): boolean {
-  return /\b(great post|thanks for sharing|love this|insightful post|nice post)\b/iu.test(
-    body,
-  );
+/** Runs a native comment mutation and returns the affected row id. */
+async function invokeCommentMutation(
+  command: string,
+  input: unknown,
+): Promise<number> {
+  return commentMutationResultSchema.parse(
+    await invokeCommand(command, { input }),
+  ).id;
 }
 
 function mapThread(row: CommentThreadRow): CommentThread {
@@ -254,293 +202,42 @@ export function getCommentAuditSeverity(
   return "pass";
 }
 
-export function auditCommentVariant(body: string): CommentAuditFinding[] {
-  const trimmed = body.trim();
-  const findings: CommentAuditFinding[] = [];
-
-  if (trimmed.length === 0) {
-    findings.push(
-      createFinding("required_text", "block", "Add a comment before review."),
-    );
-  } else {
-    findings.push(
-      createFinding(
-        "required_text",
-        "pass",
-        "This comment has text to review.",
-      ),
-    );
-  }
-
-  if (trimmed.length > 1250) {
-    findings.push(
-      createFinding(
-        "comment_length",
-        "block",
-        "Keep comments under Linkgo's 1,250 character cap.",
-      ),
-    );
-  } else {
-    findings.push(
-      createFinding(
-        "comment_length",
-        "pass",
-        "This comment stays under Linkgo's 1,250 character cap.",
-      ),
-    );
-  }
-
-  if (hasExternalLink(trimmed)) {
-    findings.push(
-      createFinding(
-        "external_link",
-        "block",
-        "Remove external links before review.",
-      ),
-    );
-  } else {
-    findings.push(
-      createFinding("external_link", "pass", "No external link was found."),
-    );
-  }
-
-  if (countHashtags(trimmed) > 2) {
-    findings.push(
-      createFinding("hashtag_limit", "block", "Use two or fewer hashtags."),
-    );
-  } else {
-    findings.push(
-      createFinding(
-        "hashtag_limit",
-        "pass",
-        "This comment uses two or fewer hashtags.",
-      ),
-    );
-  }
-
-  const mentions = trimmed.match(/@[\p{L}\p{N}_.-]+/gu)?.length ?? 0;
-  if (mentions > 1) {
-    findings.push(
-      createFinding(
-        "mention_limit",
-        "warning",
-        "Use at most one mention unless the reviewer confirms it is intentional.",
-      ),
-    );
-  }
-
-  if (trimmed.length < 40 || isGenericReply(trimmed)) {
-    findings.push(
-      createFinding(
-        "generic_reply",
-        "warning",
-        "Make the reply more specific than a generic reaction.",
-      ),
-    );
-  }
-
-  if (!hasSpecificitySignal(trimmed)) {
-    findings.push(
-      createFinding(
-        "specificity",
-        "warning",
-        "Add a number, quoted phrase, or first-person signal.",
-      ),
-    );
-  }
-
-  return findings.sort(
-    (left, right) =>
-      SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity] ||
-      left.rule_key.localeCompare(right.rule_key),
-  );
-}
-
-async function insertAuditFindings(
-  db: LinkgoDatabase,
-  variantId: number,
-  findings: CommentAuditFinding[],
-): Promise<void> {
-  for (const finding of findings) {
-    await db.execute(
-      `INSERT INTO comment_audits (comment_variant_id, rule_key, severity, message)
-      VALUES ($1, $2, $3, $4)`,
-      [variantId, finding.rule_key, finding.severity, finding.message],
-    );
-  }
-}
-
-async function ensureThreadMutable(
-  db: LinkgoDatabase,
-  threadId: number,
-): Promise<CommentThreadValidationRow> {
-  const rows = await db.select<CommentThreadValidationRow[]>(
-    `SELECT
-      ct.id,
-      ct.campaign_id,
-      ct.candidate_post_id,
-      ct.status,
-      c.status AS campaign_status,
-      c.daily_comment_limit
-    FROM comment_threads ct
-    INNER JOIN campaigns c ON c.id = ct.campaign_id
-    WHERE ct.id = $1
-    LIMIT 1`,
-    [threadId],
-  );
-  const thread = rows[0];
-  if (thread === undefined) throw new Error("Comment thread was not found");
-  if (thread.campaign_status === "archived")
-    throw new Error("Campaign is archived");
-  return thread;
-}
-
-async function getThreadForVariant(
-  db: LinkgoDatabase,
-  variantId: number,
-): Promise<{ thread: CommentThreadValidationRow; variant: CommentVariantRow }> {
-  const variants = await db.select<CommentVariantRow[]>(
-    `SELECT * FROM comment_variants WHERE id = $1 LIMIT 1`,
-    [variantId],
-  );
-  const variant = variants[0];
-  if (variant === undefined) throw new Error("Comment variant was not found");
-  const thread = await ensureThreadMutable(db, variant.comment_thread_id);
-  return { thread, variant };
-}
-
-async function getSelectedVariant(
-  db: LinkgoDatabase,
-  threadId: number,
-): Promise<SelectedVariantRow | null> {
-  const selectedRows = await db.select<SelectedVariantRow[]>(
-    `SELECT
-      cv.*,
-      SUM(CASE WHEN ca.severity = 'block' THEN 1 ELSE 0 END) AS blocked_count
-    FROM comment_variants cv
-    LEFT JOIN comment_audits ca ON ca.comment_variant_id = cv.id
-    WHERE cv.comment_thread_id = $1 AND cv.status = 'selected'
-    GROUP BY cv.id
-    ORDER BY cv.id ASC`,
-    [threadId],
-  );
-  if (selectedRows.length > 1) {
-    throw new Error("Choose exactly one selected comment variant");
-  }
-  return selectedRows[0] ?? null;
-}
-
-async function assertSelectedVariantReady(
-  db: LinkgoDatabase,
-  threadId: number,
-): Promise<SelectedVariantRow> {
-  const selected = await getSelectedVariant(db, threadId);
-  if (selected === null)
-    throw new Error("Choose one comment variant before review");
-  if (selected.blocked_count > 0)
-    throw new Error("Blocked comment variants cannot be reviewed");
-  return selected;
-}
-
-async function assertKillSwitchAllowsComment(
-  db: LinkgoDatabase,
-  thread: CommentThreadValidationRow,
-): Promise<void> {
-  await db.execute(`INSERT OR IGNORE INTO safety_settings (id) VALUES (1)`);
-  const settingsRows = await db.select<SafetySettings[]>(
-    `SELECT * FROM safety_settings WHERE id = 1 LIMIT 1`,
-  );
-  const settings = settingsRows[0];
-  if (settings?.global_kill_switch !== 1) return;
-
-  const decision = await getCommentLimitDecision(db, {
-    campaignId: thread.campaign_id,
-    limitValue: thread.daily_comment_limit,
-  });
-  await recordRateLimitEvent(db, {
-    campaignId: decision.campaignId,
-    action: "comment",
-    windowKey: decision.windowKey,
-    limitValue: decision.limitValue,
-    currentCount: decision.currentCount,
-    decision: "blocked",
-    summary: settings.kill_switch_reason
-      ? `Comment posting blocked by global kill switch: ${settings.kill_switch_reason}`
-      : "Comment posting blocked by global kill switch",
-  });
-  throw new Error(
-    settings.kill_switch_reason
-      ? `Global kill switch is enabled: ${settings.kill_switch_reason}`
-      : "Global kill switch is enabled",
-  );
-}
-
+/**
+ * Lists comment threads (open first, newest first; capped at 500) with their
+ * variants, audits and attempts, read natively from one snapshot.
+ */
 export async function listCommentThreads(
   campaignId?: number,
 ): Promise<CommentThreadWithDetails[]> {
-  const db = await getDb();
-  const values: unknown[] = [];
-  const whereClause =
-    campaignId === undefined ? "" : "WHERE ct.campaign_id = $1";
-  if (campaignId !== undefined) values.push(campaignId);
+  return (await listCommentThreadPage(campaignId)).items;
+}
 
-  const rows = await db.select<CommentThreadRow[]>(
-    `SELECT
-      ct.id,
-      ct.campaign_id,
-      ct.candidate_post_id,
-      ct.status,
-      ct.operator_notes,
-      ct.reviewer_notes,
-      ct.approved_at,
-      ct.rejected_at,
-      ct.posted_at,
-      ct.created_at,
-      ct.updated_at,
-      c.name AS campaign_name,
-      c.status AS campaign_status,
-      cp.status AS candidate_status,
-      cp.source_keyword AS candidate_source_keyword,
-      cp.relevance_score AS candidate_relevance_score,
-      tp.id AS target_post_id,
-      tp.url AS target_url,
-      tp.platform_resource_urn AS target_platform_resource_urn,
-      tp.author_name AS target_author_name,
-      tp.author_profile_url AS target_author_profile_url,
-      tp.content AS target_content,
-      tp.posted_at AS target_posted_at
-    FROM comment_threads ct
-    INNER JOIN campaigns c ON c.id = ct.campaign_id
-    INNER JOIN candidate_posts cp ON cp.id = ct.candidate_post_id
-    INNER JOIN target_posts tp ON tp.id = cp.target_post_id
-    ${whereClause}
-    ORDER BY ct.status IN ('posted', 'rejected', 'cancelled'), datetime(ct.updated_at) DESC, ct.id DESC`,
-    values,
+/**
+ * Same as `listCommentThreads`, plus `totalCount`: the uncapped number of
+ * matching threads, so callers can tell when `items` was truncated.
+ */
+export async function listCommentThreadPage(
+  campaignId?: number,
+): Promise<CommentThreadListPage> {
+  const snapshot = commentThreadsSnapshotSchema.parse(
+    await invokeCommand("linkgo_comment_thread_list", {
+      input: campaignInput(campaignId),
+    }),
   );
+  return {
+    items: mapThreadSnapshot(snapshot),
+    totalCount: Math.max(snapshot.totalCount, snapshot.threads.length),
+  };
+}
 
+function mapThreadSnapshot(
+  snapshot: z.infer<typeof commentThreadsSnapshotSchema>,
+): CommentThreadWithDetails[] {
+  const rows = snapshot.threads;
   if (rows.length === 0) return [];
-  const threadIds = rows.map((row) => row.id);
-  const variantRows = await db.select<CommentVariantRow[]>(
-    `SELECT * FROM comment_variants
-    WHERE comment_thread_id IN (${getPlaceholders(threadIds)})
-    ORDER BY variant_number ASC`,
-    threadIds,
-  );
-  const variantIds = variantRows.map((row) => row.id);
-  const auditRows =
-    variantIds.length === 0
-      ? []
-      : await db.select<CommentAuditRow[]>(
-          `SELECT * FROM comment_audits
-          WHERE comment_variant_id IN (${getPlaceholders(variantIds)})`,
-          variantIds,
-        );
-  const attemptRows = await db.select<CommentAttempt[]>(
-    `SELECT * FROM comment_attempts
-    WHERE comment_thread_id IN (${getPlaceholders(threadIds)})
-    ORDER BY datetime(created_at) DESC, id DESC`,
-    threadIds,
-  );
+  const variantRows = snapshot.variants;
+  const auditRows = snapshot.audits;
+  const attemptRows = snapshot.attempts;
 
   const auditsByVariantId = new Map<number, CommentAuditFinding[]>();
   for (const auditRow of auditRows) {
@@ -606,408 +303,75 @@ export async function listCommentThreads(
   });
 }
 
+/** Shortlisted/drafted candidates with no thread yet; capped at 200. */
 export async function listCommentEligibleCandidates(
   campaignId?: number,
 ): Promise<CommentEligibleCandidate[]> {
-  const db = await getDb();
-  const values: unknown[] = [];
-  const campaignFilter =
-    campaignId === undefined ? "" : "AND cp.campaign_id = $1";
-  if (campaignId !== undefined) values.push(campaignId);
-
-  const rows = await db.select<CommentCandidateRow[]>(
-    `SELECT
-      cp.id AS candidate_id,
-      cp.campaign_id,
-      c.name AS campaign_name,
-      c.status AS campaign_status,
-      cp.status AS candidate_status,
-      cp.source_keyword,
-      cp.relevance_score,
-      tp.id AS target_post_id,
-      tp.url AS target_url,
-      tp.platform_resource_urn AS target_platform_resource_urn,
-      tp.author_name AS target_author_name,
-      tp.author_profile_url AS target_author_profile_url,
-      tp.content AS target_content,
-      tp.posted_at AS target_posted_at
-    FROM candidate_posts cp
-    INNER JOIN campaigns c ON c.id = cp.campaign_id
-    INNER JOIN target_posts tp ON tp.id = cp.target_post_id
-    LEFT JOIN comment_threads ct ON ct.candidate_post_id = cp.id
-    WHERE c.status <> 'archived'
-      AND cp.status IN ('shortlisted', 'drafted')
-      AND ct.id IS NULL
-      ${campaignFilter}
-    ORDER BY datetime(cp.updated_at) DESC, cp.id DESC`,
-    values,
+  const rows = commentEligibleCandidateListSchema.parse(
+    await invokeCommand("linkgo_comment_eligible_candidates", {
+      input: campaignInput(campaignId),
+    }),
   );
   return rows.map(mapEligibleCandidate);
 }
 
+/** Creates a thread and its variants; native computes and stores audits. */
 export async function createCommentThread(
   input: CreateCommentThreadInput,
 ): Promise<number> {
   const parsed = createCommentThreadSchema.parse(input);
-  const db = await getDb();
-
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    const candidates = await db.select<CommentCandidateRow[]>(
-      `SELECT
-        cp.id AS candidate_id,
-        cp.campaign_id,
-        c.name AS campaign_name,
-        c.status AS campaign_status,
-        cp.status AS candidate_status,
-        cp.source_keyword,
-        cp.relevance_score,
-        tp.id AS target_post_id,
-        tp.url AS target_url,
-        tp.author_name AS target_author_name,
-        tp.author_profile_url AS target_author_profile_url,
-        tp.content AS target_content,
-        tp.posted_at AS target_posted_at
-      FROM candidate_posts cp
-      INNER JOIN campaigns c ON c.id = cp.campaign_id
-      INNER JOIN target_posts tp ON tp.id = cp.target_post_id
-      WHERE cp.id = $1
-      LIMIT 1`,
-      [parsed.candidateId],
-    );
-    const candidate = candidates[0];
-    if (candidate === undefined) throw new Error("Candidate was not found");
-    if (candidate.campaign_status === "archived")
-      throw new Error("Campaign is archived");
-    if (!["shortlisted", "drafted"].includes(candidate.candidate_status)) {
-      throw new Error(
-        "Only shortlisted or drafted candidates can become comments",
-      );
-    }
-
-    const existingRows = await db.select<CountRow[]>(
-      `SELECT COUNT(*) AS count FROM comment_threads WHERE candidate_post_id = $1`,
-      [parsed.candidateId],
-    );
-    if ((existingRows[0]?.count ?? 0) > 0) {
-      throw new Error("Candidate already has a comment thread");
-    }
-
-    const threadResult = await db.execute(
-      `INSERT INTO comment_threads (
-        campaign_id,
-        candidate_post_id,
-        operator_notes,
-        updated_at
-      ) VALUES ($1, $2, $3, datetime('now'))`,
-      [candidate.campaign_id, parsed.candidateId, parsed.operatorNotes],
-    );
-    const threadId = threadResult.lastInsertId;
-
-    for (const [index, variant] of parsed.variants.entries()) {
-      const variantResult = await db.execute(
-        `INSERT INTO comment_variants (
-          comment_thread_id,
-          variant_number,
-          body,
-          updated_at
-        ) VALUES ($1, $2, $3, datetime('now'))`,
-        [threadId, index + 1, variant.body],
-      );
-      await insertAuditFindings(
-        db,
-        variantResult.lastInsertId,
-        auditCommentVariant(variant.body),
-      );
-    }
-
-    await db.execute("COMMIT");
-    return threadId;
-  } catch (error) {
-    await rollbackCommentTransaction(db);
-    throw error;
-  }
+  return invokeCommentMutation("linkgo_comment_thread_create", parsed);
 }
 
 export async function updateCommentThread(
   input: UpdateCommentThreadInput,
 ): Promise<void> {
   const parsed = updateCommentThreadSchema.parse(input);
-  const db = await getDb();
-  const updates: string[] = [];
-  const values: unknown[] = [];
-
-  function addUpdate(column: string, value: unknown): void {
-    values.push(value);
-    updates.push(`${column} = $${values.length}`);
-  }
-
-  if (parsed.operatorNotes !== undefined)
-    addUpdate("operator_notes", parsed.operatorNotes);
-  if (parsed.reviewerNotes !== undefined)
-    addUpdate("reviewer_notes", parsed.reviewerNotes);
-  if (updates.length === 0) return;
-
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    await ensureThreadMutable(db, parsed.id);
-    values.push(parsed.id);
-    await db.execute(
-      `UPDATE comment_threads
-      SET ${updates.join(", ")}, updated_at = datetime('now')
-      WHERE id = $${values.length}`,
-      values,
-    );
-    await db.execute("COMMIT");
-  } catch (error) {
-    await rollbackCommentTransaction(db);
-    throw error;
-  }
+  await invokeCommentMutation("linkgo_comment_thread_update", parsed);
 }
 
+/** Edits a variant body; native re-audits it and requests changes if reviewing. */
 export async function updateCommentVariant(
   input: UpdateCommentVariantInput,
 ): Promise<void> {
   const parsed = updateCommentVariantSchema.parse(input);
-  if (parsed.body === undefined) return;
-  const db = await getDb();
-
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    const { thread, variant } = await getThreadForVariant(db, parsed.id);
-    if (TERMINAL_THREAD_STATUSES.includes(thread.status)) {
-      throw new Error(
-        "Posted, rejected, and cancelled comments cannot be edited",
-      );
-    }
-    await db.execute(
-      `UPDATE comment_variants
-      SET body = $1, updated_at = datetime('now')
-      WHERE id = $2`,
-      [parsed.body, parsed.id],
-    );
-    await db.execute(
-      `DELETE FROM comment_audits WHERE comment_variant_id = $1`,
-      [parsed.id],
-    );
-    await insertAuditFindings(db, parsed.id, auditCommentVariant(parsed.body));
-    await db.execute(
-      `UPDATE comment_threads
-      SET status = CASE WHEN status IN ('needs_review', 'approved') THEN 'changes_requested' ELSE status END,
-        updated_at = datetime('now')
-      WHERE id = $1`,
-      [variant.comment_thread_id],
-    );
-    await db.execute("COMMIT");
-  } catch (error) {
-    await rollbackCommentTransaction(db);
-    throw error;
-  }
+  await invokeCommentMutation("linkgo_comment_variant_update", parsed);
 }
 
 export async function setCommentVariantStatus(
   input: SetCommentVariantStatusInput,
 ): Promise<void> {
   const parsed = setCommentVariantStatusSchema.parse(input);
-  const db = await getDb();
-
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    const { thread, variant } = await getThreadForVariant(db, parsed.id);
-    if (TERMINAL_THREAD_STATUSES.includes(thread.status)) {
-      throw new Error(
-        "Posted, rejected, and cancelled comments cannot change variants",
-      );
-    }
-
-    if (parsed.status === "selected") {
-      const audits = await db.select<CommentAuditRow[]>(
-        `SELECT * FROM comment_audits WHERE comment_variant_id = $1`,
-        [parsed.id],
-      );
-      if (audits.some((audit) => audit.severity === "block")) {
-        throw new Error("Blocked comment variants cannot be selected");
-      }
-      await db.execute(
-        `UPDATE comment_variants
-        SET status = 'draft', updated_at = datetime('now')
-        WHERE comment_thread_id = $1 AND id <> $2`,
-        [variant.comment_thread_id, parsed.id],
-      );
-    }
-
-    await db.execute(
-      `UPDATE comment_variants
-      SET status = $1, updated_at = datetime('now')
-      WHERE id = $2`,
-      [parsed.status, parsed.id],
-    );
-    await db.execute(
-      `UPDATE comment_threads
-      SET status = CASE WHEN status IN ('needs_review', 'approved') THEN 'changes_requested' ELSE status END,
-        updated_at = datetime('now')
-      WHERE id = $1`,
-      [variant.comment_thread_id],
-    );
-    await db.execute("COMMIT");
-  } catch (error) {
-    await rollbackCommentTransaction(db);
-    throw error;
-  }
+  await invokeCommentMutation("linkgo_comment_variant_set_status", parsed);
 }
 
 export async function setCommentThreadStatus(
   input: SetCommentThreadStatusInput,
 ): Promise<void> {
   const parsed = setCommentThreadStatusSchema.parse(input);
-  const db = await getDb();
-
-  await db.execute("BEGIN TRANSACTION");
-  try {
-    const thread = await ensureThreadMutable(db, parsed.id);
-    if (parsed.status === "needs_review" || parsed.status === "approved") {
-      await assertSelectedVariantReady(db, parsed.id);
-    }
-    if (parsed.status === "posted") {
-      throw new Error("Use record posted to move comments to posted");
-    }
-    if (parsed.status === "approved" && thread.status !== "needs_review") {
-      throw new Error("Only comments needing review can be approved");
-    }
-    if (
-      parsed.status === "changes_requested" &&
-      thread.status !== "needs_review"
-    ) {
-      throw new Error("Only comments needing review can request changes");
-    }
-    if (TERMINAL_THREAD_STATUSES.includes(thread.status)) {
-      throw new Error("Terminal comment threads cannot change status");
-    }
-
-    await db.execute(
-      `UPDATE comment_threads
-      SET status = $1,
-        reviewer_notes = COALESCE($2, reviewer_notes),
-        approved_at = CASE WHEN $1 = 'approved' THEN datetime('now') ELSE approved_at END,
-        rejected_at = CASE WHEN $1 = 'rejected' THEN datetime('now') ELSE rejected_at END,
-        updated_at = datetime('now')
-      WHERE id = $3`,
-      [parsed.status, parsed.reviewerNotes ?? null, parsed.id],
-    );
-    await db.execute("COMMIT");
-  } catch (error) {
-    await rollbackCommentTransaction(db);
-    throw error;
-  }
+  await invokeCommentMutation("linkgo_comment_thread_set_status", parsed);
 }
 
+/**
+ * Native publish gate. Rejects unless the thread is approved with one ready
+ * selected variant matching `commentary`, the target URN and idempotency key
+ * match, and no attempt already succeeded. Kill-switch and daily-limit
+ * rejections durably record a blocked rate-limit event.
+ */
 export async function assertCommentCanPublishViaLinkedIn(
   input: CommentPublishPreflightInput,
 ): Promise<void> {
-  const db = await getDb();
-  await db.execute("BEGIN IMMEDIATE");
-  let committed = false;
-  try {
-    const rows = await db.select<CommentPublishValidationRow[]>(
-      `SELECT
-        ct.id,
-        ct.campaign_id,
-        ct.candidate_post_id,
-        ct.status,
-        c.status AS campaign_status,
-        c.daily_comment_limit,
-        tp.url AS target_url,
-        tp.platform_resource_urn AS target_platform_resource_urn
-      FROM comment_threads ct
-      INNER JOIN campaigns c ON c.id = ct.campaign_id
-      INNER JOIN candidate_posts cp ON cp.id = ct.candidate_post_id
-      INNER JOIN target_posts tp ON tp.id = cp.target_post_id
-      WHERE ct.id = $1
-      LIMIT 1`,
-      [input.commentThreadId],
-    );
-    const thread = rows[0];
-    if (thread === undefined) throw new Error("Comment thread was not found");
-    if (thread.campaign_status === "archived")
-      throw new Error("Campaign is archived");
-    if (thread.status !== "approved") {
-      throw new Error("Only approved comments can publish via LinkedIn");
-    }
-
-    const selected = await assertSelectedVariantReady(
-      db,
-      input.commentThreadId,
-    );
-    const commentary = escapeLinkedInLittleText(selected.body);
-    if (commentary !== input.commentary) {
-      throw new Error("Commentary does not match the approved comment variant");
-    }
-
-    const expectedTargetUrn = resolveLinkedInTargetUrn(
-      thread.target_platform_resource_urn || thread.target_url,
-    );
-    if (!expectedTargetUrn) {
-      throw new Error(
-        "LinkedIn target URN could not be resolved from the candidate URL",
-      );
-    }
-    if (expectedTargetUrn !== input.targetUrn) {
-      throw new Error("LinkedIn target URN does not match the comment target");
-    }
-
-    const expectedIdempotencyKey = `comment-thread:${input.commentThreadId}:linkedin:manual`;
-    if (input.idempotencyKey !== expectedIdempotencyKey) {
-      throw new Error("Comment idempotency key does not match thread state");
-    }
-
-    const successfulAttempts = await db.select<CountRow[]>(
-      `SELECT COUNT(*) AS count FROM comment_attempts
-      WHERE comment_thread_id = $1 AND status = 'succeeded'`,
-      [input.commentThreadId],
-    );
-    if ((successfulAttempts[0]?.count ?? 0) > 0) {
-      throw new Error(
-        "Comment thread already has a successful posting attempt",
-      );
-    }
-
-    try {
-      await assertKillSwitchAllowsComment(db, thread);
-    } catch (error) {
-      await db.execute("COMMIT");
-      committed = true;
-      throw error;
-    }
-
-    const decision = await getCommentLimitDecision(db, {
-      campaignId: thread.campaign_id,
-      limitValue: thread.daily_comment_limit,
-    });
-    if (!decision.allowed) {
-      await recordRateLimitEvent(db, {
-        campaignId: decision.campaignId,
-        action: "comment",
-        windowKey: decision.windowKey,
-        limitValue: decision.limitValue,
-        currentCount: decision.currentCount,
-        decision: "blocked",
-        summary: decision.summary,
-      });
-      await db.execute("COMMIT");
-      committed = true;
-      throw new Error(decision.summary);
-    }
-
-    await db.execute("COMMIT");
-  } catch (error) {
-    if (!committed) await rollbackCommentTransaction(db);
-    throw error;
-  }
+  const parsed = commentPublishPreflightSchema.parse(input);
+  await invokeCommand<null>("linkgo_comment_assert_can_publish", {
+    input: parsed,
+  });
 }
 
 export async function recordCommentAttempt(
   input: RecordCommentAttemptInput,
 ): Promise<number> {
   const parsed = recordCommentAttemptSchema.parse(input);
-  return invoke<number>("linkgo_comment_record_attempt", { input: parsed });
+  return invokeCommand<number>("linkgo_comment_record_attempt", {
+    input: parsed,
+  });
 }

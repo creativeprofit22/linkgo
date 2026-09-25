@@ -263,6 +263,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     type DraftAudit = {
       id: number;
       draft_variant_id: number;
+      content_revision?: number;
       rule_key: string;
       severity: DraftAuditSeverity;
       message: string;
@@ -310,6 +311,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       model_name: string;
       status: "running" | "passed" | "needs_revision" | "failed";
       final_score: number | null;
+      summary: string;
       applied_rewrite_count: number;
       active_agent_run_id: number | null;
       active_ai_audit_run_id: number | null;
@@ -324,6 +326,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       content_revision: number;
       agent_run_id: number;
       status: "scoring" | "passed" | "rewritten" | "failed";
+    };
+
+    // Mirrors the native `draft_quality_category_scores` table columns.
+    type DraftQualityCategoryScore = {
+      id: number;
+      attempt_id: number;
+      category_key:
+        | "hook_strength"
+        | "authenticity"
+        | "linkedin_fit"
+        | "specificity"
+        | "narrative_structure";
+      score: number;
+      feedback: string;
+      created_at: string;
     };
 
     type DraftGenerationRequest = {
@@ -368,6 +385,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       draft_id: number;
       draft_variant_id: number;
       status: ApprovalStatus;
+      reviewed_content_revision: number | null;
       reviewer_notes: string;
       approved_at: string | null;
       rejected_at: string | null;
@@ -1000,6 +1018,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       draftAiAuditFindings: DraftAiAuditFinding[];
       draftQualityRuns: DraftQualityRun[];
       draftQualityAttempts: DraftQualityAttempt[];
+      draftQualityCategoryScores?: DraftQualityCategoryScore[];
       draftGenerationRequests: DraftGenerationRequest[];
       approvals: Approval[];
       scheduleJobs: ScheduleJob[];
@@ -1051,6 +1070,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftAiAuditFindingId: number;
       nextDraftQualityRunId: number;
       nextDraftQualityAttemptId: number;
+      nextDraftQualityCategoryScoreId?: number;
       nextDraftGenerationRequestId: number;
       nextApprovalId: number;
       nextScheduleJobId: number;
@@ -1108,6 +1128,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const draftAiAuditFindings: DraftAiAuditFinding[] = [];
     const draftQualityRuns: DraftQualityRun[] = [];
     const draftQualityAttempts: DraftQualityAttempt[] = [];
+    const draftQualityCategoryScores: DraftQualityCategoryScore[] = [];
     const draftGenerationRequests: DraftGenerationRequest[] = [];
     const approvals: Approval[] = [];
     const scheduleJobs: ScheduleJob[] = [];
@@ -1193,6 +1214,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     let nextDraftAiAuditFindingId = 1;
     let nextDraftQualityRunId = 1;
     let nextDraftQualityAttemptId = 1;
+    let nextDraftQualityCategoryScoreId = 1;
     let nextDraftGenerationRequestId = 1;
     let nextApprovalId = 1;
     let nextScheduleJobId = 1;
@@ -1255,7 +1277,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           input?: { query?: string; values?: unknown[] };
         };
       };
-      const input = sqlArgs.input ?? sqlArgs.payload?.input ?? sqlArgs.payload ?? sqlArgs;
+      const input =
+        sqlArgs.input ?? sqlArgs.payload?.input ?? sqlArgs.payload ?? sqlArgs;
       return {
         query: input.query ?? "",
         values: input.values ?? [],
@@ -1301,14 +1324,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       assertValidAgentPlaybookKey(key);
     }
 
-    function assertValidCustomInstructions(customInstructions: string): void {
-      if (customInstructions.length > 2000) {
-        throw new Error(
-          "CHECK constraint failed: length(custom_instructions) <= 2000",
-        );
-      }
-    }
-
     function removeRows<T>(rows: T[], predicate: (row: T) => boolean): number {
       let removed = 0;
       for (let index = rows.length - 1; index >= 0; index -= 1) {
@@ -1348,6 +1363,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         draftAiAuditFindings: cloneRows(draftAiAuditFindings),
         draftQualityRuns: cloneRows(draftQualityRuns),
         draftQualityAttempts: cloneRows(draftQualityAttempts),
+        draftQualityCategoryScores: cloneRows(draftQualityCategoryScores),
         draftGenerationRequests: cloneRows(draftGenerationRequests),
         approvals: cloneRows(approvals),
         scheduleJobs: cloneRows(scheduleJobs),
@@ -1399,6 +1415,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         nextDraftAiAuditFindingId,
         nextDraftQualityRunId,
         nextDraftQualityAttemptId,
+        nextDraftQualityCategoryScoreId,
         nextDraftGenerationRequestId,
         nextApprovalId,
         nextScheduleJobId,
@@ -1486,6 +1503,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (snapshot.draftQualityAttempts !== draftQualityAttempts)
         restoreRows(draftQualityAttempts, snapshot.draftQualityAttempts ?? []);
       restoreRows(
+        draftQualityCategoryScores,
+        snapshot.draftQualityCategoryScores ?? [],
+      );
+      restoreRows(
         draftGenerationRequests,
         snapshot.draftGenerationRequests ?? [],
       );
@@ -1556,6 +1577,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftAiAuditFindingId = snapshot.nextDraftAiAuditFindingId ?? 1;
       nextDraftQualityRunId = snapshot.nextDraftQualityRunId ?? 1;
       nextDraftQualityAttemptId = snapshot.nextDraftQualityAttemptId ?? 1;
+      nextDraftQualityCategoryScoreId =
+        snapshot.nextDraftQualityCategoryScoreId ?? 1;
       nextDraftGenerationRequestId = snapshot.nextDraftGenerationRequestId ?? 1;
       nextApprovalId = snapshot.nextApprovalId;
       nextScheduleJobId = snapshot.nextScheduleJobId;
@@ -1722,6 +1745,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           target_platform: target.platform,
           target_url: target.url,
           target_normalized_url: target.normalized_url,
+          target_platform_resource_urn: target.platform_resource_urn,
           target_author_name: target.author_name,
           target_author_profile_url: target.author_profile_url,
           target_posted_at: target.posted_at,
@@ -1827,7 +1851,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           target_updated_at: target.updated_at,
         });
       }
-      return rows.sort((left, right) => Number(right.id) - Number(left.id));
+      // Mirrors native `drafts_reads.rs` ORDER BY: status rank, then
+      // updated_at DESC, then id DESC.
+      const statusRank: Record<string, number> = {
+        generated: 1,
+        failed: 2,
+        pending: 3,
+        saved: 4,
+        dismissed: 5,
+      };
+      const rankOf = (status: unknown): number =>
+        statusRank[String(status)] ?? 6;
+      return rows.sort(
+        (left, right) =>
+          rankOf(left.status) - rankOf(right.status) ||
+          String(right.updated_at).localeCompare(String(left.updated_at)) ||
+          Number(right.id) - Number(left.id),
+      );
     }
 
     function selectDraftVariants(
@@ -1876,6 +1916,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         draft_id: approval.draft_id,
         draft_variant_id: approval.draft_variant_id,
         status: approval.status,
+        reviewed_content_revision: approval.reviewed_content_revision,
+        current_content_revision: variant.content_revision,
+        readiness: isApprovalReady(variant) ? 1 : 0,
         reviewer_notes: approval.reviewer_notes,
         approved_at: approval.approved_at,
         rejected_at: approval.rejected_at,
@@ -1932,14 +1975,84 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
     }
 
+    function latestQualityRun(
+      variant: DraftVariant,
+    ): DraftQualityRun | undefined {
+      return draftQualityRuns
+        .filter(
+          (run) =>
+            run.draft_variant_id === variant.id &&
+            run.current_content_revision === variant.content_revision,
+        )
+        .sort((left, right) => right.id - left.id)[0];
+    }
+
     function isApprovalQualityReady(variant: DraftVariant): boolean {
-      return draftQualityRuns.some(
-        (run) =>
-          run.draft_variant_id === variant.id &&
-          run.current_content_revision === variant.content_revision &&
-          run.status === "passed" &&
-          (run.final_score ?? 0) >= 70,
+      const run = latestQualityRun(variant);
+      return run?.status === "passed" && (run.final_score ?? 0) >= 70;
+    }
+
+    function requireCurrentQualityEvidence(
+      run: DraftQualityRun,
+      variant: DraftVariant,
+    ): void {
+      if (latestQualityRun(variant)?.id !== run.id)
+        throw new Error("Draft quality run has been superseded");
+      if (!isApprovalAiAuditReady(variant))
+        throw new Error(
+          "Current revision requires a completed canonical non-blocking latest AI audit",
+        );
+    }
+
+    function isApprovalReady(variant: DraftVariant): boolean {
+      const draft = drafts.find((row) => row.id === variant.draft_id);
+      const campaign = campaigns.find((row) => row.id === draft?.campaign_id);
+      return (
+        !!draft &&
+        !!campaign &&
+        campaign.status !== "archived" &&
+        ["ready_for_review", "needs_revision"].includes(draft.status) &&
+        variant.status === "selected" &&
+        draftVariants.filter(
+          (row) => row.draft_id === draft.id && row.status === "selected",
+        ).length === 1 &&
+        isApprovalAiAuditReady(variant) &&
+        isApprovalQualityReady(variant) &&
+        [
+          "required_text",
+          "total_length",
+          "external_link",
+          "hashtag_limit",
+        ].every((key) =>
+          draftAudits.some(
+            (audit) =>
+              audit.draft_variant_id === variant.id &&
+              audit.content_revision === variant.content_revision &&
+              audit.rule_key === key,
+          ),
+        ) &&
+        !draftAudits.some(
+          (audit) =>
+            audit.draft_variant_id === variant.id &&
+            audit.content_revision === variant.content_revision &&
+            audit.severity === "block",
+        )
       );
+    }
+
+    function revokeEditedApproval(variant: DraftVariant): void {
+      for (const approval of approvals) {
+        if (
+          approval.draft_variant_id !== variant.id ||
+          !["needs_review", "approved", "scheduled"].includes(approval.status)
+        )
+          continue;
+        approval.status = "changes_requested";
+        for (const job of scheduleJobs) {
+          if (job.approval_id === approval.id && job.status === "scheduled")
+            job.status = "cancelled";
+        }
+      }
     }
 
     function getEligibleApprovalDraftRow(
@@ -1957,8 +2070,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (
         selectedVariants.length !== 1 ||
         !variant ||
-        !isApprovalAiAuditReady(variant) ||
-        !isApprovalQualityReady(variant)
+        !isApprovalReady(variant)
       )
         return null;
       if (
@@ -2783,18 +2895,90 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         .slice(0, query.includes("LIMIT 2") ? 2 : undefined);
     }
 
-    function selectAgentPlaybookOverrides(
-      values: unknown[],
-    ): AgentPlaybookOverride[] {
-      if (values.length > 0) {
-        const key = String(values[0] ?? "");
-        return agentPlaybookOverrides.filter(
-          (override) => override.playbook_key === key,
+    /** Mirrors `src-tauri/src/playbooks.rs` and `settings.rs`. */
+    function mockPlaybookAndSettingsCommand(
+      cmd: string,
+      args: unknown,
+    ): unknown {
+      if (cmd === "linkgo_playbook_override_list") {
+        return Promise.resolve(
+          [...agentPlaybookOverrides]
+            .sort((left, right) =>
+              left.playbook_key < right.playbook_key
+                ? -1
+                : left.playbook_key > right.playbook_key
+                  ? 1
+                  : 0,
+            )
+            .map((row) => ({ ...row })),
         );
       }
-      return [...agentPlaybookOverrides].sort((left, right) =>
-        left.playbook_key.localeCompare(right.playbook_key),
-      );
+      if (cmd === "linkgo_playbook_override_upsert") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{
+            playbookKey: string;
+            enabled: boolean;
+            customInstructions?: string;
+          }>(args);
+          if (
+            !VALID_AGENT_PLAYBOOK_KEYS.includes(
+              input.playbookKey as AgentPlaybookKey,
+            )
+          )
+            throw new Error("Unknown playbook");
+          const customInstructions = (input.customInstructions ?? "").trim();
+          if (customInstructions.length > 2000)
+            throw new Error(
+              "Custom instructions must be at most 2000 characters",
+            );
+          const key = input.playbookKey as AgentPlaybookKey;
+          const enabled = input.enabled ? 1 : 0;
+          const now = getNow();
+          const existing = agentPlaybookOverrides.find(
+            (override) => override.playbook_key === key,
+          );
+          if (existing) {
+            existing.enabled = enabled;
+            existing.custom_instructions = customInstructions;
+            existing.updated_at = now;
+          } else {
+            agentPlaybookOverrides.push({
+              playbook_key: key,
+              enabled,
+              custom_instructions: customInstructions,
+              updated_at: now,
+            });
+          }
+          return null;
+        });
+      }
+      if (cmd === "linkgo_settings_launch_on_login_sync") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{
+            osEnabled: boolean;
+            lastError?: string;
+          }>(args);
+          const now = getNow();
+          appSettings.launch_on_login_enabled = input.osEnabled ? 1 : 0;
+          appSettings.launch_on_login_last_synced_at = now;
+          if (input.lastError !== undefined)
+            appSettings.launch_on_login_last_error = input.lastError.slice(
+              0,
+              500,
+            );
+          appSettings.updated_at = now;
+          return { ...appSettings };
+        });
+      }
+      if (cmd === "linkgo_settings_launch_on_login_error_record") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{ message: string }>(args);
+          appSettings.launch_on_login_last_error = input.message.slice(0, 500);
+          appSettings.updated_at = getNow();
+          return null;
+        });
+      }
+      return undefined;
     }
 
     function selectAgentRunEvents(values: unknown[]): AgentRunEvent[] {
@@ -2897,27 +3081,31 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function selectCommentEligibleCandidates(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
-      return candidatePosts
-        .filter((candidate) => {
-          const campaign = campaigns.find(
-            (row) => row.id === candidate.campaign_id,
-          );
-          const existingThread = commentThreads.find(
-            (thread) => thread.candidate_post_id === candidate.id,
-          );
-          return (
-            campaign?.status !== "archived" &&
-            ["shortlisted", "drafted"].includes(candidate.status) &&
-            existingThread === undefined &&
-            (campaignId === null || candidate.campaign_id === campaignId)
-          );
-        })
-        .map(selectCommentCandidateRow)
-        .filter((row) => row !== null)
-        .sort(
-          (left, right) =>
-            Number(right.candidate_id) - Number(left.candidate_id),
-        );
+      return (
+        candidatePosts
+          .filter((candidate) => {
+            const campaign = campaigns.find(
+              (row) => row.id === candidate.campaign_id,
+            );
+            const existingThread = commentThreads.find(
+              (thread) => thread.candidate_post_id === candidate.id,
+            );
+            return (
+              campaign?.status !== "archived" &&
+              ["shortlisted", "drafted"].includes(candidate.status) &&
+              existingThread === undefined &&
+              (campaignId === null || candidate.campaign_id === campaignId)
+            );
+          })
+          // Mirrors native `comment_reads.rs` ORDER BY: updated_at DESC, id DESC.
+          .sort(
+            (left, right) =>
+              right.updated_at.localeCompare(left.updated_at) ||
+              right.id - left.id,
+          )
+          .map(selectCommentCandidateRow)
+          .filter((row) => row !== null)
+      );
     }
 
     function selectCommentThreadValidation(values: unknown[]): unknown[] {
@@ -3510,12 +3698,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           },
         ];
       }
-      if (query.includes("FROM scheduler_settings")) {
-        return [{ ...schedulerSettings }];
-      }
-      if (query.includes("FROM app_settings")) {
-        return [{ ...appSettings }];
-      }
       if (query.includes("FROM safety_settings")) {
         return [{ ...safetySettings }];
       }
@@ -3739,21 +3921,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             return right.id - left.id;
           });
       }
-      if (query.includes("FROM scheduler_events se")) {
-        return selectSchedulerEvents(values);
-      }
-      if (
-        query.includes("FROM publish_attempts pa") &&
-        query.includes("pa.schedule_job_id IS NOT NULL")
-      ) {
-        return selectSchedulerPublishAttempts(values);
-      }
-      if (
-        query.includes("FROM schedule_jobs sj") &&
-        query.includes("dv.hook AS variant_hook")
-      ) {
-        return selectSchedulerDueJobs(values);
-      }
       if (query.includes("FROM safety_audit_events")) {
         return selectSafetyAuditEvents(values);
       }
@@ -3797,19 +3964,32 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (
         query.includes("COUNT(*) AS count") &&
         query.includes("FROM draft_variants dv") &&
-        query.includes("draft_quality_runs")
+        query.includes("approval_ready_variants")
       ) {
         const variantId = Number(values.at(-1) ?? 0);
         const variant = draftVariants.find((row) => row.id === variantId);
-        const count =
-          variant &&
-          isApprovalAiAuditReady(variant) &&
-          isApprovalQualityReady(variant)
-            ? 1
-            : 0;
+        const count = variant && isApprovalReady(variant) ? 1 : 0;
         return [
           {
             count,
+          },
+        ];
+      }
+      if (
+        query.includes("COUNT(*) AS count FROM approval_ready_variants ready")
+      ) {
+        const approval = approvals.find((row) => row.id === Number(values[0]));
+        const variant = draftVariants.find(
+          (row) => row.id === approval?.draft_variant_id,
+        );
+        return [
+          {
+            count:
+              variant &&
+              variant.content_revision === Number(values[1]) &&
+              isApprovalReady(variant)
+                ? 1
+                : 0,
           },
         ];
       }
@@ -3835,49 +4015,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const draftId = Number(values[0] ?? 0);
         return [
           { count: approvals.filter((row) => row.draft_id === draftId).length },
-        ];
-      }
-      if (
-        query.includes("COUNT(*) AS count") &&
-        query.includes("FROM schedule_jobs sj") &&
-        query.includes("sj.status = 'scheduled'") &&
-        !query.includes("sj.status IN")
-      ) {
-        const campaignId = typeof values[0] === "number" ? values[0] : null;
-        const dueOnly = query.includes(
-          "datetime(sj.scheduled_for) <= datetime('now')",
-        );
-        return [
-          {
-            count: scheduleJobs.filter((job) => {
-              const approval = scheduleApproval(job);
-              const campaign = scheduleCampaign(job);
-              if (!approval || !campaign) return false;
-              return (
-                job.status === "scheduled" &&
-                (campaignId === null || approval.campaign_id === campaignId) &&
-                (!dueOnly || isDueSchedulerJob(job))
-              );
-            }).length,
-          },
-        ];
-      }
-      if (
-        query.includes("COUNT(*) AS count") &&
-        query.includes("FROM schedule_jobs sj") &&
-        query.includes("sj.status = 'failed'")
-      ) {
-        const campaignId = typeof values[0] === "number" ? values[0] : null;
-        return [
-          {
-            count: scheduleJobs.filter((job) => {
-              const approval = scheduleApproval(job);
-              return (
-                job.status === "failed" &&
-                (campaignId === null || approval?.campaign_id === campaignId)
-              );
-            }).length,
-          },
         ];
       }
       if (
@@ -4036,9 +4173,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
       if (query.includes("FROM agent_run_events")) {
         return selectAgentRunEvents(values);
-      }
-      if (query.includes("FROM agent_playbook_overrides")) {
-        return selectAgentPlaybookOverrides(values);
       }
       if (
         query.includes("ws.status AS score_step_status") &&
@@ -4513,6 +4647,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             return right.id - left.id;
           });
       }
+      if (query.includes("FROM draft_quality_runs dqr")) {
+        const variantIds = new Set(values.map(Number));
+        return draftQualityRuns
+          .filter((run) => {
+            const variant = draftVariants.find(
+              (row) => row.id === run.draft_variant_id,
+            );
+            return (
+              variantIds.has(run.draft_variant_id) &&
+              run.current_content_revision === variant?.content_revision
+            );
+          })
+          .sort((left, right) => right.id - left.id);
+      }
+      if (query.includes("FROM draft_quality_attempts")) {
+        const runIds = new Set(values.map(Number));
+        return draftQualityAttempts
+          .filter((attempt) => runIds.has(attempt.run_id))
+          .sort((left, right) => left.attempt_number - right.attempt_number);
+      }
       if (query.includes("FROM draft_generation_requests dgr")) {
         return selectDraftGenerationRequestJoin(query, values);
       }
@@ -4870,6 +5024,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return Number.isInteger(campaignId) && campaignId > 0 ? campaignId : null;
     }
 
+    /** Holds a native list result behind the same per-campaign test gate. */
+    function withCampaignGate<T>(
+      campaignId: number | null | undefined,
+      result: T,
+    ): Promise<T> {
+      const gate =
+        campaignId === null || campaignId === undefined
+          ? undefined
+          : campaignSelectGates.get(campaignId);
+      if (gate === undefined) return Promise.resolve(result);
+      gate.pending += 1;
+      return gate.promise.then(() => {
+        gate.pending -= 1;
+        return result;
+      });
+    }
+
     function selectSqlWithCampaignDelay(args?: unknown): Promise<unknown[]> {
       const result = selectSql(args);
       const { query, values } = readSqlArgs(args);
@@ -5203,27 +5374,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           transactionSnapshot = null;
         }
         return { lastInsertId: 0, rowsAffected: 0 };
-      }
-
-      if (query.includes("INSERT OR IGNORE INTO scheduler_settings")) {
-        return { lastInsertId: 1, rowsAffected: 0 };
-      }
-
-      if (query.includes("INSERT OR IGNORE INTO app_settings")) {
-        return { lastInsertId: 1, rowsAffected: 0 };
-      }
-
-      if (query.includes("UPDATE app_settings")) {
-        if (query.includes("launch_on_login_enabled")) {
-          appSettings.launch_on_login_enabled = Number(values[0] ?? 0);
-          appSettings.launch_on_login_last_synced_at = String(values[1] ?? "");
-          appSettings.launch_on_login_last_error = String(values[2] ?? "");
-          appSettings.updated_at = String(values[1] ?? now);
-        } else if (query.includes("launch_on_login_last_error")) {
-          appSettings.launch_on_login_last_error = String(values[0] ?? "");
-          appSettings.updated_at = String(values[1] ?? now);
-        }
-        return { lastInsertId: 1, rowsAffected: 1 };
       }
 
       if (query.includes("UPDATE scheduler_settings")) {
@@ -5901,6 +6051,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const audit: DraftAudit = {
           id: nextDraftAuditId,
           draft_variant_id: Number(values[0] ?? 0),
+          content_revision: draftVariants.find(
+            (row) => row.id === Number(values[0]),
+          )?.content_revision,
           rule_key: String(values[1] ?? ""),
           severity: values[2] as DraftAuditSeverity,
           message: String(values[3] ?? ""),
@@ -5927,6 +6080,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           campaign_id: Number(values[0] ?? 0),
           draft_id: draftId,
           draft_variant_id: variantId,
+          reviewed_content_revision:
+            draftVariants.find((row) => row.id === variantId)
+              ?.content_revision ?? null,
           status: "needs_review",
           reviewer_notes: String(values[3] ?? ""),
           approved_at: null,
@@ -6171,29 +6327,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         learningEvents.push(event);
         nextLearningEventId += 1;
         return { lastInsertId: event.id, rowsAffected: 1 };
-      }
-
-      if (query.includes("INSERT INTO agent_playbook_overrides")) {
-        const key = String(values[0] ?? "");
-        const customInstructions = String(values[2] ?? "");
-        assertValidAgentPlaybookKey(key);
-        assertValidCustomInstructions(customInstructions);
-        const existing = agentPlaybookOverrides.find(
-          (override) => override.playbook_key === key,
-        );
-        if (existing) {
-          existing.enabled = Number(values[1] ?? 1);
-          existing.custom_instructions = customInstructions;
-          existing.updated_at = now;
-        } else {
-          agentPlaybookOverrides.push({
-            playbook_key: key,
-            enabled: Number(values[1] ?? 1),
-            custom_instructions: customInstructions,
-            updated_at: now,
-          });
-        }
-        return { lastInsertId: 0, rowsAffected: 1 };
       }
 
       if (query.includes("INSERT INTO agent_runs")) {
@@ -6602,7 +6735,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               const tool = agentToolCalls.find(
                 (row) => row.id === checkpoint.pending_tool_call_id,
               );
-              if (tool?.status === "waiting_approval") tool.status = "completed";
+              if (tool?.status === "waiting_approval")
+                tool.status = "completed";
               const step = workflowSteps.find(
                 (row) => row.id === run.workflow_step_id,
               );
@@ -6921,6 +7055,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             : Number(values[0] ?? 0);
         const approval = approvals.find((row) => row.id === id);
         if (approval) {
+          const revisionMatch = query.match(
+            /reviewed_content_revision = \$(\d+)/u,
+          );
+          if (revisionMatch)
+            approval.reviewed_content_revision = Number(
+              values[Number(revisionMatch[1]) - 1],
+            );
           approval.status = (literalStatus ?? values[0]) as ApprovalStatus;
           if (query.includes("reviewer_notes")) {
             approval.reviewer_notes = String(values[1] ?? "");
@@ -7290,6 +7431,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (variant.status !== "selected") continue;
           variant.hook += " revised";
           variant.content_revision += 1;
+          revokeEditedApproval(variant);
           variant.updated_at = now;
           rowsAffected += 1;
         }
@@ -7392,7 +7534,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                 variant.status = value as DraftVariantStatus;
               }
             });
-            if (contentChanged) variant.content_revision += 1;
+            if (contentChanged) {
+              variant.content_revision += 1;
+              revokeEditedApproval(variant);
+            }
           }
           variant.updated_at = now;
           return { lastInsertId: id, rowsAffected: 1 };
@@ -7593,85 +7738,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           campaigns,
           (campaign) => campaign.id === id,
         );
-        const removedDraftIds = drafts
-          .filter((draft) => draft.campaign_id === id)
-          .map((draft) => draft.id);
-        const removedApprovalIds = approvals
-          .filter((approval) => approval.campaign_id === id)
-          .map((approval) => approval.id);
-        removeRows(keywords, (keyword) => keyword.campaign_id === id);
-        removeRows(
-          candidateIntakePolicies,
-          (policy) => policy.campaign_id === id,
-        );
-        removeRows(
-          candidatePolicyBannedTopics,
-          (topic) => topic.campaign_id === id,
-        );
-        removeRows(candidatePosts, (candidate) => candidate.campaign_id === id);
-        removeRows(dedupeKeys, (key) => key.campaign_id === id);
-        const removedSourceBatchIds = sourceImportBatches
-          .filter((batch) => batch.campaign_id === id)
-          .map((batch) => batch.id);
-        removeRows(sourceImportBatches, (batch) => batch.campaign_id === id);
-        removeRows(sourceImportItems, (item) =>
-          removedSourceBatchIds.includes(item.source_import_batch_id),
-        );
-        removeRows(drafts, (draft) => draft.campaign_id === id);
-        removeRows(draftVariants, (variant) =>
-          removedDraftIds.includes(variant.draft_id),
-        );
-        removeRows(approvals, (approval) => approval.campaign_id === id);
-        removeRows(agentApprovalCheckpoints, (checkpoint) =>
-          removedApprovalIds.includes(checkpoint.approval_id),
-        );
-        removeRows(scheduleJobs, (job) =>
-          removedApprovalIds.includes(job.approval_id),
-        );
-        removeRows(publishAttempts, (attempt) =>
-          removedApprovalIds.includes(attempt.approval_id),
-        );
-        const removedCommentThreadIds = commentThreads
-          .filter((thread) => thread.campaign_id === id)
-          .map((thread) => thread.id);
-        const removedCommentVariantIds = commentVariants
-          .filter((variant) =>
-            removedCommentThreadIds.includes(variant.comment_thread_id),
-          )
-          .map((variant) => variant.id);
-        removeRows(commentThreads, (thread) => thread.campaign_id === id);
-        removeRows(commentVariants, (variant) =>
-          removedCommentThreadIds.includes(variant.comment_thread_id),
-        );
-        removeRows(commentAudits, (audit) =>
-          removedCommentVariantIds.includes(audit.comment_variant_id),
-        );
-        removeRows(commentAttempts, (attempt) =>
-          removedCommentThreadIds.includes(attempt.comment_thread_id),
-        );
-        removeRows(postMetrics, (metric) => metric.campaign_id === id);
-        removeRows(campaignMemory, (memory) => memory.campaign_id === id);
-        removeRows(learningEvents, (event) => event.campaign_id === id);
-        const removedAgentRunIds = agentRuns
-          .filter((run) => run.campaign_id === id)
-          .map((run) => run.id);
-        removeRows(agentRuns, (run) => run.campaign_id === id);
-        removeRows(agentToolCalls, (toolCall) =>
-          removedAgentRunIds.includes(toolCall.agent_run_id),
-        );
-        removeRows(agentRunEvents, (event) =>
-          removedAgentRunIds.includes(event.agent_run_id),
-        );
-        removeRows(agentApprovalCheckpoints, (checkpoint) =>
-          removedAgentRunIds.includes(checkpoint.agent_run_id),
-        );
-        removeRows(
-          draftAudits,
-          (audit) =>
-            !draftVariants.some(
-              (variant) => variant.id === audit.draft_variant_id,
-            ),
-        );
+        cascadeDeletedCampaign(id);
         return { lastInsertId: 0, rowsAffected };
       }
 
@@ -8716,6 +8783,126 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       nextDraftVariantId += 1;
       return { ...variant };
     };
+    w.__LINKGO_SQL_SEED_QUALITY_RECOVERY__ = async (
+      status: DraftQualityRun["status"],
+      lastAttempt: number,
+      stale: boolean,
+    ) => {
+      const seeded = (
+        w.__LINKGO_SQL_SEED_DRAFT_AI_AUDIT_VARIANT__ as () => DraftVariant
+      )();
+      const variant = draftVariants.find((row) => row.id === seeded.id)!;
+      const now = getNow();
+      const auditId = nextDraftAiAuditRunId++;
+      draftAiAuditRuns.push({
+        id: auditId,
+        draft_variant_id: variant.id,
+        content_revision: 1,
+        agent_run_id: null,
+        provider_key: "dry_run",
+        model_name: "dry-run-local",
+        status: "completed",
+        summary: "Checked",
+        error_message: "",
+        started_at: now,
+        completed_at: now,
+        created_at: now,
+        updated_at: now,
+        workflow_step_execution_id: null,
+      });
+      for (const rule_key of [
+        "hook",
+        "specificity",
+        "generic_language",
+        "authenticity",
+        "clarity",
+        "safety",
+      ]) {
+        draftAiAuditFindings.push({
+          id: nextDraftAiAuditFindingId++,
+          audit_run_id: auditId,
+          rule_key,
+          severity: "pass",
+          message: "Checked",
+          created_at: now,
+        });
+      }
+      const claim = (await claimDraftQualityCommand({
+        input: {
+          draftVariantId: variant.id,
+          providerKey: "dry_run",
+          modelName: "dry-run-local",
+        },
+      })) as { qualityRunId: number; attemptId: number };
+      const run = draftQualityRuns.find(
+        (row) => row.id === claim.qualityRunId,
+      )!;
+      run.status = status;
+      const attempt = draftQualityAttempts.find(
+        (row) => row.id === claim.attemptId,
+      )!;
+      attempt.status = "failed";
+      attempt.attempt_number = lastAttempt;
+      if (stale) variant.content_revision += 1;
+      return { qualityRunId: run.id, draftVariantId: variant.id };
+    };
+    w.__LINKGO_SQL_QUALITY_RECOVERY_SNAPSHOT__ = () =>
+      createTransactionSnapshot();
+    // Seeds approval_ready_variants evidence for a variant at its current
+    // revision without creating agent runs: deterministic audits, a completed
+    // canonical non-blocking AI audit, and a passed quality run.
+    w.__LINKGO_SQL_SEED_APPROVAL_READINESS__ = (draftVariantId: number) => {
+      const variant = draftVariants.find((row) => row.id === draftVariantId);
+      if (variant === undefined) throw new Error("Draft variant was not found");
+      const now = getNow();
+      regenerateQualityRewriteAudits(variant);
+      const auditId = nextDraftAiAuditRunId++;
+      draftAiAuditRuns.push({
+        id: auditId,
+        draft_variant_id: variant.id,
+        content_revision: variant.content_revision,
+        agent_run_id: null,
+        provider_key: "dry_run",
+        model_name: "dry-run-local",
+        status: "completed",
+        summary: "Checked",
+        error_message: "",
+        started_at: now,
+        completed_at: now,
+        created_at: now,
+        updated_at: now,
+        workflow_step_execution_id: null,
+      });
+      for (const rule_key of approvalAiAuditRuleKeys) {
+        draftAiAuditFindings.push({
+          id: nextDraftAiAuditFindingId++,
+          audit_run_id: auditId,
+          rule_key,
+          severity: "pass",
+          message: "Checked",
+          created_at: now,
+        });
+      }
+      draftQualityRuns.push({
+        id: nextDraftQualityRunId++,
+        draft_variant_id: variant.id,
+        current_content_revision: variant.content_revision,
+        provider_key: "dry_run",
+        model_name: "dry-run-local",
+        status: "passed",
+        final_score: 80,
+        summary: "Passed",
+        applied_rewrite_count: 0,
+        active_agent_run_id: null,
+        active_ai_audit_run_id: null,
+        error_message: "",
+        updated_at: now,
+      });
+      if (!isApprovalReady(variant))
+        throw new Error("Seeded variant is not approval ready");
+      persistReloadSnapshot();
+    };
+
     w.__LINKGO_SQL_SEED_DRAFT_AI_AUDIT_RECOVERY__ = () => {
       const staleAt = "2000-01-01T00:00:00.000Z";
       const seedVariant =
@@ -9463,6 +9650,41 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (!campaign) return;
       campaign.status = status;
       campaign.updated_at = getNow();
+      persistReloadSnapshot();
+    };
+    // Bulk-seeds scored `new` candidates so tests can exceed the 500-row
+    // native list cap without driving the UI once per row.
+    w.__LINKGO_SQL_SEED_CANDIDATES__ = (campaignId: number, count: number) => {
+      const now = getNow();
+      for (let index = 0; index < count; index += 1) {
+        const targetId = nextTargetPostId++;
+        targetPosts.push({
+          id: targetId,
+          platform: "linkedin",
+          url: `https://www.linkedin.com/posts/seed-${targetId}`,
+          normalized_url: `https://www.linkedin.com/posts/seed-${targetId}`,
+          platform_resource_urn: "",
+          author_name: `Seed author ${targetId}`,
+          author_profile_url: "",
+          posted_at: null,
+          content: `Seeded candidate ${targetId}`,
+          content_hash: `seed-${targetId}`,
+          created_at: now,
+          updated_at: now,
+        });
+        candidatePosts.push({
+          id: nextCandidatePostId++,
+          campaign_id: campaignId,
+          target_post_id: targetId,
+          source_keyword: "",
+          status: "new",
+          relevance_score: 50,
+          score_reason: "",
+          notes: "",
+          created_at: now,
+          updated_at: now,
+        });
+      }
       persistReloadSnapshot();
     };
     w.__LINKGO_SQL_CREATE_CONTACT_ATTEMPT__ = (
@@ -10795,32 +11017,22 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function completeNativePlannerDraftAudit(args?: unknown): Promise<unknown> {
       return nativeAuditMutation(() => {
-        const input = nativeScoringInput<{
-          agentRunId: number;
-          summary: string;
-          findings: Array<{
-            ruleKey: string;
-            severity: DraftAuditSeverity;
-            message: string;
-          }>;
-        }>(args);
-        const rules = [
-          "hook",
-          "specificity",
-          "generic_language",
-          "authenticity",
-          "clarity",
-          "safety",
-        ];
-        if (
-          input.findings.length !== 6 ||
-          new Set(input.findings.map((row) => row.ruleKey)).size !== 6 ||
-          input.findings.some((row) => !rules.includes(row.ruleKey))
-        )
-          throw new Error(
-            "Audit findings must contain exactly all six required categories",
-          );
-        const link = nativeAuditLink(input.agentRunId);
+        const { agentRunId } = nativeScoringInput<{ agentRunId: number }>(args);
+        const link = nativeAuditLink(agentRunId);
+        // Like native: read the auditor's own persisted audit_post output.
+        const snapshot = mockAu_loadDraftAiAuditSnapshot(
+          link.audit.draft_variant_id,
+        );
+        const input = mockAu_consumeCompletedDraftAiAuditOutput(
+          {
+            campaignId: snapshot.campaign_id,
+            draftVariantId: link.audit.draft_variant_id,
+            contentRevision: link.audit.content_revision,
+            auditRunId: link.audit.id,
+            text: mockAu_parseCanonicalDraftAuditText(snapshot),
+          },
+          agentRunId,
+        );
         const variant = draftVariants.find(
           (row) => row.id === link.audit.draft_variant_id,
         );
@@ -11211,7 +11423,75 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           };
         }
       )?.input;
-      const approval = approvals.find((row) => row.id === input?.approvalId);
+      // Mirrors validate_record_publish_attempt in approvals.rs.
+      const allowedKeys = [
+        "approvalId",
+        "scheduleJobId",
+        "status",
+        "externalPostUrl",
+        "platformPostId",
+        "errorMessage",
+      ];
+      const unknownKey = Object.keys(input ?? {}).find(
+        (key) => !allowedKeys.includes(key),
+      );
+      if (unknownKey !== undefined)
+        throw new Error(`unknown field \`${unknownKey}\``);
+      const isPositiveId = (value: unknown) =>
+        typeof value === "number" && Number.isInteger(value) && value > 0;
+      if (!isPositiveId(input?.approvalId))
+        throw new Error("Approval id must be a positive integer");
+      if (
+        input?.scheduleJobId !== undefined &&
+        !isPositiveId(input.scheduleJobId)
+      )
+        throw new Error("Schedule job id must be a positive integer");
+      if (input?.status !== "succeeded" && input?.status !== "failed")
+        throw new Error("Publish attempt status must be succeeded or failed");
+      const boundedText = (
+        value: string | undefined,
+        max: number,
+        label: string,
+      ) => {
+        const trimmed = (value ?? "").trim();
+        if (Array.from(trimmed).length > max)
+          throw new Error(`${label} must be ${max} characters or fewer`);
+        return trimmed;
+      };
+      const externalPostUrl = boundedText(
+        input.externalPostUrl,
+        1000,
+        "LinkedIn post URL",
+      );
+      if (
+        externalPostUrl !== "" &&
+        !externalPostUrl.startsWith("https://www.linkedin.com/") &&
+        !externalPostUrl.startsWith("https://linkedin.com/")
+      )
+        throw new Error(
+          "LinkedIn post URL must start with https://www.linkedin.com/",
+        );
+      const platformPostId = boundedText(
+        input.platformPostId,
+        200,
+        "Platform post ID",
+      );
+      const errorMessage = boundedText(
+        input.errorMessage,
+        1000,
+        "Failure reason",
+      );
+      if (input.status === "failed" && errorMessage === "")
+        throw new Error("Failure reason is required for failed attempts");
+      if (
+        input.status === "succeeded" &&
+        externalPostUrl === "" &&
+        platformPostId === ""
+      )
+        throw new Error(
+          "LinkedIn URL or platform post ID is required for success",
+        );
+      const approval = approvals.find((row) => row.id === input.approvalId);
       if (approval === undefined) throw new Error("Approval was not found");
       const campaign = campaigns.find((row) => row.id === approval.campaign_id);
       if (campaign?.status === "archived")
@@ -11237,6 +11517,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (input?.scheduleJobId !== undefined && scheduleJob === undefined) {
         throw new Error("Schedule job was not found");
       }
+      // Mirrors approvals.rs: successes need current readiness; failures are
+      // always recorded and revoke an approval that is no longer ready.
+      const ready =
+        approval.status === "published" ||
+        isApprovalReadyAtRevision(approval, approval.reviewed_content_revision);
+      if (input?.status === "succeeded" && !ready) {
+        throw new Error(STALE_APPROVAL_ERROR);
+      }
 
       const now = new Date().toISOString();
       const attempt: PublishAttempt = {
@@ -11244,10 +11532,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         approval_id: approval.id,
         schedule_job_id: scheduleJob?.id ?? null,
         platform: "linkedin",
-        status: input?.status ?? "failed",
-        external_post_url: input?.externalPostUrl ?? "",
-        platform_post_id: input?.platformPostId ?? "",
-        error_message: input?.errorMessage ?? "",
+        status: input.status,
+        external_post_url: externalPostUrl,
+        platform_post_id: platformPostId,
+        error_message: errorMessage,
         created_at: now,
       };
       publishAttempts.push(attempt);
@@ -11255,7 +11543,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         approval.status = "published";
         if (scheduleJob !== undefined) scheduleJob.status = "completed";
       } else if (approval.status !== "published") {
-        approval.status = "approved";
+        approval.status = ready ? "approved" : "changes_requested";
         if (scheduleJob !== undefined) scheduleJob.status = "failed";
       }
       safetyAuditEvents.push({
@@ -11312,6 +11600,697 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return Promise.resolve(attempt.id);
     };
 
+    // Mirrors src-tauri/src/approval_review.rs: one atomic settlement per
+    // command, same rules, messages and rejection side effects.
+    const APPROVAL_REVIEW_TRANSITIONS: Partial<
+      Record<ApprovalStatus, ApprovalStatus[]>
+    > = {
+      needs_review: ["approved", "changes_requested", "rejected", "cancelled"],
+      changes_requested: ["needs_review", "approved", "rejected", "cancelled"],
+      approved: ["needs_review", "changes_requested", "cancelled"],
+      cancelled: ["needs_review"],
+    };
+    const STALE_APPROVAL_ERROR =
+      "Approval is stale or not ready. Reload and run current AI audit and quality checks.";
+
+    function isApprovalReadyAtRevision(
+      approval: Approval,
+      revision: number | null | undefined,
+    ): boolean {
+      const variant = draftVariants.find(
+        (row) => row.id === approval.draft_variant_id,
+      );
+      return (
+        variant !== undefined &&
+        typeof revision === "number" &&
+        variant.content_revision === revision &&
+        isApprovalReady(variant)
+      );
+    }
+
+    function pushApprovalSafetyAudit(
+      event: Omit<SafetyAuditEvent, "id" | "created_at">,
+    ): void {
+      safetyAuditEvents.push({
+        ...event,
+        id: nextSafetyAuditEventId++,
+        created_at: getNow(),
+      });
+    }
+
+    function projectRejectedWorkflow(run: AgentRun, errorMessage: string) {
+      const step = workflowSteps.find((row) => row.id === run.workflow_step_id);
+      const workflowRun = workflowRuns.find(
+        (row) => row.id === run.workflow_run_id,
+      );
+      if (!step || !workflowRun || step.workflow_run_id !== workflowRun.id)
+        return;
+      if (workflowRun.status === "cancelled") return;
+      const plannerAudit =
+        step.step_key === "audit" &&
+        autopilotPlans.some((plan) => plan.workflow_run_id === workflowRun.id);
+      if (plannerAudit) return;
+      if (
+        !["running", "waiting_approval", "failed", "blocked"].includes(
+          step.status,
+        )
+      )
+        throw new Error("Unsupported workflow step transition");
+      const now = getNow();
+      workflowStepExecutions
+        .filter(
+          (row) =>
+            row.agent_run_id === run.id && row.workflow_step_id === step.id,
+        )
+        .forEach((execution) => {
+          execution.status = "cancelled";
+          execution.error_summary = errorMessage;
+          execution.completed_at = execution.completed_at ?? now;
+          execution.updated_at = now;
+        });
+      const previousStatus = step.status;
+      step.status = "blocked";
+      step.output_summary = "";
+      step.error_message = errorMessage;
+      step.completed_at = null;
+      step.updated_at = now;
+      if (previousStatus !== "blocked")
+        addNativeWorkflowEvent(
+          workflowRun.id,
+          step.id,
+          "step_blocked",
+          `${step.title} blocked`,
+        );
+      const current = workflowSteps
+        .filter((row) => row.workflow_run_id === workflowRun.id)
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .find((row) => !["completed", "skipped"].includes(row.status));
+      const nextStatus = !current
+        ? "completed"
+        : current.status === "waiting_approval" ||
+            current.status === "blocked" ||
+            current.status === "failed"
+          ? current.status
+          : "running";
+      workflowRun.status = nextStatus;
+      workflowRun.current_step_key = current?.step_key ?? "measure";
+      if (nextStatus === "running")
+        workflowRun.started_at = workflowRun.started_at ?? now;
+      workflowRun.completed_at =
+        nextStatus === "completed" ? (workflowRun.completed_at ?? now) : null;
+      workflowRun.updated_at = now;
+      if (step.step_key === "score")
+        syncNativeScoringBacklog(workflowRun.id, "blocked");
+    }
+
+    function rejectLinkedAgentRuns(approvalId: number, detail: string) {
+      const errorMessage = `Approval rejected: ${detail}`;
+      const now = getNow();
+      for (const checkpoint of agentApprovalCheckpoints.filter(
+        (row) => row.approval_id === approvalId,
+      )) {
+        const tool = agentToolCalls.find(
+          (row) =>
+            row.id === checkpoint.pending_tool_call_id &&
+            ["waiting_approval", "running"].includes(row.status),
+        );
+        if (tool) {
+          tool.status = "rejected";
+          tool.error_message = errorMessage;
+          tool.completed_at = now;
+        }
+        const run = agentRuns.find((row) => row.id === checkpoint.agent_run_id);
+        if (!run) continue;
+        run.status = "cancelled";
+        run.error_message = errorMessage;
+        run.completed_at = now;
+        run.updated_at = now;
+        projectRejectedWorkflow(run, errorMessage);
+        agentRunEvents.push({
+          id: nextAgentRunEventId++,
+          agent_run_id: run.id,
+          event_type: "run_cancelled",
+          summary: `Agent run cancelled after approval rejection: ${detail}`,
+          created_at: now,
+        });
+      }
+      removeRows(
+        agentApprovalCheckpoints,
+        (row) => row.approval_id === approvalId,
+      );
+    }
+
+    function upsertApprovalRejectionError(approval: Approval, detail: string) {
+      const title = "Approval rejected";
+      const now = getNow();
+      let item = errorQueueItems.find(
+        (row) =>
+          row.source_type === "approval" &&
+          row.source_id === approval.id &&
+          ["open", "in_progress", "awaiting_review"].includes(row.status),
+      );
+      const eventType = item ? "error_item_updated" : "error_item_created";
+      if (item) {
+        Object.assign(item, {
+          campaign_id: approval.campaign_id,
+          title,
+          detail,
+          severity: "warning",
+          updated_at: now,
+        });
+      } else {
+        item = {
+          id: nextErrorQueueItemId++,
+          campaign_id: approval.campaign_id,
+          source_type: "approval",
+          source_id: approval.id,
+          title,
+          detail,
+          severity: "warning",
+          status: "open",
+          resolution_notes: "",
+          created_at: now,
+          updated_at: now,
+        };
+        errorQueueItems.push(item);
+      }
+      pushApprovalSafetyAudit({
+        campaign_id: approval.campaign_id,
+        subject_type: "error_queue_item",
+        subject_id: item.id,
+        event_type: eventType,
+        severity: "warning",
+        summary: `Error item ${eventType === "error_item_created" ? "created" : "updated"}: ${title}`,
+        metadata_json: JSON.stringify({
+          sourceType: "approval",
+          sourceId: approval.id,
+        }),
+      });
+    }
+
+    function createApprovalCommand(args?: unknown): Promise<unknown> {
+      return nativeAuditMutation(() => {
+        const input = (
+          args as { input?: { draftId?: number; reviewerNotes?: string } }
+        )?.input;
+        const draftId = Number(input?.draftId ?? 0);
+        const draft = drafts.find((row) => row.id === draftId);
+        if (!draft) throw new Error("Draft was not found");
+        const campaign = campaigns.find((row) => row.id === draft.campaign_id);
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        if (draft.status !== "ready_for_review")
+          throw new Error("Draft is not ready for review");
+        const selected = draftVariants.filter(
+          (row) => row.draft_id === draftId && row.status === "selected",
+        );
+        const variant = selected[0];
+        if (selected.length !== 1 || !variant)
+          throw new Error("Select a draft variant before review");
+        if (!isApprovalReady(variant))
+          throw new Error(
+            "Selected variant requires both a completed current-revision AI audit with six canonical non-blocking findings and a passed quality score of at least 70",
+          );
+        if (
+          draftAudits.some(
+            (audit) =>
+              audit.draft_variant_id === variant.id &&
+              audit.severity === "block",
+          )
+        )
+          throw new Error("Blocked variants cannot be sent for approval");
+        if (approvals.some((row) => row.draft_id === draftId))
+          throw new Error("Draft already has an approval record");
+        const now = getNow();
+        const approval: Approval = {
+          id: nextApprovalId++,
+          campaign_id: draft.campaign_id,
+          draft_id: draftId,
+          draft_variant_id: variant.id,
+          reviewed_content_revision: variant.content_revision,
+          status: "needs_review",
+          reviewer_notes: (input?.reviewerNotes ?? "").trim(),
+          approved_at: null,
+          rejected_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        approvals.push(approval);
+        return approval.id;
+      });
+    }
+
+    function setApprovalStatusCommand(args?: unknown): Promise<unknown> {
+      return nativeAuditMutation(() => {
+        const input = (
+          args as {
+            input?: {
+              id?: number;
+              status?: ApprovalStatus;
+              contentRevision?: number;
+              reviewerNotes?: string;
+            };
+          }
+        )?.input;
+        const approval = approvals.find((row) => row.id === input?.id);
+        if (!approval) throw new Error("Approval was not found");
+        const campaign = campaigns.find(
+          (row) => row.id === approval.campaign_id,
+        );
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        const next = input?.status as ApprovalStatus;
+        if (
+          !(APPROVAL_REVIEW_TRANSITIONS[approval.status] ?? []).includes(next)
+        )
+          throw new Error("Unsupported approval transition");
+        if (
+          next === "approved" &&
+          !isApprovalReadyAtRevision(approval, input?.contentRevision)
+        )
+          throw new Error(STALE_APPROVAL_ERROR);
+        const now = getNow();
+        const notes = input?.reviewerNotes?.trim();
+        approval.status = next;
+        if (notes !== undefined) approval.reviewer_notes = notes;
+        if (next === "approved") {
+          approval.reviewed_content_revision = input?.contentRevision ?? null;
+          approval.approved_at = now;
+          approval.rejected_at = null;
+        }
+        if (next === "rejected") approval.rejected_at = now;
+        approval.updated_at = now;
+        const draft = drafts.find((row) => row.id === approval.draft_id);
+        if (draft && next === "changes_requested") {
+          draft.status = "needs_revision";
+          draft.updated_at = now;
+        }
+        if (draft && next === "needs_review") {
+          draft.status = "ready_for_review";
+          draft.updated_at = now;
+        }
+        if (next === "rejected") {
+          const detail = notes || "Approval rejected by operator review";
+          rejectLinkedAgentRuns(approval.id, detail);
+          pushApprovalSafetyAudit({
+            campaign_id: approval.campaign_id,
+            subject_type: "approval",
+            subject_id: approval.id,
+            event_type: "approval_rejected",
+            severity: "warning",
+            summary: "Approval rejected",
+            metadata_json: JSON.stringify({ reviewerNotes: detail }),
+          });
+          upsertApprovalRejectionError(approval, detail);
+        }
+        return null;
+      });
+    }
+
+    /** Mirrors `approval_reads.rs` list/eligible/preflight commands. */
+    const SNAPSHOT_KEYS = [
+      "campaign_id",
+      "draft_id",
+      "draft_variant_id",
+      "draft_candidate_post_id",
+      "draft_angle",
+      "draft_notes",
+      "draft_status",
+      "campaign_name",
+      "campaign_status",
+      "candidate_source_keyword",
+      "target_url",
+      "target_author_name",
+      "target_author_profile_url",
+      "target_content",
+      "variant_number",
+      "variant_hook",
+      "variant_body",
+      "variant_cta",
+      "variant_hashtags",
+      "variant_status",
+      "created_at",
+      "updated_at",
+    ];
+    /** Calendar approval snapshot columns (`content_calendar.rs`). */
+    const APPROVAL_SNAPSHOT_KEYS = [
+      "approval_id",
+      "campaign_id",
+      "approval_status",
+      "approval_reviewer_notes",
+      "approval_approved_at",
+      "campaign_name",
+      "campaign_status",
+      "draft_id",
+      "draft_angle",
+      "draft_notes",
+      "candidate_post_id",
+      "candidate_source_keyword",
+      "target_url",
+      "target_author_name",
+      "target_author_profile_url",
+      "target_content",
+      "variant_id",
+      "variant_number",
+      "variant_hook",
+      "variant_body",
+      "variant_cta",
+      "variant_hashtags",
+      "schedule_job_id",
+      "schedule_scheduled_for",
+      "schedule_timezone",
+      "schedule_status",
+      "schedule_attempt_count",
+      "schedule_last_error",
+      "schedule_updated_at",
+    ];
+    const APPROVAL_KEYS = [
+      ...SNAPSHOT_KEYS,
+      "id",
+      "status",
+      "reviewed_content_revision",
+      "current_content_revision",
+      "readiness",
+      "reviewer_notes",
+      "approved_at",
+      "rejected_at",
+    ];
+    const pickKeys = (
+      row: Record<string, unknown>,
+      keys: string[],
+    ): Record<string, unknown> =>
+      Object.fromEntries(keys.map((key) => [key, row[key]]));
+    const auditsForVariants = (variantIds: number[]): unknown[] => {
+      const ids = new Set(variantIds);
+      return draftAudits
+        .filter((audit) => ids.has(audit.draft_variant_id))
+        .sort((left, right) => left.id - right.id)
+        .map((audit) => ({
+          id: audit.id,
+          draft_variant_id: audit.draft_variant_id,
+          rule_key: audit.rule_key,
+          severity: audit.severity,
+          message: audit.message,
+          created_at: audit.created_at,
+        }));
+    };
+    const approvalListCommand = (args: unknown): Promise<unknown> => {
+      const input = nativeInput<{ campaignId?: number }>(args);
+      const rows = (
+        selectApprovalJoin(
+          input.campaignId === undefined ? [] : [input.campaignId],
+        ) as Array<Record<string, unknown>>
+      )
+        .slice(0, 500)
+        .map((row) => pickKeys(row, APPROVAL_KEYS));
+      const approvalIds = new Set(rows.map((row) => Number(row.id)));
+      const byNewest = <T extends { id: number }>(
+        list: T[],
+        at: (row: T) => string,
+      ): T[] =>
+        [...list].sort(
+          (left, right) =>
+            at(right).localeCompare(at(left)) || right.id - left.id,
+        );
+      const checkpointCounts = new Map<number, number>();
+      for (const checkpoint of agentApprovalCheckpoints) {
+        if (!approvalIds.has(checkpoint.approval_id)) continue;
+        checkpointCounts.set(
+          checkpoint.approval_id,
+          (checkpointCounts.get(checkpoint.approval_id) ?? 0) + 1,
+        );
+      }
+      return Promise.resolve({
+        rows,
+        scheduleJobs: byNewest(
+          scheduleJobs.filter((job) => approvalIds.has(job.approval_id)),
+          (job) => job.updated_at,
+        ).map((job) => ({ ...job })),
+        publishAttempts: byNewest(
+          publishAttempts.filter((attempt) =>
+            approvalIds.has(attempt.approval_id),
+          ),
+          (attempt) => attempt.created_at,
+        ).map((attempt) => ({ ...attempt })),
+        linkedAgentRunCounts: [...checkpointCounts.entries()]
+          .sort(([left], [right]) => left - right)
+          .map(([approval_id, count]) => ({ approval_id, count })),
+        audits: auditsForVariants(
+          rows.map((row) => Number(row.draft_variant_id)),
+        ),
+      });
+    };
+    const approvalEligibleDraftsCommand = (args: unknown): Promise<unknown> => {
+      const input = nativeInput<{ campaignId?: number }>(args);
+      const rows = (
+        selectApprovalEligibleDrafts(
+          input.campaignId === undefined ? [] : [input.campaignId],
+        ) as Array<Record<string, unknown>>
+      )
+        .slice(0, 200)
+        .map((row) => pickKeys(row, SNAPSHOT_KEYS));
+      return Promise.resolve({
+        rows,
+        audits: auditsForVariants(
+          rows.map((row) => Number(row.draft_variant_id)),
+        ),
+      });
+    };
+    /** Mirrors `content_calendar.rs` commands (validation already in Zod). */
+    const calendarCommand = (
+      cmd: string,
+      args: unknown,
+    ): Promise<unknown> | undefined => {
+      const slotRowKeys = [
+        ...APPROVAL_SNAPSHOT_KEYS,
+        "id",
+        "purpose",
+        "slot_for",
+        "timezone",
+        "format",
+        "angle",
+        "visual_direction",
+        "cta",
+        "notes",
+        "status",
+        "created_at",
+        "updated_at",
+        "publish_attempt_id",
+        "publish_status",
+        "publish_external_post_url",
+        "publish_platform_post_id",
+        "publish_error_message",
+        "publish_created_at",
+      ];
+      const slotForMutation = (id: number): ContentCalendarSlot => {
+        const slot = contentCalendarSlots.find((row) => row.id === id);
+        if (!slot) throw new Error("Calendar slot was not found");
+        const campaign = campaigns.find((row) => row.id === slot.campaign_id);
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        return slot;
+      };
+      type SlotFields = {
+        purpose: ContentCalendarPurpose;
+        slotFor: string;
+        timezone?: string;
+        format: ContentCalendarFormat;
+        angle: string;
+        visualDirection: string;
+        cta: string;
+        notes?: string;
+      };
+      const applyFields = (
+        slot: ContentCalendarSlot,
+        input: SlotFields,
+      ): void => {
+        slot.purpose = input.purpose;
+        slot.slot_for = input.slotFor.trim();
+        slot.timezone = input.timezone?.trim() || "local";
+        slot.format = input.format;
+        slot.angle = input.angle.trim();
+        slot.visual_direction = input.visualDirection.trim();
+        slot.cta = input.cta.trim();
+        slot.notes = (input.notes ?? "").trim();
+      };
+      if (cmd === "linkgo_content_calendar_list") {
+        const input = nativeInput<{ campaignId?: number }>(args);
+        const rows = (
+          selectContentCalendarSlots(
+            input.campaignId === undefined ? [] : [input.campaignId],
+          ) as Array<Record<string, unknown>>
+        )
+          .slice(0, 500)
+          .map((row) => pickKeys(row, slotRowKeys));
+        return Promise.resolve({
+          rows,
+          audits: auditsForVariants(rows.map((row) => Number(row.variant_id))),
+        });
+      }
+      if (cmd === "linkgo_content_calendar_eligible_approvals") {
+        const input = nativeInput<{ campaignId?: number }>(args);
+        const rows = (
+          selectContentCalendarEligibleApprovals(
+            input.campaignId === undefined ? [] : [input.campaignId],
+          ) as Array<Record<string, unknown>>
+        )
+          .slice(0, 200)
+          .map((row) => pickKeys(row, APPROVAL_SNAPSHOT_KEYS));
+        return Promise.resolve({
+          rows,
+          audits: auditsForVariants(rows.map((row) => Number(row.variant_id))),
+        });
+      }
+      if (cmd === "linkgo_content_calendar_create_slot") {
+        return runNativeMutation(() => {
+          const input = nativeInput<SlotFields & { approvalId: number }>(args);
+          const approval = approvals.find((row) => row.id === input.approvalId);
+          if (!approval) throw new Error("Approval was not found");
+          const campaign = campaigns.find(
+            (row) => row.id === approval.campaign_id,
+          );
+          if (campaign?.status === "archived")
+            throw new Error("Campaign is archived");
+          if (!["approved", "scheduled", "published"].includes(approval.status))
+            throw new Error(
+              "Approval must be approved before calendar planning",
+            );
+          if (
+            contentCalendarSlots.some(
+              (slot) => slot.approval_id === approval.id,
+            )
+          )
+            throw new Error("Approval already has a calendar slot");
+          const now = getNow();
+          const slot: ContentCalendarSlot = {
+            id: nextContentCalendarSlotId,
+            campaign_id: approval.campaign_id,
+            approval_id: approval.id,
+            purpose: input.purpose,
+            slot_for: "",
+            timezone: "local",
+            format: input.format,
+            angle: "",
+            visual_direction: "",
+            cta: "",
+            notes: "",
+            status: "planned",
+            created_at: now,
+            updated_at: now,
+          };
+          applyFields(slot, input);
+          contentCalendarSlots.push(slot);
+          nextContentCalendarSlotId += 1;
+          return slot.id;
+        });
+      }
+      if (cmd === "linkgo_content_calendar_update_slot") {
+        return runNativeMutation(() => {
+          const input = nativeInput<SlotFields & { id: number }>(args);
+          const slot = slotForMutation(input.id);
+          if (slot.status !== "planned")
+            throw new Error("Archived calendar slots cannot be edited");
+          applyFields(slot, input);
+          slot.updated_at = getNow();
+          return null;
+        });
+      }
+      if (cmd === "linkgo_content_calendar_archive_slot") {
+        return runNativeMutation(() => {
+          const slot = slotForMutation(nativeInput<{ id: number }>(args).id);
+          slot.status = "archived";
+          slot.updated_at = getNow();
+          return null;
+        });
+      }
+      if (cmd === "linkgo_content_calendar_schedule_preflight") {
+        return runNativeMutation(() => {
+          const slot = slotForMutation(nativeInput<{ id: number }>(args).id);
+          if (slot.status === "archived")
+            throw new Error("Archived slots cannot be scheduled");
+          const approval = approvals.find((row) => row.id === slot.approval_id);
+          if (approval?.status !== "approved")
+            throw new Error("Only approved posts can be scheduled");
+          return {
+            approvalId: slot.approval_id,
+            scheduledFor: slot.slot_for,
+            timezone: slot.timezone,
+          };
+        });
+      }
+      return undefined;
+    };
+
+    /** Mirrors `approval_reads::publish_preflight` checks and messages. */
+    const approvalPublishPreflightCommand = (
+      args: unknown,
+    ): Promise<unknown> => {
+      try {
+        const input = nativeInput<{
+          approvalId: number;
+          scheduleJobId?: number;
+        }>(args);
+        if (safetySettings.global_kill_switch === 1) {
+          const reason = safetySettings.kill_switch_reason;
+          throw new Error(
+            reason
+              ? `Global kill switch is enabled: ${reason}`
+              : "Global kill switch is enabled",
+          );
+        }
+        const approval = approvals.find((row) => row.id === input.approvalId);
+        if (!approval) throw new Error("Approval was not found");
+        const campaign = campaigns.find(
+          (row) => row.id === approval.campaign_id,
+        );
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        if (!["approved", "scheduled"].includes(approval.status))
+          throw new Error(
+            "Only approved or scheduled approvals can publish via LinkedIn",
+          );
+        if (
+          publishAttempts.some(
+            (attempt) =>
+              attempt.approval_id === approval.id &&
+              attempt.status === "succeeded",
+          )
+        )
+          throw new Error("Approval already has a successful publish attempt");
+        if (
+          !isApprovalReadyAtRevision(
+            approval,
+            approval.reviewed_content_revision,
+          )
+        )
+          throw new Error(STALE_APPROVAL_ERROR);
+        if (input.scheduleJobId === undefined) {
+          if (approval.status === "scheduled")
+            throw new Error(
+              "Scheduled approvals require the current schedule job",
+            );
+          return Promise.resolve(null);
+        }
+        const current = [...scheduleJobs]
+          .filter((job) => job.approval_id === approval.id)
+          .sort(
+            (left, right) =>
+              right.updated_at.localeCompare(left.updated_at) ||
+              right.id - left.id,
+          )[0];
+        if (
+          current?.id !== input.scheduleJobId ||
+          current.status !== "scheduled"
+        )
+          throw new Error("Schedule job is not the current scheduled job");
+        return Promise.resolve(null);
+      } catch (error) {
+        return Promise.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    };
+
     const scheduleApprovalCommand = (args?: unknown) => {
       const input = (
         args as {
@@ -11322,20 +12301,47 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           };
         }
       )?.input;
-      const approval = approvals.find((row) => row.id === input?.approvalId);
+      // Mirrors `validate_schedule` in src-tauri/src/approval_scheduling.rs.
+      if (
+        !input ||
+        Object.keys(input).some(
+          (key) => !["approvalId", "scheduledFor", "timezone"].includes(key),
+        )
+      )
+        throw new Error("Invalid schedule input");
+      if (!Number.isInteger(input.approvalId) || (input.approvalId ?? 0) <= 0)
+        throw new Error("Approval id must be a positive integer");
+      const scheduledFor = (input.scheduledFor ?? "").trim();
+      if (scheduledFor.length > 80)
+        throw new Error("Scheduled time must be 80 characters or fewer");
+      if (
+        !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/.test(
+          scheduledFor,
+        ) ||
+        !Number.isFinite(Date.parse(scheduledFor.replace(" ", "T")))
+      )
+        throw new Error("Scheduled time must be a valid date");
+      const timezoneInput = (input.timezone ?? "").trim();
+      if (timezoneInput.length > 80)
+        throw new Error("Timezone must be 80 characters or fewer");
+      const timezone = timezoneInput || "local";
+      const approval = approvals.find((row) => row.id === input.approvalId);
       if (!approval) throw new Error("Approval was not found");
       const campaign = campaigns.find((row) => row.id === approval.campaign_id);
       if (campaign?.status === "archived")
         throw new Error("Campaign is archived");
       if (approval.status !== "approved")
         throw new Error("Only approved posts can be scheduled");
+      if (
+        !isApprovalReadyAtRevision(approval, approval.reviewed_content_revision)
+      )
+        throw new Error(STALE_APPROVAL_ERROR);
       const existing = scheduleJobs.find(
         (row) => row.approval_id === approval.id,
       );
       if (existing && !["cancelled", "failed"].includes(existing.status)) {
         throw new Error("Approval already has an active schedule job");
       }
-      const scheduledFor = input?.scheduledFor ?? "";
       const windowKey = scheduledFor.slice(0, 10);
       const currentCount = scheduleJobs.filter((job) => {
         const owner = approvals.find((row) => row.id === job.approval_id);
@@ -11418,7 +12424,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         approval_id: approval.id,
         platform: "linkedin" as const,
         scheduled_for: scheduledFor,
-        timezone: input?.timezone ?? "local",
+        timezone,
         status: "scheduled" as const,
         idempotency_key: idempotencyKey,
         attempt_count: 0,
@@ -11435,7 +12441,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       Object.assign(job, {
         status: "scheduled",
         scheduled_for: scheduledFor,
-        timezone: input?.timezone ?? "local",
+        timezone,
         idempotency_key: idempotencyKey,
         updated_at: now,
       });
@@ -11471,6 +12477,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     const cancelScheduleCommand = (args?: unknown) => {
       const id = (args as { input?: { id?: number } })?.input?.id;
+      if (!Number.isInteger(id) || (id ?? 0) <= 0)
+        throw new Error("Schedule job id must be a positive integer");
       const job = scheduleJobs.find((row) => row.id === id);
       if (!job) throw new Error("Schedule job was not found");
       const approval = approvals.find((row) => row.id === job.approval_id);
@@ -11587,6 +12595,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         model_name: String(input.modelName ?? "").trim(),
         status: "running",
         final_score: null,
+        summary: "",
         applied_rewrite_count: 0,
         active_agent_run_id: null,
         active_ai_audit_run_id: null,
@@ -11614,8 +12623,129 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       });
     }
 
+    function regenerateQualityRewriteAudits(variant: DraftVariant): void {
+      const hook = variant.hook.trim();
+      const body = variant.body.trim();
+      const cta = variant.cta.trim();
+      const hashtags = variant.hashtags.trim();
+      const findings: Array<[string, DraftAuditSeverity, string]> = [
+        !hook && !body
+          ? [
+              "required_text",
+              "block",
+              "Add a hook or body before this variant can be reviewed.",
+            ]
+          : ["required_text", "pass", "This variant has draft text to review."],
+        `${hook}${body}${cta}${hashtags}`.length > 3000
+          ? [
+              "total_length",
+              "block",
+              "Keep the combined hook, body, CTA, and hashtags under 3,000 characters.",
+            ]
+          : [
+              "total_length",
+              "pass",
+              "This variant stays under the 3,000 character limit.",
+            ],
+        /https?:\/\/|www\./iu.test(`${hook} ${body} ${cta}`)
+          ? [
+              "external_link",
+              "block",
+              "Remove external links from the hook, body, and CTA before review.",
+            ]
+          : [
+              "external_link",
+              "pass",
+              "No external link was found in the hook, body, or CTA.",
+            ],
+        (hashtags.match(/#[\p{L}\p{N}_-]+/gu)?.length ?? 0) > 5
+          ? ["hashtag_limit", "block", "Use five or fewer hashtags."]
+          : [
+              "hashtag_limit",
+              "pass",
+              "This variant uses five or fewer hashtags.",
+            ],
+      ];
+      if (
+        hook.length < 35 ||
+        /^(excited to|in today's|i'm thrilled|quick update)/iu.test(hook)
+      )
+        findings.push([
+          "weak_hook",
+          "warning",
+          "Strengthen the hook with a specific, curiosity-driving opening.",
+        ]);
+      const combined = `${hook} ${body} ${cta} ${hashtags}`.trim();
+      if (!/\d/u.test(combined) && !/\b(i|we|my|our)\b/iu.test(combined))
+        findings.push([
+          "specificity",
+          "warning",
+          "Add a number or first-person signal so the draft feels specific.",
+        ]);
+      for (let index = draftAudits.length - 1; index >= 0; index -= 1) {
+        if (draftAudits[index].draft_variant_id === variant.id)
+          draftAudits.splice(index, 1);
+      }
+      for (const [rule_key, severity, message] of findings) {
+        draftAudits.push({
+          id: nextDraftAuditId++,
+          draft_variant_id: variant.id,
+          content_revision: variant.content_revision,
+          rule_key,
+          severity,
+          message,
+          created_at: getNow(),
+        });
+      }
+    }
+
     function applyDraftQualityScoreCommand(args: unknown): Promise<unknown> {
       const input = qualityScope(args);
+      // Mirror ApplyScoreInput's strict Serde boundary before touching mock state.
+      const exactFields = (
+        value: unknown,
+        required: string[],
+        optional: string[] = [],
+      ): value is Record<string, unknown> =>
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value) &&
+        required.every((key) => Object.hasOwn(value, key)) &&
+        Object.keys(value).every(
+          (key) => required.includes(key) || optional.includes(key),
+        );
+      const identities = [
+        "qualityRunId",
+        "draftVariantId",
+        "attemptId",
+        "contentRevision",
+        "agentRunId",
+      ];
+      if (
+        !exactFields(
+          input,
+          [...identities, "categoryScores", "summary"],
+          ["rewrite"],
+        ) ||
+        !identities.every((key) => Number.isSafeInteger(input[key])) ||
+        typeof input.summary !== "string" ||
+        !Array.isArray(input.categoryScores) ||
+        !input.categoryScores.every(
+          (score) =>
+            exactFields(score, ["categoryKey", "score", "feedback"]) &&
+            typeof score.categoryKey === "string" &&
+            Number.isSafeInteger(score.score) &&
+            typeof score.feedback === "string",
+        ) ||
+        (input.rewrite != null &&
+          (!exactFields(input.rewrite, ["hook", "body", "cta", "hashtags"]) ||
+            !Object.values(input.rewrite).every(
+              (value) => typeof value === "string",
+            )))
+      )
+        return Promise.reject(new Error("Invalid quality settlement DTO"));
+      if (!input.summary.trim() || Array.from(input.summary).length > 1000)
+        return Promise.reject(new Error("Quality summary is invalid"));
       const run = draftQualityRuns.find(
         (row) => row.id === Number(input.qualityRunId),
       );
@@ -11638,6 +12768,50 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return Promise.reject(
           new Error("Quality settlement identity is stale or invalid"),
         );
+      const categoryKeys: ReadonlyArray<
+        DraftQualityCategoryScore["category_key"]
+      > = [
+        "hook_strength",
+        "authenticity",
+        "linkedin_fit",
+        "specificity",
+        "narrative_structure",
+      ];
+      const isCategoryKey = (
+        value: unknown,
+      ): value is DraftQualityCategoryScore["category_key"] =>
+        categoryKeys.some((key) => key === value);
+      if (
+        new Set(scores.map((score) => score.categoryKey)).size !== 5 ||
+        !scores.every(
+          (score) =>
+            isCategoryKey(score.categoryKey) &&
+            Number.isInteger(score.score) &&
+            Number(score.score) >= 0 &&
+            Number(score.score) <= 100 &&
+            String(score.feedback).trim() !== "",
+        )
+      )
+        return Promise.reject(new Error("Quality category scores are invalid"));
+      requireCurrentQualityEvidence(run, variant);
+      const scoredAt = new Date().toISOString();
+      restoreRows(
+        draftQualityCategoryScores,
+        draftQualityCategoryScores.filter(
+          (row) => row.attempt_id !== attempt.id,
+        ),
+      );
+      for (const score of scores) {
+        if (!isCategoryKey(score.categoryKey)) continue;
+        draftQualityCategoryScores.push({
+          id: nextDraftQualityCategoryScoreId++,
+          attempt_id: attempt.id,
+          category_key: score.categoryKey,
+          score: Number(score.score),
+          feedback: String(score.feedback).trim(),
+          created_at: scoredAt,
+        });
+      }
       const overall = Math.round(
         scores.reduce((total, score) => total + Number(score.score ?? 0), 0) /
           5,
@@ -11646,6 +12820,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (overall >= 70) {
         attempt.status = "passed";
         run.status = "passed";
+        run.summary = input.summary.trim();
         run.final_score = overall;
         run.active_agent_run_id = null;
         run.updated_at = now;
@@ -11661,6 +12836,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const rewrite = input.rewrite as Record<string, unknown> | undefined;
       if (!rewrite || run.applied_rewrite_count >= 2) {
         run.status = "needs_revision";
+        run.summary = input.summary.trim();
         run.final_score = overall;
         return Promise.resolve({
           status: "needs_revision",
@@ -11673,6 +12849,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       variant.cta = String(rewrite.cta ?? "");
       variant.hashtags = String(rewrite.hashtags ?? "");
       variant.content_revision += 1;
+      regenerateQualityRewriteAudits(variant);
+      revokeEditedApproval(variant);
       variant.updated_at = now;
       run.current_content_revision = variant.content_revision;
       run.applied_rewrite_count += 1;
@@ -11689,9 +12867,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           draftVariantId: variant.id,
           contentRevision: variant.content_revision,
           auditRunId: auditId,
-          text: [variant.hook, variant.body, variant.cta, variant.hashtags].join(
-            "\n\n",
-          ),
+          text: [
+            variant.hook,
+            variant.body,
+            variant.cta,
+            variant.hashtags,
+          ].join("\n\n"),
         },
       });
       draftAiAuditRuns.push({
@@ -11729,6 +12910,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
       if (!run || !variant || run.status !== "running")
         return Promise.reject(new Error("Active quality run was not found"));
+      requireCurrentQualityEvidence(run, variant);
       const audit = draftAiAuditRuns.find(
         (row) => row.id === run.active_ai_audit_run_id,
       );
@@ -11762,12 +12944,57 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const run = draftQualityRuns.find(
         (row) => row.id === Number(input.qualityRunId),
       );
-      if (!run || run.status !== "failed")
+      if (
+        !run ||
+        run.draft_variant_id !== Number(input.draftVariantId) ||
+        run.status !== "failed"
+      )
         return Promise.reject(
           new Error("Recoverable failed quality run was not found"),
         );
+      const variant = draftVariants.find(
+        (row) => row.id === Number(input.draftVariantId),
+      );
+      if (!variant)
+        return Promise.reject(new Error("Draft variant was not found"));
+      if (run.current_content_revision !== variant.content_revision)
+        return Promise.reject(new Error("Draft changed before quality resume"));
+      requireCurrentQualityEvidence(run, variant);
+      const attemptNumber =
+        Math.max(
+          0,
+          ...draftQualityAttempts
+            .filter((row) => row.run_id === run.id)
+            .map((row) => row.attempt_number),
+        ) + 1;
+      if (attemptNumber > 3)
+        return Promise.reject(new Error("Quality rewrite limit is exhausted"));
+      const draft = drafts.find((row) => row.id === variant.draft_id);
+      if (!draft)
+        return Promise.reject(new Error("Draft variant was not found"));
+      // Resume scores directly; unlike continuation it needs no linked rewrite audit.
+      const attempt: DraftQualityAttempt = {
+        id: nextDraftQualityAttemptId++,
+        run_id: run.id,
+        attempt_number: attemptNumber,
+        content_revision: variant.content_revision,
+        agent_run_id: 0,
+        status: "scoring",
+      };
+      draftQualityAttempts.push(attempt);
+      const agentRunId = createQualityAgent(run, attempt, variant);
       run.status = "running";
-      return continueDraftQualityCommand(args);
+      run.error_message = "";
+      run.active_ai_audit_run_id = null;
+      run.updated_at = getNow();
+      return Promise.resolve({
+        qualityRunId: run.id,
+        attemptId: attempt.id,
+        agentRunId,
+        campaignId: draft.campaign_id,
+        draftVariantId: variant.id,
+        contentRevision: variant.content_revision,
+      });
     }
 
     function failDraftQualityCommand(args: unknown): Promise<unknown> {
@@ -11777,8 +13004,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
       if (!run || run.status !== "running")
         return Promise.reject(new Error("Active quality run was not found"));
-      run.status = "passed";
-      run.final_score = 70;
+      run.status = "failed";
       run.active_agent_run_id = null;
       run.error_message = String(input.errorMessage ?? "").trim();
       draftQualityAttempts
@@ -11790,678 +13016,7841 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return Promise.resolve(null);
     }
 
-    w.__TAURI_INTERNALS__ = {
-      invoke: (cmd: string, args?: unknown) => {
-        if (cmd === "linkgo_approval_schedule")
-          return scheduleApprovalCommand(args);
-        if (cmd === "linkgo_approval_cancel_schedule")
-          return cancelScheduleCommand(args);
-        if (cmd === "linkgo_approval_record_publish_attempt") {
-          return recordPublishAttemptCommand(args);
-        }
-        if (cmd === "linkgo_comment_record_attempt") {
-          return recordCommentAttemptCommand(args);
-        }
-        if (cmd === "linkgo_campaign_backlog_create") {
-          return runCampaignBacklogCommand(() =>
-            createCampaignBacklogCommand(args),
-          );
-        }
-        if (cmd === "linkgo_campaign_backlog_update") {
-          return runCampaignBacklogCommand(() =>
-            updateCampaignBacklogCommand(args),
-          );
-        }
-        if (cmd === "linkgo_campaign_backlog_set_status") {
-          return runCampaignBacklogCommand(() =>
-            setCampaignBacklogStatusCommand(args),
-          );
-        }
-        if (cmd === "linkgo_relevance_scoring_claim") {
-          return claimNativeScoringCommand(args);
-        }
-        if (cmd === "linkgo_relevance_scoring_start") {
-          return startNativeScoringCommand(args);
-        }
-        if (cmd === "linkgo_relevance_scoring_apply_scores") {
-          return applyNativeScoresCommand(args);
-        }
-        if (cmd === "linkgo_relevance_scoring_settle") {
-          return settleNativeScoringCommand(args);
-        }
-        if (cmd === "linkgo_relevance_scoring_fail") {
-          return failNativeScoringCommand(args);
-        }
-        if (cmd === "linkgo_relevance_scoring_reconcile") {
-          return reconcileNativeScoringCommand(args);
-        }
-        if (cmd === "linkgo_planner_draft_audit_claim")
-          return claimNativePlannerDraftAudit(args);
-        if (cmd === "linkgo_planner_draft_audit_complete")
-          return completeNativePlannerDraftAudit(args);
-        if (cmd === "linkgo_planner_draft_audit_fail")
-          return failNativePlannerDraftAudit(args);
-        if (cmd === "linkgo_planner_draft_audit_reconcile_stale")
-          return reconcileNativePlannerDraftAudits(args);
-        if (cmd === "linkgo_draft_quality_reconcile_stale")
-          return Promise.resolve({ reconciledRunIds: [] });
-        if (cmd === "linkgo_draft_quality_claim")
-          return claimDraftQualityCommand(args);
-        if (cmd === "linkgo_draft_quality_apply_score")
-          return applyDraftQualityScoreCommand(args);
-        if (cmd === "linkgo_draft_quality_continue")
-          return continueDraftQualityCommand(args);
-        if (cmd === "linkgo_draft_quality_resume")
-          return resumeDraftQualityCommand(args);
-        if (cmd === "linkgo_draft_quality_fail")
-          return failDraftQualityCommand(args);
-        if (cmd === "linkgo_relevance_scoring_fail_agent") {
-          return failNativeScoringAgentCommand(args);
-        }
-        if (cmd === "plugin:sql|select")
-          return selectSqlWithCampaignDelay(args);
-        if (cmd === "plugin:sql|execute") {
-          const result = executeSql(args);
-          return Promise.resolve([result.rowsAffected, result.lastInsertId]);
-        }
-        if (cmd === "plugin:sql|close") return Promise.resolve(true);
-        if (cmd === "plugin:sql|load") return Promise.resolve("");
-        if (cmd === "plugin:autostart|is_enabled") {
-          if (
-            w.__LINKGO_FAIL_AUTOSTART_IS_ENABLED__ === true ||
-            (w.__LINKGO_FAIL_AUTOSTART_IS_ENABLED_AFTER_MUTATION__ === true &&
-              autostartMutationCount > 0)
-          ) {
-            throw new Error("Autostart status read failed");
-          }
-          if (typeof w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__ === "boolean") {
-            return Promise.resolve(w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__);
-          }
-          const stored = window.localStorage.getItem(
-            "linkgo.autostart.enabled",
-          );
-          return Promise.resolve(
-            stored === "true" || w.__LINKGO_AUTOSTART_ENABLED__ === true,
-          );
-        }
-        if (cmd === "plugin:autostart|enable") {
-          if (w.__LINKGO_FAIL_AUTOSTART_ENABLE__ === true) {
-            throw new Error("Autostart enable failed");
-          }
-          autostartMutationCount += 1;
-          w.__LINKGO_AUTOSTART_ENABLED__ = true;
-          window.localStorage.setItem("linkgo.autostart.enabled", "true");
-          return Promise.resolve(null);
-        }
-        if (cmd === "plugin:autostart|disable") {
-          if (w.__LINKGO_FAIL_AUTOSTART_DISABLE__ === true) {
-            throw new Error("Autostart disable failed");
-          }
-          autostartMutationCount += 1;
-          w.__LINKGO_AUTOSTART_ENABLED__ = false;
-          window.localStorage.setItem("linkgo.autostart.enabled", "false");
-          return Promise.resolve(null);
-        }
-        if (cmd === "update_tray_menu") return Promise.resolve(null);
-        if (cmd === "linkgo_auth_status")
-          return Promise.resolve(getAuthStatusMock());
-        if (cmd === "linkgo_auth_api_key") {
-          const input =
-            (
-              args as
-                | {
-                    input?: {
-                      providerKey?: string;
-                      provider_key?: string;
-                      apiKey?: string;
-                      api_key?: string;
-                      baseUrl?: string;
-                      base_url?: string;
-                      accountLabel?: string;
-                    };
-                  }
-                | undefined
-            )?.input ?? {};
-          const providerKey =
-            input.providerKey ?? input.provider_key ?? "openai";
-          const apiKey = input.apiKey ?? input.api_key ?? "sk-test-secret";
-          const baseUrl = input.baseUrl ?? input.base_url;
-          if (providerKey === "custom" && !baseUrl?.trim()) {
-            throw new Error("Custom provider requires a Base URL override");
-          }
-          providerSecrets[providerKey] = {
-            apiKey,
-            ...(baseUrl ? { baseUrl } : {}),
-          };
-          const provider =
-            authProviders.find((candidate) => candidate.key === providerKey) ??
-            authProviders[0];
-          const existingIndex = connectedAccounts.findIndex(
-            (account) => account.provider_key === providerKey,
-          );
-          const account = {
-            id:
-              existingIndex >= 0
-                ? existingIndex + 1
-                : connectedAccounts.length + 1,
-            provider_key: providerKey,
-            provider_label: provider?.label ?? providerKey,
-            auth_method: "api_key",
-            status: "connected",
-            scopes: "",
-            account_label:
-              input.accountLabel ?? `${provider?.label ?? providerKey} account`,
-            account_id: "",
-            expires_at: null,
-            refresh_expires_at: null,
-            has_base_url_override: Boolean(baseUrl?.trim()),
-            last_checked_at: getNow(),
-            last_error: "",
-            created_at: getNow(),
-            updated_at: getNow(),
-          };
-          if (existingIndex >= 0) connectedAccounts[existingIndex] = account;
-          else connectedAccounts.push(account);
-          return Promise.resolve(getAuthStatusMock());
-        }
-        if (cmd === "linkgo_auth_provider_secret") {
-          const input =
-            (
-              args as
-                | { input?: { providerKey?: string; provider_key?: string } }
-                | undefined
-            )?.input ?? {};
-          const providerKey =
-            input.providerKey ?? input.provider_key ?? "openai";
-          const secret = providerSecrets[providerKey];
-          if (secret === undefined)
-            throw new Error("Provider is not connected");
-          return Promise.resolve({
-            providerKey,
-            apiKey: secret.apiKey,
-            ...(secret.baseUrl ? { baseUrl: secret.baseUrl } : {}),
-          });
-        }
-        if (cmd === "linkgo_auth_oauth_start") {
-          return Promise.resolve({
-            providerKey: "linkedin",
-            authUrl:
-              "https://www.linkedin.com/oauth/v2/authorization?response_type=code&state=test-oauth-state&code_challenge=test-pkce-challenge&code_challenge_method=S256",
-            state: "test-oauth-state",
-            needsCode: true,
-          });
-        }
-        if (cmd === "linkgo_auth_oauth_code") {
-          connectedAccounts.push({
-            id: connectedAccounts.length + 1,
-            provider_key: "linkedin",
-            provider_label: "LinkedIn",
-            auth_method: "oauth",
-            status: "connected",
-            scopes:
-              "openid profile email w_member_social w_member_social_feed r_member_social_feed",
-            account_label: "LinkedIn member",
-            account_id: "member-1",
-            expires_at: null,
-            refresh_expires_at: null,
-            has_base_url_override: false,
-            last_checked_at: getNow(),
-            last_error: "",
-            created_at: getNow(),
-            updated_at: getNow(),
-          });
-          return Promise.resolve(getAuthStatusMock());
-        }
-        if (cmd === "linkgo_auth_logout") {
-          const input =
-            (
-              args as
-                | { input?: { providerKey?: string; provider_key?: string } }
-                | undefined
-            )?.input ?? {};
-          const providerKey =
-            input.providerKey ?? input.provider_key ?? "openai";
-          removeRows(
-            connectedAccounts,
-            (account) => account.provider_key === providerKey,
-          );
-          return Promise.resolve(getAuthStatusMock());
-        }
-        if (cmd === "linkgo_auth_check")
-          return Promise.resolve(getAuthStatusMock());
-        if (cmd === "linkgo_agent_settle_approved_continuation") {
-          agentContinuationSettlementInvocations += 1;
-          sessionStorage.setItem(
-            "linkgo-agent-continuation-settlement-count",
-            String(agentContinuationSettlementInvocations),
-          );
-          const input = (
-            args as { input?: { agentRunId?: number } } | undefined
-          )?.input;
-          const runId = Number(input?.agentRunId ?? 0);
-          if (activeAgentContinuationSettlements.has(runId)) {
-            throw new Error("Agent continuation is already running");
-          }
-          activeAgentContinuationSettlements.add(runId);
-          try {
-            const checkpoint = agentApprovalCheckpoints.find(
-              (row) => row.agent_run_id === runId,
-            );
-            if (!checkpoint)
-              throw new Error("Agent approval checkpoint was not found");
-            const run = agentRuns.find((row) => row.id === runId);
-            if (!run)
-              throw new Error(
-                "Agent run cannot resume from its current status",
-              );
-            const tool = agentToolCalls.find(
-              (row) =>
-                row.id === checkpoint.pending_tool_call_id &&
-                row.agent_run_id === runId,
-            );
-            if (!tool)
-              throw new Error("Pending approval tool call was not found");
-            if (
-              tool.tool_name !== "schedule_post" ||
-              tool.requires_approval !== 1
-            )
-              throw new Error(
-                "Approval checkpoint does not reference schedule_post",
-              );
-            let scheduleInput: {
-              campaignId?: number;
-              approvalId?: number;
-              scheduledFor?: string;
-              timezone?: string;
-            };
-            let messages: Array<Record<string, unknown>>;
-            let inputContext: Record<string, unknown>;
-            try {
-              scheduleInput = JSON.parse(
-                tool.input_json,
-              ) as typeof scheduleInput;
-              messages = JSON.parse(checkpoint.messages_json) as Array<
-                Record<string, unknown>
-              >;
-              inputContext = JSON.parse(run.input_context_json) as Record<
-                string,
-                unknown
-              >;
-              if (!Array.isArray(messages)) throw new Error("invalid messages");
-            } catch {
-              throw new Error("Agent continuation could not be settled");
-            }
-            const pendingMessageCalls = new Map<string, string>();
-            for (const message of messages) {
-              if (
-                message.role === "assistant" &&
-                typeof message.toolName === "string" &&
-                typeof message.providerToolCallId === "string"
-              ) {
-                pendingMessageCalls.set(
-                  message.providerToolCallId,
-                  message.toolName,
-                );
-              } else if (message.role === "tool") {
-                if (
-                  typeof message.toolName !== "string" ||
-                  typeof message.providerToolCallId !== "string" ||
-                  pendingMessageCalls.get(message.providerToolCallId) !==
-                    message.toolName
-                ) {
-                  throw new Error("Agent continuation could not be settled");
-                }
-                pendingMessageCalls.delete(message.providerToolCallId);
-              }
-            }
-            if (
-              scheduleInput.campaignId !== run.campaign_id ||
-              scheduleInput.approvalId !== checkpoint.approval_id
-            )
-              throw new Error(
-                "Approval checkpoint does not match the run campaign",
-              );
-            const approval = approvals.find(
-              (row) => row.id === checkpoint.approval_id,
-            );
-            if (!approval)
-              throw new Error("Agent continuation could not be settled");
-            if (approval.campaign_id !== run.campaign_id)
-              throw new Error(
-                "Linked approval belongs to a different campaign",
-              );
-            if (approval.status === "rejected") {
-              const linkedCheckpoints = agentApprovalCheckpoints.filter(
-                (row) => row.approval_id === approval.id,
-              );
-              for (const linkedCheckpoint of linkedCheckpoints) {
-                const linkedTool = agentToolCalls.find(
-                  (row) => row.id === linkedCheckpoint.pending_tool_call_id,
-                );
-                const linkedRun = agentRuns.find(
-                  (row) => row.id === linkedCheckpoint.agent_run_id,
-                );
-                if (linkedTool) {
-                  linkedTool.status = "rejected";
-                  linkedTool.error_message =
-                    "Approval rejected: Approval rejected before continuation";
-                  linkedTool.completed_at = getNow();
-                }
-                if (linkedRun) {
-                  linkedRun.status = "cancelled";
-                  linkedRun.error_message =
-                    "Approval rejected: Approval rejected before continuation";
-                  linkedRun.completed_at = getNow();
-                }
-              }
-              removeRows(
-                agentApprovalCheckpoints,
-                (row) => row.approval_id === approval.id,
-              );
-              throw new Error("Linked approval was rejected");
-            }
-            if (approval.status !== "approved")
-              throw new Error("Linked approval must be approved before resume");
-            const campaign = campaigns.find(
-              (row) => row.id === run.campaign_id,
-            );
-            if (campaign?.status === "archived")
-              throw new Error("Campaign is archived");
-            if (safetySettings.global_kill_switch === 1)
-              throw new Error("Global kill switch is enabled");
+    /** Emulates ON DELETE CASCADE for every campaign child table. */
+    function cascadeDeletedCampaign(id: number): void {
+      const removedDraftIds = drafts
+        .filter((draft) => draft.campaign_id === id)
+        .map((draft) => draft.id);
+      const removedApprovalIds = approvals
+        .filter((approval) => approval.campaign_id === id)
+        .map((approval) => approval.id);
+      removeRows(keywords, (keyword) => keyword.campaign_id === id);
+      removeRows(
+        candidateIntakePolicies,
+        (policy) => policy.campaign_id === id,
+      );
+      removeRows(
+        candidatePolicyBannedTopics,
+        (topic) => topic.campaign_id === id,
+      );
+      removeRows(candidatePosts, (candidate) => candidate.campaign_id === id);
+      removeRows(dedupeKeys, (key) => key.campaign_id === id);
+      const removedSourceBatchIds = sourceImportBatches
+        .filter((batch) => batch.campaign_id === id)
+        .map((batch) => batch.id);
+      removeRows(sourceImportBatches, (batch) => batch.campaign_id === id);
+      removeRows(sourceImportItems, (item) =>
+        removedSourceBatchIds.includes(item.source_import_batch_id),
+      );
+      removeRows(drafts, (draft) => draft.campaign_id === id);
+      removeRows(draftVariants, (variant) =>
+        removedDraftIds.includes(variant.draft_id),
+      );
+      removeRows(approvals, (approval) => approval.campaign_id === id);
+      removeRows(agentApprovalCheckpoints, (checkpoint) =>
+        removedApprovalIds.includes(checkpoint.approval_id),
+      );
+      removeRows(scheduleJobs, (job) =>
+        removedApprovalIds.includes(job.approval_id),
+      );
+      removeRows(publishAttempts, (attempt) =>
+        removedApprovalIds.includes(attempt.approval_id),
+      );
+      const removedCommentThreadIds = commentThreads
+        .filter((thread) => thread.campaign_id === id)
+        .map((thread) => thread.id);
+      const removedCommentVariantIds = commentVariants
+        .filter((variant) =>
+          removedCommentThreadIds.includes(variant.comment_thread_id),
+        )
+        .map((variant) => variant.id);
+      removeRows(commentThreads, (thread) => thread.campaign_id === id);
+      removeRows(commentVariants, (variant) =>
+        removedCommentThreadIds.includes(variant.comment_thread_id),
+      );
+      removeRows(commentAudits, (audit) =>
+        removedCommentVariantIds.includes(audit.comment_variant_id),
+      );
+      removeRows(commentAttempts, (attempt) =>
+        removedCommentThreadIds.includes(attempt.comment_thread_id),
+      );
+      removeRows(postMetrics, (metric) => metric.campaign_id === id);
+      removeRows(campaignMemory, (memory) => memory.campaign_id === id);
+      removeRows(learningEvents, (event) => event.campaign_id === id);
+      const removedAgentRunIds = agentRuns
+        .filter((run) => run.campaign_id === id)
+        .map((run) => run.id);
+      removeRows(agentRuns, (run) => run.campaign_id === id);
+      removeRows(agentToolCalls, (toolCall) =>
+        removedAgentRunIds.includes(toolCall.agent_run_id),
+      );
+      removeRows(agentRunEvents, (event) =>
+        removedAgentRunIds.includes(event.agent_run_id),
+      );
+      removeRows(agentApprovalCheckpoints, (checkpoint) =>
+        removedAgentRunIds.includes(checkpoint.agent_run_id),
+      );
+      removeRows(
+        draftAudits,
+        (audit) =>
+          !draftVariants.some(
+            (variant) => variant.id === audit.draft_variant_id,
+          ),
+      );
+    }
 
-            const recovered =
-              checkpoint.phase === "continuation_ready" &&
-              run.status === "failed";
-            if (
-              checkpoint.phase === "continuation_ready" &&
-              run.status === "running"
-            )
-              throw new Error("Agent continuation is already running");
-            if (
-              !recovered &&
-              (checkpoint.phase !== "waiting_approval" ||
-                run.status !== "waiting_approval")
-            )
-              throw new Error(
-                "Agent run cannot resume from its current status",
-              );
-            if (!recovered) {
-              if (!["waiting_approval", "running"].includes(tool.status))
-                throw new Error("Pending approval tool is not executable");
-              const output = {
-                scheduled: false,
-                approvalId: checkpoint.approval_id,
-                scheduledFor: scheduleInput.scheduledFor,
-                timezone: scheduleInput.timezone,
-                summary:
-                  "Approval confirmed for schedule metadata only; no schedule record or publish action was created.",
-              };
-              tool.status = "completed";
-              tool.output_json = JSON.stringify(output);
-              tool.error_message = "";
-              tool.completed_at = getNow();
-              messages.push({
-                role: "tool",
-                content: JSON.stringify(output),
-                toolName: "schedule_post",
-                providerToolCallId: tool.provider_tool_call_id,
-              });
-              checkpoint.phase = "continuation_ready";
-              checkpoint.messages_json = JSON.stringify(messages);
-              checkpoint.updated_at = getNow();
-            } else if (tool.status !== "completed") {
-              throw new Error("Approved tool call was already handled");
-            }
-            run.status = "running";
-            run.completed_at = null;
-            run.error_message = "";
-            run.updated_at = getNow();
-            return Promise.resolve({
-              agentRunId: run.id,
-              campaignId: run.campaign_id,
-              workflowRunId: run.workflow_run_id,
-              workflowStepId: run.workflow_step_id,
-              agentRole: run.agent_role,
-              providerKey: run.provider_key,
-              modelName: run.model_name,
-              playbookKey: run.playbook_key,
-              inputSummary: run.input_summary,
-              inputContext,
-              messages,
-              iterationCount: checkpoint.iteration_count,
-              handledProviderToolCallIds: agentToolCalls
+    /**
+     * Emulates a pinned native transaction: every mock table is restored if
+     * the mutation throws, and a successful mutation is persisted for reload.
+     */
+    function runNativeMutation<T>(mutation: () => T): Promise<T> {
+      const snapshot = createTransactionSnapshot();
+      try {
+        const result = mutation();
+        persistReloadSnapshot();
+        return Promise.resolve(result);
+      } catch (error) {
+        restoreTransactionSnapshot(snapshot);
+        return Promise.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    }
+
+    function nativeInput<T>(args: unknown): T {
+      return (args as { input: T }).input;
+    }
+
+    function pushLearningEvent(
+      event: Omit<LearningEvent, "id" | "created_at">,
+    ): void {
+      learningEvents.push({
+        ...event,
+        id: nextLearningEventId,
+        created_at: getNow(),
+      });
+      nextLearningEventId += 1;
+    }
+
+    function requireMutableMetricsCampaign(campaignId: number): void {
+      const campaign = campaigns.find((row) => row.id === campaignId);
+      if (!campaign) throw new Error("Campaign was not found");
+      if (campaign.status === "archived")
+        throw new Error("Campaign is archived");
+    }
+
+    function recordPostMetricCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          campaignId: number;
+          approvalId: number;
+          publishAttemptId?: number;
+          measuredAt: string;
+          impressions: number;
+          reactions: number;
+          comments: number;
+          reposts: number;
+          profileVisits: number;
+          linkClicks: number;
+          ctr: number | null;
+          notes: string;
+        }>(args);
+        const approval = approvals.find((row) => row.id === input.approvalId);
+        if (!approval) throw new Error("Approval was not found");
+        if (approval.campaign_id !== input.campaignId)
+          throw new Error("Approval does not belong to this campaign");
+        const campaign = campaigns.find(
+          (row) => row.id === approval.campaign_id,
+        );
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        if (approval.status !== "published")
+          throw new Error("Only published approvals can record metrics");
+        const attempt =
+          input.publishAttemptId === undefined
+            ? publishAttempts
                 .filter(
                   (row) =>
-                    row.agent_run_id === run.id &&
-                    row.provider_tool_call_id !== "",
+                    row.approval_id === input.approvalId &&
+                    row.status === "succeeded",
                 )
-                .map((row) => row.provider_tool_call_id),
-              checkpointPhase: "continuation_ready",
-              recovered,
-            });
-          } finally {
-            activeAgentContinuationSettlements.delete(runId);
-          }
+                .sort(
+                  (left, right) =>
+                    right.created_at.localeCompare(left.created_at) ||
+                    right.id - left.id,
+                )[0]
+            : publishAttempts.find(
+                (row) =>
+                  row.id === input.publishAttemptId &&
+                  row.status === "succeeded",
+              );
+        if (!attempt || attempt.approval_id !== input.approvalId)
+          throw new Error(
+            "Published approval needs a successful publish attempt",
+          );
+        const now = getNow();
+        const metric: PostMetric = {
+          id: nextPostMetricId,
+          campaign_id: input.campaignId,
+          approval_id: input.approvalId,
+          publish_attempt_id: attempt.id,
+          platform: "linkedin",
+          measured_at: input.measuredAt.trim(),
+          impressions: input.impressions,
+          reactions: input.reactions,
+          comments: input.comments,
+          reposts: input.reposts,
+          profile_visits: input.profileVisits,
+          link_clicks: input.linkClicks,
+          ctr: input.ctr ?? null,
+          notes: input.notes.trim(),
+          collection_source: "manual",
+          raw_payload_json: "",
+          created_at: now,
+          updated_at: now,
+        };
+        postMetrics.push(metric);
+        nextPostMetricId += 1;
+        pushLearningEvent({
+          campaign_id: input.campaignId,
+          post_metric_id: metric.id,
+          campaign_memory_id: null,
+          event_type: "metric_recorded",
+          summary: `Metric snapshot recorded for approval #${input.approvalId}`,
+        });
+        return { id: metric.id };
+      });
+    }
+
+    function createCampaignMemoryCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          campaignId: number;
+          postMetricId?: number;
+          signal: MemorySignal;
+          summary: string;
+          evidence: string;
+          confidence: number;
+        }>(args);
+        requireMutableMetricsCampaign(input.campaignId);
+        if (input.postMetricId !== undefined) {
+          const metric = postMetrics.find(
+            (row) => row.id === input.postMetricId,
+          );
+          if (!metric) throw new Error("Post metric was not found");
+          if (metric.campaign_id !== input.campaignId)
+            throw new Error("Post metric does not belong to this campaign");
         }
-        if (cmd === "linkgo_agent_provider_stream") {
-          const input =
-            (
-              args as
-                | {
-                    input?: {
-                      providerKey?: string;
-                      modelName?: string;
-                      request?: unknown;
-                    };
-                  }
-                | undefined
-            )?.input ?? {};
-          const providerKey = input.providerKey ?? "openai";
-          const secret = providerSecrets[providerKey];
-          if (secret === undefined)
-            throw new Error("Provider is not connected");
-          const testApi = (
-            w as unknown as {
-              __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
-                execute: (args: unknown) => Promise<unknown> | unknown;
-              };
+        const now = getNow();
+        const summary = input.summary.trim();
+        const memory: CampaignMemory = {
+          id: nextCampaignMemoryId,
+          campaign_id: input.campaignId,
+          post_metric_id: input.postMetricId ?? null,
+          signal: input.signal,
+          summary,
+          evidence: input.evidence.trim(),
+          confidence: input.confidence,
+          status: "active",
+          created_at: now,
+          updated_at: now,
+        };
+        campaignMemory.push(memory);
+        nextCampaignMemoryId += 1;
+        pushLearningEvent({
+          campaign_id: input.campaignId,
+          post_metric_id: input.postMetricId ?? null,
+          campaign_memory_id: memory.id,
+          event_type: "memory_created",
+          summary: `Campaign memory created: ${summary}`,
+        });
+        return { id: memory.id };
+      });
+    }
+
+    function setCampaignMemoryStatusCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          id: number;
+          status: CampaignMemoryStatus;
+        }>(args);
+        const memory = campaignMemory.find((row) => row.id === input.id);
+        if (!memory) throw new Error("Campaign memory was not found");
+        const campaign = campaigns.find((row) => row.id === memory.campaign_id);
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        memory.status = input.status;
+        memory.updated_at = getNow();
+        const archived = input.status === "archived";
+        pushLearningEvent({
+          campaign_id: memory.campaign_id,
+          post_metric_id: null,
+          campaign_memory_id: memory.id,
+          event_type: archived ? "memory_archived" : "memory_restored",
+          summary: `Campaign memory ${archived ? "archived" : "restored"}`,
+        });
+        return { id: memory.id };
+      });
+    }
+
+    // Mirrors src-tauri/src/comment_audit.rs (itself a port of the old
+    // renderer rules); findings are computed where they are stored.
+    function mockAuditComment(body: string): Array<{
+      rule_key: string;
+      severity: CommentAuditSeverity;
+      message: string;
+    }> {
+      const text = body.trim();
+      const out: Array<{
+        rule_key: string;
+        severity: CommentAuditSeverity;
+        message: string;
+      }> = [];
+      const add = (
+        rule_key: string,
+        severity: CommentAuditSeverity,
+        message: string,
+      ): void => {
+        out.push({ rule_key, severity, message });
+      };
+      if (text.length === 0)
+        add("required_text", "block", "Add a comment before review.");
+      else add("required_text", "pass", "This comment has text to review.");
+      if (text.length > 1250)
+        add(
+          "comment_length",
+          "block",
+          "Keep comments under Linkgo's 1,250 character cap.",
+        );
+      else
+        add(
+          "comment_length",
+          "pass",
+          "This comment stays under Linkgo's 1,250 character cap.",
+        );
+      if (/https?:\/\/|www\./iu.test(text))
+        add("external_link", "block", "Remove external links before review.");
+      else add("external_link", "pass", "No external link was found.");
+      if ((text.match(/#[\p{L}\p{N}_-]+/gu)?.length ?? 0) > 2)
+        add("hashtag_limit", "block", "Use two or fewer hashtags.");
+      else
+        add(
+          "hashtag_limit",
+          "pass",
+          "This comment uses two or fewer hashtags.",
+        );
+      if ((text.match(/@[\p{L}\p{N}_.-]+/gu)?.length ?? 0) > 1)
+        add(
+          "mention_limit",
+          "warning",
+          "Use at most one mention unless the reviewer confirms it is intentional.",
+        );
+      if (
+        text.length < 40 ||
+        /\b(great post|thanks for sharing|love this|insightful post|nice post)\b/iu.test(
+          text,
+        )
+      )
+        add(
+          "generic_reply",
+          "warning",
+          "Make the reply more specific than a generic reaction.",
+        );
+      if (
+        !(
+          /\d/u.test(text) ||
+          /[“"][^”"]+[”"]/u.test(text) ||
+          /\b(i|we|my|our|i've|we've|i’m|we’re|i'd|we'd)\b/iu.test(text)
+        )
+      )
+        add(
+          "specificity",
+          "warning",
+          "Add a number, quoted phrase, or first-person signal.",
+        );
+      const rank = { block: 0, warning: 1, pass: 2 } as const;
+      return out.sort(
+        (left, right) =>
+          rank[left.severity] - rank[right.severity] ||
+          left.rule_key.localeCompare(right.rule_key),
+      );
+    }
+
+    function writeMockCommentAudits(variantId: number, body: string): void {
+      restoreRows(
+        commentAudits,
+        commentAudits.filter((row) => row.comment_variant_id !== variantId),
+      );
+      for (const finding of mockAuditComment(body)) {
+        commentAudits.push({
+          id: nextCommentAuditId,
+          comment_variant_id: variantId,
+          ...finding,
+          created_at: getNow(),
+        });
+        nextCommentAuditId += 1;
+      }
+    }
+
+    function mutableMockCommentThread(threadId: number): CommentThread {
+      const thread = commentThreads.find((row) => row.id === threadId);
+      if (!thread) throw new Error("Comment thread was not found");
+      const campaign = campaigns.find((row) => row.id === thread.campaign_id);
+      if (campaign?.status === "archived")
+        throw new Error("Campaign is archived");
+      return thread;
+    }
+
+    function mockThreadForVariant(variantId: number): {
+      thread: CommentThread;
+      variant: CommentVariant;
+    } {
+      const variant = commentVariants.find((row) => row.id === variantId);
+      if (!variant) throw new Error("Comment variant was not found");
+      return {
+        thread: mutableMockCommentThread(variant.comment_thread_id),
+        variant,
+      };
+    }
+
+    function mockSelectedVariantReady(threadId: number): CommentVariant {
+      const selected = commentVariants
+        .filter(
+          (row) =>
+            row.comment_thread_id === threadId && row.status === "selected",
+        )
+        .sort((left, right) => left.id - right.id);
+      if (selected.length > 1)
+        throw new Error("Choose exactly one selected comment variant");
+      const variant = selected[0];
+      if (!variant) throw new Error("Choose one comment variant before review");
+      if (
+        commentAudits.some(
+          (row) =>
+            row.comment_variant_id === variant.id && row.severity === "block",
+        )
+      )
+        throw new Error("Blocked comment variants cannot be reviewed");
+      return variant;
+    }
+
+    function requestMockCommentChanges(thread: CommentThread): void {
+      if (thread.status === "needs_review" || thread.status === "approved")
+        thread.status = "changes_requested";
+      thread.updated_at = getNow();
+    }
+
+    const MOCK_TERMINAL_COMMENT_STATUSES = ["posted", "rejected", "cancelled"];
+
+    function createCommentThreadCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          candidateId: number;
+          operatorNotes?: string;
+          variants: Array<{ body: string }>;
+        }>(args);
+        const candidate = candidatePosts.find(
+          (row) => row.id === input.candidateId,
+        );
+        if (!candidate) throw new Error("Candidate was not found");
+        const campaign = campaigns.find(
+          (row) => row.id === candidate.campaign_id,
+        );
+        if (campaign?.status === "archived")
+          throw new Error("Campaign is archived");
+        if (!["shortlisted", "drafted"].includes(candidate.status))
+          throw new Error(
+            "Only shortlisted or drafted candidates can become comments",
+          );
+        if (
+          commentThreads.some(
+            (row) => row.candidate_post_id === input.candidateId,
+          )
+        )
+          throw new Error("Candidate already has a comment thread");
+        const now = getNow();
+        const thread: CommentThread = {
+          id: nextCommentThreadId,
+          campaign_id: candidate.campaign_id,
+          candidate_post_id: candidate.id,
+          status: "drafting",
+          operator_notes: String(input.operatorNotes ?? "").trim(),
+          reviewer_notes: "",
+          approved_at: null,
+          rejected_at: null,
+          posted_at: null,
+          created_at: now,
+          updated_at: now,
+        };
+        commentThreads.push(thread);
+        nextCommentThreadId += 1;
+        input.variants.forEach((variantInput, index) => {
+          const body = variantInput.body.trim();
+          const variant: CommentVariant = {
+            id: nextCommentVariantId,
+            comment_thread_id: thread.id,
+            variant_number: index + 1,
+            body,
+            status: "draft",
+            created_at: now,
+            updated_at: now,
+          };
+          commentVariants.push(variant);
+          nextCommentVariantId += 1;
+          writeMockCommentAudits(variant.id, body);
+        });
+        return { id: thread.id };
+      });
+    }
+
+    function updateCommentThreadCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          id: number;
+          operatorNotes?: string;
+          reviewerNotes?: string;
+        }>(args);
+        const thread = mutableMockCommentThread(input.id);
+        if (
+          input.operatorNotes === undefined &&
+          input.reviewerNotes === undefined
+        )
+          return { id: thread.id };
+        if (input.operatorNotes !== undefined)
+          thread.operator_notes = input.operatorNotes.trim();
+        if (input.reviewerNotes !== undefined)
+          thread.reviewer_notes = input.reviewerNotes.trim();
+        thread.updated_at = getNow();
+        return { id: thread.id };
+      });
+    }
+
+    function updateCommentVariantCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{ id: number; body?: string }>(args);
+        if (input.body === undefined) return { id: input.id };
+        const { thread, variant } = mockThreadForVariant(input.id);
+        if (MOCK_TERMINAL_COMMENT_STATUSES.includes(thread.status))
+          throw new Error(
+            "Posted, rejected, and cancelled comments cannot be edited",
+          );
+        variant.body = input.body.trim();
+        variant.updated_at = getNow();
+        writeMockCommentAudits(variant.id, variant.body);
+        requestMockCommentChanges(thread);
+        return { id: variant.id };
+      });
+    }
+
+    function setCommentVariantStatusCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          id: number;
+          status: CommentVariantStatus;
+        }>(args);
+        const { thread, variant } = mockThreadForVariant(input.id);
+        if (MOCK_TERMINAL_COMMENT_STATUSES.includes(thread.status))
+          throw new Error(
+            "Posted, rejected, and cancelled comments cannot change variants",
+          );
+        const now = getNow();
+        if (input.status === "selected") {
+          if (
+            commentAudits.some(
+              (row) =>
+                row.comment_variant_id === variant.id &&
+                row.severity === "block",
+            )
+          )
+            throw new Error("Blocked comment variants cannot be selected");
+          for (const row of commentVariants) {
+            if (row.comment_thread_id === thread.id && row.id !== variant.id) {
+              row.status = "draft";
+              row.updated_at = now;
             }
-          ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__;
-          if (testApi === undefined) {
-            throw new Error("Provider command test API is not configured");
           }
-          return Promise.resolve(testApi.execute(args));
         }
-        if (cmd === "linkgo_autopilot_planner_status") {
-          const override = w.__LINKGO_AUTOPILOT_STATUS_RESULT__;
-          return Promise.resolve(
-            override === undefined ? autopilotPlannerStatusPayload() : override,
-          );
-        }
-        if (cmd === "linkgo_autopilot_planner_start") {
-          if (safetySettings.global_kill_switch === 1) {
-            recordAutopilotPlannerEvent(
-              "planner_blocked",
-              "Autopilot planner start blocked by the global kill switch.",
-              { severity: "warning" },
-            );
-            throw new Error(
-              safetySettings.kill_switch_reason.trim()
-                ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
-                : "Global kill switch is enabled",
-            );
+        variant.status = input.status;
+        variant.updated_at = now;
+        requestMockCommentChanges(thread);
+        return { id: variant.id };
+      });
+    }
+
+    function setCommentThreadStatusCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          id: number;
+          status: CommentThreadStatus;
+          reviewerNotes?: string;
+        }>(args);
+        const thread = mutableMockCommentThread(input.id);
+        if (input.status === "needs_review" || input.status === "approved")
+          mockSelectedVariantReady(thread.id);
+        if (input.status === "posted")
+          throw new Error("Use record posted to move comments to posted");
+        if (input.status === "approved" && thread.status !== "needs_review")
+          throw new Error("Only comments needing review can be approved");
+        if (
+          input.status === "changes_requested" &&
+          thread.status !== "needs_review"
+        )
+          throw new Error("Only comments needing review can request changes");
+        if (MOCK_TERMINAL_COMMENT_STATUSES.includes(thread.status))
+          throw new Error("Terminal comment threads cannot change status");
+        const now = getNow();
+        thread.status = input.status;
+        if (input.reviewerNotes !== undefined)
+          thread.reviewer_notes = input.reviewerNotes.trim();
+        if (input.status === "approved") thread.approved_at = now;
+        if (input.status === "rejected") thread.rejected_at = now;
+        thread.updated_at = now;
+        return { id: thread.id };
+      });
+    }
+
+    function mockResolveLinkedInTargetUrn(candidate: string): string {
+      const normalize = (value: string): string => {
+        let decoded = value.trim();
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const next = decodeURIComponent(decoded);
+            if (next === decoded) break;
+            decoded = next;
+          } catch {
+            break;
           }
-          autopilotPlannerSettings.enabled = 1;
-          autopilotPlannerSettings.updated_at = getNow();
-          autopilotPlannerRunning = true;
-          recordAutopilotPlannerEvent(
-            "planner_started",
-            "Background autopilot planner started.",
-            { metadata: { runnerId: "mock-autopilot" } },
+        }
+        const urn = /urn:li:(ugcPost|share|activity):([A-Za-z0-9_-]+)/u.exec(
+          decoded,
+        );
+        if (urn) return `urn:li:${urn[1]}:${urn[2]}`;
+        const activity = /activity[-:]([0-9]+)/iu.exec(decoded);
+        return activity?.[1] ? `urn:li:activity:${activity[1]}` : "";
+      };
+      const trimmed = candidate.trim();
+      if (!trimmed) return "";
+      const direct = normalize(trimmed);
+      if (direct) return direct;
+      try {
+        const url = new URL(trimmed);
+        for (const part of [url.pathname, url.search, url.hash]) {
+          const resolved = normalize(part);
+          if (resolved) return resolved;
+        }
+      } catch {
+        return "";
+      }
+      return "";
+    }
+
+    function mockEscapeLinkedInLittleText(text: string): string {
+      return text.replace(/[|{}@[\]()<>#\\*_~]/gu, "\\$&");
+    }
+
+    /**
+     * Publish gate: rejections commit (a blocked rate-limit event survives),
+     * matching the native Settlement::Rejected path.
+     */
+    function assertCommentCanPublishCommand(args: unknown): Promise<unknown> {
+      const input = nativeInput<{
+        commentThreadId: number;
+        commentary: string;
+        targetUrn: string;
+        idempotencyKey: string;
+      }>(args);
+      let rejection = "";
+      const settled = runNativeMutation(() => {
+        const thread = mutableMockCommentThread(input.commentThreadId);
+        if (thread.status !== "approved")
+          throw new Error("Only approved comments can publish via LinkedIn");
+        const selected = mockSelectedVariantReady(thread.id);
+        if (mockEscapeLinkedInLittleText(selected.body) !== input.commentary)
+          throw new Error(
+            "Commentary does not match the approved comment variant",
           );
-          queueMicrotask(() => runAutopilotPlannerTickMock());
-          return Promise.resolve(autopilotPlannerStatusPayload());
-        }
-        if (cmd === "linkgo_autopilot_planner_stop") {
-          autopilotPlannerSettings.enabled = 0;
-          autopilotPlannerSettings.updated_at = getNow();
-          autopilotPlannerRunning = false;
-          recordAutopilotPlannerEvent(
-            "planner_stopped",
-            "Background autopilot planner stopped.",
-            { metadata: { runnerId: "mock-autopilot" } },
+        const candidate = candidatePosts.find(
+          (row) => row.id === thread.candidate_post_id,
+        );
+        const target = targetPosts.find(
+          (row) => row.id === candidate?.target_post_id,
+        );
+        const expectedUrn = mockResolveLinkedInTargetUrn(
+          target?.platform_resource_urn || target?.url || "",
+        );
+        if (!expectedUrn)
+          throw new Error(
+            "LinkedIn target URN could not be resolved from the candidate URL",
           );
-          return Promise.resolve(autopilotPlannerStatusPayload());
-        }
-        if (cmd === "linkgo_autopilot_planner_tick") {
-          const error = w.__LINKGO_AUTOPILOT_TICK_ERROR__;
-          if (typeof error === "string" && error.trim() !== "") {
-            throw new Error(error);
-          }
-          return Promise.resolve(runAutopilotPlannerTickMock());
-        }
-        if (cmd === "linkgo_scheduler_status") {
-          return Promise.resolve(schedulerStatusPayload());
-        }
-        if (cmd === "linkgo_scheduler_start") {
-          if (safetySettings.global_kill_switch === 1) {
-            throw new Error(
-              safetySettings.kill_switch_reason.trim()
-                ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
-                : "Global kill switch is enabled",
-            );
-          }
-          schedulerSettings.enabled = 1;
-          schedulerSettings.updated_at = getNow();
-          schedulerRunning = true;
-          recordSchedulerEvent(
-            "scheduler_started",
-            "Background scheduler started.",
-            {
-              metadata: { runnerId: "mock-runner" },
-            },
+        if (expectedUrn !== input.targetUrn)
+          throw new Error(
+            "LinkedIn target URN does not match the comment target",
           );
-          return Promise.resolve(schedulerStatusPayload());
-        }
-        if (cmd === "linkgo_scheduler_stop") {
-          schedulerSettings.enabled = 0;
-          schedulerSettings.updated_at = getNow();
-          schedulerRunning = false;
-          recordSchedulerEvent(
-            "scheduler_stopped",
-            "Background scheduler stopped.",
-            {
-              metadata: { runnerId: "mock-runner" },
-            },
+        if (
+          input.idempotencyKey !== `comment-thread:${thread.id}:linkedin:manual`
+        )
+          throw new Error(
+            "Comment idempotency key does not match thread state",
           );
-          return Promise.resolve(schedulerStatusPayload());
-        }
-        if (cmd === "linkgo_scheduler_tick") {
-          return Promise.resolve(runSchedulerTickMock());
-        }
-        if (cmd === "linkgo_metric_refresh_status") {
-          return Promise.resolve(metricRefreshStatusPayload());
-        }
-        if (cmd === "linkgo_metric_refresh_start") {
-          metricRefreshSettings.enabled = 1;
-          metricRefreshSettings.updated_at = getNow();
-          metricRefreshRunning = true;
-          recordMetricRefreshEvent(
-            "worker_started",
-            "Metric refresh worker started.",
-            {
-              metadata: { runnerId: "mock-metric-refresh" },
-            },
+        if (
+          commentAttempts.some(
+            (row) =>
+              row.comment_thread_id === thread.id && row.status === "succeeded",
+          )
+        )
+          throw new Error(
+            "Comment thread already has a successful posting attempt",
           );
-          return Promise.resolve(metricRefreshStatusPayload());
-        }
-        if (cmd === "linkgo_metric_refresh_stop") {
-          metricRefreshSettings.enabled = 0;
-          metricRefreshSettings.updated_at = getNow();
-          metricRefreshRunning = false;
-          recordMetricRefreshEvent(
-            "worker_stopped",
-            "Metric refresh worker stopped.",
-            {
-              metadata: { runnerId: "mock-metric-refresh" },
-            },
+        const campaign = campaigns.find((row) => row.id === thread.campaign_id);
+        const today = getNow().slice(0, 10);
+        const limit = campaign?.daily_comment_limit ?? 0;
+        const currentCount = commentAttempts.filter((attempt) => {
+          const attemptThread = commentThreads.find(
+            (row) => row.id === attempt.comment_thread_id,
           );
-          return Promise.resolve(metricRefreshStatusPayload());
-        }
-        if (cmd === "linkgo_metric_refresh_tick") {
-          const error = w.__LINKGO_METRIC_REFRESH_TICK_ERROR__;
-          if (typeof error === "string" && error.trim() !== "") {
-            return Promise.reject(error);
-          }
-          return Promise.resolve(runMetricRefreshTickMock());
-        }
-        if (cmd === "linkgo_linkedin_publish_comment") {
-          const input =
-            (
-              args as
-                | {
-                    input?: {
-                      commentThreadId?: number;
-                      comment_thread_id?: number;
-                      targetUrn?: string;
-                      target_urn?: string;
-                    };
-                  }
-                | undefined
-            )?.input ?? {};
-          const commentInvokes = Number(
-            w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ ?? 0,
+          return (
+            attemptThread?.campaign_id === thread.campaign_id &&
+            attempt.status === "succeeded" &&
+            attempt.created_at.slice(0, 10) === today
           );
-          w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ = commentInvokes + 1;
-          const error = w.__LINKGO_LINKEDIN_COMMENT_ERROR__;
-          if (typeof error === "string" && error.trim() !== "") {
-            throw new Error(error);
-          }
-          const result = w.__LINKGO_LINKEDIN_COMMENT_RESULT__;
-          if (result !== undefined) {
-            return Promise.resolve(result);
-          }
-          const commentThreadId =
-            input.commentThreadId ?? input.comment_thread_id ?? 1;
-          const targetUrn =
-            input.targetUrn ?? input.target_urn ?? "urn:li:ugcPost:test";
-          const platformCommentId = `test-comment-${commentThreadId}`;
-          return Promise.resolve({
-            platformCommentId,
-            platformCommentUrn: `urn:li:comment:(${targetUrn},${platformCommentId})`,
-            externalCommentUrl: `https://www.linkedin.com/feed/update/${targetUrn}/`,
+        }).length;
+        const block = (summary: string, error: string): void => {
+          rateLimitEvents.push({
+            id: nextRateLimitEventId++,
+            campaign_id: thread.campaign_id,
+            action: "comment",
+            window_key: today,
+            limit_value: limit,
+            current_count: currentCount,
+            decision: "blocked",
+            summary,
+            created_at: getNow(),
           });
+          rejection = error;
+        };
+        if (safetySettings.global_kill_switch === 1) {
+          const reason = safetySettings.kill_switch_reason;
+          block(
+            reason
+              ? `Comment posting blocked by global kill switch: ${reason}`
+              : "Comment posting blocked by global kill switch",
+            reason
+              ? `Global kill switch is enabled: ${reason}`
+              : "Global kill switch is enabled",
+          );
+          return undefined;
         }
-        if (cmd === "linkgo_linkedin_publish_post") {
-          const input =
-            (
-              args as
-                | {
-                    input?: {
-                      approvalId?: number;
-                      approval_id?: number;
-                    };
-                  }
-                | undefined
-            )?.input ?? {};
-          const error = w.__LINKGO_LINKEDIN_PUBLISH_ERROR__;
-          if (typeof error === "string" && error.trim() !== "") {
-            throw new Error(error);
+        if (currentCount >= limit) {
+          const summary = `Daily comment limit reached for ${today}: ${currentCount}/${limit} used`;
+          block(summary, summary);
+        }
+        return undefined;
+      });
+      return settled.then(() =>
+        rejection ? Promise.reject(new Error(rejection)) : undefined,
+      );
+    }
+
+    // Native candidate-queue commands replay the statements the native module
+    // runs through the existing SQL emulator, so its cascades and fault hooks
+    // (dedupe insert, workflow event, discovery status) keep applying.
+    function mockSqlSelect<T>(query: string, values: unknown[]): T[] {
+      return selectSql({ query, values }) as T[];
+    }
+
+    function mockSqlExecute(
+      query: string,
+      values: unknown[],
+    ): { lastInsertId: number; rowsAffected: number } {
+      return executeSql({ query, values });
+    }
+
+    function mockContentHash(content: string): string {
+      const normalized = content.trim().replace(/\s+/gu, " ");
+      let hash = 0x811c9dc5;
+      for (let index = 0; index < normalized.length; index += 1) {
+        hash ^= normalized.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      return (hash >>> 0).toString(16).padStart(8, "0");
+    }
+
+    function mockAssertCandidateCampaignCanMutate(campaignId: number): void {
+      const campaign = campaigns.find((row) => row.id === campaignId);
+      if (!campaign) throw new Error("Campaign was not found");
+      if (campaign.status === "archived")
+        throw new Error("Campaign is archived");
+    }
+
+    interface MockCandidateInput {
+      campaignId: number;
+      url: string;
+      content: string;
+      authorName?: string;
+      authorProfileUrl?: string;
+      postedAt?: string | null;
+      platformResourceUrn?: string;
+      sourceKeyword?: string;
+      relevanceScore?: number | null;
+      scoreReason?: string;
+      notes?: string;
+    }
+
+    // Mirrors src-tauri/src/js_url.rs (the renderer's former WHATWG helper).
+    function mockNormalizeUrl(value: string, clearSearch: boolean): string {
+      const trimmed = value.trim();
+      if (!trimmed) return "";
+      try {
+        const url = new URL(trimmed);
+        url.protocol = url.protocol.toLocaleLowerCase();
+        url.hostname = url.hostname.toLocaleLowerCase();
+        url.hash = "";
+        if (clearSearch) url.search = "";
+        if (url.pathname.length > 1)
+          url.pathname = url.pathname.replace(/\/+$/u, "");
+        return url.toString();
+      } catch {
+        return trimmed.toLocaleLowerCase();
+      }
+    }
+
+    function createCandidateCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => ({
+        id: mockInsertCandidate(nativeInput<MockCandidateInput>(args)),
+      }));
+    }
+
+    // ---- Source imports: mirrors src-tauri/src/source_imports.rs and the
+    // native candidate-policy evaluator (formerly renderer code). ----
+    const mockActiveImports = new Map<number, number>();
+    const MOCK_IMPORT_REASONS = {
+      duplicate: "Duplicate URL or post text for this campaign.",
+      storage:
+        "Candidate could not be stored. Review the row and retry the import.",
+      skipped:
+        "Not processed because the import stopped after a local storage error.",
+      batch: "Import stopped after a local storage error.",
+      interruptedItem:
+        "Not processed because the previous app session ended before the import finished.",
+      interruptedBatch:
+        "Import stopped because the previous app session ended before processing finished.",
+    } as const;
+
+    function mockPolicyFindings(input: MockCandidateInput): Array<{
+      ruleKey: string;
+      message: string;
+    }> {
+      const findings: Array<{ ruleKey: string; message: string }> = [];
+      const add = (ruleKey: string, message: string): void => {
+        findings.push({ ruleKey, message: message.slice(0, 300) });
+      };
+      const policy = candidateIntakePolicies.find(
+        (row) => row.campaign_id === input.campaignId,
+      );
+      const maxAge = policy?.max_post_age_days ?? 30;
+      let allowed = false;
+      try {
+        const url = new URL(input.url);
+        const host = url.hostname.toLocaleLowerCase();
+        allowed =
+          url.protocol === "https:" &&
+          (host === "linkedin.com" || host.endsWith(".linkedin.com"));
+      } catch {
+        allowed = false;
+      }
+      if (!allowed)
+        add(
+          "source",
+          "Source must be an HTTPS linkedin.com URL or LinkedIn subdomain.",
+        );
+      const trimmed = input.postedAt?.trim() ?? "";
+      const parts =
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/u.exec(
+          trimmed,
+        );
+      // Reject calendar dates `Date` would silently roll over (e.g. Feb 30),
+      // as the native evaluator does.
+      const calendarOk = ((): boolean => {
+        if (parts === null) return false;
+        const [year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0] =
+          parts.slice(1, 7).map((part) => Number(part ?? "0"));
+        const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+        const days = [
+          31,
+          leap ? 29 : 28,
+          31,
+          30,
+          31,
+          30,
+          31,
+          31,
+          30,
+          31,
+          30,
+          31,
+        ][month - 1];
+        return (
+          days !== undefined &&
+          day >= 1 &&
+          day <= days &&
+          hour <= 23 &&
+          minute <= 59 &&
+          second <= 59
+        );
+      })();
+      const posted = calendarOk ? Date.parse(trimmed) : Number.NaN;
+      if (Number.isNaN(posted)) {
+        add(
+          "age",
+          "Post timestamp must be an absolute ISO-8601 value with a timezone.",
+        );
+      } else {
+        const ageMs = Date.now() - posted;
+        if (ageMs < -5 * 60 * 1000)
+          add("age", "Post timestamp is materially in the future.");
+        else if (ageMs > maxAge * 86_400_000)
+          add("age", `Post is older than the ${maxAge}-day campaign limit.`);
+      }
+      const text = [input.content, input.sourceKeyword ?? ""]
+        .join("\n")
+        .normalize("NFKC")
+        .toLocaleLowerCase();
+      const topic = candidatePolicyBannedTopics
+        .filter((row) => row.campaign_id === input.campaignId)
+        .sort((left, right) => left.id - right.id)
+        .find((row) => {
+          const normalized = row.topic
+            .normalize("NFKC")
+            .trim()
+            .replace(/\s+/gu, " ")
+            .toLocaleLowerCase();
+          if (!normalized) return false;
+          const phrase = normalized
+            .replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+            .replace(/\s+/gu, "\\s+");
+          return new RegExp(
+            `(?:^|[^\\p{L}\\p{N}])${phrase}(?=$|[^\\p{L}\\p{N}])`,
+            "u",
+          ).test(text);
+        });
+      if (topic)
+        add("banned_topic", `Post matches banned topic: ${topic.topic}.`);
+      const normalizedUrl = mockNormalizeUrl(input.url, false);
+      const profile = mockNormalizeUrl(input.authorProfileUrl ?? "", true);
+      const urn = (input.platformResourceUrn ?? "").trim();
+      const contacts = mockSqlSelect<{
+        normalized_url: string;
+        platform_resource_urn: string;
+        author_profile_url: string;
+      }>(
+        `SELECT tp.normalized_url, tp.platform_resource_urn, tp.author_profile_url
+     FROM comment_attempts ca
+     INNER JOIN comment_threads ct ON ct.id = ca.comment_thread_id
+     INNER JOIN candidate_posts cp ON cp.id = ct.candidate_post_id
+     INNER JOIN target_posts tp ON tp.id = cp.target_post_id
+     WHERE ca.status = 'succeeded'
+       AND (
+         tp.normalized_url = $1
+         OR ($2 <> '' AND tp.platform_resource_urn = $2)
+         OR ($3 <> '' AND TRIM(tp.author_profile_url) <> '')
+       )`,
+        [normalizedUrl, urn, profile],
+      );
+      if (
+        contacts.some(
+          (contact) =>
+            contact.normalized_url === normalizedUrl ||
+            (urn !== "" && contact.platform_resource_urn === urn) ||
+            (profile !== "" &&
+              mockNormalizeUrl(contact.author_profile_url, true) === profile),
+        )
+      )
+        add(
+          "already_contacted",
+          "A successful Linkgo comment already contacted this target or author profile.",
+        );
+      return findings;
+    }
+
+    function mockUpdateImportItem(
+      batchId: number,
+      rowNumber: number,
+      status: "accepted" | "duplicate" | "rejected",
+      candidateId: number | null,
+      reason: string,
+      ruleKey = "",
+    ): void {
+      const result = mockSqlExecute(
+        `UPDATE source_import_items
+      SET status = $1,
+        candidate_post_id = $2,
+        reason = $3,
+        policy_rule_key = $4,
+        updated_at = datetime('now')
+      WHERE source_import_batch_id = $5
+        AND row_number = $6`,
+        [
+          status,
+          candidateId,
+          reason.slice(0, 2000),
+          ruleKey,
+          batchId,
+          rowNumber,
+        ],
+      );
+      if (result.rowsAffected !== 1)
+        throw new Error("Source import item outcome was not stored");
+    }
+
+    interface MockImportResult {
+      batchId: number;
+      status: string;
+      totalCount: number;
+      acceptedCount: number;
+      duplicateCount: number;
+      rejectedCount: number;
+      errorMessage: string;
+    }
+
+    function mockUpdateImportBatch(result: MockImportResult): void {
+      const updated = mockSqlExecute(
+        `UPDATE source_import_batches
+      SET status = $1,
+        accepted_count = $2,
+        duplicate_count = $3,
+        rejected_count = $4,
+        error_message = $5,
+        updated_at = datetime('now')
+      WHERE id = $6`,
+        [
+          result.status,
+          result.acceptedCount,
+          result.duplicateCount,
+          result.rejectedCount,
+          result.errorMessage,
+          result.batchId,
+        ],
+      );
+      if (updated.rowsAffected !== 1)
+        throw new Error("Source import batch outcome was not stored");
+    }
+
+    /** Runs `work` atomically against every mock table. */
+    function mockAtomic<T>(work: () => T): T {
+      const snapshot = createTransactionSnapshot();
+      try {
+        return work();
+      } catch (error) {
+        restoreTransactionSnapshot(snapshot);
+        throw error;
+      }
+    }
+
+    function mockTerminalizeBatch(
+      batchId: number,
+      totalCount: number,
+      failedRow: number | null,
+      failedReason: string,
+      remainingReason: string,
+      batchError: string,
+    ): MockImportResult {
+      try {
+        return mockAtomic(() => {
+          const items = sourceImportItems
+            .filter((item) => item.source_import_batch_id === batchId)
+            .sort((left, right) => left.row_number - right.row_number);
+          const counts = { accepted: 0, duplicate: 0, rejected: 0 };
+          for (const item of items) {
+            if (item.status === "pending") {
+              mockUpdateImportItem(
+                batchId,
+                item.row_number,
+                "rejected",
+                null,
+                failedRow === null || item.row_number === failedRow
+                  ? failedReason
+                  : remainingReason,
+              );
+            }
+            if (item.status === "accepted") counts.accepted += 1;
+            if (item.status === "duplicate") counts.duplicate += 1;
+            if (item.status === "rejected") counts.rejected += 1;
           }
-          const result = w.__LINKGO_LINKEDIN_PUBLISH_RESULT__;
-          if (result !== undefined) {
-            return Promise.resolve(result);
-          }
-          const approvalId = input.approvalId ?? input.approval_id ?? 1;
-          const platformPostId = `urn:li:ugcPost:test-${approvalId}`;
-          return Promise.resolve({
-            platformPostId,
-            externalPostUrl: `https://www.linkedin.com/feed/update/${platformPostId}/`,
+          const result: MockImportResult = {
+            batchId,
+            status: "failed",
+            totalCount,
+            acceptedCount: counts.accepted,
+            duplicateCount: counts.duplicate,
+            rejectedCount: counts.rejected,
+            errorMessage: batchError,
+          };
+          mockUpdateImportBatch(result);
+          return result;
+        });
+      } catch {
+        throw new Error(
+          "Source import failed and its outcome could not be recorded",
+        );
+      }
+    }
+
+    function writeSourceImportBatchCommand(args: unknown): Promise<unknown> {
+      const input = nativeInput<{
+        campaignId: number;
+        connectorKey: string;
+        rows: Array<{
+          rowNumber: number;
+          inputJson: string;
+          value: Omit<MockCandidateInput, "campaignId"> | null;
+          validationError: string;
+        }>;
+      }>(args);
+      try {
+        mockAssertCandidateCampaignCanMutate(input.campaignId);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      mockActiveImports.set(
+        input.campaignId,
+        (mockActiveImports.get(input.campaignId) ?? 0) + 1,
+      );
+      let batchId: number | null = null;
+      let currentRow: number | null = null;
+      try {
+        try {
+          batchId = mockAtomic(() => {
+            const id = mockSqlExecute(
+              `INSERT INTO source_import_batches (
+        campaign_id,
+        source_type,
+        status,
+        total_count,
+        accepted_count,
+        duplicate_count,
+        rejected_count,
+        error_message,
+        updated_at
+      ) VALUES ($1, $2, 'processing', $3, 0, 0, 0, '', datetime('now'))`,
+              [input.campaignId, input.connectorKey, input.rows.length],
+            ).lastInsertId;
+            for (const row of input.rows)
+              mockSqlExecute(
+                `INSERT INTO source_import_items (
+          source_import_batch_id,
+          row_number,
+          status,
+          input_json,
+          candidate_post_id,
+          reason,
+          policy_rule_key,
+          updated_at
+        ) VALUES ($1, $2, 'pending', $3, NULL, '', '', datetime('now'))`,
+                [id, row.rowNumber, row.inputJson],
+              );
+            return id;
           });
+        } catch {
+          throw new Error("Source import could not be started");
         }
-        return Promise.resolve(null);
+        const started = batchId;
+        const counts = { accepted: 0, duplicate: 0, rejected: 0 };
+        for (const row of input.rows) {
+          currentRow = row.rowNumber;
+          const value = row.value;
+          if (value === null) {
+            mockUpdateImportItem(
+              started,
+              row.rowNumber,
+              "rejected",
+              null,
+              row.validationError,
+            );
+            counts.rejected += 1;
+            continue;
+          }
+          const candidate = { ...value, campaignId: input.campaignId };
+          const findings = mockPolicyFindings(candidate);
+          const primary = findings[0];
+          if (primary) {
+            mockUpdateImportItem(
+              started,
+              row.rowNumber,
+              "rejected",
+              null,
+              findings.map((finding) => finding.message).join(" "),
+              primary.ruleKey,
+            );
+            counts.rejected += 1;
+            continue;
+          }
+          try {
+            mockAtomic(() => {
+              const candidateId = mockInsertCandidate(candidate);
+              mockUpdateImportItem(
+                started,
+                row.rowNumber,
+                "accepted",
+                candidateId,
+                `Candidate ${candidateId} created.`,
+              );
+            });
+            counts.accepted += 1;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            if (message !== "Candidate already exists for this campaign")
+              throw error;
+            mockUpdateImportItem(
+              started,
+              row.rowNumber,
+              "duplicate",
+              null,
+              MOCK_IMPORT_REASONS.duplicate,
+            );
+            counts.duplicate += 1;
+          }
+        }
+        currentRow = null;
+        const result: MockImportResult = {
+          batchId: started,
+          status:
+            counts.accepted === input.rows.length
+              ? "completed"
+              : "completed_with_errors",
+          totalCount: input.rows.length,
+          acceptedCount: counts.accepted,
+          duplicateCount: counts.duplicate,
+          rejectedCount: counts.rejected,
+          errorMessage: "",
+        };
+        mockUpdateImportBatch(result);
+        persistReloadSnapshot();
+        return Promise.resolve(result);
+      } catch (error) {
+        if (batchId === null)
+          return Promise.reject(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        try {
+          const failed = mockTerminalizeBatch(
+            batchId,
+            input.rows.length,
+            currentRow,
+            MOCK_IMPORT_REASONS.storage,
+            MOCK_IMPORT_REASONS.skipped,
+            MOCK_IMPORT_REASONS.batch,
+          );
+          persistReloadSnapshot();
+          return Promise.resolve(failed);
+        } catch (terminalError) {
+          return Promise.reject(
+            terminalError instanceof Error
+              ? terminalError
+              : new Error(String(terminalError)),
+          );
+        }
+      } finally {
+        const remaining = (mockActiveImports.get(input.campaignId) ?? 1) - 1;
+        if (remaining <= 0) mockActiveImports.delete(input.campaignId);
+        else mockActiveImports.set(input.campaignId, remaining);
+      }
+    }
+
+    function recoverSourceImportsCommand(args: unknown): Promise<unknown> {
+      const { campaignId } = nativeInput<{ campaignId: number }>(args);
+      if (mockActiveImports.has(campaignId))
+        return Promise.resolve({ recovered: 0 });
+      try {
+        const interrupted = sourceImportBatches
+          .filter(
+            (batch) =>
+              batch.campaign_id === campaignId && batch.status === "processing",
+          )
+          .sort((left, right) => left.id - right.id);
+        for (const batch of interrupted)
+          mockTerminalizeBatch(
+            batch.id,
+            batch.total_count,
+            null,
+            MOCK_IMPORT_REASONS.interruptedItem,
+            MOCK_IMPORT_REASONS.interruptedItem,
+            MOCK_IMPORT_REASONS.interruptedBatch,
+          );
+        if (interrupted.length > 0) persistReloadSnapshot();
+        return Promise.resolve({ recovered: interrupted.length });
+      } catch (error) {
+        return Promise.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    }
+
+    // ---- Workflows: generated from the pre-migration renderer workflow code
+    // (sync over the SQL emulator) so the browser suite exercises the same
+    // statements and fault hooks the native commands replaced. ----
+    type MockWfStepStatus =
+      | "pending"
+      | "running"
+      | "waiting_approval"
+      | "blocked"
+      | "completed"
+      | "failed"
+      | "skipped";
+    type CampaignStatus = string;
+    type WorkflowArtifactType = "agent_run" | "candidate_post" | "draft";
+    const TERMINAL_RUN_STATUSES: WorkflowRunStatus[] = [
+      "completed",
+      "cancelled",
+    ];
+    const CONTENT_PIPELINE_STEPS: ReadonlyArray<{
+      step_key: WorkflowStepKey;
+      title: string;
+      description: string;
+      sort_order: number;
+    }> = [
+      {
+        step_key: "research",
+        title: "Research",
+        description: "Research source posts and campaign context.",
+        sort_order: 1,
       },
+      {
+        step_key: "score",
+        title: "Score relevance",
+        description: "Dedupe and score candidate relevance.",
+        sort_order: 2,
+      },
+      {
+        step_key: "draft",
+        title: "Draft variants",
+        description: "Create draft variants.",
+        sort_order: 3,
+      },
+      {
+        step_key: "audit",
+        title: "Audit drafts",
+        description: "Run deterministic/AI audit checks.",
+        sort_order: 4,
+      },
+      {
+        step_key: "approve",
+        title: "Approve",
+        description: "Wait for human review.",
+        sort_order: 5,
+      },
+      {
+        step_key: "schedule",
+        title: "Schedule",
+        description: "Schedule approved content.",
+        sort_order: 6,
+      },
+      {
+        step_key: "measure",
+        title: "Measure",
+        description: "Record metrics and learning.",
+        sort_order: 7,
+      },
+    ];
+    interface WorkflowStepValidationRow extends WorkflowStep {
+      run_status: WorkflowRunStatus;
+      campaign_id: number;
+      campaign_status: CampaignStatus;
+      autopilot_plan_id: number | null;
+    }
+    interface WorkflowRunValidationRow {
+      id: number;
+      campaign_id: number;
+      status: WorkflowRunStatus;
+      current_step_key: string;
+      started_at: string | null;
+      campaign_status: CampaignStatus;
+      autopilot_plan_id: number | null;
+    }
+    interface CampaignStatusRow {
+      id: number;
+      status: CampaignStatus;
+    }
+    interface WorkflowArtifactOwnershipRow {
+      [key: string]: unknown;
+    }
+    interface WorkflowAgentRunLinkRow {
+      workflow_run_id: number | null;
+      workflow_step_id: number | null;
+    }
+    interface WorkflowLinkedAgentRow {
+      id: number;
+      status: AgentRunStatus;
+      output_summary: string;
+      error_message: string;
+    }
+    interface ReconcileWorkflowAgentRunInput {
+      agentRunId: number;
+      status: AgentRunStatus;
+      outputSummary: string;
+      errorMessage: string;
+    }
+    type CreateWorkflowRunInput = {
+      campaignId: number;
+      title: string;
+      contextSummary: string;
+    };
+    type StartWorkflowRunInput = { id: number };
+    type CancelWorkflowRunInput = { id: number };
+    type AddWorkflowNoteInput = { workflowRunId: number; note: string };
+    type SetWorkflowStepStatusInput = {
+      stepId: number;
+      status: MockWfStepStatus;
+      outputSummary: string;
+      errorMessage: string;
+    };
+    type CreateWorkflowArtifactInput = {
+      workflowRunId: number;
+      workflowStepId?: number;
+      artifactType: WorkflowArtifactType;
+      artifactId: number;
+      summary: string;
+    };
+    const mockWf_FINISHED_STEP_STATUSES: WorkflowStepStatus[] = [
+      "completed",
+      "skipped",
+    ];
+
+    const mockWf_PLANNER_DRAFT_SAVE_ONLY_MESSAGE =
+      "Planner-linked draft steps are save-only. Open Drafts, generate variants, and save a generated draft to continue to audit.";
+
+    const mockWf_STEP_TRANSITIONS: Record<
+      WorkflowStepStatus,
+      WorkflowStepStatus[]
+    > = {
+      pending: ["running", "skipped"],
+      running: [
+        "completed",
+        "waiting_approval",
+        "blocked",
+        "failed",
+        "skipped",
+      ],
+      waiting_approval: ["completed", "blocked", "failed", "running"],
+      blocked: ["running", "failed", "skipped"],
+      failed: ["running", "blocked", "skipped"],
+      completed: ["running"],
+      skipped: ["running"],
+    };
+
+    function mockWf_assertStepTransition(
+      currentStatus: WorkflowStepStatus,
+      nextStatus: WorkflowStepStatus,
+    ): void {
+      if (!mockWf_STEP_TRANSITIONS[currentStatus].includes(nextStatus)) {
+        throw new Error("Unsupported workflow step transition");
+      }
+    }
+
+    function mockWf_getStepEventType(
+      currentStatus: WorkflowStepStatus,
+      nextStatus: WorkflowStepStatus,
+    ): WorkflowEventType {
+      if (nextStatus === "running") {
+        return currentStatus === "pending" ? "step_started" : "step_resumed";
+      }
+      if (nextStatus === "waiting_approval") return "step_waiting_approval";
+      if (nextStatus === "blocked") return "step_blocked";
+      if (nextStatus === "completed") return "step_completed";
+      if (nextStatus === "failed") return "step_failed";
+      if (nextStatus === "skipped") return "step_skipped";
+      return "note_added";
+    }
+
+    function mockWf_getStepEventSummary(
+      step: WorkflowStep,
+      nextStatus: WorkflowStepStatus,
+    ): string {
+      if (nextStatus === "running") {
+        return step.status === "pending"
+          ? `${step.title} started`
+          : `${step.title} resumed`;
+      }
+      if (nextStatus === "waiting_approval") {
+        return `${step.title} waiting for approval`;
+      }
+      if (nextStatus === "blocked") return `${step.title} blocked`;
+      if (nextStatus === "completed") return `${step.title} completed`;
+      if (nextStatus === "failed") return `${step.title} failed`;
+      if (nextStatus === "skipped") return `${step.title} skipped`;
+      return `${step.title} updated`;
+    }
+
+    function mockWf_getCurrentStepKey(steps: WorkflowStep[]): WorkflowStepKey {
+      return (
+        steps.find(
+          (step) => !mockWf_FINISHED_STEP_STATUSES.includes(step.status),
+        )?.step_key ?? "measure"
+      );
+    }
+
+    function mockWf_getRunStatusFromSteps(
+      steps: WorkflowStep[],
+    ): WorkflowRunStatus {
+      const currentStep = steps.find(
+        (step) => !mockWf_FINISHED_STEP_STATUSES.includes(step.status),
+      );
+      if (currentStep?.status === "waiting_approval") return "waiting_approval";
+      if (currentStep?.status === "blocked") return "blocked";
+      if (currentStep?.status === "failed") return "failed";
+      if (currentStep === undefined) return "completed";
+      return "running";
+    }
+
+    function mockWf_loadWorkflowSteps(workflowRunId: number): WorkflowStep[] {
+      return mockSqlSelect<WorkflowStep>(
+        `SELECT * FROM workflow_steps
+    WHERE workflow_run_id = $1
+    ORDER BY sort_order ASC`,
+        [workflowRunId],
+      );
+    }
+
+    function mockWf_insertWorkflowEvent(
+      workflowRunId: number,
+      workflowStepId: number | null,
+      eventType: WorkflowEventType,
+      summary: string,
+    ): void {
+      mockSqlExecute(
+        `INSERT INTO workflow_events (
+      workflow_run_id,
+      workflow_step_id,
+      event_type,
+      summary
+    ) VALUES ($1, $2, $3, $4)`,
+        [workflowRunId, workflowStepId, eventType, summary],
+      );
+    }
+
+    function mockWf_getWorkflowRunValidation(
+      id: number,
+    ): WorkflowRunValidationRow {
+      const rows = mockSqlSelect<WorkflowRunValidationRow>(
+        `SELECT
+      wr.*,
+      c.status AS campaign_status,
+      ap.id AS autopilot_plan_id
+    FROM workflow_runs wr
+    INNER JOIN campaigns c ON c.id = wr.campaign_id
+    LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
+    WHERE wr.id = $1
+    LIMIT 1`,
+        [id],
+      );
+      const run = rows[0];
+      if (run === undefined) throw new Error("Workflow run was not found");
+      return run;
+    }
+
+    function mockWf_updateRunFromSteps(
+      workflowRunId: number,
+      previousRunStatus: WorkflowRunStatus,
+    ): void {
+      const steps = mockWf_loadWorkflowSteps(workflowRunId);
+      const nextStatus = mockWf_getRunStatusFromSteps(steps);
+      const currentStepKey = mockWf_getCurrentStepKey(steps);
+      mockSqlExecute(
+        `UPDATE workflow_runs
+    SET status = $1,
+      current_step_key = $2,
+      started_at = CASE WHEN $1 = 'running' THEN COALESCE(started_at, datetime('now')) ELSE started_at END,
+      completed_at = CASE WHEN $1 = 'completed' THEN COALESCE(completed_at, datetime('now')) ELSE NULL END,
+      updated_at = datetime('now')
+    WHERE id = $3`,
+        [nextStatus, currentStepKey, workflowRunId],
+      );
+      if (nextStatus === "completed" && previousRunStatus !== "completed") {
+        mockWf_insertWorkflowEvent(
+          workflowRunId,
+          null,
+          "run_completed",
+          "Workflow run completed",
+        );
+      }
+    }
+
+    function mockWf_syncPlannerScoringBacklogInTransaction(
+      workflowRunId: number,
+      scoreStepStatus: WorkflowStepStatus,
+    ): void {
+      const backlogStatus =
+        scoreStepStatus === "pending"
+          ? "pending"
+          : scoreStepStatus === "running" ||
+              scoreStepStatus === "waiting_approval"
+            ? "in_progress"
+            : scoreStepStatus === "completed"
+              ? "completed"
+              : scoreStepStatus === "skipped"
+                ? "cancelled"
+                : "blocked";
+      mockSqlExecute(
+        `UPDATE campaign_backlog_items
+      SET status = $1,
+        completed_at = CASE
+          WHEN $1 = 'completed' THEN COALESCE(completed_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+          ELSE NULL
+        END,
+        cancelled_at = CASE
+          WHEN $1 = 'cancelled' THEN COALESCE(cancelled_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+          ELSE NULL
+        END,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE id = (
+        SELECT ap.campaign_backlog_item_id
+        FROM autopilot_plans ap
+        INNER JOIN workflow_steps ws
+          ON ws.workflow_run_id = ap.workflow_run_id
+         AND ws.step_key = 'score'
+        WHERE ap.workflow_run_id = $2
+          AND ap.status = 'planned'
+          AND ws.status = $3
+        LIMIT 1
+      )
+        AND owner_type = 'linkgo'
+        AND work_type = 'scoring'
+        AND recurrence = 'none'
+        AND status NOT IN ('completed', 'cancelled')`,
+        [backlogStatus, workflowRunId, scoreStepStatus],
+      );
+    }
+
+    function mockWf_startNextPendingWorkflowStep(step: WorkflowStep): void {
+      const steps = mockWf_loadWorkflowSteps(step.workflow_run_id);
+      const nextStep = steps.find(
+        (candidate) =>
+          candidate.sort_order === step.sort_order + 1 &&
+          candidate.status === "pending",
+      );
+      if (nextStep === undefined) return;
+
+      mockWf_assertStepTransition(nextStep.status, "running");
+      mockSqlExecute(
+        `UPDATE workflow_steps
+    SET status = 'running',
+      started_at = COALESCE(started_at, datetime('now')),
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $1`,
+        [nextStep.id],
+      );
+      mockWf_insertWorkflowEvent(
+        step.workflow_run_id,
+        nextStep.id,
+        "step_started",
+        `${nextStep.title} started`,
+      );
+    }
+
+    function mockWf_getWorkflowProjectionFromAgentStatus(
+      status: AgentRunStatus,
+    ): {
+      stepStatus: WorkflowStepStatus;
+      executionStatus:
+        | "running"
+        | "completed"
+        | "waiting_approval"
+        | "failed"
+        | "blocked"
+        | "cancelled";
+    } {
+      if (status === "completed") {
+        return { stepStatus: "completed", executionStatus: "completed" };
+      }
+      if (status === "waiting_approval") {
+        return {
+          stepStatus: "waiting_approval",
+          executionStatus: "waiting_approval",
+        };
+      }
+      if (status === "failed") {
+        return { stepStatus: "failed", executionStatus: "failed" };
+      }
+      if (status === "cancelled") {
+        return { stepStatus: "blocked", executionStatus: "cancelled" };
+      }
+      return { stepStatus: "running", executionStatus: "running" };
+    }
+
+    function mockWf_reconcileWorkflowAgentRunInTransaction(
+      input: ReconcileWorkflowAgentRunInput,
+    ): boolean {
+      const linkRows = mockSqlSelect<WorkflowAgentRunLinkRow>(
+        `SELECT workflow_run_id, workflow_step_id
+    FROM agent_runs
+    WHERE id = $1
+    LIMIT 1`,
+        [input.agentRunId],
+      );
+      const link = linkRows[0];
+      if (
+        link?.workflow_run_id === null ||
+        link?.workflow_run_id === undefined ||
+        link.workflow_step_id === null
+      ) {
+        return false;
+      }
+
+      const stepRows = mockSqlSelect<WorkflowStepValidationRow>(
+        `SELECT
+      ws.*,
+      wr.status AS run_status,
+      wr.campaign_id,
+      c.status AS campaign_status,
+      ap.id AS autopilot_plan_id
+    FROM workflow_steps ws
+    INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+    INNER JOIN campaigns c ON c.id = wr.campaign_id
+    LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
+    WHERE ws.id = $1
+    LIMIT 1`,
+        [link.workflow_step_id],
+      );
+      const step = stepRows[0];
+      if (
+        step === undefined ||
+        step.workflow_run_id !== link.workflow_run_id ||
+        step.run_status === "cancelled"
+      ) {
+        return false;
+      }
+
+      // Planner draft audits are settled atomically by their native complete/fail
+      // commands after the generic agent runtime has persisted provider output.
+      if (step.step_key === "audit" && step.autopilot_plan_id !== null) {
+        return false;
+      }
+
+      const projection = mockWf_getWorkflowProjectionFromAgentStatus(
+        input.status,
+      );
+      mockSqlExecute(
+        `UPDATE workflow_step_executions
+    SET status = $1,
+      error_summary = $2,
+      completed_at = CASE
+        WHEN $1 IN ('completed', 'failed', 'blocked', 'cancelled') THEN COALESCE(completed_at, datetime('now'))
+        ELSE NULL
+      END,
+      updated_at = datetime('now')
+    WHERE agent_run_id = $3
+      AND workflow_step_id = $4`,
+        [
+          projection.executionStatus,
+          input.errorMessage,
+          input.agentRunId,
+          step.id,
+        ],
+      );
+
+      if (step.status !== projection.stepStatus) {
+        mockWf_assertStepTransition(step.status, projection.stepStatus);
+      }
+      mockSqlExecute(
+        `UPDATE workflow_steps
+    SET status = $1,
+      output_summary = $2,
+      error_message = $3,
+      started_at = CASE WHEN $1 = 'running' THEN COALESCE(started_at, datetime('now')) ELSE started_at END,
+      completed_at = CASE
+        WHEN $1 IN ('completed', 'skipped') THEN COALESCE(completed_at, datetime('now'))
+        WHEN $1 IN ('running', 'blocked', 'failed', 'waiting_approval') THEN NULL
+        ELSE completed_at
+      END,
+      updated_at = datetime('now')
+    WHERE id = $4`,
+        [
+          projection.stepStatus,
+          input.outputSummary,
+          input.errorMessage,
+          step.id,
+        ],
+      );
+
+      if (step.status !== projection.stepStatus) {
+        mockWf_insertWorkflowEvent(
+          step.workflow_run_id,
+          step.id,
+          mockWf_getStepEventType(step.status, projection.stepStatus),
+          mockWf_getStepEventSummary(step, projection.stepStatus),
+        );
+        if (projection.stepStatus === "completed") {
+          mockWf_startNextPendingWorkflowStep(step);
+        }
+      }
+
+      mockWf_updateRunFromSteps(step.workflow_run_id, step.run_status);
+      if (step.step_key === "score") {
+        mockWf_syncPlannerScoringBacklogInTransaction(
+          step.workflow_run_id,
+          projection.stepStatus,
+        );
+      }
+      return true;
+    }
+
+    function mockWf_createWorkflowRun(input: CreateWorkflowRunInput): number {
+      const parsed = input;
+      try {
+        const campaignRows = mockSqlSelect<CampaignStatusRow>(
+          `SELECT id, status FROM campaigns WHERE id = $1 LIMIT 1`,
+          [parsed.campaignId],
+        );
+        const campaign = campaignRows[0];
+        if (campaign === undefined) throw new Error("Campaign was not found");
+        if (campaign.status === "archived")
+          throw new Error("Campaign is archived");
+
+        const result = mockSqlExecute(
+          `INSERT INTO workflow_runs (
+        campaign_id,
+        workflow_type,
+        title,
+        status,
+        current_step_key,
+        context_summary,
+        updated_at
+      ) VALUES ($1, 'content_pipeline', $2, 'queued', 'research', $3, datetime('now'))`,
+          [parsed.campaignId, parsed.title, parsed.contextSummary],
+        );
+
+        for (const step of CONTENT_PIPELINE_STEPS) {
+          mockSqlExecute(
+            `INSERT INTO workflow_steps (
+          workflow_run_id,
+          step_key,
+          title,
+          description,
+          sort_order,
+          status,
+          output_summary,
+          error_message,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, 'pending', '', '', datetime('now'))`,
+            [
+              result.lastInsertId,
+              step.step_key,
+              step.title,
+              step.description,
+              step.sort_order,
+            ],
+          );
+        }
+
+        mockWf_insertWorkflowEvent(
+          result.lastInsertId,
+          null,
+          "run_created",
+          `Run created: ${parsed.title}`,
+        );
+        return result.lastInsertId;
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockWf_startWorkflowRun(input: StartWorkflowRunInput): void {
+      const parsed = input;
+      try {
+        const run = mockWf_getWorkflowRunValidation(parsed.id);
+        if (run.campaign_status === "archived")
+          throw new Error("Campaign is archived");
+        if (TERMINAL_RUN_STATUSES.includes(run.status)) {
+          throw new Error("Terminal workflow runs cannot be started");
+        }
+
+        mockSqlExecute(
+          `UPDATE workflow_runs
+      SET status = 'running',
+        started_at = COALESCE(started_at, datetime('now')),
+        updated_at = datetime('now')
+      WHERE id = $1`,
+          [parsed.id],
+        );
+
+        mockWf_insertWorkflowEvent(
+          parsed.id,
+          null,
+          "run_started",
+          run.started_at === null
+            ? "Workflow run started"
+            : "Workflow run resumed",
+        );
+
+        const steps = mockWf_loadWorkflowSteps(parsed.id);
+        const resumableStep =
+          steps.find(
+            (step) =>
+              step.step_key === run.current_step_key &&
+              ["blocked", "failed"].includes(step.status),
+          ) ??
+          steps.find((step) => ["blocked", "failed"].includes(step.status));
+
+        if (resumableStep !== undefined) {
+          mockSqlExecute(
+            `UPDATE workflow_steps
+        SET status = 'running',
+          started_at = COALESCE(started_at, datetime('now')),
+          completed_at = NULL,
+          updated_at = datetime('now')
+        WHERE id = $1`,
+            [resumableStep.id],
+          );
+          mockWf_insertWorkflowEvent(
+            parsed.id,
+            resumableStep.id,
+            "step_resumed",
+            `${resumableStep.title} resumed`,
+          );
+        } else {
+          const hasActiveStep = steps.some((step) =>
+            ["running", "waiting_approval"].includes(step.status),
+          );
+          if (!hasActiveStep) {
+            const firstRunnableStep =
+              steps.find(
+                (step) =>
+                  step.step_key === run.current_step_key &&
+                  step.status === "pending",
+              ) ?? steps.find((step) => step.status === "pending");
+            if (firstRunnableStep !== undefined) {
+              mockSqlExecute(
+                `UPDATE workflow_steps
+            SET status = 'running',
+              started_at = COALESCE(started_at, datetime('now')),
+              completed_at = NULL,
+              updated_at = datetime('now')
+            WHERE id = $1`,
+                [firstRunnableStep.id],
+              );
+              mockWf_insertWorkflowEvent(
+                parsed.id,
+                firstRunnableStep.id,
+                "step_started",
+                `${firstRunnableStep.title} started`,
+              );
+            }
+          }
+        }
+
+        const scoreStatusRows = mockSqlSelect<{ status: WorkflowStepStatus }>(
+          `SELECT status FROM workflow_steps
+        WHERE workflow_run_id = $1 AND step_key = 'score' LIMIT 1`,
+          [parsed.id],
+        );
+        const scoreStatus = scoreStatusRows[0]?.status;
+        if (scoreStatus !== undefined) {
+          mockWf_syncPlannerScoringBacklogInTransaction(parsed.id, scoreStatus);
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockWf_getWorkflowArtifactOwnership(
+      artifactType: WorkflowArtifactType,
+      artifactId: number,
+      workflowStepId: number | undefined,
+      workflowRunId: number,
+      campaignId: number,
+      campaignStatus: CampaignStatus,
+    ): WorkflowArtifactOwnershipRow {
+      if (campaignStatus === "archived")
+        throw new Error("Campaign is archived");
+
+      if (workflowStepId !== undefined) {
+        const stepRows = mockSqlSelect<WorkflowArtifactOwnershipRow>(
+          `SELECT
+        wr.campaign_id,
+        ws.workflow_run_id,
+        NULL AS workflow_step_id
+      FROM workflow_steps ws
+      INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+      WHERE ws.id = $1
+      LIMIT 1`,
+          [workflowStepId],
+        );
+        const step = stepRows[0];
+        if (step === undefined) throw new Error("Workflow step was not found");
+        if (step.workflow_run_id !== workflowRunId) {
+          throw new Error("Workflow step belongs to a different workflow run");
+        }
+        if (step.campaign_id !== campaignId) {
+          throw new Error("Workflow step belongs to a different campaign");
+        }
+      }
+
+      let artifactRows: WorkflowArtifactOwnershipRow[];
+      if (artifactType === "agent_run") {
+        artifactRows = mockSqlSelect<WorkflowArtifactOwnershipRow>(
+          `SELECT campaign_id, workflow_run_id, workflow_step_id
+      FROM agent_runs
+      WHERE id = $1
+      LIMIT 1`,
+          [artifactId],
+        );
+      } else if (artifactType === "draft") {
+        artifactRows = mockSqlSelect<WorkflowArtifactOwnershipRow>(
+          `SELECT
+        campaign_id,
+        NULL AS workflow_run_id,
+        NULL AS workflow_step_id
+      FROM drafts
+      WHERE id = $1
+      LIMIT 1`,
+          [artifactId],
+        );
+      } else {
+        artifactRows = mockSqlSelect<WorkflowArtifactOwnershipRow>(
+          `SELECT
+        campaign_id,
+        NULL AS workflow_run_id,
+        NULL AS workflow_step_id
+      FROM candidate_posts
+      WHERE id = $1
+      LIMIT 1`,
+          [artifactId],
+        );
+      }
+      const artifact = artifactRows[0];
+      if (artifact === undefined)
+        throw new Error("Workflow artifact was not found");
+      if (artifact.campaign_id !== campaignId) {
+        throw new Error("Artifact belongs to a different campaign");
+      }
+      if (
+        artifact.workflow_run_id !== null &&
+        artifact.workflow_run_id !== workflowRunId
+      ) {
+        throw new Error("Artifact belongs to a different workflow run");
+      }
+      if (
+        workflowStepId !== undefined &&
+        artifact.workflow_step_id !== null &&
+        artifact.workflow_step_id !== workflowStepId
+      ) {
+        throw new Error("Artifact belongs to a different workflow step");
+      }
+
+      return artifact;
+    }
+
+    function mockWf_createWorkflowArtifact(
+      input: CreateWorkflowArtifactInput,
+    ): number {
+      const parsed = input;
+      try {
+        const run = mockWf_getWorkflowRunValidation(parsed.workflowRunId);
+        mockWf_getWorkflowArtifactOwnership(
+          parsed.artifactType,
+          parsed.artifactId,
+          parsed.workflowStepId,
+          parsed.workflowRunId,
+          run.campaign_id,
+          run.campaign_status,
+        );
+
+        mockSqlExecute(
+          `INSERT INTO workflow_artifacts (
+        workflow_run_id,
+        workflow_step_id,
+        artifact_type,
+        artifact_id,
+        summary,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, datetime('now'))
+      ON CONFLICT(workflow_run_id, artifact_type, artifact_id) DO UPDATE SET
+        workflow_step_id = excluded.workflow_step_id,
+        summary = excluded.summary,
+        updated_at = datetime('now')`,
+          [
+            parsed.workflowRunId,
+            parsed.workflowStepId ?? null,
+            parsed.artifactType,
+            parsed.artifactId,
+            parsed.summary,
+          ],
+        );
+        const artifactRows = mockSqlSelect<{ id: number }>(
+          `SELECT id
+      FROM workflow_artifacts
+      WHERE workflow_run_id = $1
+        AND artifact_type = $2
+        AND artifact_id = $3
+      LIMIT 1`,
+          [parsed.workflowRunId, parsed.artifactType, parsed.artifactId],
+        );
+        const artifact = artifactRows[0];
+        if (artifact === undefined) {
+          throw new Error("Workflow artifact was not found after upsert");
+        }
+        mockSqlExecute(
+          `UPDATE workflow_runs
+      SET updated_at = datetime('now')
+      WHERE id = $1`,
+          [parsed.workflowRunId],
+        );
+        return artifact.id;
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockWf_resumeWorkflowRun(input: StartWorkflowRunInput): {
+      linkedAgentIsActive: boolean;
+    } {
+      const parsed = input;
+      let linkedAgentIsActive = false;
+      try {
+        const run = mockWf_getWorkflowRunValidation(parsed.id);
+        if (
+          run.autopilot_plan_id !== null &&
+          run.current_step_key === "draft"
+        ) {
+          throw new Error(mockWf_PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
+        }
+        const steps = mockWf_loadWorkflowSteps(parsed.id);
+        const waitingStep =
+          steps.find(
+            (step) =>
+              step.step_key === run.current_step_key &&
+              step.status === "waiting_approval",
+          ) ?? steps.find((step) => step.status === "waiting_approval");
+
+        if (waitingStep !== undefined) {
+          const agentRows = mockSqlSelect<WorkflowLinkedAgentRow>(
+            `SELECT id, status, output_summary, error_message
+        FROM agent_runs
+        WHERE workflow_run_id = $1
+          AND workflow_step_id = $2
+        ORDER BY id DESC
+        LIMIT 1`,
+            [parsed.id, waitingStep.id],
+          );
+          const agentRun = agentRows[0];
+          if (agentRun !== undefined) {
+            mockWf_reconcileWorkflowAgentRunInTransaction({
+              agentRunId: agentRun.id,
+              status: agentRun.status,
+              outputSummary: agentRun.output_summary,
+              errorMessage: agentRun.error_message,
+            });
+            linkedAgentIsActive = [
+              "queued",
+              "running",
+              "waiting_approval",
+            ].includes(agentRun.status);
+          }
+        }
+      } catch (error) {
+        throw error;
+      }
+
+      return { linkedAgentIsActive };
+    }
+
+    function mockWf_setWorkflowStepStatus(
+      input: SetWorkflowStepStatusInput,
+    ): void {
+      const parsed = input;
+      try {
+        const rows = mockSqlSelect<WorkflowStepValidationRow>(
+          `SELECT
+        ws.*,
+        wr.status AS run_status,
+        wr.campaign_id,
+        c.status AS campaign_status,
+        ap.id AS autopilot_plan_id
+      FROM workflow_steps ws
+      INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+      INNER JOIN campaigns c ON c.id = wr.campaign_id
+      LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
+      WHERE ws.id = $1
+      LIMIT 1`,
+          [parsed.stepId],
+        );
+        const step = rows[0];
+        if (step === undefined) throw new Error("Workflow step was not found");
+        if (step.campaign_status === "archived")
+          throw new Error("Campaign is archived");
+        if (step.run_status === "cancelled") {
+          throw new Error("Cancelled workflow runs cannot change steps");
+        }
+        if (step.run_status === "completed" && parsed.status !== "running") {
+          throw new Error("Completed workflow runs can only reopen steps");
+        }
+        if (
+          step.autopilot_plan_id !== null &&
+          step.step_key === "draft" &&
+          mockWf_FINISHED_STEP_STATUSES.includes(parsed.status)
+        ) {
+          throw new Error(mockWf_PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
+        }
+
+        mockWf_assertStepTransition(step.status, parsed.status);
+
+        mockSqlExecute(
+          `UPDATE workflow_steps
+      SET status = $1,
+        output_summary = $2,
+        error_message = $3,
+        started_at = CASE WHEN $1 = 'running' THEN COALESCE(started_at, datetime('now')) ELSE started_at END,
+        completed_at = CASE
+          WHEN $1 IN ('completed', 'skipped') THEN datetime('now')
+          WHEN $1 IN ('running', 'blocked', 'failed', 'waiting_approval') THEN NULL
+          ELSE completed_at
+        END,
+        updated_at = datetime('now')
+      WHERE id = $4`,
+          [
+            parsed.status,
+            parsed.outputSummary,
+            parsed.errorMessage,
+            parsed.stepId,
+          ],
+        );
+
+        mockWf_insertWorkflowEvent(
+          step.workflow_run_id,
+          step.id,
+          mockWf_getStepEventType(step.status, parsed.status),
+          mockWf_getStepEventSummary(step, parsed.status),
+        );
+
+        if (parsed.status === "completed") {
+          mockWf_startNextPendingWorkflowStep(step);
+        }
+
+        mockWf_updateRunFromSteps(step.workflow_run_id, step.run_status);
+        if (step.step_key === "score") {
+          mockWf_syncPlannerScoringBacklogInTransaction(
+            step.workflow_run_id,
+            parsed.status,
+          );
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockWf_cancelWorkflowRun(input: CancelWorkflowRunInput): void {
+      const parsed = input;
+      try {
+        const run = mockWf_getWorkflowRunValidation(parsed.id);
+        if (run.campaign_status === "archived")
+          throw new Error("Campaign is archived");
+
+        mockSqlExecute(
+          `UPDATE workflow_runs
+      SET status = 'cancelled',
+        completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE id = $1`,
+          [parsed.id],
+        );
+        mockWf_insertWorkflowEvent(
+          parsed.id,
+          null,
+          "run_cancelled",
+          "Workflow run cancelled",
+        );
+        const scoreRows = mockSqlSelect<{
+          id: number;
+          status: WorkflowStepStatus;
+        }>(
+          `SELECT id, status FROM workflow_steps
+        WHERE workflow_run_id = $1 AND step_key = 'score' LIMIT 1`,
+          [parsed.id],
+        );
+        const scoreStep = scoreRows[0];
+        if (
+          scoreStep !== undefined &&
+          !["completed", "skipped"].includes(scoreStep.status)
+        ) {
+          mockSqlExecute(
+            `UPDATE workflow_steps
+          SET status = 'skipped',
+            completed_at = COALESCE(completed_at, datetime('now')),
+            updated_at = datetime('now')
+          WHERE id = $1`,
+            [scoreStep.id],
+          );
+          mockWf_syncPlannerScoringBacklogInTransaction(parsed.id, "skipped");
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockWf_addWorkflowNote(input: AddWorkflowNoteInput): void {
+      const parsed = input;
+      try {
+        const run = mockWf_getWorkflowRunValidation(parsed.workflowRunId);
+        if (run.campaign_status === "archived")
+          throw new Error("Campaign is archived");
+
+        mockWf_insertWorkflowEvent(
+          parsed.workflowRunId,
+          null,
+          "note_added",
+          parsed.note,
+        );
+        mockSqlExecute(
+          `UPDATE workflow_runs
+      SET updated_at = datetime('now')
+      WHERE id = $1`,
+          [parsed.workflowRunId],
+        );
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function runWorkflowCommand(
+      args: unknown,
+      work: (input: never) => unknown,
+    ): Promise<unknown> {
+      return runNativeMutation(() => work(nativeInput<never>(args)));
+    }
+
+    function mockWorkflowCommand(
+      cmd: string,
+      args: unknown,
+    ): Promise<unknown> | undefined {
+      switch (cmd) {
+        case "linkgo_workflow_create_run":
+          return runWorkflowCommand(args, (input: CreateWorkflowRunInput) => ({
+            id: mockWf_createWorkflowRun(input),
+          }));
+        case "linkgo_workflow_start_run":
+          return runWorkflowCommand(args, (input: StartWorkflowRunInput) => {
+            mockWf_startWorkflowRun(input);
+            return { id: input.id };
+          });
+        case "linkgo_workflow_resume_run":
+          return runWorkflowCommand(args, (input: StartWorkflowRunInput) =>
+            mockWf_resumeWorkflowRun(input),
+          );
+        case "linkgo_workflow_set_step_status":
+          return runWorkflowCommand(
+            args,
+            (input: SetWorkflowStepStatusInput) => {
+              mockWf_setWorkflowStepStatus(input);
+              return { id: input.stepId };
+            },
+          );
+        case "linkgo_workflow_cancel_run":
+          return runWorkflowCommand(args, (input: CancelWorkflowRunInput) => {
+            mockWf_cancelWorkflowRun(input);
+            return { id: input.id };
+          });
+        case "linkgo_workflow_add_note":
+          return runWorkflowCommand(args, (input: AddWorkflowNoteInput) => {
+            mockWf_addWorkflowNote(input);
+            return { id: input.workflowRunId };
+          });
+        case "linkgo_workflow_create_artifact":
+          return runWorkflowCommand(
+            args,
+            (input: CreateWorkflowArtifactInput) => ({
+              id: mockWf_createWorkflowArtifact(input),
+            }),
+          );
+        default:
+          return undefined;
+      }
+    }
+
+    // ---- Agent runs: generated from the pre-migration renderer agent-runtime
+    // and safety code (sync over the SQL emulator); mirrors the native
+    // agent_run_store commands. ----
+    interface AgentRunValidationRow extends AgentRun {
+      campaign_status: string;
+    }
+    interface ApprovalLinkRow {
+      id: number;
+      campaign_id: number;
+      status: string;
+    }
+    interface WorkflowRunValidationRow {
+      id: number;
+      campaign_id: number;
+    }
+    interface WorkflowStepValidationRow {
+      id: number;
+      workflow_run_id: number;
+      campaign_id: number;
+    }
+    interface MockArToolCall {
+      providerToolCallId: string;
+      toolName: string;
+      status: string;
+      requiresApproval: boolean;
+      input: unknown;
+      output: unknown;
+      errorMessage: string;
+    }
+    interface AgentLoopResult {
+      status: "completed" | "failed" | "waiting_approval";
+      outputSummary: string;
+      errorMessage: string;
+      iterationCount: number;
+      conversation: unknown[];
+      toolCalls: MockArToolCall[];
+    }
+    type ResumeAgentRunResult = {
+      checkpointPhase: "waiting_approval" | "continuation_ready" | null;
+    };
+    type CreateAgentRunInput = {
+      campaignId: number;
+      workflowRunId?: number;
+      workflowStepId?: number;
+      agentRole: string;
+      providerKey: string;
+      modelName: string;
+      playbookKey?: string;
+      inputSummary: string;
+      inputContext: Record<string, unknown>;
+    };
+    type CancelAgentRunInput = { id: number };
+    type RecordSafetyAuditEventInput = {
+      campaignId?: number | null;
+      subjectType: string;
+      subjectId?: number | null;
+      eventType: string;
+      severity: string;
+      summary: string;
+      metadata?: unknown;
+    };
+    type UpsertErrorQueueItemInput = {
+      campaignId?: number | null;
+      sourceType: string;
+      sourceId?: number | null;
+      title: string;
+      detail: string;
+      severity: string;
+    };
+    type SafetyKillSwitchContext = {
+      campaignId?: number | null;
+      subjectType: string;
+      subjectId?: number | null;
+      summary: string;
+    };
+    type RecordAgentToolCallInput = {
+      agentRunId: number;
+      providerToolCallId: string;
+      toolName: string;
+      status: string;
+      requiresApproval: boolean;
+      input: unknown;
+      output: unknown;
+      errorMessage: string;
+    };
+    type RecordAgentRunEventInput = {
+      agentRunId: number;
+      eventType: string;
+      summary: string;
+    };
+    interface CampaignStatusRow {
+      id: number;
+      status: string;
+    }
+    // Playbook metadata the old create path read from the agent registry.
+    const MOCK_AR_PLAYBOOKS: Record<
+      string,
+      {
+        compatibleRoles: string[];
+        runtimeEnabled: boolean;
+        operatorGuidanceOnly: boolean;
+      }
+    > = {
+      linkedin_writer: {
+        compatibleRoles: ["drafter"],
+        runtimeEnabled: true,
+        operatorGuidanceOnly: false,
+      },
+      linkedin_humanizer: {
+        compatibleRoles: ["auditor"],
+        runtimeEnabled: true,
+        operatorGuidanceOnly: false,
+      },
+      content_calendar: {
+        compatibleRoles: ["scheduler"],
+        runtimeEnabled: true,
+        operatorGuidanceOnly: false,
+      },
+      linkedin_commenter: {
+        compatibleRoles: [],
+        runtimeEnabled: false,
+        operatorGuidanceOnly: true,
+      },
+      campaign_analyst: {
+        compatibleRoles: ["analyst"],
+        runtimeEnabled: true,
+        operatorGuidanceOnly: false,
+      },
+    };
+    const MOCK_AR_DEFAULT_PLAYBOOK: Record<string, string> = {
+      drafter: "linkedin_writer",
+      auditor: "linkedin_humanizer",
+      scheduler: "content_calendar",
+      analyst: "campaign_analyst",
+    };
+    function getAgentPlaybook(
+      key: string,
+    ): ({ key: string } & (typeof MOCK_AR_PLAYBOOKS)[string]) | undefined {
+      const playbook = MOCK_AR_PLAYBOOKS[key];
+      return playbook ? { key, ...playbook } : undefined;
+    }
+    function getDefaultPlaybookForRole(
+      role: string,
+    ): { key: string } | undefined {
+      const key = MOCK_AR_DEFAULT_PLAYBOOK[role];
+      return key ? { key } : undefined;
+    }
+    function mockAr_stringifyMetadata(metadata: unknown): string {
+      try {
+        return JSON.stringify(metadata ?? {});
+      } catch {
+        return JSON.stringify({ serializationError: true });
+      }
+    }
+
+    function mockAr_recordSafetyAuditEvent(
+      input: RecordSafetyAuditEventInput,
+    ): number {
+      const parsed = input;
+      const result = mockSqlExecute(
+        `INSERT INTO safety_audit_events (
+      campaign_id,
+      subject_type,
+      subject_id,
+      event_type,
+      severity,
+      summary,
+      metadata_json
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          parsed.campaignId ?? null,
+          parsed.subjectType,
+          parsed.subjectId ?? null,
+          parsed.eventType,
+          parsed.severity,
+          parsed.summary,
+          mockAr_stringifyMetadata(parsed.metadata),
+        ],
+      );
+      return result.lastInsertId;
+    }
+
+    function mockAr_upsertErrorQueueItem(
+      input: UpsertErrorQueueItemInput,
+    ): number {
+      const parsed = input;
+
+      const existingRows =
+        parsed.sourceId === undefined || parsed.sourceId === null
+          ? []
+          : mockSqlSelect<ErrorQueueItem>(
+              `SELECT * FROM error_queue_items
+          WHERE source_type = $1
+            AND source_id = $2
+            AND status IN ('open', 'in_progress', 'awaiting_review')
+          LIMIT 1`,
+              [parsed.sourceType, parsed.sourceId],
+            );
+      const existing = existingRows[0];
+
+      if (existing !== undefined) {
+        mockSqlExecute(
+          `UPDATE error_queue_items
+      SET campaign_id = $1,
+        title = $2,
+        detail = $3,
+        severity = $4,
+        updated_at = datetime('now')
+      WHERE id = $5`,
+          [
+            parsed.campaignId ?? null,
+            parsed.title,
+            parsed.detail,
+            parsed.severity,
+            existing.id,
+          ],
+        );
+        mockAr_recordSafetyAuditEvent({
+          campaignId: parsed.campaignId ?? existing.campaign_id,
+          subjectType: "error_queue_item",
+          subjectId: existing.id,
+          eventType: "error_item_updated",
+          severity: "warning",
+          summary: `Error item updated: ${parsed.title}`,
+          metadata: {
+            sourceType: parsed.sourceType,
+            sourceId: parsed.sourceId ?? null,
+          },
+        });
+        return existing.id;
+      }
+
+      const result = mockSqlExecute(
+        `INSERT INTO error_queue_items (
+      campaign_id,
+      source_type,
+      source_id,
+      title,
+      detail,
+      severity,
+      status,
+      updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, 'open', datetime('now'))`,
+        [
+          parsed.campaignId ?? null,
+          parsed.sourceType,
+          parsed.sourceId ?? null,
+          parsed.title,
+          parsed.detail,
+          parsed.severity,
+        ],
+      );
+      mockAr_recordSafetyAuditEvent({
+        campaignId: parsed.campaignId ?? null,
+        subjectType: "error_queue_item",
+        subjectId: result.lastInsertId,
+        eventType: "error_item_created",
+        severity: "warning",
+        summary: `Error item created: ${parsed.title}`,
+        metadata: {
+          sourceType: parsed.sourceType,
+          sourceId: parsed.sourceId ?? null,
+        },
+      });
+      return result.lastInsertId;
+    }
+
+    function mockAr_assertSafetyKillSwitchOff(
+      context: SafetyKillSwitchContext,
+    ): void {
+      const parsed = context;
+      mockSqlExecute(
+        `INSERT OR IGNORE INTO safety_settings (id) VALUES (1)`,
+        [],
+      );
+      const rows = mockSqlSelect<SafetySettings>(
+        `SELECT * FROM safety_settings WHERE id = 1 LIMIT 1`,
+        [],
+      );
+      const settings = rows[0];
+      if (settings?.global_kill_switch === 1) {
+        mockAr_recordSafetyAuditEvent({
+          campaignId: parsed.campaignId ?? null,
+          subjectType: parsed.subjectType,
+          subjectId: parsed.subjectId ?? null,
+          eventType:
+            parsed.subjectType === "schedule_job"
+              ? "schedule_blocked"
+              : "agent_run_failed",
+          severity: "block",
+          summary: `${parsed.summary} blocked by global kill switch`,
+          metadata: { reason: settings.kill_switch_reason },
+        });
+        throw new Error(
+          settings.kill_switch_reason
+            ? `Global kill switch is enabled: ${settings.kill_switch_reason}`
+            : "Global kill switch is enabled",
+        );
+      }
+    }
+
+    function mockAr_assertCampaignCanMutate(campaignId: number): void {
+      const rows = mockSqlSelect<CampaignStatusRow>(
+        `SELECT id, status FROM campaigns WHERE id = $1 LIMIT 1`,
+        [campaignId],
+      );
+      const campaign = rows[0];
+      if (campaign === undefined) throw new Error("Campaign was not found");
+      if (campaign.status === "archived")
+        throw new Error("Campaign is archived");
+    }
+
+    function mockAr_validateWorkflowOwnership(
+      campaignId: number,
+      workflowRunId?: number,
+      workflowStepId?: number,
+    ): { workflowRunId: number | null; workflowStepId: number | null } {
+      let nextWorkflowRunId = workflowRunId ?? null;
+      if (workflowRunId !== undefined) {
+        const rows = mockSqlSelect<WorkflowRunValidationRow>(
+          `SELECT id, campaign_id FROM workflow_runs WHERE id = $1 LIMIT 1`,
+          [workflowRunId],
+        );
+        const workflowRun = rows[0];
+        if (workflowRun === undefined)
+          throw new Error("Workflow run was not found");
+        if (workflowRun.campaign_id !== campaignId) {
+          throw new Error("Workflow run belongs to a different campaign");
+        }
+      }
+
+      if (workflowStepId !== undefined) {
+        const rows = mockSqlSelect<WorkflowStepValidationRow>(
+          `SELECT
+        ws.id,
+        ws.workflow_run_id,
+        wr.campaign_id
+      FROM workflow_steps ws
+      INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+      WHERE ws.id = $1
+      LIMIT 1`,
+          [workflowStepId],
+        );
+        const workflowStep = rows[0];
+        if (workflowStep === undefined)
+          throw new Error("Workflow step was not found");
+        if (workflowStep.campaign_id !== campaignId) {
+          throw new Error("Workflow step belongs to a different campaign");
+        }
+        if (
+          nextWorkflowRunId !== null &&
+          workflowStep.workflow_run_id !== nextWorkflowRunId
+        ) {
+          throw new Error("Workflow step belongs to a different workflow run");
+        }
+        nextWorkflowRunId = workflowStep.workflow_run_id;
+      }
+
+      return {
+        workflowRunId: nextWorkflowRunId,
+        workflowStepId: workflowStepId ?? null,
+      };
+    }
+
+    function mockAr_getAgentRunValidation(id: number): AgentRunValidationRow {
+      const rows = mockSqlSelect<AgentRunValidationRow>(
+        `SELECT
+      ar.*,
+      c.status AS campaign_status
+    FROM agent_runs ar
+    INNER JOIN campaigns c ON c.id = ar.campaign_id
+    WHERE ar.id = $1
+    LIMIT 1`,
+        [id],
+      );
+      const run = rows[0];
+      if (run === undefined) throw new Error("Agent run was not found");
+      return run;
+    }
+
+    function mockAr_insertAgentRunEvent(input: RecordAgentRunEventInput): void {
+      const parsed = input;
+      mockSqlExecute(
+        `INSERT INTO agent_run_events (
+      agent_run_id,
+      event_type,
+      summary
+    ) VALUES ($1, $2, $3)`,
+        [parsed.agentRunId, parsed.eventType, parsed.summary],
+      );
+    }
+
+    function mockAr_resolvePlaybookKeyForCreate(
+      role: string,
+      requestedKey?: string,
+    ): string {
+      const candidateKey =
+        requestedKey ?? getDefaultPlaybookForRole(role)?.key ?? "";
+      if (candidateKey === "") return "";
+      const definition = getAgentPlaybook(candidateKey);
+      if (!definition) throw new Error("Playbook was not found");
+      const override = agentPlaybookOverrides.find(
+        (row) => row.playbook_key === candidateKey,
+      );
+      const usable =
+        definition.runtimeEnabled &&
+        !definition.operatorGuidanceOnly &&
+        (override === undefined || override.enabled === 1);
+      if (!usable) {
+        if (requestedKey !== undefined) throw new Error("Playbook is disabled");
+        return "";
+      }
+      if (!definition.compatibleRoles.includes(role)) {
+        throw new Error(
+          "Playbook is not compatible with the selected agent role",
+        );
+      }
+      return definition.key;
+    }
+
+    function mockAr_insertAgentToolCall(
+      input: RecordAgentToolCallInput,
+    ): number {
+      const parsed = input;
+      const validatedInput = parsed.input;
+      const validatedOutput =
+        parsed.status === "completed"
+          ? (parsed.output ?? {})
+          : (parsed.output ?? {});
+      const result = mockSqlExecute(
+        `INSERT INTO agent_tool_calls (
+      agent_run_id,
+      provider_tool_call_id,
+      tool_name,
+      status,
+      requires_approval,
+      input_json,
+      output_json,
+      error_message,
+      started_at,
+      completed_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, datetime('now'), CASE WHEN $4 IN ('completed', 'failed', 'rejected') THEN datetime('now') ELSE NULL END)`,
+        [
+          parsed.agentRunId,
+          parsed.providerToolCallId,
+          parsed.toolName,
+          parsed.status,
+          parsed.requiresApproval ? 1 : 0,
+          JSON.stringify(validatedInput),
+          JSON.stringify(validatedOutput),
+          parsed.errorMessage,
+        ],
+      );
+      return result.lastInsertId;
+    }
+
+    function mockAr_createAgentRun(input: CreateAgentRunInput): number {
+      const parsed = input;
+      const playbookKey = mockAr_resolvePlaybookKeyForCreate(
+        parsed.agentRole,
+        parsed.playbookKey,
+      );
+      try {
+        mockAr_assertCampaignCanMutate(parsed.campaignId);
+        const workflow = mockAr_validateWorkflowOwnership(
+          parsed.campaignId,
+          parsed.workflowRunId,
+          parsed.workflowStepId,
+        );
+
+        const result = mockSqlExecute(
+          `INSERT INTO agent_runs (
+        campaign_id,
+        workflow_run_id,
+        workflow_step_id,
+        agent_role,
+        provider_key,
+        model_name,
+        playbook_key,
+        status,
+        input_summary,
+        input_context_json,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, $9, datetime('now'))`,
+          [
+            parsed.campaignId,
+            workflow.workflowRunId,
+            workflow.workflowStepId,
+            parsed.agentRole,
+            parsed.providerKey,
+            parsed.modelName,
+            playbookKey,
+            parsed.inputSummary,
+            JSON.stringify(parsed.inputContext),
+          ],
+        );
+
+        mockAr_insertAgentRunEvent({
+          agentRunId: result.lastInsertId,
+          eventType: "run_created",
+          summary: `Agent run created for ${parsed.agentRole}.`,
+        });
+        return result.lastInsertId;
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockAr_getApprovalLink(approvalId: number): ApprovalLinkRow {
+      const rows = mockSqlSelect<ApprovalLinkRow>(
+        `SELECT id, campaign_id, status
+    FROM approvals
+    WHERE id = $1
+    LIMIT 1`,
+        [approvalId],
+      );
+      const approval = rows[0];
+      if (approval === undefined)
+        throw new Error("Linked approval was not found");
+      return approval;
+    }
+
+    function mockAr_validateApprovalInterrupt(
+      run: AgentRunValidationRow,
+      result: AgentLoopResult,
+    ): number | null {
+      if (result.status !== "waiting_approval") return null;
+      const waitingCalls = result.toolCalls.filter(
+        (toolCall) => toolCall.status === "waiting_approval",
+      );
+      if (waitingCalls.length !== 1) {
+        throw new Error(
+          "Approval interrupt must contain one pending tool call",
+        );
+      }
+      const pendingCall = waitingCalls[0];
+      if (pendingCall?.toolName !== "schedule_post") {
+        throw new Error("Only schedule_post can create an approval checkpoint");
+      }
+      const scheduleInput = pendingCall.input as {
+        campaignId: number;
+        approvalId: number;
+      };
+      if (scheduleInput.campaignId !== run.campaign_id) {
+        throw new Error("Schedule request belongs to a different campaign");
+      }
+      const approval = mockAr_getApprovalLink(scheduleInput.approvalId);
+      if (approval.campaign_id !== run.campaign_id) {
+        throw new Error("Linked approval belongs to a different campaign");
+      }
+      return approval.id;
+    }
+
+    function mockAr_shouldRetainContinuationCheckpoint(
+      result: AgentLoopResult,
+    ): boolean {
+      return (
+        result.status === "failed" &&
+        result.toolCalls.length === 0 &&
+        !result.errorMessage.includes("maximum turn limit")
+      );
+    }
+
+    function mockAr_getPersistedCheckpointPhase(
+      result: AgentLoopResult,
+      options: { allowContinuationRecovery: boolean },
+    ): ResumeAgentRunResult["checkpointPhase"] {
+      if (result.status === "waiting_approval") return "waiting_approval";
+      if (
+        options.allowContinuationRecovery &&
+        mockAr_shouldRetainContinuationCheckpoint(result)
+      ) {
+        return "continuation_ready";
+      }
+      return null;
+    }
+
+    function mockAr_persistAgentLoopResult(
+      run: AgentRunValidationRow,
+      result: AgentLoopResult,
+      options: { allowContinuationRecovery: boolean },
+    ): void {
+      const conversation = result.conversation;
+      const approvalId = mockAr_validateApprovalInterrupt(run, result);
+      const checkpointPhase = mockAr_getPersistedCheckpointPhase(
+        result,
+        options,
+      );
+      let pendingToolCallId: number | null = null;
+
+      for (const toolCall of result.toolCalls) {
+        const toolCallId = mockAr_insertAgentToolCall({
+          agentRunId: run.id,
+          providerToolCallId: toolCall.providerToolCallId,
+          toolName: toolCall.toolName,
+          status: toolCall.status,
+          requiresApproval: toolCall.requiresApproval,
+          input: toolCall.input,
+          output: toolCall.output,
+          errorMessage: toolCall.errorMessage,
+        });
+        if (toolCall.status === "waiting_approval") {
+          pendingToolCallId = toolCallId;
+        }
+      }
+
+      if (checkpointPhase === "waiting_approval") {
+        if (approvalId === null || pendingToolCallId === null) {
+          throw new Error(
+            "Approval checkpoint is missing its pending tool call",
+          );
+        }
+        mockSqlExecute(
+          `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
+          [run.id],
+        );
+        mockSqlExecute(
+          `INSERT INTO agent_run_approval_checkpoints (
+        agent_run_id,
+        pending_tool_call_id,
+        approval_id,
+        phase,
+        messages_json,
+        iteration_count,
+        updated_at
+      ) VALUES ($1, $2, $3, 'waiting_approval', $4, $5, datetime('now'))`,
+          [
+            run.id,
+            pendingToolCallId,
+            approvalId,
+            JSON.stringify(conversation),
+            result.iterationCount,
+          ],
+        );
+      } else if (checkpointPhase === "continuation_ready") {
+        const checkpointResult = mockSqlExecute(
+          `UPDATE agent_run_approval_checkpoints
+      SET phase = 'continuation_ready',
+        messages_json = $1,
+        iteration_count = $2,
+        updated_at = datetime('now')
+      WHERE agent_run_id = $3`,
+          [JSON.stringify(conversation), result.iterationCount, run.id],
+        );
+        if (checkpointResult.rowsAffected !== 1) {
+          throw new Error("Agent continuation checkpoint was lost");
+        }
+      } else {
+        mockSqlExecute(
+          `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
+          [run.id],
+        );
+      }
+
+      mockSqlExecute(
+        `UPDATE agent_runs
+    SET status = $1,
+      output_summary = $2,
+      error_message = $3,
+      iteration_count = $4,
+      completed_at = CASE WHEN $1 IN ('completed', 'failed', 'cancelled') THEN datetime('now') ELSE NULL END,
+      updated_at = datetime('now')
+    WHERE id = $5`,
+        [
+          result.status,
+          result.outputSummary,
+          result.errorMessage,
+          result.iterationCount,
+          run.id,
+        ],
+      );
+      mockWf_reconcileWorkflowAgentRunInTransaction({
+        agentRunId: run.id,
+        status: result.status,
+        outputSummary: result.outputSummary,
+        errorMessage: result.errorMessage,
+      });
+
+      if (result.status === "failed") {
+        mockAr_recordSafetyAuditEvent({
+          campaignId: run.campaign_id,
+          subjectType: "agent_run",
+          subjectId: run.id,
+          eventType: "agent_run_failed",
+          severity: "warning",
+          summary: result.errorMessage || "Agent run failed",
+          metadata: { iterationCount: result.iterationCount },
+        });
+        mockAr_upsertErrorQueueItem({
+          campaignId: run.campaign_id,
+          sourceType: "agent_run",
+          sourceId: run.id,
+          title: "Agent run failed",
+          detail: result.errorMessage || "Agent run failed",
+          severity: "error",
+        });
+      }
+    }
+
+    function mockAr_cancelAgentRun(input: CancelAgentRunInput): void {
+      const parsed = input;
+      try {
+        const run = mockAr_getAgentRunValidation(parsed.id);
+        if (run.campaign_status === "archived")
+          throw new Error("Campaign is archived");
+        if (run.status === "completed") {
+          throw new Error("Completed agent runs cannot be cancelled");
+        }
+
+        const errorMessage = run.error_message || "Agent run cancelled";
+        mockSqlExecute(
+          `UPDATE agent_runs
+      SET status = 'cancelled',
+        error_message = $1,
+        completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE id = $2`,
+          [errorMessage, parsed.id],
+        );
+        mockWf_reconcileWorkflowAgentRunInTransaction({
+          agentRunId: run.id,
+          status: "cancelled",
+          outputSummary: run.output_summary,
+          errorMessage,
+        });
+        mockSqlExecute(
+          `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
+          [parsed.id],
+        );
+        mockAr_insertAgentRunEvent({
+          agentRunId: parsed.id,
+          eventType: "run_cancelled",
+          summary: "Agent run cancelled",
+        });
+      } catch (error) {
+        throw error;
+      }
+    }
+    function runAgentRunCommand(
+      args: unknown,
+      work: (input: never) => unknown,
+    ): Promise<unknown> {
+      return runNativeMutation(() => work(nativeInput<never>(args)));
+    }
+
+    function mockAgentRunCommand(
+      cmd: string,
+      args: unknown,
+    ): Promise<unknown> | undefined {
+      switch (cmd) {
+        case "linkgo_agent_run_create":
+          return runAgentRunCommand(args, (input: CreateAgentRunInput) => ({
+            id: mockAr_createAgentRun(input),
+          }));
+        case "linkgo_agent_run_start":
+          return runAgentRunCommand(
+            args,
+            (input: { id: number; claim: boolean }) => {
+              const run = mockAr_getAgentRunValidation(input.id);
+              if (run.campaign_status === "archived")
+                throw new Error("Campaign is archived");
+              if (["completed", "cancelled"].includes(run.status))
+                throw new Error("Terminal agent runs cannot be restarted");
+              if (run.status === "running")
+                throw new Error("Agent run is already running");
+              if (run.status === "waiting_approval")
+                throw new Error("Agent run is waiting for approval");
+              if (
+                mockSqlSelect(
+                  `SELECT agent_run_id FROM agent_run_approval_checkpoints
+    WHERE agent_run_id = $1
+    LIMIT 1`,
+                  [run.id],
+                ).length > 0
+              ) {
+                throw new Error(
+                  "Use approval continuation recovery for this agent run",
+                );
+              }
+              // The kill-switch audit must survive the rejection, like the native
+              // command, so it runs outside the rolled-back mutation.
+              mockAr_assertSafetyKillSwitchOff({
+                campaignId: run.campaign_id,
+                subjectType: "agent_run",
+                subjectId: run.id,
+                summary: "Agent run start",
+              });
+              if (input.claim) {
+                const claim = mockSqlExecute(
+                  `UPDATE agent_runs
+        SET status = 'running',
+          started_at = COALESCE(started_at, datetime('now')),
+          completed_at = NULL,
+          error_message = '',
+          updated_at = datetime('now')
+        WHERE id = $1
+          AND status IN ('queued', 'failed')`,
+                  [run.id],
+                );
+                if (claim.rowsAffected !== 1)
+                  throw new Error("Agent run could not be claimed for start");
+                mockAr_recordSafetyAuditEvent({
+                  campaignId: run.campaign_id,
+                  subjectType: "agent_run",
+                  subjectId: run.id,
+                  eventType: "agent_run_started",
+                  severity: "info",
+                  summary: "Agent run started",
+                  metadata: {
+                    agentRole: run.agent_role,
+                    providerKey: run.provider_key,
+                  },
+                });
+              }
+              return { id: run.id };
+            },
+          );
+        case "linkgo_agent_run_record_event":
+          return runAgentRunCommand(args, (input: RecordAgentRunEventInput) => {
+            mockAr_getAgentRunValidation(input.agentRunId);
+            mockAr_insertAgentRunEvent(input);
+            return { id: input.agentRunId };
+          });
+        case "linkgo_agent_run_persist_result":
+          return runAgentRunCommand(
+            args,
+            (input: {
+              agentRunId: number;
+              continuation: boolean;
+              result: AgentLoopResult;
+            }) => {
+              const run = mockAr_getAgentRunValidation(input.agentRunId);
+              if (run.status !== "running")
+                throw new Error("Agent run is no longer running");
+              if (input.continuation) {
+                const active = mockSqlSelect(
+                  `SELECT agent_run_id FROM agent_run_approval_checkpoints
+        WHERE agent_run_id = $1 AND phase = 'continuation_ready'`,
+                  [run.id],
+                );
+                if (active.length !== 1)
+                  throw new Error(
+                    "Agent continuation checkpoint is no longer active",
+                  );
+              }
+              const options = { allowContinuationRecovery: input.continuation };
+              mockAr_persistAgentLoopResult(run, input.result, options);
+              return {
+                checkpointPhase: mockAr_getPersistedCheckpointPhase(
+                  input.result,
+                  options,
+                ),
+              };
+            },
+          );
+        case "linkgo_agent_run_fail_after_persistence_error":
+          return runAgentRunCommand(
+            args,
+            (input: { agentRunId: number; errorMessage: string }) => {
+              const updated = mockSqlExecute(
+                `UPDATE agent_runs
+      SET status = 'failed',
+        error_message = $1,
+        completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE id = $2 AND status = 'running'`,
+                [input.errorMessage, input.agentRunId],
+              );
+              if (updated.rowsAffected === 1) {
+                mockAr_insertAgentRunEvent({
+                  agentRunId: input.agentRunId,
+                  eventType: "run_failed",
+                  summary: input.errorMessage,
+                });
+              }
+              return { id: input.agentRunId };
+            },
+          );
+        case "linkgo_agent_run_cancel":
+          return runAgentRunCommand(args, (input: CancelAgentRunInput) => {
+            mockAr_cancelAgentRun(input);
+            return { id: input.id };
+          });
+        default:
+          return undefined;
+      }
+    }
+
+    // ---- Drafts: generated from the pre-migration renderer draft code
+    // (sync over the SQL emulator); mirrors the native drafts_core and
+    // draft_generation commands. ----
+    interface DraftAuditFinding {
+      id?: number;
+      draft_variant_id?: number;
+      rule_key: string;
+      severity: DraftAuditSeverity;
+      message: string;
+      created_at?: string;
+    }
+    interface DraftVariantInput {
+      hook?: string;
+      body?: string;
+      cta?: string;
+      hashtags?: string;
+    }
+    type CreateDraftInput = {
+      candidateId: number;
+      angle: string;
+      notes: string;
+      contentIntent: DraftContentIntent;
+      variants: DraftVariantInput[];
+    };
+    type UpdateDraftVariantInput = {
+      id: number;
+      hook?: string;
+      body?: string;
+      cta?: string;
+      hashtags?: string;
+    };
+    type SetDraftVariantStatusInput = { id: number; status: string };
+    type SaveGeneratedDraftInput = { id: number };
+    type DraftGenerationRequestStatus =
+      | "pending"
+      | "generated"
+      | "failed"
+      | "saved"
+      | "dismissed";
+    interface GeneratedDraftVariant {
+      hook: string;
+      body: string;
+      cta: string;
+      hashtags: string[];
+    }
+    interface DraftVariantRow {
+      id: number;
+      draft_id: number;
+      variant_number: number;
+      hook: string;
+      body: string;
+      cta: string;
+      hashtags: string;
+      content_revision: number;
+      status: DraftVariantStatus;
+      created_at: string;
+      updated_at: string;
+    }
+
+    interface DraftAuditRow {
+      id: number;
+      draft_variant_id: number;
+      rule_key: string;
+      severity: DraftAuditSeverity;
+      message: string;
+      created_at: string;
+    }
+
+    interface DraftCandidateRow {
+      candidate_id: number;
+      campaign_id: number;
+      campaign_status: CampaignStatus;
+      candidate_status: CandidateStatus;
+    }
+
+    interface DraftCandidateContextRow extends DraftCandidateRow {
+      campaign_name: string;
+      campaign_product: string;
+      campaign_audience: string;
+      campaign_voice: string;
+      campaign_tone: string;
+      candidate_source_keyword: string;
+      candidate_score_reason: string;
+      candidate_notes: string;
+      candidate_relevance_score: number | null;
+      target_author_name: string;
+      target_content: string;
+    }
+
+    interface SelectedCountRow {
+      selected_count: number;
+    }
+
+    interface CampaignMutationStatusRow {
+      status: CampaignStatus;
+    }
+
+    interface DraftInsertInput {
+      campaignId: number;
+      candidateId: number;
+      angle: string;
+      notes: string;
+      contentIntent: DraftContentIntent;
+      variants: CreateDraftInput["variants"];
+    }
+
+    interface DraftGenerationRequestRow {
+      id: number;
+      campaign_id: number;
+      candidate_post_id: number;
+      agent_run_id: number | null;
+      provider_key: DraftGenerationRequest["provider_key"];
+      model_name: string;
+      playbook_key: DraftGenerationRequest["playbook_key"];
+      variant_count: number;
+      content_intent: DraftContentIntent;
+      workflow_run_id: number | null;
+      workflow_step_id: number | null;
+      angle: string;
+      voice_notes: string;
+      status: DraftGenerationRequestStatus;
+      summary: string;
+      generated_variants_json: string;
+      error_message: string;
+      created_draft_id: number | null;
+      created_at: string;
+      updated_at: string;
+      campaign_name: string;
+      candidate_source_keyword: string;
+      candidate_status: CandidateStatus;
+      candidate_relevance_score: number | null;
+      candidate_score_reason: string;
+      candidate_notes: string;
+      candidate_created_at: string;
+      candidate_updated_at: string;
+      target_id: number;
+      target_platform: "linkedin";
+      target_url: string;
+      target_normalized_url: string;
+      target_platform_resource_urn: string;
+      target_author_name: string;
+      target_author_profile_url: string;
+      target_posted_at: string | null;
+      target_content: string;
+      target_content_hash: string;
+      target_created_at: string;
+      target_updated_at: string;
+    }
+
+    interface DraftToolCallRow {
+      input_json: string;
+      output_json: string;
+    }
+
+    const mockDr_SEVERITY_RANK: Record<DraftAuditSeverity, number> = {
+      block: 0,
+      warning: 1,
+      pass: 2,
+    };
+
+    function mockDr_normalizeVariantInput(
+      input: DraftVariantInput,
+    ): Required<DraftVariantInput> {
+      return {
+        hook: input.hook ?? "",
+        body: input.body ?? "",
+        cta: input.cta ?? "",
+        hashtags: input.hashtags ?? "",
+      };
+    }
+
+    function mockDr_countHashtags(hashtags: string): number {
+      return hashtags.match(/#[\p{L}\p{N}_-]+/gu)?.length ?? 0;
+    }
+
+    function mockDr_hasExternalLink(text: string): boolean {
+      return /https?:\/\/|www\./iu.test(text);
+    }
+
+    function mockDr_createFinding(
+      ruleKey: string,
+      severity: DraftAuditSeverity,
+      message: string,
+    ): DraftAuditFinding {
+      return { rule_key: ruleKey, severity, message };
+    }
+
+    function mockDr_auditDraftVariant(
+      input: DraftVariantInput,
+    ): DraftAuditFinding[] {
+      const variant = mockDr_normalizeVariantInput(input);
+      const hook = variant.hook.trim();
+      const body = variant.body.trim();
+      const cta = variant.cta.trim();
+      const hashtags = variant.hashtags.trim();
+      const combined = `${hook}${body}${cta}${hashtags}`;
+      const combinedWithSpaces = `${hook} ${body} ${cta} ${hashtags}`.trim();
+      const findings: DraftAuditFinding[] = [];
+
+      if (!hook && !body) {
+        findings.push(
+          mockDr_createFinding(
+            "required_text",
+            "block",
+            "Add a hook or body before this variant can be reviewed.",
+          ),
+        );
+      } else {
+        findings.push(
+          mockDr_createFinding(
+            "required_text",
+            "pass",
+            "This variant has draft text to review.",
+          ),
+        );
+      }
+
+      if (combined.length > 3000) {
+        findings.push(
+          mockDr_createFinding(
+            "total_length",
+            "block",
+            "Keep the combined hook, body, CTA, and hashtags under 3,000 characters.",
+          ),
+        );
+      } else {
+        findings.push(
+          mockDr_createFinding(
+            "total_length",
+            "pass",
+            "This variant stays under the 3,000 character limit.",
+          ),
+        );
+      }
+
+      if (mockDr_hasExternalLink(`${hook} ${body} ${cta}`)) {
+        findings.push(
+          mockDr_createFinding(
+            "external_link",
+            "block",
+            "Remove external links from the hook, body, and CTA before review.",
+          ),
+        );
+      } else {
+        findings.push(
+          mockDr_createFinding(
+            "external_link",
+            "pass",
+            "No external link was found in the hook, body, or CTA.",
+          ),
+        );
+      }
+
+      if (mockDr_countHashtags(hashtags) > 5) {
+        findings.push(
+          mockDr_createFinding(
+            "hashtag_limit",
+            "block",
+            "Use five or fewer hashtags.",
+          ),
+        );
+      } else {
+        findings.push(
+          mockDr_createFinding(
+            "hashtag_limit",
+            "pass",
+            "This variant uses five or fewer hashtags.",
+          ),
+        );
+      }
+
+      if (
+        hook.length < 35 ||
+        /^(excited to|in today's|i'm thrilled|quick update)/iu.test(hook)
+      ) {
+        findings.push(
+          mockDr_createFinding(
+            "weak_hook",
+            "warning",
+            "Strengthen the hook with a specific, curiosity-driving opening.",
+          ),
+        );
+      }
+
+      if (
+        !/\d/u.test(combinedWithSpaces) &&
+        !/\b(i|we|my|our)\b/iu.test(combinedWithSpaces)
+      ) {
+        findings.push(
+          mockDr_createFinding(
+            "specificity",
+            "warning",
+            "Add a number or first-person signal so the draft feels specific.",
+          ),
+        );
+      }
+
+      return findings.sort(
+        (left, right) =>
+          mockDr_SEVERITY_RANK[left.severity] -
+            mockDr_SEVERITY_RANK[right.severity] ||
+          left.rule_key.localeCompare(right.rule_key),
+      );
+    }
+
+    function mockDr_assertCampaignMutableInTransaction(
+      campaignId: number,
+    ): void {
+      const campaigns = mockSqlSelect<CampaignMutationStatusRow>(
+        "SELECT status FROM campaigns WHERE id = $1 LIMIT 1",
+        [campaignId],
+      );
+      const campaign = campaigns[0];
+      if (campaign === undefined) throw new Error("Campaign was not found");
+      if (campaign.status === "archived")
+        throw new Error("Campaign is archived");
+    }
+
+    function mockDr_insertAuditFindings(
+      variantId: number,
+      findings: DraftAuditFinding[],
+    ): void {
+      for (const finding of findings) {
+        mockSqlExecute(
+          `INSERT INTO draft_audits (draft_variant_id, rule_key, severity, message)
+      VALUES ($1, $2, $3, $4)`,
+          [variantId, finding.rule_key, finding.severity, finding.message],
+        );
+      }
+    }
+
+    function mockDr_insertDraftInTransaction(input: DraftInsertInput): number {
+      const draftResult = mockSqlExecute(
+        `INSERT INTO drafts (
+      campaign_id, candidate_post_id, angle, notes, content_intent, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, datetime('now'))`,
+        [
+          input.campaignId,
+          input.candidateId,
+          input.angle,
+          input.notes,
+          input.contentIntent,
+        ],
+      );
+      const draftId = draftResult.lastInsertId;
+
+      for (const [index, variant] of input.variants.entries()) {
+        const variantResult = mockSqlExecute(
+          `INSERT INTO draft_variants (
+        draft_id, variant_number, hook, body, cta, hashtags, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
+          [
+            draftId,
+            index + 1,
+            variant.hook,
+            variant.body,
+            variant.cta,
+            variant.hashtags,
+          ],
+        );
+        mockDr_insertAuditFindings(
+          variantResult.lastInsertId,
+          mockDr_auditDraftVariant(variant),
+        );
+      }
+
+      const candidateUpdate = mockSqlExecute(
+        `UPDATE candidate_posts
+    SET status = 'drafted', updated_at = datetime('now')
+    WHERE id = $1 AND campaign_id = $2 AND status IN ('new', 'shortlisted')`,
+        [input.candidateId, input.campaignId],
+      );
+      if (candidateUpdate.rowsAffected !== 1) {
+        throw new Error("Candidate is no longer eligible for drafting");
+      }
+      return draftId;
+    }
+
+    function mockDr_getEligibleDraftCandidate(
+      candidateId: number,
+      campaignId?: number,
+      includeGenerationContext = false,
+    ): DraftCandidateRow | DraftCandidateContextRow {
+      const contextSelect = includeGenerationContext
+        ? `,
+      c.name AS campaign_name,
+      c.product AS campaign_product,
+      c.audience AS campaign_audience,
+      c.voice AS campaign_voice,
+      c.tone AS campaign_tone,
+      cp.source_keyword AS candidate_source_keyword,
+      cp.score_reason AS candidate_score_reason,
+      cp.notes AS candidate_notes,
+      cp.relevance_score AS candidate_relevance_score,
+      tp.author_name AS target_author_name,
+      tp.content AS target_content`
+        : "";
+      const candidates = mockSqlSelect<DraftCandidateRow>(
+        `SELECT
+      cp.id AS candidate_id,
+      cp.campaign_id,
+      c.status AS campaign_status,
+      cp.status AS candidate_status
+      ${contextSelect}
+    FROM candidate_posts cp
+    INNER JOIN campaigns c ON c.id = cp.campaign_id
+    INNER JOIN target_posts tp ON tp.id = cp.target_post_id
+    WHERE cp.id = $1
+    LIMIT 1`,
+        [candidateId],
+      );
+      const candidate = candidates[0];
+      if (candidate === undefined) throw new Error("Candidate was not found");
+      if (campaignId !== undefined && candidate.campaign_id !== campaignId) {
+        throw new Error("Candidate belongs to a different campaign");
+      }
+      mockDr_assertCampaignMutableInTransaction(candidate.campaign_id);
+      if (candidate.candidate_status === "rejected") {
+        throw new Error("Rejected candidates cannot be drafted");
+      }
+      if (candidate.candidate_status === "drafted") {
+        throw new Error("Candidate already has a draft");
+      }
+      return candidate;
+    }
+
+    function mockDr_createDraft(input: CreateDraftInput): number {
+      const parsed = input;
+      try {
+        const candidate = mockDr_getEligibleDraftCandidate(parsed.candidateId);
+        const draftId = mockDr_insertDraftInTransaction({
+          campaignId: candidate.campaign_id,
+          candidateId: parsed.candidateId,
+          angle: parsed.angle,
+          notes: parsed.notes,
+          contentIntent: parsed.contentIntent,
+          variants: parsed.variants,
+        });
+        return draftId;
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockDr_updateDraftVariant(input: UpdateDraftVariantInput): void {
+      const parsed = input;
+      const hasContentUpdate =
+        parsed.hook !== undefined ||
+        parsed.body !== undefined ||
+        parsed.cta !== undefined ||
+        parsed.hashtags !== undefined;
+      if (!hasContentUpdate) return;
+      const updates: string[] = [];
+      const values: unknown[] = [];
+
+      function addUpdate(column: string, value: string): void {
+        values.push(value);
+        updates.push(`${column} = $${values.length}`);
+      }
+      try {
+        const currentVariants = mockSqlSelect<DraftVariantRow>(
+          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+          [parsed.id],
+        );
+        const currentVariant = currentVariants[0];
+        if (currentVariant === undefined) {
+          throw new Error("Draft variant was not found");
+        }
+
+        if (parsed.hook !== undefined && parsed.hook !== currentVariant.hook) {
+          addUpdate("hook", parsed.hook);
+        }
+        if (parsed.body !== undefined && parsed.body !== currentVariant.body) {
+          addUpdate("body", parsed.body);
+        }
+        if (parsed.cta !== undefined && parsed.cta !== currentVariant.cta) {
+          addUpdate("cta", parsed.cta);
+        }
+        if (
+          parsed.hashtags !== undefined &&
+          parsed.hashtags !== currentVariant.hashtags
+        ) {
+          addUpdate("hashtags", parsed.hashtags);
+        }
+
+        if (updates.length === 0) {
+          return;
+        }
+
+        values.push(parsed.id);
+        mockSqlExecute(
+          `UPDATE draft_variants
+      SET ${updates.join(", ")},
+          updated_at = datetime('now')
+      WHERE id = $${values.length}`,
+          values,
+        );
+
+        const variants = mockSqlSelect<DraftVariantRow>(
+          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+          [parsed.id],
+        );
+        const variant = variants[0];
+        if (variant === undefined)
+          throw new Error("Draft variant was not found");
+
+        mockSqlExecute(`DELETE FROM draft_audits WHERE draft_variant_id = $1`, [
+          parsed.id,
+        ]);
+        mockDr_insertAuditFindings(
+          parsed.id,
+          mockDr_auditDraftVariant(variant),
+        );
+        mockSqlExecute(
+          `UPDATE drafts
+      SET updated_at = datetime('now')
+      WHERE id = $1`,
+          [variant.draft_id],
+        );
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockDr_setDraftVariantStatus(
+      input: SetDraftVariantStatusInput,
+    ): void {
+      const parsed = input;
+      try {
+        const variants = mockSqlSelect<DraftVariantRow>(
+          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+          [parsed.id],
+        );
+        const variant = variants[0];
+        if (variant === undefined)
+          throw new Error("Draft variant was not found");
+
+        if (parsed.status === "selected") {
+          const audits = mockSqlSelect<DraftAuditRow>(
+            `SELECT * FROM draft_audits WHERE draft_variant_id = $1`,
+            [parsed.id],
+          );
+          if (audits.some((audit) => audit.severity === "block")) {
+            throw new Error("Blocked variants cannot be selected");
+          }
+          mockSqlExecute(
+            `UPDATE draft_variants
+        SET status = 'draft', updated_at = datetime('now')
+        WHERE draft_id = $1 AND id <> $2`,
+            [variant.draft_id, parsed.id],
+          );
+          mockSqlExecute(
+            `UPDATE draft_variants
+        SET status = 'selected', updated_at = datetime('now')
+        WHERE id = $1`,
+            [parsed.id],
+          );
+          mockSqlExecute(
+            `UPDATE drafts
+        SET status = 'ready_for_review', updated_at = datetime('now')
+        WHERE id = $1`,
+            [variant.draft_id],
+          );
+        } else {
+          mockSqlExecute(
+            `UPDATE draft_variants
+        SET status = $1, updated_at = datetime('now')
+        WHERE id = $2`,
+            [parsed.status, parsed.id],
+          );
+
+          if (parsed.status === "draft") {
+            const selectedCounts = mockSqlSelect<SelectedCountRow>(
+              `SELECT COUNT(*) AS selected_count
+          FROM draft_variants
+          WHERE draft_id = $1 AND status = 'selected'`,
+              [variant.draft_id],
+            );
+            if ((selectedCounts[0]?.selected_count ?? 0) === 0) {
+              mockSqlExecute(
+                `UPDATE drafts
+            SET status = 'needs_revision', updated_at = datetime('now')
+            WHERE id = $1`,
+                [variant.draft_id],
+              );
+            }
+          }
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockDr_mapGeneratedVariants(
+      value: string,
+    ): GeneratedDraftVariant[] {
+      try {
+        return JSON.parse(value) as GeneratedDraftVariant[];
+      } catch {
+        return [];
+      }
+    }
+
+    function mockDr_generatedHashtagsToDraftString(hashtags: string[]): string {
+      return hashtags
+        .map((hashtag) => hashtag.trim())
+        .filter(Boolean)
+        .map((hashtag) => (hashtag.startsWith("#") ? hashtag : `#${hashtag}`))
+        .join(" ");
+    }
+
+    function mockDr_loadDraftGenerationRequestRow(
+      id: number,
+    ): DraftGenerationRequestRow {
+      const rows = mockSqlSelect<DraftGenerationRequestRow>(
+        `SELECT
+      dgr.*,
+      c.name AS campaign_name,
+      cp.source_keyword AS candidate_source_keyword,
+      cp.status AS candidate_status,
+      cp.relevance_score AS candidate_relevance_score,
+      cp.score_reason AS candidate_score_reason,
+      cp.notes AS candidate_notes,
+      cp.created_at AS candidate_created_at,
+      cp.updated_at AS candidate_updated_at,
+      tp.id AS target_id,
+      tp.platform AS target_platform,
+      tp.url AS target_url,
+      tp.normalized_url AS target_normalized_url,
+      tp.platform_resource_urn AS target_platform_resource_urn,
+      tp.author_name AS target_author_name,
+      tp.author_profile_url AS target_author_profile_url,
+      tp.posted_at AS target_posted_at,
+      tp.content AS target_content,
+      tp.content_hash AS target_content_hash,
+      tp.created_at AS target_created_at,
+      tp.updated_at AS target_updated_at
+    FROM draft_generation_requests dgr
+    INNER JOIN campaigns c ON c.id = dgr.campaign_id
+    INNER JOIN candidate_posts cp ON cp.id = dgr.candidate_post_id
+    INNER JOIN target_posts tp ON tp.id = cp.target_post_id
+    WHERE dgr.id = $1
+    LIMIT 1`,
+        [id],
+      );
+      const request = rows[0];
+      if (request === undefined) {
+        throw new Error("Draft generation request was not found");
+      }
+      return request;
+    }
+
+    function mockDr_truncateDraftReference(
+      value: string,
+      maxLength: number,
+    ): string {
+      const normalized = value.replace(/\s+/gu, " ").trim();
+      if (normalized.length <= maxLength) return normalized;
+      return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+    }
+
+    function mockDr_buildDraftGenerationContext(
+      parsed: MockDraftClaimInput,
+      candidate: DraftCandidateContextRow,
+      draftGenerationRequestId: number,
+    ): Record<string, unknown> {
+      return {
+        draftRequest: {
+          draftGenerationRequestId,
+          campaignId: candidate.campaign_id,
+          candidatePostId: parsed.candidateId,
+          variantCount: parsed.variantCount,
+          contentIntent: parsed.contentIntent,
+        },
+        referenceData: {
+          campaign: {
+            name: mockDr_truncateDraftReference(candidate.campaign_name, 160),
+            product: mockDr_truncateDraftReference(
+              candidate.campaign_product,
+              500,
+            ),
+            audience: mockDr_truncateDraftReference(
+              candidate.campaign_audience,
+              500,
+            ),
+            voice: mockDr_truncateDraftReference(candidate.campaign_voice, 500),
+            tone: mockDr_truncateDraftReference(candidate.campaign_tone, 500),
+          },
+          candidate: {
+            id: candidate.candidate_id,
+            sourceKeyword: mockDr_truncateDraftReference(
+              candidate.candidate_source_keyword,
+              160,
+            ),
+            relevanceScore: candidate.candidate_relevance_score,
+            scoreReason: mockDr_truncateDraftReference(
+              candidate.candidate_score_reason,
+              500,
+            ),
+            notes: mockDr_truncateDraftReference(
+              candidate.candidate_notes,
+              500,
+            ),
+            targetAuthorName: mockDr_truncateDraftReference(
+              candidate.target_author_name,
+              160,
+            ),
+            targetContent: mockDr_truncateDraftReference(
+              candidate.target_content,
+              2000,
+            ),
+          },
+        },
+      };
+    }
+
+    function mockDr_saveGeneratedDraft(input: SaveGeneratedDraftInput): number {
+      const parsed = input;
+      try {
+        const request = mockDr_loadDraftGenerationRequestRow(parsed.id);
+        if (request.status !== "generated") {
+          throw new Error("Only generated draft requests can be saved");
+        }
+        mockDr_getEligibleDraftCandidate(
+          request.candidate_post_id,
+          request.campaign_id,
+        );
+        const generatedVariants = mockDr_mapGeneratedVariants(
+          request.generated_variants_json,
+        );
+        if (generatedVariants.length !== request.variant_count) {
+          throw new Error(
+            "Generated request does not have its exact requested variants",
+          );
+        }
+        const linkedScope = mockDr_validateLinkedDraftSaveInTransaction({
+          workflowRunId: request.workflow_run_id,
+          workflowStepId: request.workflow_step_id,
+          campaignId: request.campaign_id,
+          candidateId: request.candidate_post_id,
+        });
+        const draftId = mockDr_insertDraftInTransaction({
+          campaignId: request.campaign_id,
+          candidateId: request.candidate_post_id,
+          angle: request.angle,
+          notes: `Generated by ${request.provider_key}/${request.model_name || "default"} from request #${request.id}.`,
+          contentIntent: request.content_intent,
+          variants: generatedVariants.map((variant) => ({
+            hook: variant.hook,
+            body: variant.body,
+            cta: variant.cta,
+            hashtags: mockDr_generatedHashtagsToDraftString(variant.hashtags),
+          })),
+        });
+        const savedResult = mockSqlExecute(
+          `UPDATE draft_generation_requests
+      SET status = 'saved', created_draft_id = $1, updated_at = datetime('now')
+      WHERE id = $2 AND status = 'generated'`,
+          [draftId, request.id],
+        );
+        if (savedResult.rowsAffected !== 1) {
+          throw new Error("Draft generation request is no longer saveable");
+        }
+        if (linkedScope !== null) {
+          mockDr_completeLinkedDraftSaveInTransaction({
+            ...linkedScope,
+            draftId,
+            contentIntent: request.content_intent,
+          });
+        }
+        return draftId;
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockDr_dismissDraftGenerationRequest(id: number): void {
+      const parsed = { id };
+      try {
+        const request = mockDr_loadDraftGenerationRequestRow(parsed.id);
+        const interruptedReason =
+          request.status === "pending"
+            ? `Draft generation request #${request.id} was dismissed after an interrupted provider call. Generate variants again to retry.`
+            : "Draft generation dismissed by operator";
+
+        if (request.status === "pending" && request.agent_run_id !== null) {
+          const cancelledRun = mockSqlExecute(
+            `UPDATE agent_runs
+        SET status = 'cancelled',
+          error_message = $1,
+          completed_at = COALESCE(completed_at, datetime('now')),
+          updated_at = datetime('now')
+        WHERE id = $2 AND status IN ('queued', 'running')`,
+            [interruptedReason, request.agent_run_id],
+          );
+          if (cancelledRun.rowsAffected === 1) {
+            mockSqlExecute(
+              `DELETE FROM agent_run_approval_checkpoints
+          WHERE agent_run_id = $1`,
+              [request.agent_run_id],
+            );
+            mockSqlExecute(
+              `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+          VALUES ($1, $2, $3)`,
+              [request.agent_run_id, "run_cancelled", interruptedReason],
+            );
+          }
+        }
+
+        const dismissedResult = mockSqlExecute(
+          `UPDATE draft_generation_requests
+      SET status = 'dismissed',
+        error_message = CASE WHEN status = 'pending' THEN $1 ELSE error_message END,
+        updated_at = datetime('now')
+      WHERE id = $2 AND status IN ('generated', 'failed', 'pending')`,
+          [interruptedReason, parsed.id],
+        );
+        if (dismissedResult.rowsAffected === 1 && request.status !== "failed") {
+          mockDr_blockLinkedDraftGenerationInTransaction({
+            workflowRunId: request.workflow_run_id,
+            workflowStepId: request.workflow_step_id,
+            campaignId: request.campaign_id,
+            candidateId: request.candidate_post_id,
+            reason: interruptedReason,
+          });
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    interface LinkedDraftScopeRow {
+      workflow_run_id: number;
+      campaign_id: number;
+      run_status: WorkflowRunStatus;
+      current_step_key: string;
+      workflow_step_id: number;
+      step_status: WorkflowStepStatus;
+      step_title: string;
+      candidate_status: CandidateStatus;
+      relevance_score: number | null;
+      candidate_campaign_id: number;
+    }
+
+    interface LinkedDraftGenerationScope {
+      workflowRunId: number;
+      workflowStepId: number;
+    }
+
+    interface LinkedDraftRequestScope {
+      workflowRunId: number | null;
+      workflowStepId: number | null;
+      campaignId: number;
+      candidateId: number;
+    }
+
+    const mockDr_ELIGIBLE_CANDIDATE_STATUSES: CandidateStatus[] = [
+      "new",
+      "shortlisted",
+    ];
+
+    const mockDr_RESUMABLE_RUN_STATUSES: WorkflowRunStatus[] = [
+      "running",
+      "blocked",
+      "failed",
+    ];
+
+    const mockDr_CLAIMABLE_STEP_STATUSES: WorkflowStepStatus[] = [
+      "pending",
+      "running",
+      "blocked",
+      "failed",
+    ];
+
+    function mockDr_boundWorkflowSummary(value: string): string {
+      const normalized = value.replace(/\s+/gu, " ").trim();
+      return normalized.length <= 1000
+        ? normalized
+        : `${normalized.slice(0, 999).trimEnd()}…`;
+    }
+
+    function mockDr_loadLinkedDraftScope(input: {
+      workflowRunId: number;
+      campaignId: number;
+      candidateId: number;
+    }): LinkedDraftScopeRow {
+      const rows = mockSqlSelect<LinkedDraftScopeRow>(
+        `SELECT
+      wr.id AS workflow_run_id,
+      wr.campaign_id,
+      wr.status AS run_status,
+      wr.current_step_key,
+      ws.id AS workflow_step_id,
+      ws.status AS step_status,
+      ws.title AS step_title,
+      cp.status AS candidate_status,
+      cp.relevance_score,
+      cp.campaign_id AS candidate_campaign_id
+    FROM workflow_runs wr
+    INNER JOIN workflow_steps ws
+      ON ws.workflow_run_id = wr.id AND ws.step_key = 'draft'
+    INNER JOIN workflow_artifacts wa
+      ON wa.workflow_run_id = wr.id
+      AND wa.artifact_type = 'candidate_post'
+      AND wa.artifact_id = $1
+    INNER JOIN candidate_posts cp ON cp.id = wa.artifact_id
+    WHERE wr.id = $2
+    LIMIT 1`,
+        [input.candidateId, input.workflowRunId],
+      );
+      const scope = rows[0];
+      if (scope === undefined) {
+        throw new Error(
+          "Workflow has no surviving artifact for this candidate",
+        );
+      }
+      if (
+        scope.campaign_id !== input.campaignId ||
+        scope.candidate_campaign_id !== input.campaignId
+      ) {
+        throw new Error(
+          "Workflow and candidate must belong to the selected campaign",
+        );
+      }
+      if (scope.current_step_key !== "draft") {
+        throw new Error("Workflow is not at its draft step");
+      }
+      if (!mockDr_RESUMABLE_RUN_STATUSES.includes(scope.run_status)) {
+        throw new Error("Workflow is not running or resumable");
+      }
+      if (!mockDr_CLAIMABLE_STEP_STATUSES.includes(scope.step_status)) {
+        throw new Error("Workflow draft step is not eligible for generation");
+      }
+      if (scope.relevance_score === null) {
+        throw new Error("Workflow candidate must have a relevance score");
+      }
+      if (
+        !mockDr_ELIGIBLE_CANDIDATE_STATUSES.includes(scope.candidate_status)
+      ) {
+        throw new Error("Workflow candidate is not eligible for drafting");
+      }
+      return scope;
+    }
+
+    function mockDr_claimLinkedDraftGenerationInTransaction(input: {
+      workflowRunId: number | null;
+      campaignId: number;
+      candidateId: number;
+    }): LinkedDraftGenerationScope | null {
+      if (input.workflowRunId === null) return null;
+      const scope = mockDr_loadLinkedDraftScope({
+        workflowRunId: input.workflowRunId,
+        campaignId: input.campaignId,
+        candidateId: input.candidateId,
+      });
+      const eventType =
+        scope.step_status === "pending" ? "step_started" : "step_resumed";
+      const eventSummary =
+        scope.step_status === "pending"
+          ? "Draft variants started with a save-gated generation request"
+          : "Draft variants resumed with a new save-gated generation request";
+
+      mockSqlExecute(
+        `UPDATE workflow_steps
+    SET status = 'running',
+      output_summary = 'Waiting for operator to save generated variants',
+      error_message = '',
+      started_at = COALESCE(started_at, datetime('now')),
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $1`,
+        [scope.workflow_step_id],
+      );
+      mockSqlExecute(
+        `UPDATE workflow_runs
+    SET status = 'running',
+      current_step_key = 'draft',
+      started_at = COALESCE(started_at, datetime('now')),
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $1`,
+        [scope.workflow_run_id],
+      );
+      mockSqlExecute(
+        `INSERT INTO workflow_events (
+      workflow_run_id, workflow_step_id, event_type, summary
+    ) VALUES ($1, $2, $3, $4)`,
+        [
+          scope.workflow_run_id,
+          scope.workflow_step_id,
+          eventType,
+          eventSummary,
+        ],
+      );
+
+      return {
+        workflowRunId: scope.workflow_run_id,
+        workflowStepId: scope.workflow_step_id,
+      };
+    }
+
+    function mockDr_blockLinkedDraftGenerationInTransaction(
+      input: LinkedDraftRequestScope & { reason: string },
+    ): void {
+      if (input.workflowRunId === null || input.workflowStepId === null) return;
+      const summary = mockDr_boundWorkflowSummary(
+        input.reason || "Draft generation stopped",
+      );
+      const rows = mockSqlSelect<{
+        step_status: WorkflowStepStatus;
+        run_status: WorkflowRunStatus;
+        current_step_key: string;
+      }>(
+        `SELECT
+      ws.status AS step_status,
+      wr.status AS run_status,
+      wr.current_step_key
+    FROM workflow_steps ws
+    INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+    WHERE ws.id = $1
+      AND ws.workflow_run_id = $2
+      AND ws.step_key = 'draft'
+      AND wr.campaign_id = $3
+    LIMIT 1`,
+        [input.workflowStepId, input.workflowRunId, input.campaignId],
+      );
+      const scope = rows[0];
+      if (
+        scope === undefined ||
+        scope.current_step_key !== "draft" ||
+        ["completed", "cancelled"].includes(scope.run_status) ||
+        ["completed", "skipped"].includes(scope.step_status)
+      ) {
+        return;
+      }
+
+      mockSqlExecute(
+        `UPDATE workflow_steps
+    SET status = 'blocked',
+      output_summary = '',
+      error_message = $1,
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $2`,
+        [summary, input.workflowStepId],
+      );
+      mockSqlExecute(
+        `UPDATE workflow_runs
+    SET status = 'blocked',
+      current_step_key = 'draft',
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $1`,
+        [input.workflowRunId],
+      );
+      mockSqlExecute(
+        `INSERT INTO workflow_events (
+      workflow_run_id, workflow_step_id, event_type, summary
+    ) VALUES ($1, $2, 'step_blocked', $3)`,
+        [input.workflowRunId, input.workflowStepId, summary],
+      );
+    }
+
+    function mockDr_validateLinkedDraftSaveInTransaction(
+      input: LinkedDraftRequestScope,
+    ): LinkedDraftGenerationScope | null {
+      if (input.workflowRunId === null && input.workflowStepId === null)
+        return null;
+      if (input.workflowRunId === null || input.workflowStepId === null) {
+        throw new Error(
+          "Draft generation request has incomplete workflow provenance",
+        );
+      }
+      const scope = mockDr_loadLinkedDraftScope({
+        workflowRunId: input.workflowRunId,
+        campaignId: input.campaignId,
+        candidateId: input.candidateId,
+      });
+      if (scope.workflow_step_id !== input.workflowStepId) {
+        throw new Error(
+          "Draft generation request points to a stale workflow step",
+        );
+      }
+      if (scope.step_status !== "running" || scope.run_status !== "running") {
+        throw new Error("Linked workflow draft step must still be running");
+      }
+      return {
+        workflowRunId: scope.workflow_run_id,
+        workflowStepId: scope.workflow_step_id,
+      };
+    }
+
+    function mockDr_completeLinkedDraftSaveInTransaction(
+      input: LinkedDraftGenerationScope & {
+        draftId: number;
+        contentIntent: DraftContentIntent;
+      },
+    ): void {
+      const auditRows = mockSqlSelect<{
+        id: number;
+        status: WorkflowStepStatus;
+        title: string;
+      }>(
+        `SELECT id, status, title
+    FROM workflow_steps
+    WHERE workflow_run_id = $1 AND step_key = 'audit'
+    LIMIT 1`,
+        [input.workflowRunId],
+      );
+      const auditStep = auditRows[0];
+      if (auditStep === undefined || auditStep.status !== "pending") {
+        throw new Error("Linked workflow audit step is not ready to advance");
+      }
+
+      mockSqlExecute(
+        `INSERT INTO workflow_artifacts (
+      workflow_run_id, workflow_step_id, artifact_type, artifact_id, summary,
+      updated_at
+    ) VALUES ($1, $2, 'draft', $3, $4, datetime('now'))`,
+        [
+          input.workflowRunId,
+          input.workflowStepId,
+          input.draftId,
+          `${input.contentIntent} intent · saved draft`,
+        ],
+      );
+      const completedDraftStep = mockSqlExecute(
+        `UPDATE workflow_steps
+    SET status = 'completed',
+      output_summary = $1,
+      error_message = '',
+      completed_at = datetime('now'),
+      updated_at = datetime('now')
+    WHERE id = $2 AND status = 'running'`,
+        ["Generated variants saved by operator", input.workflowStepId],
+      );
+      if (completedDraftStep.rowsAffected !== 1) {
+        throw new Error(
+          "Linked workflow draft step changed before save completed",
+        );
+      }
+      const startedAuditStep = mockSqlExecute(
+        `UPDATE workflow_steps
+    SET status = 'running',
+      output_summary = '',
+      error_message = '',
+      started_at = COALESCE(started_at, datetime('now')),
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $1 AND status = 'pending'`,
+        [auditStep.id],
+      );
+      if (startedAuditStep.rowsAffected !== 1) {
+        throw new Error(
+          "Linked workflow audit step changed before save completed",
+        );
+      }
+      mockSqlExecute(
+        `UPDATE workflow_runs
+    SET status = 'running',
+      current_step_key = 'audit',
+      completed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = $1`,
+        [input.workflowRunId],
+      );
+      mockSqlExecute(
+        `INSERT INTO workflow_events (
+      workflow_run_id, workflow_step_id, event_type, summary
+    ) VALUES ($1, $2, 'step_completed', 'Draft variants saved by operator')`,
+        [input.workflowRunId, input.workflowStepId],
+      );
+      mockSqlExecute(
+        `INSERT INTO workflow_events (
+      workflow_run_id, workflow_step_id, event_type, summary
+    ) VALUES ($1, $2, 'step_started', 'Audit drafts started')`,
+        [input.workflowRunId, auditStep.id],
+      );
+    }
+
+    function runDraftCommand(
+      args: unknown,
+      work: (input: never) => unknown,
+    ): Promise<unknown> {
+      return runNativeMutation(() => work(nativeInput<never>(args)));
+    }
+
+    type MockDraftClaimInput = {
+      campaignId: number;
+      candidateId: number;
+      providerKey: string;
+      modelName: string;
+      playbookKey: string;
+      variantCount: number;
+      contentIntent: DraftContentIntent;
+      workflowRunId?: number;
+      angle: string;
+      voiceNotes: string;
+    };
+
+    /** Mirrors linkgo_draft_generation_claim (old generateDraftVariants claim). */
+    function mockDr_claimGeneration(input: MockDraftClaimInput): unknown {
+      const candidate = mockDr_getEligibleDraftCandidate(
+        input.candidateId,
+        input.campaignId,
+        true,
+      ) as DraftCandidateContextRow;
+      const claimed = mockDr_claimLinkedDraftGenerationInTransaction({
+        workflowRunId: input.workflowRunId ?? null,
+        campaignId: candidate.campaign_id,
+        candidateId: input.candidateId,
+      });
+      const requestResult = mockSqlExecute(
+        `INSERT INTO draft_generation_requests (
+      campaign_id, candidate_post_id, provider_key, model_name, playbook_key,
+      variant_count, content_intent, workflow_run_id, workflow_step_id,
+      angle, voice_notes, status, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', datetime('now'))`,
+        [
+          candidate.campaign_id,
+          input.candidateId,
+          input.providerKey,
+          input.modelName,
+          input.playbookKey,
+          input.variantCount,
+          input.contentIntent,
+          claimed?.workflowRunId ?? null,
+          claimed?.workflowStepId ?? null,
+          input.angle.trim(),
+          input.voiceNotes.trim(),
+        ],
+      );
+      const requestId = requestResult.lastInsertId;
+      const context = mockDr_buildDraftGenerationContext(
+        input as never,
+        candidate,
+        requestId,
+      );
+      return {
+        requestId,
+        campaignId: candidate.campaign_id,
+        workflowRunId: claimed?.workflowRunId ?? null,
+        candidateContext: context.referenceData,
+      };
+    }
+
+    function mockDr_linkAgentRun(input: {
+      requestId: number;
+      agentRunId: number;
+    }): unknown {
+      const result = mockSqlExecute(
+        `UPDATE draft_generation_requests
+      SET agent_run_id = $1, updated_at = datetime('now')
+      WHERE id = $2 AND status = 'pending'`,
+        [input.agentRunId, input.requestId],
+      );
+      if (result.rowsAffected !== 1) {
+        throw new Error(
+          "Draft generation request could not be linked to its agent run",
+        );
+      }
+      return { id: input.requestId };
+    }
+
+    /** Mirrors linkgo_draft_generation_settle: generated, or failed + blocked. */
+    function mockDr_settleGeneration(input: {
+      requestId: number;
+      failureMessage: string | null;
+    }): { status: string; errorMessage: string } {
+      const request = mockDr_loadDraftGenerationRequestRow(input.requestId);
+      const fail = (
+        message: string,
+      ): { status: string; errorMessage: string } => {
+        const bounded = mockDr_truncateDraftReference(message, 1000);
+        const failed = mockSqlExecute(
+          `UPDATE draft_generation_requests
+        SET status = 'failed', error_message = $1, updated_at = datetime('now')
+        WHERE id = $2 AND status = 'pending'`,
+          [bounded, input.requestId],
+        );
+        if (failed.rowsAffected === 1) {
+          mockDr_blockLinkedDraftGenerationInTransaction({
+            workflowRunId: request.workflow_run_id ?? null,
+            workflowStepId: request.workflow_step_id ?? null,
+            campaignId: request.campaign_id,
+            candidateId: request.candidate_post_id,
+            reason: `Draft generation failed: ${bounded}`,
+          });
+        }
+        return { status: "failed", errorMessage: bounded };
+      };
+      if (input.failureMessage !== null) return fail(input.failureMessage);
+      try {
+        const toolRows = mockSqlSelect<DraftToolCallRow>(
+          `SELECT input_json, output_json
+      FROM agent_tool_calls
+      WHERE agent_run_id = $1 AND tool_name = 'draft_post' AND status = 'completed'
+      ORDER BY id DESC
+      LIMIT 2`,
+          [request.agent_run_id],
+        );
+        const toolRow = toolRows[0];
+        if (toolRows.length !== 1 || toolRow === undefined) {
+          throw new Error(
+            "Drafter must return exactly one completed draft_post call",
+          );
+        }
+        const toolInput = JSON.parse(toolRow.input_json) as Record<
+          string,
+          unknown
+        >;
+        const output = JSON.parse(toolRow.output_json) as {
+          variants: GeneratedDraftVariant[];
+          summary?: string;
+        };
+        if (
+          toolInput.draftGenerationRequestId !== input.requestId ||
+          toolInput.campaignId !== request.campaign_id ||
+          toolInput.candidatePostId !== request.candidate_post_id ||
+          toolInput.variantCount !== request.variant_count ||
+          toolInput.contentIntent !== request.content_intent
+        ) {
+          throw new Error(
+            "Drafter tool input did not match the durable request",
+          );
+        }
+        if (output.variants.length !== request.variant_count) {
+          throw new Error(
+            "Drafter output did not contain the requested variant count",
+          );
+        }
+        if (
+          JSON.stringify(output.variants) !== JSON.stringify(toolInput.variants)
+        ) {
+          throw new Error(
+            "Drafter output did not preserve provider-authored variants",
+          );
+        }
+        const generated = mockSqlExecute(
+          `UPDATE draft_generation_requests
+      SET status = 'generated',
+        summary = $1,
+        generated_variants_json = $2,
+        error_message = '',
+        updated_at = datetime('now')
+      WHERE id = $3 AND status = 'pending'`,
+          [
+            (output.summary ?? "").trim(),
+            JSON.stringify(output.variants),
+            input.requestId,
+          ],
+        );
+        if (generated.rowsAffected !== 1) {
+          throw new Error("Draft generation request is no longer pending");
+        }
+        return { status: "generated", errorMessage: "" };
+      } catch (caught) {
+        return fail(
+          caught instanceof Error ? caught.message : "Draft generation failed",
+        );
+      }
+    }
+
+    function mockDraftCommand(
+      cmd: string,
+      args: unknown,
+    ): Promise<unknown> | undefined {
+      switch (cmd) {
+        case "linkgo_draft_create":
+          return runDraftCommand(args, (input: CreateDraftInput) => ({
+            id: mockDr_createDraft(input),
+          }));
+        case "linkgo_draft_variant_update":
+          return runDraftCommand(args, (input: UpdateDraftVariantInput) => {
+            mockDr_updateDraftVariant(input);
+            return { id: input.id };
+          });
+        case "linkgo_draft_variant_set_status":
+          return runDraftCommand(args, (input: SetDraftVariantStatusInput) => {
+            mockDr_setDraftVariantStatus(input);
+            return { id: input.id };
+          });
+        case "linkgo_draft_generation_claim":
+          return runDraftCommand(args, (input: MockDraftClaimInput) =>
+            mockDr_claimGeneration(input),
+          );
+        case "linkgo_draft_generation_link_agent_run":
+          return runDraftCommand(
+            args,
+            (input: { requestId: number; agentRunId: number }) =>
+              mockDr_linkAgentRun(input),
+          );
+        case "linkgo_draft_generation_settle":
+          return runDraftCommand(
+            args,
+            (input: { requestId: number; failureMessage: string | null }) =>
+              mockDr_settleGeneration(input),
+          );
+        case "linkgo_draft_generation_save":
+          return runDraftCommand(args, (input: SaveGeneratedDraftInput) => ({
+            id: mockDr_saveGeneratedDraft(input),
+          }));
+        case "linkgo_draft_generation_dismiss":
+          return runDraftCommand(args, (input: { id: number }) => {
+            mockDr_dismissDraftGenerationRequest(input.id);
+            return { id: input.id };
+          });
+        default:
+          return undefined;
+      }
+    }
+
+    // ---- Draft AI audits: generated from the pre-step-14 renderer audit
+    // code (sync over the SQL emulator); mirrors the native draft_ai_audits
+    // commands. Completion reads the auditor's own persisted output. ----
+    interface MockAuditPostInput {
+      campaignId: number;
+      draftVariantId: number;
+      contentRevision: number;
+      auditRunId: number;
+      text: string;
+      findings: MockAuditPostOutput["findings"];
+    }
+    interface MockAuditPostOutput {
+      summary: string;
+      findings: Array<{
+        ruleKey: string;
+        severity: DraftAuditSeverity;
+        message: string;
+      }>;
+    }
+    type StartDraftAiAuditRunInput = {
+      draftVariantId: number;
+      contentRevision?: number;
+      agentRunId?: number | null;
+      providerKey: string;
+      modelName: string;
+    };
+    type MockAuditIdentity = {
+      auditRunId: number;
+      draftVariantId: number;
+      contentRevision: number;
+    };
+    type CompleteDraftAiAuditRunInput = MockAuditIdentity & {
+      summary: string;
+      findings: MockAuditPostOutput["findings"];
+    };
+    type FailDraftAiAuditRunInput = MockAuditIdentity & {
+      errorMessage: string;
+      agentRunId?: number | null;
+    };
+    type DraftAiAuditRunProjection = DraftAiAuditRunRow;
+    const DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES = 5;
+    const DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES = 30;
+    interface DraftAiAuditSnapshot {
+      draft_variant_id: number;
+      campaign_id: number;
+      content_revision: number;
+      hook: string;
+      body: string;
+      cta: string;
+      hashtags: string;
+    }
+    interface DraftAiAuditRunRow {
+      id: number;
+      draft_variant_id: number;
+      content_revision: number;
+      agent_run_id: number | null;
+      workflow_step_execution_id: number | null;
+      provider_key: DraftAiAuditRun["provider_key"];
+      model_name: string;
+      status: DraftAiAuditRunStatus;
+      summary: string;
+      error_message: string;
+      started_at: string | null;
+      completed_at: string | null;
+      created_at: string;
+      updated_at: string;
+    }
+
+    interface DraftAuditAgentResultRow {
+      status: string;
+      error_message: string;
+    }
+
+    interface StaleDraftAiAuditRow {
+      id: number;
+      draft_variant_id: number;
+      content_revision: number;
+      agent_run_id: number | null;
+    }
+
+    interface StaleDraftAuditAgentRow {
+      id: number;
+    }
+
+    function mockAu_boundDraftAiAuditError(caught: unknown): string {
+      const detail =
+        caught instanceof Error ? caught.message : "Draft AI audit failed";
+      if (detail.length <= 1000) return detail || "Draft AI audit failed";
+      return `${detail.slice(0, 999)}…`;
+    }
+
+    function mockAu_loadDraftAiAuditSnapshot(
+      draftVariantId: number,
+    ): DraftAiAuditSnapshot {
+      const rows = mockSqlSelect<DraftAiAuditSnapshot>(
+        `SELECT
+      dv.id AS draft_variant_id,
+      d.campaign_id,
+      dv.content_revision,
+      dv.hook,
+      dv.body,
+      dv.cta,
+      dv.hashtags
+    FROM draft_variants dv
+    INNER JOIN drafts d ON d.id = dv.draft_id
+    WHERE dv.id = $1
+    LIMIT 1`,
+        [draftVariantId],
+      );
+      const snapshot = rows[0];
+      if (snapshot === undefined)
+        throw new Error("Draft variant was not found");
+      return snapshot;
+    }
+
+    function mockAu_parseCanonicalDraftAuditText(
+      snapshot: Pick<
+        DraftAiAuditSnapshot,
+        "hook" | "body" | "cta" | "hashtags"
+      >,
+    ): string {
+      const canonicalText = mockAu_buildCanonicalDraftAuditText(snapshot);
+      if (canonicalText.trim().length === 0)
+        throw new Error(
+          "Draft AI audit text must contain at least one non-whitespace character",
+        );
+      if (canonicalText.length > 4306)
+        throw new Error("Draft AI audit text must not exceed 4306 characters");
+      return canonicalText;
+    }
+
+    function mockAu_consumeCompletedDraftAiAuditOutput(
+      expected: {
+        campaignId: number;
+        draftVariantId: number;
+        contentRevision: number;
+        auditRunId: number;
+        text: string;
+      },
+      agentRunId: number,
+    ): MockAuditPostOutput {
+      const agentRows = mockSqlSelect<DraftAuditAgentResultRow>(
+        "SELECT status, error_message FROM agent_runs WHERE id = $1 LIMIT 1",
+        [agentRunId],
+      );
+      const agent = agentRows[0];
+      if (agent === undefined)
+        throw new Error("Auditor agent run was not found");
+      if (agent.status !== "completed") {
+        throw new Error(
+          agent.error_message || "Auditor agent did not complete",
+        );
+      }
+
+      const toolRows = mockSqlSelect<DraftToolCallRow>(
+        `SELECT input_json, output_json
+    FROM agent_tool_calls
+    WHERE agent_run_id = $1
+      AND tool_name = 'audit_post'
+      AND status = 'completed'
+    ORDER BY id DESC
+    LIMIT 2`,
+        [agentRunId],
+      );
+      if (toolRows.length !== 1 || toolRows[0] === undefined) {
+        throw new Error(
+          "Auditor must return exactly one completed audit_post call",
+        );
+      }
+
+      const toolInput = JSON.parse(
+        toolRows[0].input_json,
+      ) as MockAuditPostInput;
+      if (
+        toolInput.campaignId !== expected.campaignId ||
+        toolInput.draftVariantId !== expected.draftVariantId ||
+        toolInput.contentRevision !== expected.contentRevision ||
+        toolInput.auditRunId !== expected.auditRunId ||
+        toolInput.text !== expected.text
+      ) {
+        throw new Error(
+          "Auditor tool input did not match the durable audit request",
+        );
+      }
+
+      const output = JSON.parse(toolRows[0].output_json) as MockAuditPostOutput;
+      if (
+        JSON.stringify(output.findings) !== JSON.stringify(toolInput.findings)
+      ) {
+        throw new Error(
+          "Auditor output did not preserve provider-authored findings",
+        );
+      }
+      return output;
+    }
+
+    function mockAu_linkDraftAiAuditAgentRun(input: {
+      auditRunId: number;
+      draftVariantId: number;
+      contentRevision: number;
+      agentRunId: number;
+    }): void {
+      try {
+        const result = mockSqlExecute(
+          `UPDATE draft_ai_audit_runs
+      SET agent_run_id = $1, updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND agent_run_id IS NULL
+        AND status IN ('pending', 'running')`,
+          [
+            input.agentRunId,
+            input.auditRunId,
+            input.draftVariantId,
+            input.contentRevision,
+          ],
+        );
+        if (result.rowsAffected !== 1) {
+          throw new Error(
+            "Draft AI audit could not be linked to its agent run",
+          );
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockAu_settleDraftAiAuditFailure(input: {
+      auditRunId: number;
+      draftVariantId: number;
+      contentRevision: number;
+      agentRunId: number | null;
+      errorMessage: string;
+    }): void {
+      try {
+        const run = mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+        mockAu_assertAuditRunIdentity(run, input);
+        const failedAudit = mockSqlExecute(
+          `UPDATE draft_ai_audit_runs
+      SET status = 'failed',
+        error_message = $1,
+        completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND status IN ('pending', 'running')`,
+          [
+            input.errorMessage,
+            input.auditRunId,
+            input.draftVariantId,
+            input.contentRevision,
+          ],
+        );
+        if (failedAudit.rowsAffected !== 1) {
+          throw new Error("Draft AI audit run is not active");
+        }
+
+        const agentRunId = run.agent_run_id ?? input.agentRunId;
+        if (agentRunId !== null) {
+          const failedAgent = mockSqlExecute(
+            `UPDATE agent_runs
+        SET status = 'failed',
+          error_message = $1,
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+        WHERE id = $2
+          AND status IN ('queued', 'running', 'waiting_approval')`,
+            [input.errorMessage, agentRunId],
+          );
+          if (failedAgent.rowsAffected === 1) {
+            mockSqlExecute(
+              "DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1",
+              [agentRunId],
+            );
+            mockSqlExecute(
+              `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+          VALUES ($1, $2, $3)`,
+              [agentRunId, "run_failed", input.errorMessage],
+            );
+          }
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockAu_assertAuditRunIdentity(
+      run: DraftAiAuditRunRow,
+      identity: {
+        draftVariantId: number;
+        contentRevision: number;
+      },
+    ): void {
+      if (
+        run.draft_variant_id !== identity.draftVariantId ||
+        run.content_revision !== identity.contentRevision
+      ) {
+        throw new Error("Draft AI audit run identity does not match");
+      }
+      if (run.status !== "pending" && run.status !== "running") {
+        throw new Error("Draft AI audit run is not active");
+      }
+    }
+
+    function mockAu_getDraftAiAuditRunInTransaction(
+      auditRunId: number,
+    ): DraftAiAuditRunRow {
+      const rows = mockSqlSelect<DraftAiAuditRunRow>(
+        "SELECT * FROM draft_ai_audit_runs WHERE id = $1 LIMIT 1",
+        [auditRunId],
+      );
+      const run = rows[0];
+      if (run === undefined)
+        throw new Error("Draft AI audit run was not found");
+      return run;
+    }
+
+    function mockAu_assertDraftRevisionCurrentInTransaction(
+      draftVariantId: number,
+      contentRevision: number,
+      message: string,
+    ): void {
+      const rows = mockSqlSelect<
+        Pick<DraftVariantRow, "id" | "content_revision">
+      >(
+        "SELECT id, content_revision FROM draft_variants WHERE id = $1 LIMIT 1",
+        [draftVariantId],
+      );
+      const variant = rows[0];
+      if (variant === undefined) throw new Error("Draft variant was not found");
+      if (variant.content_revision !== contentRevision)
+        throw new Error(message);
+    }
+
+    function mockAu_buildCanonicalDraftAuditText(
+      variant: Pick<DraftAiAuditSnapshot, "hook" | "body" | "cta" | "hashtags">,
+    ): string {
+      return [variant.hook, variant.body, variant.cta, variant.hashtags]
+        .filter((segment) => segment.length > 0)
+        .join("\n\n");
+    }
+
+    function mockAu_mapDraftAiAuditRun(
+      row: DraftAiAuditRunRow,
+    ): DraftAiAuditRun {
+      return row as DraftAiAuditRunRow;
+    }
+
+    function mockAu_startDraftAiAuditRun(
+      input: StartDraftAiAuditRunInput,
+    ): DraftAiAuditRun {
+      const parsed = input;
+
+      try {
+        mockAu_assertDraftRevisionCurrentInTransaction(
+          parsed.draftVariantId,
+          parsed.contentRevision,
+          "Draft AI audit must start against the current content revision",
+        );
+        const activeRuns = mockSqlSelect<DraftAiAuditRunRow>(
+          `SELECT * FROM draft_ai_audit_runs
+      WHERE draft_variant_id = $1
+        AND content_revision = $2
+        AND status IN ('pending', 'running')
+      LIMIT 1`,
+          [parsed.draftVariantId, parsed.contentRevision],
+        );
+        if (activeRuns.length > 0) {
+          throw new Error(
+            "An active AI audit already exists for this draft revision",
+          );
+        }
+
+        const result = mockSqlExecute(
+          `INSERT INTO draft_ai_audit_runs (
+        draft_variant_id,
+        content_revision,
+        agent_run_id,
+        provider_key,
+        model_name,
+        status,
+        started_at
+      ) VALUES ($1, $2, $3, $4, $5, 'running', datetime('now'))`,
+          [
+            parsed.draftVariantId,
+            parsed.contentRevision,
+            parsed.agentRunId,
+            parsed.providerKey,
+            parsed.modelName,
+          ],
+        );
+        const run = mockAu_getDraftAiAuditRunInTransaction(result.lastInsertId);
+        return mockAu_mapDraftAiAuditRun(run);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        if (
+          /draft_ai_audit_runs.*UNIQUE|UNIQUE.*draft_ai_audit_runs/iu.test(
+            detail,
+          )
+        ) {
+          throw Object.assign(
+            new Error(
+              "An active AI audit already exists for this draft revision",
+            ),
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+    }
+
+    function mockAu_completeDraftAiAuditRun(
+      input: CompleteDraftAiAuditRunInput,
+    ): void {
+      const parsed = input;
+
+      try {
+        const run = mockAu_getDraftAiAuditRunInTransaction(parsed.auditRunId);
+        mockAu_assertAuditRunIdentity(run, parsed);
+        mockAu_assertDraftRevisionCurrentInTransaction(
+          parsed.draftVariantId,
+          parsed.contentRevision,
+          "Draft content changed before the AI audit completed",
+        );
+
+        // Refresh deterministic evidence in the same revision-checked transaction.
+        // This also gives historical drafts and native rewrites a verifiable audit.
+        const variants = mockSqlSelect<DraftVariantRow>(
+          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+          [parsed.draftVariantId],
+        );
+        const variant = variants[0];
+        if (!variant) throw new Error("Draft variant was not found");
+        mockSqlExecute(`DELETE FROM draft_audits WHERE draft_variant_id = $1`, [
+          parsed.draftVariantId,
+        ]);
+        mockDr_insertAuditFindings(
+          parsed.draftVariantId,
+          mockDr_auditDraftVariant(variant),
+        );
+
+        for (const finding of parsed.findings) {
+          mockSqlExecute(
+            `INSERT INTO draft_ai_audit_findings (
+          audit_run_id,
+          rule_key,
+          severity,
+          message
+        ) VALUES ($1, $2, $3, $4)`,
+            [
+              parsed.auditRunId,
+              finding.ruleKey,
+              finding.severity,
+              finding.message,
+            ],
+          );
+        }
+
+        const update = mockSqlExecute(
+          `UPDATE draft_ai_audit_runs
+      SET status = 'completed',
+          summary = $1,
+          error_message = '',
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND status IN ('pending', 'running')`,
+          [
+            parsed.summary,
+            parsed.auditRunId,
+            parsed.draftVariantId,
+            parsed.contentRevision,
+          ],
+        );
+        if (update.rowsAffected !== 1) {
+          throw new Error("Draft AI audit run is not active");
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockAu_failDraftAiAuditRun(input: FailDraftAiAuditRunInput): void {
+      const parsed = input;
+
+      try {
+        const run = mockAu_getDraftAiAuditRunInTransaction(parsed.auditRunId);
+        mockAu_assertAuditRunIdentity(run, parsed);
+        const update = mockSqlExecute(
+          `UPDATE draft_ai_audit_runs
+      SET status = 'failed',
+          error_message = $1,
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+      WHERE id = $2
+        AND draft_variant_id = $3
+        AND content_revision = $4
+        AND status IN ('pending', 'running')`,
+          [
+            parsed.errorMessage,
+            parsed.auditRunId,
+            parsed.draftVariantId,
+            parsed.contentRevision,
+          ],
+        );
+        if (update.rowsAffected !== 1) {
+          throw new Error("Draft AI audit run is not active");
+        }
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    function mockAu_failStaleDraftAuditAgent(
+      agentRunId: number,
+      errorMessage: string,
+    ): { failed: boolean; clearedApprovalCheckpoints: number } {
+      const failedAgent = mockSqlExecute(
+        `UPDATE agent_runs
+    SET status = 'failed',
+      error_message = $1,
+      completed_at = datetime('now'),
+      updated_at = datetime('now')
+    WHERE id = $2
+      AND status IN ('queued', 'running', 'waiting_approval')`,
+        [errorMessage, agentRunId],
+      );
+      if (failedAgent.rowsAffected !== 1) {
+        return { failed: false, clearedApprovalCheckpoints: 0 };
+      }
+
+      const clearedCheckpoints = mockSqlExecute(
+        "DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1",
+        [agentRunId],
+      );
+      mockSqlExecute(
+        `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+    VALUES ($1, $2, $3)`,
+        [agentRunId, "run_failed", errorMessage],
+      );
+      return {
+        failed: true,
+        clearedApprovalCheckpoints: clearedCheckpoints.rowsAffected,
+      };
+    }
+
+    function mockAu_reconcileDraftAiAuditLifecycle(
+      input: { maxAuditRuns?: number; maxOrphanAgentRuns?: number } = {},
+    ): {
+      failedAuditRunIds: number[];
+      failedAgentRunIds: number[];
+      clearedApprovalCheckpointCount: number;
+    } {
+      const parsed = {
+        maxAuditRuns: input.maxAuditRuns ?? 25,
+        maxOrphanAgentRuns: input.maxOrphanAgentRuns ?? 25,
+      };
+      const failedAuditRunIds: number[] = [];
+      const failedAgentRunIds: number[] = [];
+      let clearedApprovalCheckpointCount = 0;
+      const reservationCutoff = `-${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes`;
+      const executionCutoff = `-${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes`;
+      try {
+        const staleAudits = mockSqlSelect<StaleDraftAiAuditRow>(
+          `SELECT
+        dar.id,
+        dar.draft_variant_id,
+        dar.content_revision,
+        dar.agent_run_id
+      FROM draft_ai_audit_runs dar
+      LEFT JOIN agent_runs ar ON ar.id = dar.agent_run_id
+      WHERE dar.status IN ('pending', 'running')
+        AND dar.workflow_step_execution_id IS NULL
+        AND (
+          (
+            dar.agent_run_id IS NULL
+            AND datetime(dar.updated_at) <= datetime('now', $1)
+          )
+          OR (
+            dar.agent_run_id IS NOT NULL
+            AND datetime(
+              CASE
+                WHEN ar.updated_at IS NOT NULL
+                  AND datetime(ar.updated_at) > datetime(dar.updated_at)
+                  THEN ar.updated_at
+                ELSE dar.updated_at
+              END
+            ) <= datetime('now', $2)
+          )
+        )
+      ORDER BY datetime(dar.updated_at) ASC, dar.id ASC
+      LIMIT $3`,
+          [reservationCutoff, executionCutoff, parsed.maxAuditRuns],
+        );
+
+        for (const audit of staleAudits) {
+          const errorMessage =
+            audit.agent_run_id === null
+              ? `Draft AI audit was interrupted before agent linking and remained reserved for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`
+              : `Draft AI audit did not reach terminal settlement within ${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes of its last lifecycle activity.`;
+          const failedAudit = mockSqlExecute(
+            `UPDATE draft_ai_audit_runs
+        SET status = 'failed',
+          error_message = $1,
+          completed_at = datetime('now'),
+          updated_at = datetime('now')
+        WHERE id = $2
+          AND draft_variant_id = $3
+          AND content_revision = $4
+          AND status IN ('pending', 'running')`,
+            [
+              errorMessage,
+              audit.id,
+              audit.draft_variant_id,
+              audit.content_revision,
+            ],
+          );
+          if (failedAudit.rowsAffected !== 1) continue;
+          failedAuditRunIds.push(audit.id);
+
+          if (audit.agent_run_id !== null) {
+            const agentResult = mockAu_failStaleDraftAuditAgent(
+              audit.agent_run_id,
+              errorMessage,
+            );
+            if (agentResult.failed) failedAgentRunIds.push(audit.agent_run_id);
+            clearedApprovalCheckpointCount +=
+              agentResult.clearedApprovalCheckpoints;
+          }
+        }
+
+        const orphanedAgents = mockSqlSelect<StaleDraftAuditAgentRow>(
+          `SELECT ar.id
+      FROM agent_runs ar
+      WHERE ar.agent_role = 'auditor'
+        AND ar.workflow_run_id IS NULL
+        AND ar.workflow_step_id IS NULL
+        AND ar.status IN ('queued', 'running', 'waiting_approval')
+        AND datetime(ar.updated_at) <= datetime('now', $1)
+        AND json_valid(ar.input_context_json) = 1
+        AND json_type(
+          ar.input_context_json,
+          '$.auditRequest.auditRunId'
+        ) = 'integer'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM draft_ai_audit_runs dar
+          WHERE dar.agent_run_id = ar.id
+        )
+      ORDER BY datetime(ar.updated_at) ASC, ar.id ASC
+      LIMIT $2`,
+          [reservationCutoff, parsed.maxOrphanAgentRuns],
+        );
+
+        for (const agent of orphanedAgents) {
+          const errorMessage = `Draft AI audit agent was interrupted before linking and remained orphaned for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`;
+          const agentResult = mockAu_failStaleDraftAuditAgent(
+            agent.id,
+            errorMessage,
+          );
+          if (agentResult.failed) failedAgentRunIds.push(agent.id);
+          clearedApprovalCheckpointCount +=
+            agentResult.clearedApprovalCheckpoints;
+        }
+      } catch (error) {
+        throw error;
+      }
+
+      return {
+        failedAuditRunIds,
+        failedAgentRunIds,
+        clearedApprovalCheckpointCount,
+      };
+    }
+
+    function runAuditCommand(
+      args: unknown,
+      work: (input: never) => unknown,
+    ): Promise<unknown> {
+      return runNativeMutation(() => work(nativeInput<never>(args)));
+    }
+
+    function mockAu_currentRevision(draftVariantId: number): number {
+      const row = mockSqlSelect<{ content_revision: number }>(
+        "SELECT content_revision FROM draft_variants WHERE id = $1 LIMIT 1",
+        [draftVariantId],
+      )[0];
+      if (row === undefined) throw new Error("Draft variant was not found");
+      return row.content_revision;
+    }
+
+    /** Mirrors linkgo_draft_ai_audit_start: returns run, campaign and text. */
+    function mockAu_start(input: StartDraftAiAuditRunInput): unknown {
+      const contentRevision =
+        input.contentRevision ?? mockAu_currentRevision(input.draftVariantId);
+      const snapshot = mockAu_loadDraftAiAuditSnapshot(input.draftVariantId);
+      const run = mockAu_startDraftAiAuditRun({ ...input, contentRevision });
+      return {
+        run,
+        campaignId: snapshot.campaign_id,
+        text: mockAu_parseCanonicalDraftAuditText(snapshot),
+      };
+    }
+
+    /** Mirrors linkgo_draft_ai_audit_complete: findings come from storage. */
+    function mockAu_complete(input: MockAuditIdentity): unknown {
+      const run = mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+      // Like native: the revision check comes before reading auditor output.
+      if (
+        mockAu_currentRevision(input.draftVariantId) !== input.contentRevision
+      )
+        throw new Error("Draft content changed before the AI audit completed");
+      if (run.agent_run_id === null)
+        throw new Error("Draft AI audit run has no auditor agent run");
+      const snapshot = mockAu_loadDraftAiAuditSnapshot(input.draftVariantId);
+      const output = mockAu_consumeCompletedDraftAiAuditOutput(
+        {
+          campaignId: snapshot.campaign_id,
+          draftVariantId: input.draftVariantId,
+          contentRevision: input.contentRevision,
+          auditRunId: input.auditRunId,
+          text: mockAu_parseCanonicalDraftAuditText(snapshot),
+        },
+        run.agent_run_id,
+      );
+      // Like native validate_findings: exactly one per category, stored in
+      // category order.
+      const ruleOrder = [
+        "hook",
+        "specificity",
+        "generic_language",
+        "authenticity",
+        "clarity",
+        "safety",
+      ];
+      if (
+        output.findings.length !== ruleOrder.length ||
+        new Set(output.findings.map((finding) => finding.ruleKey)).size !==
+          ruleOrder.length ||
+        output.findings.some((finding) => !ruleOrder.includes(finding.ruleKey))
+      )
+        throw new Error(
+          "findings must contain exactly one entry for each required audit category",
+        );
+      const ordered = [...output.findings].sort(
+        (left, right) =>
+          ruleOrder.indexOf(left.ruleKey) - ruleOrder.indexOf(right.ruleKey),
+      );
+      mockAu_completeDraftAiAuditRun({
+        ...input,
+        summary: output.summary.trim(),
+        findings: ordered,
+      });
+      // Native returns the settled run row.
+      return mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+    }
+
+    /** Mirrors linkgo_draft_ai_audit_fail (a linked agent fails with it). */
+    function mockAu_fail(input: FailDraftAiAuditRunInput): unknown {
+      if (input.agentRunId !== undefined && input.agentRunId !== null) {
+        mockAu_settleDraftAiAuditFailure({
+          auditRunId: input.auditRunId,
+          draftVariantId: input.draftVariantId,
+          contentRevision: input.contentRevision,
+          agentRunId: input.agentRunId,
+          errorMessage: input.errorMessage,
+        });
+        return mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+      }
+      mockAu_failDraftAiAuditRun(input);
+      return mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+    }
+
+    /**
+     * Test-only: stands in for a finished auditor agent run. Creates a completed
+     * auditor agent with one completed audit_post call that answers the run's
+     * durable request (findings authored in the input, preserved in the output)
+     * and links it, so completion reads the auditor's own output like native.
+     */
+    function mockAu_recordAuditorOutput(input: {
+      auditRunId: number;
+      summary?: string;
+      findings: MockAuditPostOutput["findings"];
+      text?: string;
+      outputFindings?: MockAuditPostOutput["findings"];
+    }): unknown {
+      const run = mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+      if (run.agent_run_id !== null) {
+        // Already linked: replace that auditor's recorded audit_post output.
+        const linkedAgentId = run.agent_run_id;
+        const snapshotForRetry = mockAu_loadDraftAiAuditSnapshot(
+          run.draft_variant_id,
+        );
+        const retryRequest = {
+          campaignId: snapshotForRetry.campaign_id,
+          draftVariantId: run.draft_variant_id,
+          contentRevision: run.content_revision,
+          auditRunId: run.id,
+          text:
+            input.text ?? mockAu_parseCanonicalDraftAuditText(snapshotForRetry),
+        };
+        const call = agentToolCalls.find(
+          (row) =>
+            row.agent_run_id === linkedAgentId &&
+            row.tool_name === "audit_post",
+        );
+        if (call === undefined)
+          throw new Error("Linked auditor has no audit_post call");
+        call.input_json = JSON.stringify({
+          ...retryRequest,
+          findings: input.findings,
+        });
+        call.output_json = JSON.stringify({
+          summary: input.summary ?? "",
+          findings: input.outputFindings ?? input.findings,
+        });
+        return { agentRunId: linkedAgentId };
+      }
+      const snapshot = mockAu_loadDraftAiAuditSnapshot(run.draft_variant_id);
+      const now = getNow();
+      const agentRunId = nextAgentRunId;
+      nextAgentRunId += 1;
+      const request = {
+        campaignId: snapshot.campaign_id,
+        draftVariantId: run.draft_variant_id,
+        contentRevision: run.content_revision,
+        auditRunId: run.id,
+        text: input.text ?? mockAu_parseCanonicalDraftAuditText(snapshot),
+      };
+      agentRuns.push({
+        id: agentRunId,
+        campaign_id: snapshot.campaign_id,
+        workflow_run_id: null,
+        workflow_step_id: null,
+        agent_role: "auditor",
+        provider_key: run.provider_key,
+        model_name: run.model_name,
+        playbook_key: "linkedin_humanizer",
+        status: "completed",
+        input_summary: "Audit draft variant #" + String(run.draft_variant_id),
+        input_context_json: JSON.stringify({ auditRequest: request }),
+        output_summary: input.summary ?? "",
+        error_message: "",
+        iteration_count: 1,
+        started_at: now,
+        completed_at: now,
+        created_at: now,
+        updated_at: now,
+      } as AgentRun);
+      agentToolCalls.push({
+        id: nextAgentToolCallId,
+        agent_run_id: agentRunId,
+        provider_tool_call_id: "audit-" + String(run.id),
+        tool_name: "audit_post",
+        status: "completed",
+        requires_approval: 0,
+        input_json: JSON.stringify({ ...request, findings: input.findings }),
+        output_json: JSON.stringify({
+          summary: input.summary ?? "",
+          findings: input.outputFindings ?? input.findings,
+        }),
+        error_message: "",
+        started_at: now,
+        completed_at: now,
+        created_at: now,
+      } as AgentToolCall);
+      nextAgentToolCallId += 1;
+      // Linking requires the reserved revision; a stale run is left unlinked so
+      // completion reports the stale revision, as native does.
+      if (mockAu_currentRevision(run.draft_variant_id) === run.content_revision)
+        mockAu_linkDraftAiAuditAgentRun({
+          auditRunId: run.id,
+          draftVariantId: run.draft_variant_id,
+          contentRevision: run.content_revision,
+          agentRunId,
+        });
+      return { agentRunId };
+    }
+
+    function mockAuditCommand(
+      cmd: string,
+      args: unknown,
+    ): Promise<unknown> | undefined {
+      switch (cmd) {
+        case "linkgo_test_record_auditor_output":
+          return runAuditCommand(
+            args,
+            (input: Parameters<typeof mockAu_recordAuditorOutput>[0]) =>
+              mockAu_recordAuditorOutput(input),
+          );
+        case "linkgo_draft_ai_audit_start":
+          return runAuditCommand(args, (input: StartDraftAiAuditRunInput) =>
+            mockAu_start(input),
+          );
+        case "linkgo_draft_ai_audit_link_agent_run":
+          return runAuditCommand(
+            args,
+            (input: { auditRunId: number; agentRunId: number }) => {
+              const run = mockAu_getDraftAiAuditRunInTransaction(
+                input.auditRunId,
+              );
+              mockAu_linkDraftAiAuditAgentRun({
+                auditRunId: run.id,
+                draftVariantId: run.draft_variant_id,
+                contentRevision: run.content_revision,
+                agentRunId: input.agentRunId,
+              });
+              return mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+            },
+          );
+        case "linkgo_draft_ai_audit_complete":
+          return runAuditCommand(args, (input: MockAuditIdentity) =>
+            mockAu_complete(input),
+          );
+        case "linkgo_draft_ai_audit_fail":
+          return runAuditCommand(args, (input: FailDraftAiAuditRunInput) =>
+            mockAu_fail(input),
+          );
+        case "linkgo_draft_ai_audit_reconcile":
+          return runAuditCommand(
+            args,
+            (input: { maxAuditRuns?: number; maxOrphanAgentRuns?: number }) =>
+              mockAu_reconcileDraftAiAuditLifecycle(input),
+          );
+        default:
+          return undefined;
+      }
+    }
+
+    /** Candidate insert shared by manual create and source imports. */
+    function mockInsertCandidate(raw: MockCandidateInput): number {
+      {
+        const input = {
+          ...raw,
+          normalizedUrl: mockNormalizeUrl(raw.url, false),
+          authorName: raw.authorName ?? "",
+          authorProfileUrl: raw.authorProfileUrl ?? "",
+          postedAt: raw.postedAt ?? null,
+          sourceKeyword: raw.sourceKeyword ?? "",
+          relevanceScore: raw.relevanceScore ?? null,
+          scoreReason: raw.scoreReason ?? "",
+          notes: raw.notes ?? "",
+        };
+        mockAssertCandidateCampaignCanMutate(input.campaignId);
+        const contentHash = mockContentHash(input.content);
+        const urn =
+          (input.platformResourceUrn ?? "").trim() ||
+          mockResolveLinkedInTargetUrn(input.url);
+        const duplicate = mockSqlSelect(
+          `SELECT id FROM dedupe_keys WHERE campaign_id = $1 AND ((key_type = 'normalized_url' AND key_value = $2) OR (key_type = 'content_hash' AND key_value = $3)) LIMIT 1`,
+          [input.campaignId, input.normalizedUrl, contentHash],
+        );
+        if (duplicate.length > 0)
+          throw new Error("Candidate already exists for this campaign");
+        const target = mockSqlSelect<{ id: number }>(
+          `SELECT * FROM target_posts WHERE platform = 'linkedin' AND (normalized_url = $1 OR content_hash = $2) ORDER BY normalized_url = $1 DESC, id ASC LIMIT 1`,
+          [input.normalizedUrl, contentHash],
+        )[0];
+        const targetPostId =
+          target?.id ??
+          mockSqlExecute(
+            `INSERT INTO target_posts (platform, url, normalized_url, author_name, author_profile_url, platform_resource_urn, posted_at, content, content_hash, updated_at) VALUES ('linkedin', $1, $2, $3, $4, $5, $6, $7, $8, datetime('now'))`,
+            [
+              input.url,
+              input.normalizedUrl,
+              input.authorName,
+              input.authorProfileUrl,
+              urn,
+              input.postedAt,
+              input.content,
+              contentHash,
+            ],
+          ).lastInsertId;
+        const candidateId = mockSqlExecute(
+          `INSERT INTO candidate_posts (campaign_id, target_post_id, source_keyword, relevance_score, score_reason, notes, updated_at) VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))`,
+          [
+            input.campaignId,
+            targetPostId,
+            input.sourceKeyword,
+            input.relevanceScore,
+            input.scoreReason,
+            input.notes,
+          ],
+        ).lastInsertId;
+        mockSqlExecute(
+          `INSERT INTO dedupe_keys (campaign_id, key_type, key_value, candidate_post_id) VALUES ($1, 'normalized_url', $2, $3)`,
+          [input.campaignId, input.normalizedUrl, candidateId],
+        );
+        mockSqlExecute(
+          `INSERT INTO dedupe_keys (campaign_id, key_type, key_value, candidate_post_id) VALUES ($1, 'content_hash', $2, $3)`,
+          [input.campaignId, contentHash, candidateId],
+        );
+        return candidateId;
+      }
+    }
+
+    function promoteDiscoveryItemCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{ id: number; campaignId: number }>(args);
+        mockAssertCandidateCampaignCanMutate(input.campaignId);
+        const item = candidateDiscoveryItems.find(
+          (row) => row.id === input.id && row.campaign_id === input.campaignId,
+        );
+        if (!item) throw new Error("Discovery suggestion was not found");
+        const keyword = item.kind === "keyword" ? item.keyword.trim() : "";
+        if (keyword)
+          mockSqlExecute(
+            `INSERT OR IGNORE INTO campaign_keywords (campaign_id, keyword, source) VALUES ($1, $2, $3)`,
+            [input.campaignId, keyword, "generated"],
+          );
+        const updated = mockSqlExecute(
+          `UPDATE candidate_discovery_items SET status = 'promoted', updated_at = datetime('now') WHERE id = $1 AND campaign_id = $2`,
+          [input.id, input.campaignId],
+        );
+        if (updated.rowsAffected !== 1)
+          throw new Error("Discovery suggestion was not found");
+        return { id: input.id };
+      });
+    }
+
+    function boundMockWorkflowSummary(value: string): string {
+      const normalized = value.replace(/\s+/gu, " ").trim();
+      return normalized.length <= 1000
+        ? normalized
+        : `${normalized.slice(0, 999).trimEnd()}…`;
+    }
+
+    function deleteCandidateCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const { id } = nativeInput<{ id: number }>(args);
+        const requests = mockSqlSelect<{
+          request_id: number;
+          request_status: string;
+          agent_run_id: number | null;
+          campaign_id: number;
+          workflow_run_id: number | null;
+          workflow_step_id: number | null;
+          run_status: string | null;
+          current_step_key: string | null;
+          step_status: string | null;
+        }>(
+          `SELECT dgr.id AS request_id, dgr.status AS request_status, dgr.agent_run_id, dgr.campaign_id, dgr.workflow_run_id, dgr.workflow_step_id, wr.status AS run_status, wr.current_step_key, ws.status AS step_status FROM draft_generation_requests dgr LEFT JOIN workflow_runs wr ON wr.id = dgr.workflow_run_id LEFT JOIN workflow_steps ws ON ws.id = dgr.workflow_step_id AND ws.workflow_run_id = dgr.workflow_run_id AND ws.step_key = 'draft' WHERE dgr.candidate_post_id = $1 AND dgr.status IN ('pending', 'generated') AND ( dgr.workflow_run_id IS NOT NULL OR dgr.workflow_step_id IS NOT NULL ) ORDER BY dgr.id ASC`,
+          [id],
+        );
+        for (const request of requests) {
+          const active =
+            request.workflow_run_id !== null &&
+            request.workflow_step_id !== null &&
+            request.current_step_key === "draft" &&
+            ["running", "blocked", "failed"].includes(
+              request.run_status ?? "",
+            ) &&
+            ["pending", "running", "blocked", "failed"].includes(
+              request.step_status ?? "",
+            );
+          if (!active)
+            throw new Error(
+              `Candidate cannot be deleted because linked draft request #${request.request_id} is not attached to an active draft workflow step. Resolve the request from Drafts first.`,
+            );
+          const reason = boundMockWorkflowSummary(
+            `Candidate #${id} was deleted. Linked draft request #${request.request_id} was removed, and the candidate remains recorded as a removed workflow artifact.`,
+          );
+          if (
+            request.request_status === "pending" &&
+            request.agent_run_id !== null
+          ) {
+            const cancelled = mockSqlExecute(
+              `UPDATE agent_runs SET status = 'cancelled', error_message = $1, completed_at = COALESCE(completed_at, datetime('now')), updated_at = datetime('now') WHERE id = $2 AND status IN ('queued', 'running')`,
+              [reason, request.agent_run_id],
+            );
+            if (cancelled.rowsAffected === 1) {
+              mockSqlExecute(
+                `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
+                [request.agent_run_id],
+              );
+              mockSqlExecute(
+                `INSERT INTO agent_run_events (agent_run_id, event_type, summary) VALUES ($1, 'run_cancelled', $2)`,
+                [request.agent_run_id, reason],
+              );
+            }
+          }
+          const dismissed = mockSqlExecute(
+            `UPDATE draft_generation_requests SET status = 'dismissed', error_message = $1, updated_at = datetime('now') WHERE id = $2 AND status IN ('pending', 'generated')`,
+            [reason, request.request_id],
+          );
+          if (dismissed.rowsAffected !== 1)
+            throw new Error(
+              `Linked draft request #${request.request_id} changed before candidate deletion`,
+            );
+          const run = workflowRuns.find(
+            (row) => row.id === request.workflow_run_id,
+          );
+          const step = workflowSteps.find(
+            (row) =>
+              row.id === request.workflow_step_id &&
+              row.workflow_run_id === request.workflow_run_id &&
+              row.step_key === "draft",
+          );
+          if (
+            run &&
+            step &&
+            run.campaign_id === request.campaign_id &&
+            run.current_step_key === "draft" &&
+            !["completed", "cancelled"].includes(run.status) &&
+            !["completed", "skipped"].includes(step.status)
+          ) {
+            mockSqlExecute(
+              `UPDATE workflow_steps SET status = 'blocked', output_summary = '', error_message = $1, completed_at = NULL, updated_at = datetime('now') WHERE id = $2`,
+              [reason, step.id],
+            );
+            mockSqlExecute(
+              `UPDATE workflow_runs SET status = 'blocked', current_step_key = 'draft', completed_at = NULL, updated_at = datetime('now') WHERE id = $1`,
+              [run.id],
+            );
+            mockSqlExecute(
+              `INSERT INTO workflow_events ( workflow_run_id, workflow_step_id, event_type, summary ) VALUES ($1, $2, 'step_blocked', $3)`,
+              [run.id, step.id, reason],
+            );
+          }
+        }
+        mockSqlExecute(`DELETE FROM dedupe_keys WHERE candidate_post_id = $1`, [
+          id,
+        ]);
+        const deleted = mockSqlExecute(
+          `DELETE FROM candidate_posts WHERE id = $1`,
+          [id],
+        );
+        if (deleted.rowsAffected !== 1)
+          throw new Error("Candidate was not found");
+        return { id };
+      });
+    }
+
+    function updateCandidatePolicyCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => {
+        const input = nativeInput<{
+          campaignId: number;
+          maxPostAgeDays: number;
+          bannedTopics: string[];
+        }>(args);
+        const campaign = campaigns.find((row) => row.id === input.campaignId);
+        if (!campaign) throw new Error("Campaign was not found");
+        if (campaign.status === "archived")
+          throw new Error("Campaign is archived");
+        if (w.__LINKGO_FAIL_CANDIDATE_POLICY_SAVE__ === true) {
+          w.__LINKGO_FAIL_CANDIDATE_POLICY_SAVE__ = undefined;
+          throw new Error("Injected candidate policy save failure");
+        }
+        const now = getNow();
+        let policy = candidateIntakePolicies.find(
+          (row) => row.campaign_id === input.campaignId,
+        );
+        if (policy) {
+          policy.max_post_age_days = input.maxPostAgeDays;
+          policy.updated_at = now;
+        } else {
+          policy = {
+            campaign_id: input.campaignId,
+            max_post_age_days: input.maxPostAgeDays,
+            created_at: now,
+            updated_at: now,
+          };
+          candidateIntakePolicies.push(policy);
+        }
+        restoreRows(
+          candidatePolicyBannedTopics,
+          candidatePolicyBannedTopics.filter(
+            (row) => row.campaign_id !== input.campaignId,
+          ),
+        );
+        const topics = input.bannedTopics.map((topic) =>
+          topic.trim().replace(/\s+/gu, " "),
+        );
+        for (const topic of topics) {
+          candidatePolicyBannedTopics.push({
+            id: nextCandidatePolicyBannedTopicId,
+            campaign_id: input.campaignId,
+            topic,
+            normalized_topic: topic.toLowerCase(),
+            created_at: now,
+          });
+          nextCandidatePolicyBannedTopicId += 1;
+        }
+        return {
+          campaign_id: input.campaignId,
+          max_post_age_days: policy.max_post_age_days,
+          banned_topics: topics,
+          created_at: policy.created_at,
+          updated_at: policy.updated_at,
+        };
+      });
+    }
+
+    /**
+     * Mirrors `candidate_queue_store.rs` and `source_import_reads.rs`.
+     * Returns `undefined` for commands it does not own.
+     */
+    function mockCandidateQueueCommand(
+      cmd: string,
+      args: unknown,
+    ): Promise<unknown> | undefined {
+      const assertCampaignCanMutate = (campaignId: number): void => {
+        const campaign = campaigns.find((row) => row.id === campaignId);
+        if (!campaign) throw new Error("Campaign was not found");
+        if (campaign.status === "archived")
+          throw new Error("Campaign is archived");
+      };
+      const compact = (value: string | undefined, max: number): string =>
+        (value ?? "").trim().replace(/\s+/gu, " ").slice(0, max);
+
+      if (cmd === "linkgo_candidate_list") {
+        const input = nativeInput<{ campaignId?: number }>(args);
+        const matches = selectCandidateJoin(
+          input.campaignId === undefined ? [] : [input.campaignId],
+        );
+        // Mirrors `candidate_queue_store::CandidateListPage`.
+        return withCampaignGate(input.campaignId, {
+          rows: matches.slice(0, 500),
+          totalCount: matches.length,
+        });
+      }
+      if (cmd === "linkgo_candidate_discovery_list") {
+        const input = nativeInput<{ campaignId: number }>(args);
+        const rows = candidateDiscoveryItems
+          .filter(
+            (item) =>
+              item.campaign_id === input.campaignId &&
+              item.status !== "dismissed",
+          )
+          .sort((left, right) => {
+            const promoted =
+              (left.status === "promoted" ? 1 : 0) -
+              (right.status === "promoted" ? 1 : 0);
+            if (promoted !== 0) return promoted;
+            const confidence =
+              (right.confidence_score ?? -1) - (left.confidence_score ?? -1);
+            if (confidence !== 0) return confidence;
+            return (
+              right.updated_at.localeCompare(left.updated_at) ||
+              right.id - left.id
+            );
+          })
+          .slice(0, 200)
+          .map((item) => ({ ...item }));
+        return withCampaignGate(input.campaignId, rows);
+      }
+      if (cmd === "linkgo_candidate_agent_run_context") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{ campaignId: number }>(args);
+          assertCampaignCanMutate(input.campaignId);
+          return {
+            seedKeywords: keywords
+              .filter((row) => row.campaign_id === input.campaignId)
+              .map((row) => row.keyword)
+              .sort()
+              .slice(0, 12),
+            scoringCandidateIds: candidatePosts
+              .filter(
+                (row) =>
+                  row.campaign_id === input.campaignId &&
+                  row.status === "new" &&
+                  row.relevance_score === null,
+              )
+              .sort(
+                (left, right) =>
+                  left.created_at.localeCompare(right.created_at) ||
+                  left.id - right.id,
+              )
+              .slice(0, 50)
+              .map((row) => row.id),
+          };
+        });
+      }
+      if (cmd === "linkgo_candidate_update") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{
+            id: number;
+            status?: CandidateStatus;
+            relevanceScore?: number | null;
+            scoreReason?: string;
+            notes?: string;
+          }>(args);
+          const candidate = candidatePosts.find((row) => row.id === input.id);
+          const changed =
+            input.status !== undefined ||
+            input.relevanceScore !== undefined ||
+            input.scoreReason !== undefined ||
+            input.notes !== undefined;
+          if (!candidate || !changed) return null;
+          if (input.status !== undefined) candidate.status = input.status;
+          if (input.relevanceScore !== undefined)
+            candidate.relevance_score = input.relevanceScore;
+          if (input.scoreReason !== undefined)
+            candidate.score_reason = input.scoreReason.trim();
+          if (input.notes !== undefined) candidate.notes = input.notes.trim();
+          candidate.updated_at = getNow();
+          return null;
+        });
+      }
+      if (cmd === "linkgo_candidate_dismiss_discovery_item") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{ id: number; campaignId: number }>(args);
+          assertCampaignCanMutate(input.campaignId);
+          if (w.__LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__) {
+            w.__LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__ = undefined;
+            throw new Error("Injected discovery status update failure");
+          }
+          const item = candidateDiscoveryItems.find(
+            (row) =>
+              row.id === input.id && row.campaign_id === input.campaignId,
+          );
+          if (!item) throw new Error("Discovery suggestion was not found");
+          item.status = "dismissed";
+          item.updated_at = getNow();
+          return null;
+        });
+      }
+      if (cmd === "linkgo_candidate_discovery_insert") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{
+            campaignId: number;
+            agentRunId: number;
+            workflowRunId?: number | null;
+            suggestions: Array<{
+              kind: CandidateDiscoveryItem["kind"];
+              title?: string;
+              keyword?: string;
+              rationale?: string;
+              sourceKeyword?: string;
+              confidenceScore?: number | null;
+            }>;
+          }>(args);
+          assertCampaignCanMutate(input.campaignId);
+          const saved: CandidateDiscoveryItem[] = [];
+          const seen = new Set<string>();
+          for (const suggestion of input.suggestions.slice(0, 25)) {
+            const title = compact(suggestion.title, 160);
+            const keyword = compact(suggestion.keyword, 80);
+            if (!title && !keyword) continue;
+            const key = `${suggestion.kind}:${keyword.toLocaleLowerCase()}:${title.toLocaleLowerCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const existing = candidateDiscoveryItems.find(
+              (item) =>
+                item.campaign_id === input.campaignId &&
+                item.kind === suggestion.kind &&
+                item.keyword === keyword &&
+                item.title === title &&
+                item.status !== "dismissed",
+            );
+            if (existing) {
+              saved.push({ ...existing });
+              continue;
+            }
+            const now = getNow();
+            const item: CandidateDiscoveryItem = {
+              id: nextCandidateDiscoveryItemId,
+              campaign_id: input.campaignId,
+              agent_run_id: input.agentRunId,
+              workflow_run_id: input.workflowRunId ?? null,
+              kind: suggestion.kind,
+              title,
+              keyword,
+              rationale: compact(suggestion.rationale, 500),
+              source_keyword: compact(suggestion.sourceKeyword, 80),
+              confidence_score: suggestion.confidenceScore ?? null,
+              status: "suggested",
+              created_at: now,
+              updated_at: now,
+            };
+            nextCandidateDiscoveryItemId += 1;
+            candidateDiscoveryItems.push(item);
+            saved.push({ ...item });
+          }
+          return saved;
+        });
+      }
+      if (cmd === "linkgo_source_import_dashboard") {
+        const input = nativeInput<{ campaignId: number }>(args);
+        const batches = sourceImportBatches
+          .filter((batch) => batch.campaign_id === input.campaignId)
+          .sort(
+            (left, right) =>
+              right.created_at.localeCompare(left.created_at) ||
+              right.id - left.id,
+          )
+          .slice(0, 10)
+          .map((batch) => ({
+            ...batch,
+            items: sourceImportItems
+              .filter((item) => item.source_import_batch_id === batch.id)
+              .sort((left, right) => left.row_number - right.row_number)
+              .slice(0, 50)
+              .map((item) => ({ ...item })),
+          }));
+        return withCampaignGate(input.campaignId, batches);
+      }
+      return undefined;
+    }
+
+    /** Mirrors `candidate_policy::get_policy` (defaults when unsaved). */
+    function getCandidatePolicyCommand(args: unknown): Promise<unknown> {
+      const input = nativeInput<{ campaignId: number }>(args);
+      if (!Number.isInteger(input.campaignId) || input.campaignId <= 0)
+        return Promise.reject(
+          new Error("Campaign id must be a positive integer"),
+        );
+      if (w.__LINKGO_FAIL_CANDIDATE_POLICY_POST_COMMIT_LOAD__ === true) {
+        w.__LINKGO_FAIL_CANDIDATE_POLICY_POST_COMMIT_LOAD__ = undefined;
+        return Promise.reject(
+          new Error("Injected post-commit policy load failure"),
+        );
+      }
+      const policy = candidateIntakePolicies.find(
+        (row) => row.campaign_id === input.campaignId,
+      );
+      return Promise.resolve({
+        campaign_id: input.campaignId,
+        max_post_age_days: policy?.max_post_age_days ?? 30,
+        banned_topics: candidatePolicyBannedTopics
+          .filter((topic) => topic.campaign_id === input.campaignId)
+          .sort((left, right) => left.id - right.id)
+          .map((topic) => topic.topic),
+        created_at: policy?.created_at ?? null,
+        updated_at: policy?.updated_at ?? null,
+      });
+    }
+
+    /** Mirrors `safety_dashboard::get_safety_dashboard` (lists capped at 50). */
+    /** Mirrors native `linkgo_scheduler_dashboard_get` (one snapshot, capped lists). */
+    function getSchedulerDashboardCommand(args: unknown): Promise<unknown> {
+      const input = nativeInput<{ campaignId?: number }>(args);
+      const campaignId = input.campaignId ?? null;
+      if (
+        campaignId !== null &&
+        (!Number.isInteger(campaignId) || campaignId <= 0)
+      ) {
+        return Promise.reject(
+          new Error("Campaign id must be a positive integer"),
+        );
+      }
+      const values = campaignId === null ? [] : [campaignId];
+      const inCampaign = (job: ScheduleJob): boolean =>
+        campaignId === null ||
+        scheduleApproval(job)?.campaign_id === campaignId;
+      const pendingJobs = scheduleJobs.filter(
+        (job) =>
+          job.status === "scheduled" &&
+          scheduleApproval(job) !== undefined &&
+          inCampaign(job),
+      );
+      const nowMs = Date.now();
+      const recentAttempts = (
+        selectSchedulerPublishAttempts(values) as Array<
+          PublishAttempt & {
+            campaign_id: number | null;
+            campaign_name: string | null;
+          }
+        >
+      ).map((attempt) => ({
+        id: attempt.id,
+        approval_id: attempt.approval_id,
+        schedule_job_id: attempt.schedule_job_id,
+        platform: attempt.platform,
+        status: attempt.status,
+        external_post_url: attempt.external_post_url,
+        platform_post_id: attempt.platform_post_id,
+        error_message: attempt.error_message,
+        created_at: attempt.created_at,
+        campaign_id: attempt.campaign_id,
+        campaign_name: attempt.campaign_name,
+      }));
+      return Promise.resolve({
+        settings: { ...schedulerSettings },
+        summary: {
+          pendingJobs: pendingJobs.length,
+          dueJobs: pendingJobs.filter(
+            (job) =>
+              dateMs(job.scheduled_for) <= nowMs &&
+              (job.next_attempt_at === null ||
+                dateMs(job.next_attempt_at) <= nowMs),
+          ).length,
+          failedJobs: scheduleJobs.filter(
+            (job) =>
+              job.status === "failed" &&
+              scheduleApproval(job) !== undefined &&
+              inCampaign(job),
+          ).length,
+          recentAttempts: recentAttempts.length,
+        },
+        dueJobs: selectSchedulerDueJobs(values),
+        recentEvents: (
+          selectSchedulerEvents(values) as Array<
+            SchedulerEvent & { campaign_name: string | null }
+          >
+        ).map((event) => ({
+          id: event.id,
+          campaign_id: event.campaign_id,
+          approval_id: event.approval_id,
+          schedule_job_id: event.schedule_job_id,
+          event_type: event.event_type,
+          severity: event.severity,
+          summary: event.summary,
+          metadata_json: event.metadata_json,
+          created_at: event.created_at,
+          campaign_name: event.campaign_name,
+        })),
+        recentAttempts,
+        globalKillSwitchEnabled: safetySettings.global_kill_switch === 1,
+        killSwitchReason: safetySettings.kill_switch_reason,
+      });
+    }
+
+    function getSafetyDashboardCommand(args: unknown): Promise<unknown> {
+      const input = nativeInput<{ campaignId?: number }>(args);
+      const campaignId = input.campaignId ?? null;
+      const matches = (id: number | null): boolean =>
+        campaignId === null || id === campaignId;
+      const newestFirst = <T extends { id: number; created_at: string }>(
+        rows: T[],
+      ): T[] =>
+        [...rows]
+          .sort(
+            (left, right) =>
+              right.created_at.localeCompare(left.created_at) ||
+              right.id - left.id,
+          )
+          .slice(0, 50);
+      const rateLimits = rateLimitEvents.filter((event) =>
+        matches(event.campaign_id),
+      );
+      const audits = safetyAuditEvents.filter((event) =>
+        matches(event.campaign_id),
+      );
+      // Like the previous SQL mock, fixtures are treated as "today".
+      const countToday = (decision: string): number =>
+        rateLimits.filter((event) => event.decision === decision).length;
+      return Promise.resolve({
+        settings: { ...safetySettings },
+        summary: {
+          openErrors: errorQueueItems.filter(
+            (item) =>
+              matches(item.campaign_id) &&
+              ["open", "in_progress", "awaiting_review"].includes(item.status),
+          ).length,
+          blockedToday: countToday("blocked"),
+          allowedToday: countToday("allowed"),
+          auditEvents: audits.length,
+        },
+        errorQueueItems: selectSafetyErrorQueue(
+          campaignId === null ? [] : [campaignId],
+        ).slice(0, 50),
+        rateLimitEvents: newestFirst(rateLimits),
+        auditEvents: newestFirst(audits),
+      });
+    }
+
+    function recordNativeCampaignCall(cmd: string, args: unknown): void {
+      const calls = (w.__LINKGO_NATIVE_CAMPAIGN_CALLS__ ??= []) as Array<{
+        cmd: string;
+        input: unknown;
+      }>;
+      calls.push({ cmd, input: nativeInput<unknown>(args) });
+    }
+
+    function uniqueMockCampaignKeywords(values: string[]): string[] {
+      const seen = new Set<string>();
+      return values
+        .map((keyword) => keyword.trim())
+        .filter((keyword) => {
+          if (!keyword) return false;
+          const key = keyword.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    }
+
+    function insertMockCampaignKeyword(
+      campaignId: number,
+      keyword: string,
+      source: Keyword["source"],
+    ): void {
+      if (
+        keywords.some(
+          (row) => row.campaign_id === campaignId && row.keyword === keyword,
+        )
+      )
+        return;
+      keywords.push({
+        id: nextKeywordId,
+        campaign_id: campaignId,
+        keyword,
+        source,
+        created_at: getNow(),
+      });
+      nextKeywordId += 1;
+    }
+
+    function mockCampaignWithKeywords(campaign: Campaign): unknown {
+      return {
+        ...campaign,
+        keywords: keywords
+          .filter((row) => row.campaign_id === campaign.id)
+          .sort((a, b) =>
+            a.keyword < b.keyword ? -1 : a.keyword > b.keyword ? 1 : 0,
+          )
+          .map((row) => ({ ...row })),
+      };
+    }
+
+    function mockCampaignCommand(cmd: string, args: unknown): unknown {
+      if (!cmd.startsWith("linkgo_campaign_")) return undefined;
+      if (cmd === "linkgo_campaign_list") {
+        const input = nativeInput<{ limit?: number } | undefined>(args) ?? {};
+        const limit = Math.min(input.limit ?? 500, 500);
+        const rank = (value: string) =>
+          Date.parse(
+            value.replace(" ", "T") + (value.includes("Z") ? "" : "Z"),
+          ) || 0;
+        return Promise.resolve(
+          [...campaigns]
+            .sort(
+              (a, b) =>
+                Number(a.status === "archived") -
+                  Number(b.status === "archived") ||
+                rank(b.updated_at) - rank(a.updated_at) ||
+                b.id - a.id,
+            )
+            .slice(0, limit)
+            .map(mockCampaignWithKeywords),
+        );
+      }
+      recordNativeCampaignCall(cmd, args);
+      if (cmd === "linkgo_campaign_create") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{
+            name: string;
+            product: string;
+            audience: string;
+            voice: string;
+            tone: string;
+            autoPilot: boolean;
+            dailyPostLimit: number;
+            dailyCommentLimit: number;
+            keywords: string[];
+          }>(args);
+          const name = input.name.trim();
+          if (campaigns.some((row) => row.name === name))
+            throw new Error("A campaign with this name already exists");
+          const now = getNow();
+          const campaign: Campaign = {
+            id: nextCampaignId,
+            name,
+            product: input.product.trim(),
+            audience: input.audience.trim(),
+            voice: input.voice.trim(),
+            tone: input.tone.trim(),
+            auto_pilot: input.autoPilot ? 1 : 0,
+            status: "draft",
+            daily_post_limit: input.dailyPostLimit,
+            daily_comment_limit: input.dailyCommentLimit,
+            created_at: now,
+            updated_at: now,
+          };
+          campaigns.push(campaign);
+          nextCampaignId += 1;
+          for (const keyword of uniqueMockCampaignKeywords(input.keywords))
+            insertMockCampaignKeyword(campaign.id, keyword, "manual");
+          return campaign.id;
+        });
+      }
+      if (cmd === "linkgo_campaign_update") {
+        return runNativeMutation(() => {
+          const input = nativeInput<
+            Partial<{
+              name: string;
+              product: string;
+              audience: string;
+              voice: string;
+              tone: string;
+              autoPilot: boolean;
+              status: Campaign["status"];
+              dailyPostLimit: number;
+              dailyCommentLimit: number;
+              keywords: string[];
+            }> & { id: number }
+          >(args);
+          const campaign = campaigns.find((row) => row.id === input.id);
+          if (!campaign) return null;
+          if (input.name !== undefined) {
+            const name = input.name.trim();
+            if (
+              campaigns.some((row) => row.id !== input.id && row.name === name)
+            )
+              throw new Error("A campaign with this name already exists");
+          }
+          let changed = false;
+          const text = (
+            value: string | undefined,
+            apply: (v: string) => void,
+          ) => {
+            if (value === undefined) return;
+            apply(value.trim());
+            changed = true;
+          };
+          text(input.name, (v) => (campaign.name = v));
+          text(input.product, (v) => (campaign.product = v));
+          text(input.audience, (v) => (campaign.audience = v));
+          text(input.voice, (v) => (campaign.voice = v));
+          text(input.tone, (v) => (campaign.tone = v));
+          if (input.autoPilot !== undefined) {
+            campaign.auto_pilot = input.autoPilot ? 1 : 0;
+            changed = true;
+          }
+          if (input.status !== undefined) {
+            campaign.status = input.status;
+            changed = true;
+          }
+          if (input.dailyPostLimit !== undefined) {
+            campaign.daily_post_limit = input.dailyPostLimit;
+            changed = true;
+          }
+          if (input.dailyCommentLimit !== undefined) {
+            campaign.daily_comment_limit = input.dailyCommentLimit;
+            changed = true;
+          }
+          if (changed) campaign.updated_at = getNow();
+          if (input.keywords !== undefined) {
+            removeRows(keywords, (row) => row.campaign_id === input.id);
+            for (const keyword of uniqueMockCampaignKeywords(input.keywords))
+              insertMockCampaignKeyword(input.id, keyword, "manual");
+          }
+          return null;
+        });
+      }
+      if (cmd === "linkgo_campaign_status_set") {
+        return runNativeMutation(() => {
+          const input = nativeInput<{ id: number; status: Campaign["status"] }>(
+            args,
+          );
+          const campaign = campaigns.find((row) => row.id === input.id);
+          if (campaign) {
+            campaign.status = input.status;
+            campaign.updated_at = getNow();
+          }
+          return null;
+        });
+      }
+      return undefined;
+    }
+
+    function pushSafetyAudit(
+      event: Omit<SafetyAuditEvent, "id" | "created_at">,
+    ): void {
+      safetyAuditEvents.push({
+        ...event,
+        id: nextSafetyAuditEventId,
+        created_at: getNow(),
+      });
+      nextSafetyAuditEventId += 1;
+    }
+
+    function setGlobalKillSwitchCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => setGlobalKillSwitchMutation(args));
+    }
+
+    function setGlobalKillSwitchMutation(args: unknown): unknown {
+      const input = nativeInput<{ enabled: boolean; reason?: string }>(args);
+      const reason = String(input.reason ?? "").trim();
+      safetySettings.global_kill_switch = input.enabled ? 1 : 0;
+      safetySettings.kill_switch_reason = reason;
+      safetySettings.updated_at = getNow();
+      pushSafetyAudit({
+        campaign_id: null,
+        subject_type: "safety_settings",
+        subject_id: 1,
+        event_type: input.enabled
+          ? "kill_switch_enabled"
+          : "kill_switch_disabled",
+        severity: input.enabled ? "block" : "info",
+        summary: input.enabled
+          ? `Global kill switch enabled${reason ? `: ${reason}` : ""}`
+          : "Global kill switch disabled",
+        metadata_json: JSON.stringify({ reason }),
+      });
+      return { enabled: input.enabled, reason };
+    }
+
+    const mockErrorStatusTransitions: Record<
+      ErrorQueueStatus,
+      ErrorQueueStatus[]
+    > = {
+      open: ["in_progress", "failed"],
+      in_progress: ["awaiting_review", "failed"],
+      awaiting_review: ["resolved", "failed"],
+      resolved: ["in_progress"],
+      failed: ["in_progress"],
+    };
+
+    function setErrorQueueItemStatusCommand(args: unknown): Promise<unknown> {
+      return runNativeMutation(() => setErrorQueueItemStatusMutation(args));
+    }
+
+    function setErrorQueueItemStatusMutation(args: unknown): unknown {
+      const input = nativeInput<{
+        id: number;
+        status: ErrorQueueStatus;
+        resolutionNotes?: string;
+      }>(args);
+      const item = errorQueueItems.find((row) => row.id === input.id);
+      if (!item) throw new Error("Error queue item was not found");
+      const campaign = campaigns.find((row) => row.id === item.campaign_id);
+      if (campaign?.status === "archived")
+        throw new Error("Archived campaign error items cannot be changed");
+      if (!mockErrorStatusTransitions[item.status].includes(input.status))
+        throw new Error("Unsupported error queue status transition");
+      const previousStatus = item.status;
+      const notes = String(input.resolutionNotes ?? "").trim();
+      item.status = input.status;
+      item.resolution_notes = notes;
+      item.updated_at = getNow();
+      pushSafetyAudit({
+        campaign_id: item.campaign_id,
+        subject_type: "error_queue_item",
+        subject_id: item.id,
+        event_type: "error_item_updated",
+        severity: "info",
+        summary: `Error item moved from ${previousStatus} to ${input.status}`,
+        metadata_json: JSON.stringify({ resolutionNotes: notes }),
+      });
+      return { id: item.id, previousStatus, status: input.status };
+    }
+
+    const dispatchMockInvoke = (cmd: string, args?: unknown): unknown => {
+      if (cmd === "linkgo_safety_set_global_kill_switch")
+        return setGlobalKillSwitchCommand(args);
+      if (cmd === "linkgo_safety_set_error_queue_item_status")
+        return setErrorQueueItemStatusCommand(args);
+      if (cmd === "linkgo_candidate_policy_update")
+        return updateCandidatePolicyCommand(args);
+      if (cmd === "linkgo_candidate_policy_get")
+        return getCandidatePolicyCommand(args).then((policy) =>
+          withCampaignGate(
+            nativeInput<{ campaignId: number }>(args).campaignId,
+            policy,
+          ),
+        );
+      {
+        const candidateQueueResult = mockCandidateQueueCommand(cmd, args);
+        if (candidateQueueResult !== undefined) return candidateQueueResult;
+      }
+      if (cmd === "linkgo_safety_settings_get")
+        return Promise.resolve({ ...safetySettings });
+      if (cmd === "linkgo_safety_dashboard_get")
+        return getSafetyDashboardCommand(args);
+      if (cmd === "linkgo_scheduler_dashboard_get")
+        return getSchedulerDashboardCommand(args);
+      {
+        const campaignResult = mockCampaignCommand(cmd, args);
+        if (campaignResult !== undefined) return campaignResult;
+        const playbookResult = mockPlaybookAndSettingsCommand(cmd, args);
+        if (playbookResult !== undefined) return playbookResult;
+      }
+      {
+        const workflowResult = mockWorkflowCommand(cmd, args);
+        if (workflowResult !== undefined) return workflowResult;
+        const agentRunResult = mockAgentRunCommand(cmd, args);
+        if (agentRunResult !== undefined) return agentRunResult;
+        const draftResult = mockDraftCommand(cmd, args);
+        if (draftResult !== undefined) return draftResult;
+        const auditResult = mockAuditCommand(cmd, args);
+        if (auditResult !== undefined) return auditResult;
+      }
+      if (cmd === "linkgo_candidate_create")
+        return createCandidateCommand(args);
+      if (cmd === "linkgo_source_import_write_batch")
+        return writeSourceImportBatchCommand(args);
+      if (cmd === "linkgo_source_import_recover_interrupted")
+        return recoverSourceImportsCommand(args);
+      if (cmd === "linkgo_candidate_delete")
+        return deleteCandidateCommand(args);
+      if (cmd === "linkgo_candidate_promote_discovery_item")
+        return promoteDiscoveryItemCommand(args);
+      if (cmd === "linkgo_comment_thread_create")
+        return createCommentThreadCommand(args);
+      if (cmd === "linkgo_comment_thread_update")
+        return updateCommentThreadCommand(args);
+      if (cmd === "linkgo_comment_variant_update")
+        return updateCommentVariantCommand(args);
+      if (cmd === "linkgo_comment_variant_set_status")
+        return setCommentVariantStatusCommand(args);
+      if (cmd === "linkgo_comment_thread_set_status")
+        return setCommentThreadStatusCommand(args);
+      if (cmd === "linkgo_comment_assert_can_publish")
+        return assertCommentCanPublishCommand(args);
+      if (cmd === "linkgo_metrics_record_post_metric")
+        return recordPostMetricCommand(args);
+      if (cmd === "linkgo_metrics_create_campaign_memory")
+        return createCampaignMemoryCommand(args);
+      if (cmd === "linkgo_metrics_set_campaign_memory_status")
+        return setCampaignMemoryStatusCommand(args);
+      if (cmd === "linkgo_approval_create") return createApprovalCommand(args);
+      if (cmd === "linkgo_approval_set_status")
+        return setApprovalStatusCommand(args);
+      {
+        const calendarResult = calendarCommand(cmd, args);
+        if (calendarResult !== undefined) return calendarResult;
+      }
+      {
+        // Mirrors `metrics_reads.rs`: reuse the SQL-mock row builders with the
+        // same campaign filter and caps.
+        const metricsRead = (
+          query: string,
+          limit: number,
+        ): Promise<unknown> => {
+          const input = nativeInput<{ campaignId?: number }>(args);
+          const values =
+            input.campaignId === undefined ? [] : [input.campaignId];
+          return Promise.resolve(
+            (selectSql({ query, values }) as unknown[]).slice(0, limit),
+          );
+        };
+        // Mirrors `drafts_reads.rs`, reusing the SQL-mock row builders.
+        if (cmd === "linkgo_draft_list") {
+          const input = nativeInput<{ campaignId?: number }>(args);
+          const values =
+            input.campaignId === undefined ? [] : [input.campaignId];
+          const draftMatches = selectDraftJoin(values) as Array<{ id: number }>;
+          const draftRows = draftMatches.slice(0, 500);
+          const variants = selectDraftVariants(
+            "FROM draft_variants",
+            draftRows.map((row) => row.id),
+          );
+          const variantIds = variants.map((variant) => variant.id);
+          const currentRevision = (variantId: number): number | undefined =>
+            draftVariants.find((row) => row.id === variantId)?.content_revision;
+          const latestPer = <
+            T extends { id: number; draft_variant_id: number },
+          >(
+            rows: T[],
+          ): T[] => {
+            const seen = new Set<number>();
+            return [...rows]
+              .sort((left, right) => right.id - left.id)
+              .filter((row) => {
+                if (seen.has(row.draft_variant_id)) return false;
+                seen.add(row.draft_variant_id);
+                return true;
+              });
+          };
+          const aiAuditRuns = latestPer(
+            draftAiAuditRuns.filter(
+              (run) =>
+                variantIds.includes(run.draft_variant_id) &&
+                run.content_revision === currentRevision(run.draft_variant_id),
+            ),
+          );
+          const completedRunIds = new Set(
+            aiAuditRuns
+              .filter((run) => run.status === "completed")
+              .map((run) => run.id),
+          );
+          const qualityRuns = latestPer(
+            draftQualityRuns.filter(
+              (run) =>
+                variantIds.includes(run.draft_variant_id) &&
+                run.current_content_revision ===
+                  currentRevision(run.draft_variant_id),
+            ),
+          );
+          const runIds = new Set(qualityRuns.map((run) => run.id));
+          const attempts = draftQualityAttempts
+            .filter((attempt) => runIds.has(attempt.run_id))
+            .sort((left, right) => left.attempt_number - right.attempt_number);
+          return withCampaignGate(input.campaignId, {
+            drafts: draftRows,
+            totalCount: draftMatches.length,
+            variants,
+            // Native selects these columns only (no `content_revision`).
+            audits: selectDraftAudits(variantIds)
+              .sort((left, right) => left.id - right.id)
+              .map((audit) => ({
+                id: audit.id,
+                draft_variant_id: audit.draft_variant_id,
+                rule_key: audit.rule_key,
+                severity: audit.severity,
+                message: audit.message,
+                created_at: audit.created_at,
+              })),
+            aiAuditRuns: aiAuditRuns.map((run) => ({ ...run })),
+            aiAuditFindings: draftAiAuditFindings
+              .filter((finding) => completedRunIds.has(finding.audit_run_id))
+              .sort((left, right) => left.id - right.id)
+              .map((finding) => ({ ...finding })),
+            // The mock stores partial quality rows; fill the remaining
+            // columns with the table defaults so the shape matches native.
+            qualityRuns: qualityRuns.map((run) => ({
+              starting_content_revision: run.current_content_revision,
+              threshold: 70,
+              maximum_rewrite_count: 2,
+              started_at: null,
+              completed_at: null,
+              created_at: run.updated_at,
+              ...run,
+            })),
+            qualityAttempts: attempts.map((attempt) => ({
+              input_hook: "",
+              input_body: "",
+              input_cta: "",
+              input_hashtags: "",
+              rewritten_hook: null,
+              rewritten_body: null,
+              rewritten_cta: null,
+              rewritten_hashtags: null,
+              overall_score: null,
+              ai_audit_run_id: null,
+              created_at: getNow(),
+              updated_at: getNow(),
+              completed_at: null,
+              ...attempt,
+            })),
+            // Native: ORDER BY category_key ASC, id ASC; exact columns only.
+            qualityScores: draftQualityCategoryScores
+              .filter((score) =>
+                attempts.some((attempt) => attempt.id === score.attempt_id),
+              )
+              .sort(
+                (left, right) =>
+                  (left.category_key < right.category_key
+                    ? -1
+                    : left.category_key > right.category_key
+                      ? 1
+                      : 0) || left.id - right.id,
+              )
+              .map((score) => ({
+                id: score.id,
+                attempt_id: score.attempt_id,
+                category_key: score.category_key,
+                score: score.score,
+                feedback: score.feedback,
+                created_at: score.created_at,
+              })),
+          });
+        }
+        if (cmd === "linkgo_draft_generation_request_list") {
+          const input = nativeInput<{ campaignId?: number }>(args);
+          const values =
+            input.campaignId === undefined ? [] : [input.campaignId];
+          return withCampaignGate(
+            input.campaignId,
+            selectDraftGenerationRequestJoin(
+              input.campaignId === undefined
+                ? "FROM draft_generation_requests dgr"
+                : "FROM draft_generation_requests dgr WHERE dgr.campaign_id",
+              values,
+            ).slice(0, 500),
+          );
+        }
+        if (cmd === "linkgo_draft_workflow_options") {
+          const input = nativeInput<{ campaignId: number }>(args);
+          return withCampaignGate(
+            input.campaignId,
+            (
+              selectSql({
+                query: "cp.id AS candidate_id FROM workflow_runs wr NOT EXISTS",
+                values: [input.campaignId],
+              }) as unknown[]
+            ).slice(0, 200),
+          );
+        }
+        if (cmd === "linkgo_draft_update") {
+          return runNativeMutation(() => {
+            const input = nativeInput<{
+              id: number;
+              angle?: string;
+              notes?: string;
+              status?: DraftStatus;
+            }>(args);
+            const draft = drafts.find((row) => row.id === input.id);
+            const changed =
+              input.angle !== undefined ||
+              input.notes !== undefined ||
+              input.status !== undefined;
+            if (!draft || !changed) return null;
+            if (input.angle !== undefined) draft.angle = input.angle.trim();
+            if (input.notes !== undefined) draft.notes = input.notes.trim();
+            if (input.status !== undefined) draft.status = input.status;
+            draft.updated_at = getNow();
+            return null;
+          });
+        }
+        if (cmd === "linkgo_comment_thread_list") {
+          // Mirrors `comment_reads::list_threads`: one snapshot, capped.
+          const input = nativeInput<{ campaignId?: number }>(args);
+          const threadMatches = selectCommentThreads(
+            input.campaignId === undefined ? [] : [input.campaignId],
+          ) as Array<{ id: number }>;
+          const threads = threadMatches.slice(0, 500);
+          const threadIds = new Set(threads.map((thread) => thread.id));
+          const variants = commentVariants
+            .filter((variant) => threadIds.has(variant.comment_thread_id))
+            .sort(
+              (left, right) =>
+                left.variant_number - right.variant_number ||
+                left.id - right.id,
+            );
+          const variantIds = new Set(variants.map((variant) => variant.id));
+          return Promise.resolve({
+            threads,
+            variants: variants.map((variant) => ({ ...variant })),
+            audits: commentAudits
+              .filter((audit) => variantIds.has(audit.comment_variant_id))
+              .sort((left, right) => left.id - right.id)
+              .map((audit) => ({ ...audit })),
+            attempts: commentAttempts
+              .filter((attempt) => threadIds.has(attempt.comment_thread_id))
+              .sort(
+                (left, right) =>
+                  right.created_at.localeCompare(left.created_at) ||
+                  right.id - left.id,
+              )
+              .map((attempt) => ({ ...attempt })),
+            totalCount: threadMatches.length,
+          });
+        }
+        if (cmd === "linkgo_comment_eligible_candidates") {
+          const input = nativeInput<{ campaignId?: number }>(args);
+          return Promise.resolve(
+            selectCommentEligibleCandidates(
+              input.campaignId === undefined ? [] : [input.campaignId],
+            ).slice(0, 200),
+          );
+        }
+        // Mirrors `planning_reads.rs`, reusing the SQL-mock row builders
+        // (and their failure and delay hooks).
+        // Mirrors `workflow_store.rs`: reuse the SQL-mock builders and trim
+        // rows to the exact native columns.
+        {
+          const pick = (
+            row: Record<string, unknown>,
+            keys: readonly string[],
+          ): Record<string, unknown> =>
+            Object.fromEntries(keys.map((key) => [key, row[key] ?? null]));
+          const RUN_KEYS = [
+            "id",
+            "campaign_id",
+            "workflow_type",
+            "title",
+            "status",
+            "current_step_key",
+            "context_summary",
+            "started_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+          ] as const;
+          const AGENT_RUN_KEYS = [
+            "id",
+            "campaign_id",
+            "workflow_run_id",
+            "workflow_step_id",
+            "agent_role",
+            "provider_key",
+            "model_name",
+            "playbook_key",
+            "status",
+            "input_summary",
+            "input_context_json",
+            "output_summary",
+            "error_message",
+            "iteration_count",
+            "started_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+          ] as const;
+          const failWith = (error: unknown): Promise<never> =>
+            Promise.reject(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          const listInput = (): { campaignId?: number } =>
+            nativeInput<{ campaignId?: number }>(args);
+          if (cmd === "linkgo_workflow_run_list") {
+            try {
+              const input = listInput();
+              const runs = (
+                selectWorkflowRunJoin(
+                  input.campaignId === undefined ? [] : [input.campaignId],
+                ) as Array<Record<string, unknown>>
+              )
+                .slice(0, 200)
+                .map((row) =>
+                  pick(row, [
+                    ...RUN_KEYS,
+                    "campaign_name",
+                    "campaign_status",
+                    "autopilot_plan_id",
+                    "source_import_batch_id",
+                  ]),
+                );
+              const runIds = runs.map((run) => Number(run.id));
+              const eventCounts = new Map<number, number>();
+              return withCampaignGate(input.campaignId, {
+                runs,
+                steps: selectWorkflowSteps(runIds),
+                events: selectWorkflowEvents(runIds).filter((event) => {
+                  const seen = eventCounts.get(event.workflow_run_id) ?? 0;
+                  eventCounts.set(event.workflow_run_id, seen + 1);
+                  return seen < 100;
+                }),
+                artifacts: selectWorkflowArtifacts(runIds),
+              });
+            } catch (error) {
+              return failWith(error);
+            }
+          }
+          if (cmd === "linkgo_workflow_run_validation") {
+            const [row] = selectWorkflowRunValidation([
+              nativeInput<{ id: number }>(args).id,
+            ]) as Array<Record<string, unknown>>;
+            return row === undefined
+              ? Promise.reject(new Error("Workflow run was not found"))
+              : Promise.resolve(
+                  pick(row, [
+                    ...RUN_KEYS,
+                    "campaign_status",
+                    "autopilot_plan_id",
+                  ]),
+                );
+          }
+          if (cmd === "linkgo_agent_run_list") {
+            try {
+              const input = listInput();
+              const runs = (
+                selectAgentRunJoin(
+                  input.campaignId === undefined ? [] : [input.campaignId],
+                ) as Array<Record<string, unknown>>
+              )
+                .slice(0, 200)
+                .map((row) =>
+                  pick(row, [
+                    ...AGENT_RUN_KEYS,
+                    "campaign_name",
+                    "campaign_status",
+                  ]),
+                );
+              const runIds = runs.map((run) => Number(run.id));
+              const eventCounts = new Map<number, number>();
+              return withCampaignGate(input.campaignId, {
+                runs,
+                toolCalls: selectAgentToolCalls("", runIds),
+                events: selectAgentRunEvents(runIds).filter((event) => {
+                  const seen = eventCounts.get(event.agent_run_id) ?? 0;
+                  eventCounts.set(event.agent_run_id, seen + 1);
+                  return seen < 100;
+                }),
+                checkpoints: selectAgentApprovalCheckpoints(
+                  "SELECT cp.*",
+                  runIds,
+                ),
+              });
+            } catch (error) {
+              return failWith(error);
+            }
+          }
+          if (cmd === "linkgo_agent_run_validation") {
+            const [row] = selectAgentRunValidation([
+              nativeInput<{ id: number }>(args).id,
+            ]) as Array<Record<string, unknown>>;
+            return row === undefined
+              ? Promise.reject(new Error("Agent run was not found"))
+              : Promise.resolve(
+                  pick(row, [...AGENT_RUN_KEYS, "campaign_status"]),
+                );
+          }
+          if (cmd === "linkgo_workflow_planner_scoring_scope") {
+            try {
+              const id = nativeInput<{ id: number }>(args).id;
+              const [header] = selectSql({
+                query:
+                  "ws.status AS score_step_status INNER JOIN autopilot_plans ap",
+                values: [id],
+              }) as Array<{ campaign_id: number }>;
+              return Promise.resolve({
+                header: header ?? null,
+                artifacts: (
+                  selectSql({
+                    query: "wa.id AS artifact_order tp.content",
+                    values: [id],
+                  }) as unknown[]
+                ).slice(0, 500),
+                keywords:
+                  header === undefined
+                    ? []
+                    : keywords
+                        .filter((row) => row.campaign_id === header.campaign_id)
+                        .sort((left, right) => left.id - right.id)
+                        .slice(0, 12)
+                        .map((row) => row.keyword),
+              });
+            } catch (error) {
+              return failWith(error);
+            }
+          }
+          if (cmd === "linkgo_workflow_planner_draft_audit_scope") {
+            try {
+              return Promise.resolve(
+                (
+                  selectSql({
+                    query:
+                      "FROM workflow_runs wr dgr.created_draft_id artifact_type = 'draft'",
+                    values: [nativeInput<{ id: number }>(args).id],
+                  }) as unknown[]
+                ).slice(0, 2),
+              );
+            } catch (error) {
+              return failWith(error);
+            }
+          }
+          if (cmd === "linkgo_workflow_step_execution_create") {
+            return runNativeMutation(() => {
+              const input = nativeInput<{
+                workflowStepId: number;
+                agentRunId?: number;
+                executorRole: AgentRole;
+              }>(args);
+              if (
+                !workflowSteps.some((step) => step.id === input.workflowStepId)
+              )
+                throw new Error("Workflow step was not found");
+              const result = executeSql({
+                query:
+                  "INSERT INTO workflow_step_executions (workflow_step_id, agent_run_id, executor_role)",
+                values: [
+                  input.workflowStepId,
+                  input.agentRunId ?? null,
+                  input.executorRole,
+                ],
+              });
+              return result.lastInsertId;
+            });
+          }
+          if (cmd === "linkgo_workflow_step_execution_update") {
+            return runNativeMutation(() => {
+              const input = nativeInput<{
+                id: number;
+                agentRunId?: number;
+                status: WorkflowStepExecutionStatus;
+                errorSummary: string;
+              }>(args);
+              executeSql({
+                query:
+                  "UPDATE workflow_step_executions SET agent_run_id, status, error_summary WHERE id = $4",
+                values: [
+                  input.agentRunId ?? null,
+                  input.status,
+                  input.errorSummary.slice(0, 2000),
+                  input.id,
+                ],
+              });
+              return null;
+            });
+          }
+        }
+        if (cmd === "linkgo_campaign_backlog_dashboard") {
+          try {
+            const input = nativeInput<{
+              campaignId?: number;
+              owner: "all" | "operator" | "linkgo";
+              view: "open" | "history";
+            }>(args);
+            const values: unknown[] = [];
+            if (input.campaignId !== undefined) values.push(input.campaignId);
+            if (input.owner !== "all") values.push(input.owner);
+            const items = selectCampaignBacklog(
+              input.view === "history"
+                ? "cbi.status IN ('completed', 'cancelled')"
+                : "cbi.status IN ('pending', 'in_progress', 'blocked')",
+              values,
+            ).slice(0, input.view === "history" ? 100 : 500);
+            const [summary] = selectCampaignBacklog(
+              "AS due_now",
+              values,
+            ) as Array<Record<string, number>>;
+            const result = {
+              items,
+              summary: {
+                dueNow: summary?.due_now ?? 0,
+                inProgress: summary?.in_progress ?? 0,
+                blocked: summary?.blocked ?? 0,
+                linkgoOwned: summary?.linkgo_owned ?? 0,
+              },
+              totalItems: campaignBacklogItems.length,
+            };
+            const gate = backlogSelectGates.get(getBacklogSelectKey(values));
+            if (gate === undefined) return Promise.resolve(result);
+            gate.pending += 1;
+            return gate.promise.then(() => {
+              gate.pending -= 1;
+              return result;
+            });
+          } catch (error) {
+            return Promise.reject(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+        }
+        if (cmd === "linkgo_autopilot_planner_dashboard") {
+          try {
+            const input = nativeInput<{ campaignId?: number }>(args);
+            const values =
+              input.campaignId === undefined ? [] : [input.campaignId];
+            const count = (query: string): number =>
+              (
+                selectAutopilotPlanner(query, values) as Array<{
+                  count: number;
+                }>
+              )[0]?.count ?? 0;
+            const result = {
+              summary: {
+                eligibleBatches: count(
+                  "FROM source_import_batches sib LEFT JOIN autopilot_plans",
+                ),
+                plannedBatches: count(
+                  "COUNT(*) AS count FROM autopilot_plans ap WHERE ap.status = 'planned'",
+                ),
+                skippedBatches: count(
+                  "COUNT(*) AS count FROM autopilot_plans ap WHERE ap.status = 'skipped'",
+                ),
+                recentFailures: count(
+                  "COUNT(*) AS count FROM autopilot_planner_events ape",
+                ),
+              },
+              recentPlans: selectAutopilotPlanner(
+                "FROM autopilot_plans ap",
+                values,
+              ),
+              recentEvents: selectAutopilotPlanner(
+                "FROM autopilot_planner_events ape",
+                values,
+              ),
+              globalKillSwitchEnabled: safetySettings.global_kill_switch === 1,
+              killSwitchReason: safetySettings.kill_switch_reason,
+            };
+            return withCampaignGate(input.campaignId, result);
+          } catch (error) {
+            return Promise.reject(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+        }
+        if (cmd === "linkgo_metrics_eligible_approvals")
+          return metricsRead(
+            "FROM approvals a INNER JOIN publish_attempts pa",
+            500,
+          );
+        if (cmd === "linkgo_metrics_post_metrics_list")
+          return metricsRead("FROM post_metrics pm", 500);
+        if (cmd === "linkgo_metrics_campaign_memory_list")
+          return metricsRead("FROM campaign_memory cm", 500);
+        if (cmd === "linkgo_metrics_learning_events_list")
+          return metricsRead("FROM learning_events le", 500);
+        if (cmd === "linkgo_metrics_refresh_dashboard") {
+          const input = nativeInput<{ campaignId?: number }>(args);
+          const values =
+            input.campaignId === undefined ? [] : [input.campaignId];
+          const [summary] = selectSql({
+            query: "SELECT\n      (SELECT COUNT(*) FROM metric_refresh_jobs",
+            values,
+          }) as Array<Record<string, number>>;
+          return Promise.resolve({
+            settings: { ...metricRefreshSettings },
+            jobs: (
+              selectSql({
+                query: "FROM metric_refresh_jobs mrj",
+                values,
+              }) as unknown[]
+            ).slice(0, 500),
+            events: selectSql({
+              query: "FROM metric_refresh_events mre",
+              values,
+            }),
+            summary: {
+              totalJobs: summary?.total_jobs ?? 0,
+              activeJobs: summary?.active_jobs ?? 0,
+              dueJobs: summary?.due_jobs ?? 0,
+              unavailableJobs: summary?.unavailable_jobs ?? 0,
+              failedJobs: summary?.failed_jobs ?? 0,
+              apiSnapshots: summary?.api_snapshots ?? 0,
+            },
+          });
+        }
+      }
+      if (cmd === "linkgo_approval_list") return approvalListCommand(args);
+      if (cmd === "linkgo_approval_eligible_drafts")
+        return approvalEligibleDraftsCommand(args);
+      if (cmd === "linkgo_approval_publish_preflight")
+        return approvalPublishPreflightCommand(args);
+      if (cmd === "linkgo_approval_schedule")
+        return scheduleApprovalCommand(args);
+      if (cmd === "linkgo_approval_cancel_schedule")
+        return cancelScheduleCommand(args);
+      if (cmd === "linkgo_approval_record_publish_attempt") {
+        return recordPublishAttemptCommand(args);
+      }
+      if (cmd === "linkgo_comment_record_attempt") {
+        return recordCommentAttemptCommand(args);
+      }
+      if (cmd === "linkgo_campaign_backlog_create") {
+        return runCampaignBacklogCommand(() =>
+          createCampaignBacklogCommand(args),
+        );
+      }
+      if (cmd === "linkgo_campaign_backlog_update") {
+        return runCampaignBacklogCommand(() =>
+          updateCampaignBacklogCommand(args),
+        );
+      }
+      if (cmd === "linkgo_campaign_backlog_set_status") {
+        return runCampaignBacklogCommand(() =>
+          setCampaignBacklogStatusCommand(args),
+        );
+      }
+      if (cmd === "linkgo_relevance_scoring_claim") {
+        return claimNativeScoringCommand(args);
+      }
+      if (cmd === "linkgo_relevance_scoring_start") {
+        return startNativeScoringCommand(args);
+      }
+      if (cmd === "linkgo_relevance_scoring_apply_scores") {
+        return applyNativeScoresCommand(args);
+      }
+      if (cmd === "linkgo_relevance_scoring_settle") {
+        return settleNativeScoringCommand(args);
+      }
+      if (cmd === "linkgo_relevance_scoring_fail") {
+        return failNativeScoringCommand(args);
+      }
+      if (cmd === "linkgo_relevance_scoring_reconcile") {
+        return reconcileNativeScoringCommand(args);
+      }
+      if (cmd === "linkgo_planner_draft_audit_claim")
+        return claimNativePlannerDraftAudit(args);
+      if (cmd === "linkgo_planner_draft_audit_complete")
+        return completeNativePlannerDraftAudit(args);
+      if (cmd === "linkgo_planner_draft_audit_fail")
+        return failNativePlannerDraftAudit(args);
+      if (cmd === "linkgo_planner_draft_audit_reconcile_stale")
+        return reconcileNativePlannerDraftAudits(args);
+      if (cmd === "linkgo_draft_quality_reconcile_stale")
+        return Promise.resolve({ reconciledRunIds: [] });
+      if (cmd === "linkgo_draft_quality_claim")
+        return claimDraftQualityCommand(args);
+      if (cmd === "linkgo_draft_quality_apply_score")
+        return applyDraftQualityScoreCommand(args);
+      if (cmd === "linkgo_draft_quality_continue")
+        return continueDraftQualityCommand(args);
+      if (cmd === "linkgo_draft_quality_resume")
+        return resumeDraftQualityCommand(args);
+      if (cmd === "linkgo_draft_quality_fail")
+        return failDraftQualityCommand(args);
+      if (cmd === "linkgo_relevance_scoring_fail_agent") {
+        return failNativeScoringAgentCommand(args);
+      }
+      // Production grants the renderer no `sql:*` permission, so the mock
+      // rejects every SQL plugin command too. Specs seed fixtures through
+      // the test-only `__linkgo_test_sql|*` channel below instead.
+      if (cmd.startsWith("plugin:sql|")) {
+        return Promise.reject(
+          new Error(`${cmd} not allowed. Command not found`),
+        );
+      }
+      if (cmd === "__linkgo_test_sql|select")
+        return selectSqlWithCampaignDelay(args);
+      if (cmd === "__linkgo_test_sql|execute") {
+        const result = executeSql(args);
+        return Promise.resolve([result.rowsAffected, result.lastInsertId]);
+      }
+      if (cmd === "plugin:autostart|is_enabled") {
+        if (
+          w.__LINKGO_FAIL_AUTOSTART_IS_ENABLED__ === true ||
+          (w.__LINKGO_FAIL_AUTOSTART_IS_ENABLED_AFTER_MUTATION__ === true &&
+            autostartMutationCount > 0)
+        ) {
+          throw new Error("Autostart status read failed");
+        }
+        if (typeof w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__ === "boolean") {
+          return Promise.resolve(w.__LINKGO_AUTOSTART_IS_ENABLED_OVERRIDE__);
+        }
+        const stored = window.localStorage.getItem("linkgo.autostart.enabled");
+        return Promise.resolve(
+          stored === "true" || w.__LINKGO_AUTOSTART_ENABLED__ === true,
+        );
+      }
+      if (cmd === "plugin:autostart|enable") {
+        if (w.__LINKGO_FAIL_AUTOSTART_ENABLE__ === true) {
+          throw new Error("Autostart enable failed");
+        }
+        autostartMutationCount += 1;
+        w.__LINKGO_AUTOSTART_ENABLED__ = true;
+        window.localStorage.setItem("linkgo.autostart.enabled", "true");
+        return Promise.resolve(null);
+      }
+      if (cmd === "plugin:autostart|disable") {
+        if (w.__LINKGO_FAIL_AUTOSTART_DISABLE__ === true) {
+          throw new Error("Autostart disable failed");
+        }
+        autostartMutationCount += 1;
+        w.__LINKGO_AUTOSTART_ENABLED__ = false;
+        window.localStorage.setItem("linkgo.autostart.enabled", "false");
+        return Promise.resolve(null);
+      }
+      if (cmd === "update_tray_menu") return Promise.resolve(null);
+      if (cmd === "linkgo_auth_status")
+        return Promise.resolve(getAuthStatusMock());
+      if (cmd === "linkgo_auth_api_key") {
+        const input =
+          (
+            args as
+              | {
+                  input?: {
+                    providerKey?: string;
+                    provider_key?: string;
+                    apiKey?: string;
+                    api_key?: string;
+                    baseUrl?: string;
+                    base_url?: string;
+                    accountLabel?: string;
+                  };
+                }
+              | undefined
+          )?.input ?? {};
+        const providerKey = input.providerKey ?? input.provider_key ?? "openai";
+        const apiKey = input.apiKey ?? input.api_key ?? "sk-test-secret";
+        const baseUrl = input.baseUrl ?? input.base_url;
+        if (providerKey === "custom" && !baseUrl?.trim()) {
+          throw new Error("Custom provider requires a Base URL override");
+        }
+        providerSecrets[providerKey] = {
+          apiKey,
+          ...(baseUrl ? { baseUrl } : {}),
+        };
+        const provider =
+          authProviders.find((candidate) => candidate.key === providerKey) ??
+          authProviders[0];
+        const existingIndex = connectedAccounts.findIndex(
+          (account) => account.provider_key === providerKey,
+        );
+        const account = {
+          id:
+            existingIndex >= 0
+              ? existingIndex + 1
+              : connectedAccounts.length + 1,
+          provider_key: providerKey,
+          provider_label: provider?.label ?? providerKey,
+          auth_method: "api_key",
+          status: "connected",
+          scopes: "",
+          account_label:
+            input.accountLabel ?? `${provider?.label ?? providerKey} account`,
+          account_id: "",
+          expires_at: null,
+          refresh_expires_at: null,
+          has_base_url_override: Boolean(baseUrl?.trim()),
+          last_checked_at: getNow(),
+          last_error: "",
+          created_at: getNow(),
+          updated_at: getNow(),
+        };
+        if (existingIndex >= 0) connectedAccounts[existingIndex] = account;
+        else connectedAccounts.push(account);
+        return Promise.resolve(getAuthStatusMock());
+      }
+      if (cmd === "linkgo_auth_provider_secret") {
+        const input =
+          (
+            args as
+              | { input?: { providerKey?: string; provider_key?: string } }
+              | undefined
+          )?.input ?? {};
+        const providerKey = input.providerKey ?? input.provider_key ?? "openai";
+        const secret = providerSecrets[providerKey];
+        if (secret === undefined) throw new Error("Provider is not connected");
+        return Promise.resolve({
+          providerKey,
+          apiKey: secret.apiKey,
+          ...(secret.baseUrl ? { baseUrl: secret.baseUrl } : {}),
+        });
+      }
+      if (cmd === "linkgo_auth_oauth_start") {
+        return Promise.resolve({
+          providerKey: "linkedin",
+          authUrl:
+            "https://www.linkedin.com/oauth/v2/authorization?response_type=code&state=test-oauth-state&code_challenge=test-pkce-challenge&code_challenge_method=S256",
+          state: "test-oauth-state",
+          needsCode: true,
+        });
+      }
+      if (cmd === "linkgo_auth_oauth_code") {
+        connectedAccounts.push({
+          id: connectedAccounts.length + 1,
+          provider_key: "linkedin",
+          provider_label: "LinkedIn",
+          auth_method: "oauth",
+          status: "connected",
+          scopes:
+            "openid profile email w_member_social w_member_social_feed r_member_social_feed",
+          account_label: "LinkedIn member",
+          account_id: "member-1",
+          expires_at: null,
+          refresh_expires_at: null,
+          has_base_url_override: false,
+          last_checked_at: getNow(),
+          last_error: "",
+          created_at: getNow(),
+          updated_at: getNow(),
+        });
+        return Promise.resolve(getAuthStatusMock());
+      }
+      if (cmd === "linkgo_auth_logout") {
+        const input =
+          (
+            args as
+              | { input?: { providerKey?: string; provider_key?: string } }
+              | undefined
+          )?.input ?? {};
+        const providerKey = input.providerKey ?? input.provider_key ?? "openai";
+        removeRows(
+          connectedAccounts,
+          (account) => account.provider_key === providerKey,
+        );
+        return Promise.resolve(getAuthStatusMock());
+      }
+      if (cmd === "linkgo_auth_check")
+        return Promise.resolve(getAuthStatusMock());
+      if (cmd === "linkgo_agent_settle_approved_continuation") {
+        agentContinuationSettlementInvocations += 1;
+        sessionStorage.setItem(
+          "linkgo-agent-continuation-settlement-count",
+          String(agentContinuationSettlementInvocations),
+        );
+        const input = (args as { input?: { agentRunId?: number } } | undefined)
+          ?.input;
+        const runId = Number(input?.agentRunId ?? 0);
+        if (activeAgentContinuationSettlements.has(runId)) {
+          throw new Error("Agent continuation is already running");
+        }
+        activeAgentContinuationSettlements.add(runId);
+        try {
+          const checkpoint = agentApprovalCheckpoints.find(
+            (row) => row.agent_run_id === runId,
+          );
+          if (!checkpoint)
+            throw new Error("Agent approval checkpoint was not found");
+          const run = agentRuns.find((row) => row.id === runId);
+          if (!run)
+            throw new Error("Agent run cannot resume from its current status");
+          const tool = agentToolCalls.find(
+            (row) =>
+              row.id === checkpoint.pending_tool_call_id &&
+              row.agent_run_id === runId,
+          );
+          if (!tool)
+            throw new Error("Pending approval tool call was not found");
+          if (
+            tool.tool_name !== "schedule_post" ||
+            tool.requires_approval !== 1
+          )
+            throw new Error(
+              "Approval checkpoint does not reference schedule_post",
+            );
+          let scheduleInput: {
+            campaignId?: number;
+            approvalId?: number;
+            scheduledFor?: string;
+            timezone?: string;
+          };
+          let messages: Array<Record<string, unknown>>;
+          let inputContext: Record<string, unknown>;
+          try {
+            scheduleInput = JSON.parse(tool.input_json) as typeof scheduleInput;
+            messages = JSON.parse(checkpoint.messages_json) as Array<
+              Record<string, unknown>
+            >;
+            inputContext = JSON.parse(run.input_context_json) as Record<
+              string,
+              unknown
+            >;
+            if (!Array.isArray(messages)) throw new Error("invalid messages");
+          } catch {
+            throw new Error("Agent continuation could not be settled");
+          }
+          const pendingMessageCalls = new Map<string, string>();
+          for (const message of messages) {
+            if (
+              message.role === "assistant" &&
+              typeof message.toolName === "string" &&
+              typeof message.providerToolCallId === "string"
+            ) {
+              pendingMessageCalls.set(
+                message.providerToolCallId,
+                message.toolName,
+              );
+            } else if (message.role === "tool") {
+              if (
+                typeof message.toolName !== "string" ||
+                typeof message.providerToolCallId !== "string" ||
+                pendingMessageCalls.get(message.providerToolCallId) !==
+                  message.toolName
+              ) {
+                throw new Error("Agent continuation could not be settled");
+              }
+              pendingMessageCalls.delete(message.providerToolCallId);
+            }
+          }
+          if (
+            scheduleInput.campaignId !== run.campaign_id ||
+            scheduleInput.approvalId !== checkpoint.approval_id
+          )
+            throw new Error(
+              "Approval checkpoint does not match the run campaign",
+            );
+          const approval = approvals.find(
+            (row) => row.id === checkpoint.approval_id,
+          );
+          if (!approval)
+            throw new Error("Agent continuation could not be settled");
+          if (approval.campaign_id !== run.campaign_id)
+            throw new Error("Linked approval belongs to a different campaign");
+          if (approval.status === "rejected") {
+            const linkedCheckpoints = agentApprovalCheckpoints.filter(
+              (row) => row.approval_id === approval.id,
+            );
+            for (const linkedCheckpoint of linkedCheckpoints) {
+              const linkedTool = agentToolCalls.find(
+                (row) => row.id === linkedCheckpoint.pending_tool_call_id,
+              );
+              const linkedRun = agentRuns.find(
+                (row) => row.id === linkedCheckpoint.agent_run_id,
+              );
+              if (linkedTool) {
+                linkedTool.status = "rejected";
+                linkedTool.error_message =
+                  "Approval rejected: Approval rejected before continuation";
+                linkedTool.completed_at = getNow();
+              }
+              if (linkedRun) {
+                linkedRun.status = "cancelled";
+                linkedRun.error_message =
+                  "Approval rejected: Approval rejected before continuation";
+                linkedRun.completed_at = getNow();
+              }
+            }
+            removeRows(
+              agentApprovalCheckpoints,
+              (row) => row.approval_id === approval.id,
+            );
+            throw new Error("Linked approval was rejected");
+          }
+          if (approval.status !== "approved")
+            throw new Error("Linked approval must be approved before resume");
+          const campaign = campaigns.find((row) => row.id === run.campaign_id);
+          if (campaign?.status === "archived")
+            throw new Error("Campaign is archived");
+          if (safetySettings.global_kill_switch === 1)
+            throw new Error("Global kill switch is enabled");
+
+          const recovered =
+            checkpoint.phase === "continuation_ready" &&
+            run.status === "failed";
+          if (
+            checkpoint.phase === "continuation_ready" &&
+            run.status === "running"
+          )
+            throw new Error("Agent continuation is already running");
+          if (
+            !recovered &&
+            (checkpoint.phase !== "waiting_approval" ||
+              run.status !== "waiting_approval")
+          )
+            throw new Error("Agent run cannot resume from its current status");
+          if (!recovered) {
+            if (!["waiting_approval", "running"].includes(tool.status))
+              throw new Error("Pending approval tool is not executable");
+            const output = {
+              scheduled: false,
+              approvalId: checkpoint.approval_id,
+              scheduledFor: scheduleInput.scheduledFor,
+              timezone: scheduleInput.timezone,
+              summary:
+                "Approval confirmed for schedule metadata only; no schedule record or publish action was created.",
+            };
+            tool.status = "completed";
+            tool.output_json = JSON.stringify(output);
+            tool.error_message = "";
+            tool.completed_at = getNow();
+            messages.push({
+              role: "tool",
+              content: JSON.stringify(output),
+              toolName: "schedule_post",
+              providerToolCallId: tool.provider_tool_call_id,
+            });
+            checkpoint.phase = "continuation_ready";
+            checkpoint.messages_json = JSON.stringify(messages);
+            checkpoint.updated_at = getNow();
+          } else if (tool.status !== "completed") {
+            throw new Error("Approved tool call was already handled");
+          }
+          run.status = "running";
+          run.completed_at = null;
+          run.error_message = "";
+          run.updated_at = getNow();
+          return Promise.resolve({
+            agentRunId: run.id,
+            campaignId: run.campaign_id,
+            workflowRunId: run.workflow_run_id,
+            workflowStepId: run.workflow_step_id,
+            agentRole: run.agent_role,
+            providerKey: run.provider_key,
+            modelName: run.model_name,
+            playbookKey: run.playbook_key,
+            inputSummary: run.input_summary,
+            inputContext,
+            messages,
+            iterationCount: checkpoint.iteration_count,
+            handledProviderToolCallIds: agentToolCalls
+              .filter(
+                (row) =>
+                  row.agent_run_id === run.id &&
+                  row.provider_tool_call_id !== "",
+              )
+              .map((row) => row.provider_tool_call_id),
+            checkpointPhase: "continuation_ready",
+            recovered,
+          });
+        } finally {
+          activeAgentContinuationSettlements.delete(runId);
+        }
+      }
+      if (cmd === "linkgo_agent_provider_stream") {
+        const input =
+          (
+            args as
+              | {
+                  input?: {
+                    providerKey?: string;
+                    modelName?: string;
+                    request?: unknown;
+                  };
+                }
+              | undefined
+          )?.input ?? {};
+        const providerKey = input.providerKey ?? "openai";
+        const secret = providerSecrets[providerKey];
+        if (secret === undefined) throw new Error("Provider is not connected");
+        const testApi = (
+          w as unknown as {
+            __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
+              execute: (args: unknown) => Promise<unknown> | unknown;
+            };
+          }
+        ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__;
+        if (testApi === undefined) {
+          throw new Error("Provider command test API is not configured");
+        }
+        return Promise.resolve(testApi.execute(args));
+      }
+      if (cmd === "linkgo_autopilot_planner_status") {
+        const override = w.__LINKGO_AUTOPILOT_STATUS_RESULT__;
+        return Promise.resolve(
+          override === undefined ? autopilotPlannerStatusPayload() : override,
+        );
+      }
+      if (cmd === "linkgo_autopilot_planner_start") {
+        if (safetySettings.global_kill_switch === 1) {
+          recordAutopilotPlannerEvent(
+            "planner_blocked",
+            "Autopilot planner start blocked by the global kill switch.",
+            { severity: "warning" },
+          );
+          throw new Error(
+            safetySettings.kill_switch_reason.trim()
+              ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
+              : "Global kill switch is enabled",
+          );
+        }
+        autopilotPlannerSettings.enabled = 1;
+        autopilotPlannerSettings.updated_at = getNow();
+        autopilotPlannerRunning = true;
+        recordAutopilotPlannerEvent(
+          "planner_started",
+          "Background autopilot planner started.",
+          { metadata: { runnerId: "mock-autopilot" } },
+        );
+        queueMicrotask(() => runAutopilotPlannerTickMock());
+        return Promise.resolve(autopilotPlannerStatusPayload());
+      }
+      if (cmd === "linkgo_autopilot_planner_stop") {
+        autopilotPlannerSettings.enabled = 0;
+        autopilotPlannerSettings.updated_at = getNow();
+        autopilotPlannerRunning = false;
+        recordAutopilotPlannerEvent(
+          "planner_stopped",
+          "Background autopilot planner stopped.",
+          { metadata: { runnerId: "mock-autopilot" } },
+        );
+        return Promise.resolve(autopilotPlannerStatusPayload());
+      }
+      if (cmd === "linkgo_autopilot_planner_tick") {
+        const error = w.__LINKGO_AUTOPILOT_TICK_ERROR__;
+        if (typeof error === "string" && error.trim() !== "") {
+          throw new Error(error);
+        }
+        return Promise.resolve(runAutopilotPlannerTickMock());
+      }
+      if (cmd === "linkgo_scheduler_status") {
+        return Promise.resolve(schedulerStatusPayload());
+      }
+      if (cmd === "linkgo_scheduler_start") {
+        if (safetySettings.global_kill_switch === 1) {
+          throw new Error(
+            safetySettings.kill_switch_reason.trim()
+              ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
+              : "Global kill switch is enabled",
+          );
+        }
+        schedulerSettings.enabled = 1;
+        schedulerSettings.updated_at = getNow();
+        schedulerRunning = true;
+        recordSchedulerEvent(
+          "scheduler_started",
+          "Background scheduler started.",
+          {
+            metadata: { runnerId: "mock-runner" },
+          },
+        );
+        return Promise.resolve(schedulerStatusPayload());
+      }
+      if (cmd === "linkgo_scheduler_stop") {
+        schedulerSettings.enabled = 0;
+        schedulerSettings.updated_at = getNow();
+        schedulerRunning = false;
+        recordSchedulerEvent(
+          "scheduler_stopped",
+          "Background scheduler stopped.",
+          {
+            metadata: { runnerId: "mock-runner" },
+          },
+        );
+        return Promise.resolve(schedulerStatusPayload());
+      }
+      if (cmd === "linkgo_scheduler_tick") {
+        return Promise.resolve(runSchedulerTickMock());
+      }
+      if (cmd === "linkgo_metric_refresh_status") {
+        return Promise.resolve(metricRefreshStatusPayload());
+      }
+      if (cmd === "linkgo_metric_refresh_start") {
+        metricRefreshSettings.enabled = 1;
+        metricRefreshSettings.updated_at = getNow();
+        metricRefreshRunning = true;
+        recordMetricRefreshEvent(
+          "worker_started",
+          "Metric refresh worker started.",
+          {
+            metadata: { runnerId: "mock-metric-refresh" },
+          },
+        );
+        return Promise.resolve(metricRefreshStatusPayload());
+      }
+      if (cmd === "linkgo_metric_refresh_stop") {
+        metricRefreshSettings.enabled = 0;
+        metricRefreshSettings.updated_at = getNow();
+        metricRefreshRunning = false;
+        recordMetricRefreshEvent(
+          "worker_stopped",
+          "Metric refresh worker stopped.",
+          {
+            metadata: { runnerId: "mock-metric-refresh" },
+          },
+        );
+        return Promise.resolve(metricRefreshStatusPayload());
+      }
+      if (cmd === "linkgo_metric_refresh_tick") {
+        const error = w.__LINKGO_METRIC_REFRESH_TICK_ERROR__;
+        if (typeof error === "string" && error.trim() !== "") {
+          return Promise.reject(error);
+        }
+        return Promise.resolve(runMetricRefreshTickMock());
+      }
+      if (cmd === "linkgo_linkedin_publish_comment") {
+        const input =
+          (
+            args as
+              | {
+                  input?: {
+                    commentThreadId?: number;
+                    comment_thread_id?: number;
+                    targetUrn?: string;
+                    target_urn?: string;
+                  };
+                }
+              | undefined
+          )?.input ?? {};
+        const commentInvokes = Number(
+          w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ ?? 0,
+        );
+        w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ = commentInvokes + 1;
+        const error = w.__LINKGO_LINKEDIN_COMMENT_ERROR__;
+        if (typeof error === "string" && error.trim() !== "") {
+          throw new Error(error);
+        }
+        const result = w.__LINKGO_LINKEDIN_COMMENT_RESULT__;
+        if (result !== undefined) {
+          return Promise.resolve(result);
+        }
+        const commentThreadId =
+          input.commentThreadId ?? input.comment_thread_id ?? 1;
+        const targetUrn =
+          input.targetUrn ?? input.target_urn ?? "urn:li:ugcPost:test";
+        const platformCommentId = `test-comment-${commentThreadId}`;
+        return Promise.resolve({
+          platformCommentId,
+          platformCommentUrn: `urn:li:comment:(${targetUrn},${platformCommentId})`,
+          externalCommentUrl: `https://www.linkedin.com/feed/update/${targetUrn}/`,
+        });
+      }
+      if (cmd === "linkgo_linkedin_publish_post") {
+        const input =
+          (
+            args as
+              | {
+                  input?: {
+                    approvalId?: number;
+                    approval_id?: number;
+                  };
+                }
+              | undefined
+          )?.input ?? {};
+        const error = w.__LINKGO_LINKEDIN_PUBLISH_ERROR__;
+        if (typeof error === "string" && error.trim() !== "") {
+          throw new Error(error);
+        }
+        const result = w.__LINKGO_LINKEDIN_PUBLISH_RESULT__;
+        if (result !== undefined) {
+          return Promise.resolve(result);
+        }
+        const approvalId = input.approvalId ?? input.approval_id ?? 1;
+        const platformPostId = `urn:li:ugcPost:test-${approvalId}`;
+        return Promise.resolve({
+          platformPostId,
+          externalPostUrl: `https://www.linkedin.com/feed/update/${platformPostId}/`,
+        });
+      }
+      return Promise.resolve(null);
+    };
+
+    /**
+     * Real Tauri v2 rejects `invoke` with the raw `Err(String)` payload of a
+     * native command, never an `Error`; mirror that for every linkgo_* command.
+     * `plugin:*` emulation keeps its existing behavior.
+     */
+    const invokeNativeCommandMock = (cmd: string, args?: unknown): unknown => {
+      const toNativeRejection = (error: unknown): Promise<never> =>
+        Promise.reject(error instanceof Error ? error.message : String(error));
+      try {
+        const result = dispatchMockInvoke(cmd, args);
+        return result instanceof Promise
+          ? result.catch(toNativeRejection)
+          : result;
+      } catch (error: unknown) {
+        return toNativeRejection(error);
+      }
+    };
+
+    w.__TAURI_INTERNALS__ = {
+      invoke: (cmd: string, args?: unknown) =>
+        cmd.startsWith("linkgo_")
+          ? invokeNativeCommandMock(cmd, args)
+          : dispatchMockInvoke(cmd, args),
       metadata: {
         currentWindow: { label: "main" },
         currentWebview: { label: "main" },

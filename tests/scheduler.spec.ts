@@ -25,7 +25,9 @@ test("runs a due scheduled post and records a successful publish", async ({
   await openScheduler(page);
   await expect(page.getByText("Due now")).toBeVisible();
   await page.getByRole("button", { name: "Run due jobs now" }).click();
-  await expect(page.getByText("Scheduled LinkedIn post was published.")).toBeVisible();
+  await expect(
+    page.getByText("Scheduled LinkedIn post was published."),
+  ).toBeVisible();
 
   const [schedule] = await getScheduleJobs(page);
   const [attempt] = await getPublishAttempts(page);
@@ -42,13 +44,17 @@ test("keeps a failed due publish scheduled for retry", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
   await page.evaluate(() => {
-    (window as unknown as Record<string, unknown>).__LINKGO_LINKEDIN_PUBLISH_ERROR__ =
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_LINKEDIN_PUBLISH_ERROR__ =
       "LinkedIn API rejected the scheduled post.";
   });
 
   await openScheduler(page);
   await page.getByRole("button", { name: "Run due jobs now" }).click();
-  await expect(page.getByText("Scheduled LinkedIn publish failed and will retry.")).toBeVisible();
+  await expect(
+    page.getByText("Scheduled LinkedIn publish failed and will retry."),
+  ).toBeVisible();
 
   const [schedule] = await getScheduleJobs(page);
   const [attempt] = await getPublishAttempts(page);
@@ -66,13 +72,16 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
   await page.evaluate(() => {
     const target = window as unknown as Record<string, unknown>;
-    target.__LINKGO_LINKEDIN_PUBLISH_ERROR__ = "LinkedIn terminal scheduler failure.";
+    target.__LINKGO_LINKEDIN_PUBLISH_ERROR__ =
+      "LinkedIn terminal scheduler failure.";
     target.__LINKGO_SCHEDULER_FORCE_TERMINAL_FAILURE__ = true;
   });
 
   await openScheduler(page);
   await page.getByRole("button", { name: "Run due jobs now" }).click();
-  await expect(page.getByText("Scheduled LinkedIn publish failed permanently.")).toBeVisible();
+  await expect(
+    page.getByText("Scheduled LinkedIn publish failed permanently."),
+  ).toBeVisible();
 
   const [schedule] = await getScheduleJobs(page);
   const counts = await getStateCounts(page);
@@ -84,11 +93,15 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
   await expect(getBadge(page, "Failed").first()).toBeVisible();
 });
 
-test("global kill switch blocks due jobs without publishing", async ({ page }) => {
+test("global kill switch blocks due jobs without publishing", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
   await page.evaluate(() => {
-    (window as unknown as Record<string, unknown>).__LINKGO_LINKEDIN_PUBLISH_INVOKES__ = 0;
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_LINKEDIN_PUBLISH_INVOKES__ = 0;
   });
 
   await openSafety(page);
@@ -97,9 +110,13 @@ test("global kill switch blocks due jobs without publishing", async ({ page }) =
   await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
 
   await openScheduler(page);
-  await expect(page.getByRole("button", { name: "Start scheduler" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Start scheduler" }),
+  ).toBeDisabled();
   await page.getByRole("button", { name: "Run due jobs now" }).click();
-  await expect(page.getByText("global kill switch is enabled").first()).toBeVisible();
+  await expect(
+    page.getByText("global kill switch is enabled").first(),
+  ).toBeVisible();
 
   const [schedule] = await getScheduleJobs(page);
   const publishInvokes = await getLinkedInPublishInvokeCount(page);
@@ -209,7 +226,8 @@ async function createReadyDraft(
     const variantId = drafts[0]?.variants.find(
       (candidate) => candidate.status === "selected",
     )?.id;
-    if (variantId === undefined) throw new Error("Selected variant was not found");
+    if (variantId === undefined)
+      throw new Error("Selected variant was not found");
     await api.runDraftQualityLoop({ draftVariantId: variantId });
   });
 }
@@ -237,7 +255,9 @@ async function createCampaign(page: Page): Promise<void> {
   await page.getByLabel("Audience").fill("Solo founders and operators");
   await page.getByLabel("Voice").fill("Concrete, concise, practical");
   await page.getByLabel("Tone").fill("Helpful operator");
-  await page.getByLabel("Manual keywords").fill("LinkedIn growth, founder content");
+  await page
+    .getByLabel("Manual keywords")
+    .fill("LinkedIn growth, founder content");
   await dialog.getByRole("button", { name: "Create campaign" }).click();
   await expect(dialog).toBeHidden();
 }
@@ -249,7 +269,9 @@ async function addCandidate(page: Page): Promise<void> {
   await page
     .getByLabel("LinkedIn post URL")
     .fill("https://www.linkedin.com/posts/scheduler-activity-123/");
-  await page.getByLabel("Post text").fill("This founder post has a sharp ICP signal.");
+  await page
+    .getByLabel("Post text")
+    .fill("This founder post has a sharp ICP signal.");
   await page.getByLabel("Author name").fill("Jane Operator");
   await page
     .getByLabel("Author profile URL")
@@ -270,7 +292,9 @@ async function createDraft(
   await page.getByRole("button", { name: "Create draft" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create draft" });
   await expect(dialog).toBeVisible();
-  await page.getByLabel("Angle").fill("Turn the source post into a tactical lesson");
+  await page
+    .getByLabel("Angle")
+    .fill("Turn the source post into a tactical lesson");
   await page.getByLabel("Notes").fill("Keep the operator tone concrete.");
   await page.locator("#draft-variant-0-hook").fill(variant.hook);
   await page.locator("#draft-variant-0-body").fill(variant.body);

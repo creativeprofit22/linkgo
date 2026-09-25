@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use sqlx::{Row, SqliteConnection, SqlitePool};
 use tauri::State;
 
-const SETTLEMENT_ERROR: &str = "Agent continuation could not be settled";
+pub(crate) const SETTLEMENT_ERROR: &str = "Agent continuation could not be settled";
 const REJECTION_DETAIL: &str = "Approval rejected before continuation";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -216,11 +216,171 @@ async fn reconcile_workflow(
     Ok(())
 }
 
+/// Step statuses that may move to (or already are) `blocked`.
+const BLOCKABLE_STEP_STATUSES: &[&str] = &["running", "waiting_approval", "failed", "blocked"];
+
+/// Projects a rejected (cancelled) agent run onto its workflow step and run,
+/// mirroring the renderer workflow projection: the step becomes `blocked`, a
+/// `step_blocked` event is recorded when the status changes, and the run
+/// status/current step are recomputed from the ordered steps.
+async fn reconcile_rejected_workflow(
+    connection: &mut SqliteConnection,
+    state: &SettlementState,
+    error_message: &str,
+) -> Result<(), String> {
+    let (Some(workflow_run_id), Some(workflow_step_id)) =
+        (state.workflow_run_id, state.workflow_step_id)
+    else {
+        return Ok(());
+    };
+    let step = sqlx::query(
+        "SELECT ws.workflow_run_id, ws.step_key, ws.title, ws.status,
+                wr.status AS run_status, ap.id AS autopilot_plan_id
+         FROM workflow_steps ws
+         INNER JOIN workflow_runs wr ON wr.id = ws.workflow_run_id
+         LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
+         WHERE ws.id = ?1 LIMIT 1",
+    )
+    .bind(workflow_step_id)
+    .fetch_optional(&mut *connection)
+    .await
+    .map_err(|_| SETTLEMENT_ERROR.to_string())?;
+    let Some(step) = step else {
+        return Ok(());
+    };
+    macro_rules! get {
+        ($row:expr, $name:literal) => {
+            $row.try_get($name)
+                .map_err(|_| SETTLEMENT_ERROR.to_string())?
+        };
+    }
+    let step_run_id: i64 = get!(step, "workflow_run_id");
+    let step_key: String = get!(step, "step_key");
+    let title: String = get!(step, "title");
+    let step_status: String = get!(step, "status");
+    let run_status: String = get!(step, "run_status");
+    let autopilot_plan_id: Option<i64> = get!(step, "autopilot_plan_id");
+    if step_run_id != workflow_run_id || run_status == "cancelled" {
+        return Ok(());
+    }
+    // Planner draft audits are settled by their own native commands.
+    if step_key == "audit" && autopilot_plan_id.is_some() {
+        return Ok(());
+    }
+    if !BLOCKABLE_STEP_STATUSES.contains(&step_status.as_str()) {
+        return Err("Unsupported workflow step transition".to_string());
+    }
+    sqlx::query(
+        "UPDATE workflow_step_executions SET status = 'cancelled', error_summary = ?1,
+         completed_at = COALESCE(completed_at, datetime('now')), updated_at = datetime('now')
+         WHERE agent_run_id = ?2 AND workflow_step_id = ?3",
+    )
+    .bind(error_message)
+    .bind(state.run_id)
+    .bind(workflow_step_id)
+    .execute(&mut *connection)
+    .await
+    .map_err(|_| SETTLEMENT_ERROR.to_string())?;
+    sqlx::query(
+        "UPDATE workflow_steps SET status = 'blocked', output_summary = '', error_message = ?1,
+         completed_at = NULL, updated_at = datetime('now') WHERE id = ?2",
+    )
+    .bind(error_message)
+    .bind(workflow_step_id)
+    .execute(&mut *connection)
+    .await
+    .map_err(|_| SETTLEMENT_ERROR.to_string())?;
+    if step_status != "blocked" {
+        sqlx::query(
+            "INSERT INTO workflow_events (workflow_run_id, workflow_step_id, event_type, summary)
+             VALUES (?1, ?2, 'step_blocked', ?3)",
+        )
+        .bind(workflow_run_id)
+        .bind(workflow_step_id)
+        .bind(format!("{title} blocked"))
+        .execute(&mut *connection)
+        .await
+        .map_err(|_| SETTLEMENT_ERROR.to_string())?;
+    }
+
+    let steps = sqlx::query(
+        "SELECT step_key, status FROM workflow_steps
+         WHERE workflow_run_id = ?1 ORDER BY sort_order ASC",
+    )
+    .bind(workflow_run_id)
+    .fetch_all(&mut *connection)
+    .await
+    .map_err(|_| SETTLEMENT_ERROR.to_string())?;
+    let mut current: Option<(String, String)> = None;
+    for row in &steps {
+        let status: String = get!(row, "status");
+        if status != "completed" && status != "skipped" {
+            current = Some((get!(row, "step_key"), status));
+            break;
+        }
+    }
+    // The rejected step is now blocked, so an unfinished step always exists.
+    let (current_step_key, next_run_status) = match current {
+        Some((key, status)) => {
+            let run_status = match status.as_str() {
+                "waiting_approval" => "waiting_approval",
+                "blocked" => "blocked",
+                "failed" => "failed",
+                _ => "running",
+            };
+            (key, run_status)
+        }
+        None => ("measure".to_string(), "completed"),
+    };
+    sqlx::query(
+        "UPDATE workflow_runs SET status = ?1, current_step_key = ?2,
+         started_at = CASE WHEN ?1 = 'running' THEN COALESCE(started_at, datetime('now')) ELSE started_at END,
+         completed_at = CASE WHEN ?1 = 'completed' THEN COALESCE(completed_at, datetime('now')) ELSE NULL END,
+         updated_at = datetime('now') WHERE id = ?3",
+    )
+    .bind(next_run_status)
+    .bind(&current_step_key)
+    .bind(workflow_run_id)
+    .execute(&mut *connection)
+    .await
+    .map_err(|_| SETTLEMENT_ERROR.to_string())?;
+    if step_key == "score" {
+        sync_planner_scoring_backlog_blocked(connection, workflow_run_id).await?;
+    }
+    Ok(())
+}
+
+async fn sync_planner_scoring_backlog_blocked(
+    connection: &mut SqliteConnection,
+    workflow_run_id: i64,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE campaign_backlog_items
+         SET status = 'blocked', completed_at = NULL, cancelled_at = NULL,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE id = (
+             SELECT ap.campaign_backlog_item_id FROM autopilot_plans ap
+             INNER JOIN workflow_steps ws
+               ON ws.workflow_run_id = ap.workflow_run_id AND ws.step_key = 'score'
+             WHERE ap.workflow_run_id = ?1 AND ap.status = 'planned' AND ws.status = 'blocked'
+             LIMIT 1
+         )
+           AND owner_type = 'linkgo' AND work_type = 'scoring' AND recurrence = 'none'
+           AND status NOT IN ('completed', 'cancelled')",
+    )
+    .bind(workflow_run_id)
+    .execute(&mut *connection)
+    .await
+    .map_err(|_| SETTLEMENT_ERROR.to_string())?;
+    Ok(())
+}
+
 async fn reject_continuation_run(
     connection: &mut SqliteConnection,
     state: &SettlementState,
+    detail: &str,
 ) -> Result<(), String> {
-    let error_message = format!("Approval rejected: {REJECTION_DETAIL}");
+    let error_message = format!("Approval rejected: {detail}");
     sqlx::query(
         "UPDATE agent_tool_calls SET status = 'rejected', error_message = ?1,
          completed_at = datetime('now') WHERE id = ?2 AND status IN ('waiting_approval', 'running')",
@@ -239,21 +399,28 @@ async fn reject_continuation_run(
     .execute(&mut *connection)
     .await
     .map_err(|_| SETTLEMENT_ERROR.to_string())?;
-    reconcile_workflow(connection, state, "cancelled", &error_message).await?;
+    reconcile_rejected_workflow(connection, state, &error_message).await?;
     sqlx::query(
         "INSERT INTO agent_run_events (agent_run_id, event_type, summary)
-         VALUES (?1, 'run_cancelled', 'Agent run cancelled after approval rejection: Approval rejected before continuation')",
+         VALUES (?1, 'run_cancelled', ?2)",
     )
     .bind(state.run_id)
+    .bind(format!(
+        "Agent run cancelled after approval rejection: {detail}"
+    ))
     .execute(&mut *connection)
     .await
     .map_err(|_| SETTLEMENT_ERROR.to_string())?;
     Ok(())
 }
 
-async fn reject_linked_continuations(
+/// Cancels every agent run waiting on `approval_id`, rejects its pending tool
+/// call, projects the cancellation onto the linked workflow, and deletes the
+/// approval checkpoints. Runs inside the caller's transaction.
+pub(crate) async fn reject_linked_continuations(
     connection: &mut SqliteConnection,
     approval_id: i64,
+    detail: &str,
 ) -> Result<(), String> {
     let run_ids = sqlx::query_scalar::<_, i64>(
         "SELECT agent_run_id FROM agent_run_approval_checkpoints
@@ -265,7 +432,7 @@ async fn reject_linked_continuations(
     .map_err(|_| SETTLEMENT_ERROR.to_string())?;
     for run_id in run_ids {
         let linked_state = load_state(connection, run_id).await?;
-        reject_continuation_run(connection, &linked_state).await?;
+        reject_continuation_run(connection, &linked_state, detail).await?;
     }
     sqlx::query("DELETE FROM agent_run_approval_checkpoints WHERE approval_id = ?1")
         .bind(approval_id)
@@ -327,15 +494,23 @@ fn validate_settlement_state(state: &SettlementState) -> Result<(), String> {
     Ok(())
 }
 
+/// Tools an approved continuation may replay (excludes `score_draft_quality`).
+pub(crate) const CONTINUATION_TOOLS: &[&str] = &[
+    "research_posts",
+    "score_relevance",
+    "draft_post",
+    "audit_post",
+    "schedule_post",
+    "collect_metrics",
+];
+
 fn validate_messages(messages: &Value) -> Result<(), String> {
-    const TOOLS: &[&str] = &[
-        "research_posts",
-        "score_relevance",
-        "draft_post",
-        "audit_post",
-        "schedule_post",
-        "collect_metrics",
-    ];
+    validate_messages_with_tools(messages, CONTINUATION_TOOLS)
+}
+
+/// Structural check of a persisted agent conversation: known roles, exact
+/// field sets, and every tool result answering one earlier assistant call.
+pub(crate) fn validate_messages_with_tools(messages: &Value, tools: &[&str]) -> Result<(), String> {
     let rows = messages
         .as_array()
         .ok_or_else(|| SETTLEMENT_ERROR.to_string())?;
@@ -367,7 +542,7 @@ fn validate_messages(messages: &Value) -> Result<(), String> {
                 let tool_name = object
                     .get("toolName")
                     .and_then(Value::as_str)
-                    .filter(|name| TOOLS.contains(name))
+                    .filter(|name| tools.contains(name))
                     .ok_or_else(|| SETTLEMENT_ERROR.to_string())?;
                 let call_id = object
                     .get("providerToolCallId")
@@ -385,7 +560,7 @@ fn validate_messages(messages: &Value) -> Result<(), String> {
                 let tool_name = object
                     .get("toolName")
                     .and_then(Value::as_str)
-                    .filter(|name| TOOLS.contains(name))
+                    .filter(|name| tools.contains(name))
                     .ok_or_else(|| SETTLEMENT_ERROR.to_string())?;
                 let call_id = object
                     .get("providerToolCallId")
@@ -431,7 +606,7 @@ async fn execute_settlement(
         return Err("Linked approval belongs to a different campaign".to_string());
     }
     if state.approval_status == "rejected" {
-        reject_linked_continuations(connection, state.approval_id).await?;
+        reject_linked_continuations(connection, state.approval_id, REJECTION_DETAIL).await?;
         return Err("Linked approval was rejected".to_string());
     }
     if state.approval_status != "approved" {

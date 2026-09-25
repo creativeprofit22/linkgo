@@ -155,3 +155,8 @@ export const setCampaignMemoryStatusSchema = z.object({
   id: positiveIdSchema,
   status: campaignMemoryStatusSchema,
 });
+
+/** Native result of the metrics mutation commands: the affected row id. */
+export const metricsMutationResultSchema = z
+  .object({ id: positiveIdSchema })
+  .strict();

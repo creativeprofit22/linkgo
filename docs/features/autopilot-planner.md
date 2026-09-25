@@ -67,6 +67,8 @@ A production connector is not enabled by changing the TypeScript registry alone.
 
 ## Dashboard
 
+The dashboard is read natively (`linkgo_autopilot_planner_dashboard` in `src-tauri/src/planning_reads.rs`). It takes an optional positive campaign and rejects unknown fields, and it returns the summary counts, 30 recent plans, 50 recent events and the kill-switch state, all from one transaction. The renderer has no SQL access to planner tables.
+
 The Autopilot tab sits between Campaigns and Backlog. It provides:
 
 - exact local-only scope copy;

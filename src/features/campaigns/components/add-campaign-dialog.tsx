@@ -14,6 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CAMPAIGN_DAILY_COMMENT_LIMIT_MAX,
+  CAMPAIGN_DAILY_POST_LIMIT_MAX,
+  CAMPAIGN_NAME_MAX,
+  CAMPAIGN_TEXT_MAX,
+  CAMPAIGN_TONE_MAX,
+  createCampaignSchema,
+} from "@/features/campaigns/schemas";
 import type {
   CampaignWithKeywords,
   CreateCampaignInput,
@@ -78,20 +86,47 @@ function parseKeywords(value: string): string[] {
     .filter(Boolean);
 }
 
+type FormValidation =
+  | { ok: true; value: CreateCampaignInput }
+  | { ok: false; error: string };
+
+/** Mirrors the data-layer schema so invalid input never reaches native. */
+function validateCampaignForm(form: CampaignFormState): FormValidation {
+  const input = toCampaignInput(form);
+  const result = createCampaignSchema.safeParse(input);
+  if (result.success) return { ok: true, value: input };
+  return {
+    ok: false,
+    error: result.error.issues[0]?.message ?? "Campaign input is invalid.",
+  };
+}
+
 export function AddCampaignDialog({
   onCreate,
 }: AddCampaignDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<CampaignFormState>(initialFormState);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleOpenChange = (next: boolean): void => {
+    if (!next) setFormError(null);
+    setOpen(next);
+  };
 
   const handleSubmit = async (
     event: SyntheticEvent<HTMLFormElement>,
   ): Promise<void> => {
     event.preventDefault();
+    const validation = validateCampaignForm(form);
+    if (!validation.ok) {
+      setFormError(validation.error);
+      return;
+    }
+    setFormError(null);
     setSubmitting(true);
     try {
-      await onCreate(toCampaignInput(form));
+      await onCreate(validation.value);
       setForm(initialFormState);
       setOpen(false);
     } finally {
@@ -100,7 +135,7 @@ export function AddCampaignDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button">
           <Plus className="size-4" /> New campaign
@@ -115,7 +150,8 @@ export function AddCampaignDialog({
           submitLabel="Create campaign"
           submittingLabel="Creating…"
           submitting={submitting}
-          onCancel={() => setOpen(false)}
+          error={formError}
+          onCancel={() => handleOpenChange(false)}
           onSubmit={handleSubmit}
         />
       </DialogContent>
@@ -134,19 +170,30 @@ export function EditCampaignDialog({
     getCampaignFormState(campaign),
   );
 
+  const [formError, setFormError] = useState<string | null>(null);
+
   useEffect(() => {
-    if (open) setForm(getCampaignFormState(campaign));
+    if (open) {
+      setForm(getCampaignFormState(campaign));
+      setFormError(null);
+    }
   }, [campaign, open]);
 
   const handleSubmit = async (
     event: SyntheticEvent<HTMLFormElement>,
   ): Promise<void> => {
     event.preventDefault();
+    const validation = validateCampaignForm(form);
+    if (!validation.ok) {
+      setFormError(validation.error);
+      return;
+    }
+    setFormError(null);
     setSubmitting(true);
     try {
       await onUpdate({
         id: campaign.id,
-        ...toCampaignInput(form),
+        ...validation.value,
       });
       onOpenChange(false);
     } finally {
@@ -165,6 +212,7 @@ export function EditCampaignDialog({
           submitLabel="Save changes"
           submittingLabel="Saving…"
           submitting={submitting}
+          error={formError}
           onCancel={() => onOpenChange(false)}
           onSubmit={handleSubmit}
         />
@@ -195,6 +243,7 @@ function CampaignForm({
   submitLabel,
   submittingLabel,
   submitting,
+  error,
   onCancel,
   onSubmit,
 }: {
@@ -205,6 +254,7 @@ function CampaignForm({
   submitLabel: string;
   submittingLabel: string;
   submitting: boolean;
+  error: string | null;
   onCancel: () => void;
   onSubmit: (event: SyntheticEvent<HTMLFormElement>) => Promise<void>;
 }): React.ReactNode {
@@ -229,6 +279,7 @@ function CampaignForm({
             value={form.name}
             onChange={(event) => updateField("name", event.target.value)}
             required
+            maxLength={CAMPAIGN_NAME_MAX}
             placeholder="Founder-led growth"
           />
         </Field>
@@ -237,6 +288,7 @@ function CampaignForm({
             id="campaign-product"
             value={form.product}
             onChange={(event) => updateField("product", event.target.value)}
+            maxLength={CAMPAIGN_TEXT_MAX}
             placeholder="What you sell or promote"
           />
         </Field>
@@ -245,6 +297,7 @@ function CampaignForm({
             id="campaign-audience"
             value={form.audience}
             onChange={(event) => updateField("audience", event.target.value)}
+            maxLength={CAMPAIGN_TEXT_MAX}
             placeholder="Who this should reach"
           />
         </Field>
@@ -253,6 +306,7 @@ function CampaignForm({
             id="campaign-voice"
             value={form.voice}
             onChange={(event) => updateField("voice", event.target.value)}
+            maxLength={CAMPAIGN_TEXT_MAX}
             placeholder="Plainspoken, evidence-heavy, concise"
           />
         </Field>
@@ -261,6 +315,7 @@ function CampaignForm({
             id="campaign-tone"
             value={form.tone}
             onChange={(event) => updateField("tone", event.target.value)}
+            maxLength={CAMPAIGN_TONE_MAX}
             placeholder="Helpful operator"
           />
         </Field>
@@ -281,7 +336,7 @@ function CampaignForm({
             id="campaign-post-limit"
             type="number"
             min={0}
-            max={10}
+            max={CAMPAIGN_DAILY_POST_LIMIT_MAX}
             value={form.dailyPostLimit}
             onChange={(event) =>
               updateField("dailyPostLimit", Number(event.target.value))
@@ -293,7 +348,7 @@ function CampaignForm({
             id="campaign-comment-limit"
             type="number"
             min={0}
-            max={50}
+            max={CAMPAIGN_DAILY_COMMENT_LIMIT_MAX}
             value={form.dailyCommentLimit}
             onChange={(event) =>
               updateField("dailyCommentLimit", Number(event.target.value))
@@ -317,6 +372,12 @@ function CampaignForm({
           className="shrink-0"
         />
       </div>
+
+      {error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      ) : null}
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>

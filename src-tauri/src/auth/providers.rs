@@ -264,4 +264,21 @@ mod tests {
 
         assert_eq!(provider.docs_url, "https://mimo.xiaomi.com/");
     }
+
+    #[test]
+    fn auth_methods_serialize_to_renderer_contract() {
+        let linkedin = auth_providers()
+            .into_iter()
+            .find(|provider| provider.key == "linkedin")
+            .expect("linkedin provider should be present");
+        let value = serde_json::to_value(&linkedin).unwrap();
+
+        assert_eq!(value["methods"], serde_json::json!(["oauth"]));
+        assert_eq!(value["defaultMethod"], "oauth");
+        assert_eq!(serde_json::to_value(AuthMethod::ApiKey).unwrap(), "api_key");
+        assert_eq!(
+            serde_json::from_str::<AuthMethod>("\"o_auth\"").unwrap(),
+            AuthMethod::OAuth
+        );
+    }
 }

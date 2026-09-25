@@ -183,11 +183,25 @@ pub(crate) async fn load_publish_preflight(
     input: &LinkedInPublishPostInput,
 ) -> Result<PublishApprovalPreflight, String> {
     let pool = sqlite_pool(app).await?;
+    load_publish_preflight_from_pool(&pool, input).await
+}
+
+/// Native publish gate run by the command that actually posts, before any
+/// LinkedIn call. Every read shares one transaction so the readiness check and
+/// the commentary it approves come from the same snapshot.
+pub(crate) async fn load_publish_preflight_from_pool(
+    pool: &SqlitePool,
+    input: &LinkedInPublishPostInput,
+) -> Result<PublishApprovalPreflight, String> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(|_| "Could not read approval".to_string())?;
 
     let safety = sqlx::query(
         "SELECT global_kill_switch, kill_switch_reason FROM safety_settings WHERE id = 1",
     )
-    .fetch_optional(&pool)
+    .fetch_optional(&mut *transaction)
     .await
     .map_err(|_| "Could not read safety settings".to_string())?;
     if let Some(row) = safety {
@@ -221,7 +235,7 @@ pub(crate) async fn load_publish_preflight(
         WHERE approvals.id = ?",
     )
     .bind(input.approval_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&mut *transaction)
     .await
     .map_err(|_| "Could not read approval".to_string())?
     .ok_or_else(|| "Approval was not found".to_string())?;
@@ -246,37 +260,45 @@ pub(crate) async fn load_publish_preflight(
         return Err("Approval already has a successful publish attempt".to_string());
     }
 
-    let current_schedule = sqlx::query(
-        "SELECT id, status FROM schedule_jobs WHERE approval_id = ? AND status = 'scheduled'",
+    // The variant must still be ready at the revision the reviewer approved;
+    // an edit after approval bumps content_revision and fails here.
+    crate::approval_review::assert_publish_ready(
+        &mut transaction,
+        input.approval_id,
+        "Could not read approval",
+    )
+    .await?;
+
+    // Same rule as `linkgo_approval_publish_preflight`: a requested schedule
+    // job must be the approval's latest job and still `scheduled`.
+    let latest_schedule = sqlx::query(
+        "SELECT id, status FROM schedule_jobs WHERE approval_id = ?
+         ORDER BY datetime(updated_at) DESC, id DESC LIMIT 1",
     )
     .bind(input.approval_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&mut *transaction)
     .await
     .map_err(|_| "Could not read schedule job".to_string())?;
+    let current_scheduled_id = latest_schedule.and_then(|row| {
+        let status: String = row.try_get("status").unwrap_or_default();
+        (status == "scheduled")
+            .then(|| row.try_get::<i64, _>("id").ok())
+            .flatten()
+    });
 
     match (
         approval_status.as_str(),
         input.schedule_job_id,
-        current_schedule,
+        current_scheduled_id,
     ) {
         ("scheduled", None, _) => {
             return Err("Scheduled approvals require the current schedule job".to_string());
         }
-        ("scheduled", Some(schedule_job_id), Some(row)) => {
-            let current_schedule_id: i64 = row.try_get("id").unwrap_or_default();
-            if current_schedule_id != schedule_job_id {
-                return Err("Schedule job is not the current scheduled job".to_string());
-            }
-        }
-        ("scheduled", Some(_), None) => {
+        (_, Some(requested), current) if current != Some(requested) => {
             return Err("Schedule job is not the current scheduled job".to_string());
         }
-        ("approved", Some(schedule_job_id), Some(row)) => {
-            let current_schedule_id: i64 = row.try_get("id").unwrap_or_default();
-            if current_schedule_id != schedule_job_id {
-                return Err("Schedule job is not the current scheduled job".to_string());
-            }
-        }
+        // Stricter than the renderer preflight: a manual publish may not
+        // bypass a pending scheduled job.
         ("approved", None, Some(_)) => {
             return Err("Schedule job is not the current scheduled job".to_string());
         }
@@ -308,6 +330,10 @@ pub(crate) async fn load_publish_preflight(
         return Err("Publish commentary does not match the approved draft variant".to_string());
     }
 
+    transaction
+        .commit()
+        .await
+        .map_err(|_| "Could not read approval".to_string())?;
     Ok(PublishApprovalPreflight { commentary })
 }
 
@@ -538,6 +564,10 @@ pub fn publish_approved_linkedin_comment(
         external_comment_url: result.external_comment_url,
     })
 }
+
+#[cfg(test)]
+#[path = "publish_preflight_tests.rs"]
+mod preflight_tests;
 
 #[cfg(test)]
 mod tests {

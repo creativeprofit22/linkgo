@@ -243,8 +243,16 @@ export interface ClaimDraftQualityInput {
   modelName?: string;
 }
 
-export interface ApplyDraftQualityScoreInput extends DraftQualityScoreInput {
+/** Native settlement DTO; provider-only request context must never cross this boundary. */
+export interface ApplyDraftQualityScoreInput {
+  qualityRunId: number;
+  draftVariantId: number;
+  attemptId: number;
+  contentRevision: number;
   agentRunId: number;
+  categoryScores: DraftQualityScoreInput["categoryScores"];
+  rewrite?: DraftQualityRewrite;
+  summary: string;
 }
 
 export interface ContinueDraftQualityInput {
@@ -295,12 +303,11 @@ export interface DraftAiAuditFindingInput {
   message: string;
 }
 
+/** Identity only: native reads findings from the auditor's own output. */
 export interface CompleteDraftAiAuditRunInput {
   auditRunId: number;
   draftVariantId: number;
   contentRevision: number;
-  summary?: string;
-  findings: DraftAiAuditFindingInput[];
 }
 
 export interface FailDraftAiAuditRunInput {
@@ -308,12 +315,12 @@ export interface FailDraftAiAuditRunInput {
   draftVariantId: number;
   contentRevision: number;
   errorMessage: string;
+  agentRunId?: number | null;
 }
 
+/** Identity only: native reads the auditor's own persisted findings. */
 export interface CompletePlannerDraftAuditInput {
   agentRunId: number;
-  summary: string;
-  findings: DraftAiAuditFindingInput[];
 }
 
 export interface FailPlannerDraftAuditInput {
@@ -344,6 +351,12 @@ export type DraftWithDetails = Draft & {
   candidate: CandidateWithTarget;
   variants: DraftVariantWithAudits[];
 };
+
+/** A capped draft list; `totalCount` counts every match before the cap. */
+export interface DraftListPage {
+  items: DraftWithDetails[];
+  totalCount: number;
+}
 
 export interface DraftVariantInput {
   hook?: string;

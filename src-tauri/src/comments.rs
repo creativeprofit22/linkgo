@@ -30,17 +30,17 @@ pub struct RecordCommentAttemptInput {
     pub error_message: String,
 }
 
-struct ThreadState {
-    campaign_id: i64,
-    status: String,
-    daily_comment_limit: i64,
+pub(crate) struct ThreadState {
+    pub(crate) campaign_id: i64,
+    pub(crate) status: String,
+    pub(crate) daily_comment_limit: i64,
 }
 
-struct LimitDecision {
-    window_key: String,
-    current_count: i64,
-    summary: String,
-    allowed: bool,
+pub(crate) struct LimitDecision {
+    pub(crate) window_key: String,
+    pub(crate) current_count: i64,
+    pub(crate) summary: String,
+    pub(crate) allowed: bool,
 }
 
 enum Settlement {
@@ -48,7 +48,7 @@ enum Settlement {
     Rejected(String),
 }
 
-async fn comment_limit_decision(
+pub(crate) async fn comment_limit_decision(
     connection: &mut SqliteConnection,
     thread: &ThreadState,
 ) -> Result<LimitDecision, String> {
@@ -88,7 +88,7 @@ async fn comment_limit_decision(
     })
 }
 
-async fn insert_rate_limit_event(
+pub(crate) async fn insert_rate_limit_event(
     connection: &mut SqliteConnection,
     thread: &ThreadState,
     decision: &LimitDecision,

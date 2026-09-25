@@ -28,6 +28,8 @@ Playbook overrides live in `agent_playbook_overrides` and store only local opera
 
 Built-in prompt content remains versioned in `src/agent/playbooks.ts`.
 
+Override storage is owned natively in `src-tauri/src/playbooks.rs`: `linkgo_playbook_override_list` (bounded to one row per known playbook) and `linkgo_playbook_override_upsert` (rejects unknown fields and keys, trims instructions and caps them at 2000 UTF-16 units, writes in one transaction). The renderer has no direct SQL access to this table.
+
 ## Safety boundaries
 
 Playbooks shape prompts and operator guidance only.
@@ -57,5 +59,7 @@ Playwright covers:
 - Disabling a runtime playbook and marking it disabled.
 - Keeping the commenter playbook guidance-only with no autonomous posting action.
 - Runtime playbook selection, provider prompt injection, and disabled-playbook filtering from the Agent Runtime create dialog.
+
+Rust `playbooks::tests` cover input validation, upsert/update ordering, rollback on injected storage failure, and concurrent upserts leaving one consistent row.
 
 Rust migration tests cover `agent_runs.playbook_key`, `agent_playbook_overrides`, the playbook index, and the boolean-like `enabled` constraint.

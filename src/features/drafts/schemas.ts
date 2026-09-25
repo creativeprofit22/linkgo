@@ -132,21 +132,22 @@ export const startDraftAiAuditRunSchema = z
   })
   .strict();
 
+/**
+ * Completion identity only: native reads the findings from the linked
+ * auditor's own persisted output, so callers cannot supply them.
+ */
 export const completeDraftAiAuditRunSchema = z
   .object({
     auditRunId: z.number().int().positive(),
     draftVariantId: z.number().int().positive(),
     contentRevision: z.number().int().positive(),
-    summary: z.string().trim().max(1000).default(""),
-    findings: draftAiAuditFindingsSchema,
   })
   .strict();
 
+/** Identity only: native reads the auditor's own persisted findings. */
 export const completePlannerDraftAuditSchema = z
   .object({
     agentRunId: z.number().int().positive(),
-    summary: z.string().trim().min(1).max(1000),
-    findings: draftAiAuditFindingsSchema,
   })
   .strict();
 
@@ -156,6 +157,25 @@ export const failDraftAiAuditRunSchema = z
     draftVariantId: z.number().int().positive(),
     contentRevision: z.number().int().positive(),
     errorMessage: z.string().trim().min(1).max(1000),
+    agentRunId: z.number().int().positive().nullable().default(null),
+  })
+  .strict();
+
+/** Native result of `linkgo_draft_ai_audit_start`. */
+export const draftAiAuditStartResultSchema = z
+  .object({
+    run: draftAiAuditRunRowSchema,
+    campaignId: z.number().int().positive(),
+    text: z.string(),
+  })
+  .strict();
+
+/** Native result of `linkgo_draft_ai_audit_reconcile`. */
+export const draftAiAuditReconcileResultSchema = z
+  .object({
+    failedAuditRunIds: z.array(z.number().int().positive()),
+    failedAgentRunIds: z.array(z.number().int().positive()),
+    clearedApprovalCheckpointCount: z.number().int().min(0),
   })
   .strict();
 
@@ -257,6 +277,19 @@ export const draftQualityScoreInputSchema = z
     }
   });
 
+export const applyDraftQualityScoreInputSchema = z
+  .object({
+    qualityRunId: z.number().int().positive(),
+    draftVariantId: z.number().int().positive(),
+    attemptId: z.number().int().positive(),
+    contentRevision: z.number().int().positive(),
+    agentRunId: z.number().int().positive(),
+    categoryScores: draftQualityCategoryScoresSchema,
+    rewrite: draftQualityRewriteSchema.optional(),
+    summary: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+
 export const draftVariantInputSchema = z.object({
   hook: z.string().trim().max(500).default(""),
   body: z.string().trim().max(3000).default(""),
@@ -292,7 +325,10 @@ export const setDraftVariantStatusSchema = z.object({
   status: draftVariantStatusSchema,
 });
 
-const playbookKeySchema = z.union([z.enum(AGENT_PLAYBOOK_KEYS), z.literal("")]);
+export const playbookKeySchema = z.union([
+  z.enum(AGENT_PLAYBOOK_KEYS),
+  z.literal(""),
+]);
 
 export const generatedDraftVariantSchema = z.object({
   hook: z.string().trim().min(1).max(280),
@@ -329,3 +365,26 @@ export const saveGeneratedDraftSchema = z.object({
 export const dismissDraftGenerationRequestSchema = z.object({
   id: z.number().int().positive(),
 });
+
+/** Native result of the draft mutation commands: the affected row id. */
+export const draftMutationResultSchema = z
+  .object({ id: z.number().int().positive() })
+  .strict();
+
+/** Native result of `linkgo_draft_generation_claim`. */
+export const draftGenerationClaimResultSchema = z
+  .object({
+    requestId: z.number().int().positive(),
+    campaignId: z.number().int().positive(),
+    workflowRunId: z.number().int().positive().nullable(),
+    candidateContext: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+/** Native result of `linkgo_draft_generation_settle`. */
+export const draftGenerationSettleResultSchema = z
+  .object({
+    status: z.enum(["generated", "failed"]),
+    errorMessage: z.string(),
+  })
+  .strict();

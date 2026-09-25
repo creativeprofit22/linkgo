@@ -39,6 +39,24 @@ Migration version `8` creates:
 
 Blocked preflight events are written before caller transactions begin, so safety history survives rejected actions. Allowed/success events are written inside the transaction that performed the action.
 
+### Native mutations
+
+The two operator mutations are owned natively in `src-tauri/src/safety.rs` and run on one pinned `BEGIN IMMEDIATE` connection:
+
+- `linkgo_safety_set_global_kill_switch` (`setGlobalKillSwitch`) — updates `safety_settings` and writes the `kill_switch_enabled`/`kill_switch_disabled` audit row together. Returns `{ enabled, reason }`.
+- `linkgo_safety_set_error_queue_item_status` (`setErrorQueueItemStatus`) — re-reads the item, rejects archived-campaign items and illegal transitions (`open → in_progress|failed`, `in_progress → awaiting_review|failed`, `awaiting_review → resolved|failed`, `resolved|failed → in_progress`), then updates and audits. Returns `{ id, previousStatus, status }`.
+
+Inputs reject unknown fields and oversize text (reason ≤ 1000, notes ≤ 2000 chars) before any storage access. Any failure rolls back both writes. Real-SQLite tests live in `src-tauri/src/safety_tests.rs`.
+
+### Native reads
+
+The renderer has no direct SQL access to the safety tables. `src-tauri/src/safety_dashboard.rs` owns the reads:
+
+- `linkgo_safety_settings_get` (`getSafetySettings`): recreates a missing singleton row and returns it, both in one transaction.
+- `linkgo_safety_dashboard_get` (`listSafetyDashboard`): takes an optional positive `campaignId` and rejects unknown fields. Returns the settings, the four summary counts, and the error queue, rate-limit and audit lists, each capped at 50 rows. Everything is read in one transaction, so the counts and lists match each other.
+
+Tests in `src-tauri/src/safety_dashboard_tests.rs` cover campaign filtering, list order and caps, rollback when row recreation fails, and reads running alongside a kill-switch change.
+
 ## Integrations
 
 ### Approvals and LinkedIn publishing

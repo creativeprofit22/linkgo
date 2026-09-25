@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { recordPublishAttemptSchema } from "@/features/approvals/schemas";
 import type {
   PublishAttemptStatus,
   RecordPublishAttemptInput,
@@ -44,20 +45,12 @@ function getInitialFormState(
   };
 }
 
-function getValidationMessage(form: PublishAttemptFormState): string {
-  if (
-    form.status === "succeeded" &&
-    form.externalPostUrl.trim() === "" &&
-    form.platformPostId.trim() === ""
-  ) {
-    return "LinkedIn URL or platform post ID is required for success";
-  }
-
-  if (form.status === "failed" && form.errorMessage.trim() === "") {
-    return "Failure reason is required for failed attempts";
-  }
-
-  return "";
+function getValidationMessage(
+  approvalId: number,
+  form: PublishAttemptFormState,
+): string {
+  const result = recordPublishAttemptSchema.safeParse({ approvalId, ...form });
+  return result.success ? "" : (result.error.issues[0]?.message ?? "");
 }
 
 export function RecordPublishAttemptDialog({
@@ -72,7 +65,7 @@ export function RecordPublishAttemptDialog({
   const [form, setForm] = useState<PublishAttemptFormState>(() =>
     getInitialFormState(initialStatus),
   );
-  const validationMessage = getValidationMessage(form);
+  const validationMessage = getValidationMessage(approvalId, form);
   const isSuccessEvidenceRequired = form.status === "succeeded";
   const isFailureReasonRequired = form.status === "failed";
 

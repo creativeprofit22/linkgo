@@ -1,6 +1,7 @@
 import type { AgentLoopResult, AgentProviderKey } from "@/agent/types";
 import type { AgentPlaybookKey } from "@/agent/playbooks";
 import { IS_TAURI, IS_TEST } from "@/lib/env";
+import { invokeCommand, toNativeCommandError } from "@/lib/tauri";
 
 export interface NativeRelevanceScoringClaim {
   executionId: number;
@@ -58,12 +59,17 @@ async function invokeScoringCommand<T>(
   input: unknown,
 ): Promise<T> {
   const injected = getInjectedInvoke();
-  if (injected) return (await injected(command, { input })) as T;
+  if (injected) {
+    try {
+      return (await injected(command, { input })) as T;
+    } catch (error: unknown) {
+      throw toNativeCommandError(error);
+    }
+  }
   if (!IS_TAURI) {
     throw new Error("Planner scoring requires the Linkgo desktop app");
   }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<T>(command, { input });
+  return invokeCommand<T>(command, { input });
 }
 
 export function claimNativeRelevanceScoring(

@@ -2,10 +2,6 @@ import type { z } from "zod";
 import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type { relevanceScoringContextSchema } from "@/features/candidate-queue/schemas";
 import type { AgentProviderKey } from "@/agent/provider-catalog";
-import type {
-  CandidatePolicyFinding,
-  CandidatePolicyRuleKey,
-} from "@/features/candidate-policy/types";
 
 export type CandidateStatus = "new" | "shortlisted" | "rejected" | "drafted";
 export type RelevanceScoringContext = z.infer<
@@ -13,6 +9,12 @@ export type RelevanceScoringContext = z.infer<
 >;
 
 export type CandidatePlatform = "linkedin";
+
+/** Native pre-run context: seed keywords and default scoring candidates. */
+export interface CandidateAgentRunContext {
+  seedKeywords: string[];
+  scoringCandidateIds: number[];
+}
 
 export type DedupeKeyType = "normalized_url" | "content_hash";
 
@@ -58,6 +60,12 @@ export type CandidateWithTarget = CandidatePost & {
   campaign_name: string;
 };
 
+/** A capped candidate list; `totalCount` counts every match before the cap. */
+export interface CandidateListPage {
+  items: CandidateWithTarget[];
+  totalCount: number;
+}
+
 export interface CreateCandidateInput {
   campaignId: number;
   url: string;
@@ -70,16 +78,6 @@ export interface CreateCandidateInput {
   relevanceScore?: number | null;
   scoreReason?: string;
   notes?: string;
-}
-
-export interface CreateCandidateTransactionOptions {
-  enforcePolicy?: boolean;
-}
-
-export interface CandidatePolicyRejection {
-  readonly name: "CandidatePolicyRejectionError";
-  readonly primaryRuleKey: CandidatePolicyRuleKey;
-  readonly findings: CandidatePolicyFinding[];
 }
 
 export interface UpdateCandidateInput {

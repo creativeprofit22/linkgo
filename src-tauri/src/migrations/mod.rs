@@ -1,6 +1,7 @@
 pub mod agent_approval_resume;
 pub mod agent_runtime;
 pub mod app_settings;
+pub mod approval_readiness;
 pub mod approvals;
 pub mod autopilot_planner;
 pub mod campaign_backlog;
@@ -14,10 +15,13 @@ pub mod content_calendar;
 pub mod draft_ai_audits;
 pub mod draft_generation;
 pub mod draft_quality;
+pub mod draft_quality_tool;
 pub mod drafts;
 pub mod integrations;
+pub mod latest_draft_quality;
 pub mod metric_refresh;
 pub mod metrics;
+mod native_persistence_upgrade;
 pub mod planner_draft_audits;
 pub mod planner_draft_generation;
 pub mod playbooks;
@@ -67,6 +71,9 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(draft_ai_audits::migrations());
     migrations.extend(planner_draft_audits::migrations());
     migrations.extend(draft_quality::migrations());
+    migrations.extend(draft_quality_tool::migrations());
+    migrations.extend(approval_readiness::migrations());
+    migrations.extend(latest_draft_quality::migrations());
     migrations
 }
 

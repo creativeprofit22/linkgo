@@ -4,14 +4,13 @@ import {
   agentConversationSchema,
   agentProviderKeySchema,
   agentRoleSchema,
-  agentRunEventTypeSchema,
-  agentToolCallStatusSchema,
-  agentToolNameSchema,
 } from "@/agent/schemas";
 
 const positiveIdSchema = z.number().int().positive();
 const optionalSummarySchema = z.string().trim().max(1000).default("");
 export const MAX_AGENT_INPUT_CONTEXT_LENGTH = 50_000;
+/** A stored agent run's playbook: a known playbook or none. */
+export const agentRunPlaybookKeySchema = playbookKeySchema.or(z.literal(""));
 
 export const agentInputContextSchema = z
   .record(z.string().trim().min(1).max(120), z.unknown())
@@ -128,19 +127,12 @@ export const cancelAgentRunSchema = z.object({
   id: positiveIdSchema,
 });
 
-export const recordAgentRunEventSchema = z.object({
-  agentRunId: positiveIdSchema,
-  eventType: agentRunEventTypeSchema,
-  summary: z.string().trim().min(1).max(1000),
-});
+/** Native result of the agent-run mutation commands: the affected run id. */
+export const agentRunMutationResultSchema = z
+  .object({ id: positiveIdSchema })
+  .strict();
 
-export const recordAgentToolCallSchema = z.object({
-  agentRunId: positiveIdSchema,
-  providerToolCallId: z.string().trim().max(200).default(""),
-  toolName: agentToolNameSchema,
-  status: agentToolCallStatusSchema,
-  requiresApproval: z.boolean(),
-  input: z.unknown(),
-  output: z.unknown().optional(),
-  errorMessage: optionalSummarySchema,
-});
+/** Native result of `linkgo_agent_run_persist_result`. */
+export const persistAgentResultOutputSchema = z
+  .object({ checkpointPhase: agentApprovalCheckpointPhaseSchema.nullable() })
+  .strict();

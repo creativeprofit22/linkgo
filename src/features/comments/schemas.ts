@@ -93,3 +93,21 @@ export const recordCommentAttemptSchema = z
       });
     }
   });
+
+/**
+ * Publish-gate input. Not trimmed: native compares `commentary` byte-for-byte
+ * with the escaped approved variant that LinkedIn will receive.
+ */
+export const commentPublishPreflightSchema = z
+  .object({
+    commentThreadId: z.number().int().positive(),
+    commentary: z.string().min(1).max(3000),
+    targetUrn: z.string().min(1).max(500),
+    idempotencyKey: z.string().min(1).max(200),
+  })
+  .strict();
+
+/** Native result of the comment mutation commands: the affected row id. */
+export const commentMutationResultSchema = z
+  .object({ id: z.number().int().positive() })
+  .strict();

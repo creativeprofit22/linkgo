@@ -10,6 +10,10 @@ export const agentPlaybookOverrideSchema = z.object({
   updated_at: z.string(),
 });
 
+export const agentPlaybookOverrideListSchema = z
+  .array(agentPlaybookOverrideSchema)
+  .max(AGENT_PLAYBOOK_KEYS.length);
+
 export const updatePlaybookOverrideSchema = z.object({
   playbookKey: playbookKeySchema,
   enabled: z.boolean(),

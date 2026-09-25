@@ -39,6 +39,15 @@ The slice lives under `src/features/content-calendar`.
 - `archiveContentCalendarSlot(input)` marks the slot archived for planning cleanup.
 - `scheduleContentCalendarSlot(input)` validates the slot and calls `scheduleApproval({ approvalId, scheduledFor: slot_for, timezone })`.
 
+Persistence is native (`src-tauri/src/content_calendar.rs`); the renderer has no direct SQL access to slots.
+
+- `linkgo_content_calendar_list` returns up to 500 slots and `linkgo_content_calendar_eligible_approvals` up to 200 approvals. Each also returns the related draft audits, and each is read in one transaction.
+- `linkgo_content_calendar_create_slot`, `_update_slot` and `_archive_slot` run in one transaction each. They keep the same ownership checks and messages as before (approval exists and is approved, scheduled or published; one slot per approval; campaign not archived; archived slots cannot be edited).
+- Every input rejects unknown fields and re-checks each field natively: allowed purpose and format values, required angle, visual direction and CTA (≤ 500 characters each), notes ≤ 1000, and slot time and timezone ≤ 80. Text is trimmed and an empty timezone becomes `local`.
+- `linkgo_content_calendar_schedule_preflight` is a read-only check. It returns the approval id, time and timezone to schedule, and `scheduleApproval` then re-checks everything in its own transaction.
+
+Tests: `src-tauri/src/content_calendar_tests.rs`. They cover bad input writing nothing, ownership messages, rollback on an injected failure, two creates at once for the same approval leaving one slot, and an update running alongside an archive.
+
 ## Lifecycle
 
 UI lifecycle labels are derived this way:

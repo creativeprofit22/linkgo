@@ -653,7 +653,7 @@ test("rejects research_posts writes for a different campaign", async ({
   await connectCustomProvider(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await createCampaign(page);
-  await createCampaign(page);
+  await createCampaign(page, "Second campaign");
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "researcher");
 
@@ -1128,16 +1128,15 @@ test("rejecting through Approvals cancels the linked run without continuation", 
       { exact: true },
     ),
   ).toBeVisible();
-  const confirmationPromise = page.waitForEvent("dialog");
-  const rejectClickPromise = page
-    .getByRole("button", { name: "Reject" })
-    .click();
-  const confirmation = await confirmationPromise;
-  expect(confirmation.message()).toBe(
-    "Reject this approval? 2 linked waiting runs will be cancelled and their resumable checkpoints removed. The draft will stay in local history.",
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  const confirmation = page.getByRole("dialog", {
+    name: "Reject this approval?",
+  });
+  await expect(confirmation).toContainText(
+    "2 linked waiting runs will be cancelled and their resumable checkpoints removed. The draft will stay in local history.",
   );
-  await confirmation.accept();
-  await rejectClickPromise;
+  await confirmation.getByRole("button", { name: "Reject approval" }).click();
+  await expect(confirmation).toBeHidden();
   await expect(getBadge(page, "Rejected").first()).toBeVisible();
 
   await openAgentRuntime(page);
@@ -1572,10 +1571,12 @@ async function executeSql(
       }
     ).__TAURI_INTERNALS__;
     if (internals === undefined) throw new Error("Tauri mocks unavailable");
-    return internals.invoke("plugin:sql|execute", sqlArgs).then((result) => {
-      if (!Array.isArray(result)) return result;
-      return { rowsAffected: result[0], lastInsertId: result[1] };
-    });
+    return internals
+      .invoke("__linkgo_test_sql|execute", sqlArgs)
+      .then((result) => {
+        if (!Array.isArray(result)) return result;
+        return { rowsAffected: result[0], lastInsertId: result[1] };
+      });
   }, args);
 }
 
@@ -1674,11 +1675,28 @@ async function seedApproval(page: Page, fixtureId = 1): Promise<void> {
       "UPDATE drafts SET status = 'ready_for_review', updated_at = datetime('now') WHERE id = $1",
     values: [fixtureId],
   });
+  await seedApprovalReadiness(page, fixtureId);
   await executeSql(page, {
     query:
       "INSERT INTO approvals (campaign_id, draft_id, draft_variant_id, status, reviewer_notes, updated_at) VALUES ($1, $2, $3, 'needs_review', $4, datetime('now'))",
     values: [1, fixtureId, fixtureId, "Review agent schedule metadata."],
   });
+}
+
+async function seedApprovalReadiness(
+  page: Page,
+  draftVariantId: number,
+): Promise<void> {
+  await page.evaluate((variantId) => {
+    const seed = (
+      window as unknown as {
+        __LINKGO_SQL_SEED_APPROVAL_READINESS__?: (variantId: number) => void;
+      }
+    ).__LINKGO_SQL_SEED_APPROVAL_READINESS__;
+    if (seed === undefined)
+      throw new Error("Approval readiness seed API unavailable");
+    seed(variantId);
+  }, draftVariantId);
 }
 
 async function openAgentRuntime(page: Page): Promise<void> {
@@ -1688,12 +1706,15 @@ async function openAgentRuntime(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-async function createCampaign(page: Page): Promise<void> {
+async function createCampaign(
+  page: Page,
+  name = "Founder-led growth",
+): Promise<void> {
   await page.getByRole("button", { name: "New campaign" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await expect(dialog).toBeVisible();
 
-  await dialog.getByLabel("Name").fill("Founder-led growth");
+  await dialog.getByLabel("Name").fill(name);
   await dialog
     .getByLabel("Product")
     .fill("A local-first LinkedIn operations cockpit");

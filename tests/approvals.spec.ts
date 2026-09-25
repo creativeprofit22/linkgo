@@ -1,5 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import {
+  recordPublishAttemptSchema,
+  setApprovalStatusSchema,
+} from "../src/features/approvals/schemas";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -28,6 +32,222 @@ const approvalAiAuditCases: Array<{
   { state: "blocked", eligible: false },
   { state: "passing", eligible: true },
 ];
+
+for (const state of ["running", "failed"] as const) {
+  test(`latest quality ${state} overrides an older pass in display and approval eligibility`, async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await createReadyDraft(page, cleanVariant());
+    await makeDraftApprovalEligible(page);
+    await page.evaluate(async (state) => {
+      const api = (
+        window as unknown as {
+          __LINKGO_DRAFTS_TEST_API__: typeof import("../src/features/drafts/data");
+        }
+      ).__LINKGO_DRAFTS_TEST_API__;
+      const variant = (await api.listDrafts())[0].variants[0];
+      const invoke = (
+        window as unknown as {
+          __TAURI_INTERNALS__: {
+            invoke: (
+              command: string,
+              args: unknown,
+            ) => Promise<{ qualityRunId: number }>;
+          };
+        }
+      ).__TAURI_INTERNALS__.invoke;
+      const claim = await invoke("linkgo_draft_quality_claim", {
+        input: {
+          draftVariantId: variant.id,
+          providerKey: "dry_run",
+          modelName: "dry-run-local",
+        },
+      });
+      if (state === "failed")
+        await invoke("linkgo_draft_quality_fail", {
+          input: {
+            qualityRunId: claim.qualityRunId,
+            draftVariantId: variant.id,
+            errorMessage: "Interrupted latest quality run",
+          },
+        });
+    }, state);
+    await openApprovals(page);
+    const blocked = await checkApprovalReadiness(page);
+    expect(blocked.eligibleDraftIds).toEqual([]);
+    expect(blocked.created).toBe(false);
+    await openDrafts(page);
+    const panel = page.getByRole("region", {
+      name: "Draft quality",
+      exact: true,
+    });
+    await expect(
+      panel.getByText(state === "running" ? "Running" : "Failed", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(panel.getByText("Passed", { exact: true })).toBeHidden();
+
+    // A new valid check for the same revision restores readiness; history remains.
+    if (state === "running")
+      await page.evaluate(async () => {
+        const api = (
+          window as unknown as {
+            __LINKGO_DRAFTS_TEST_API__: typeof import("../src/features/drafts/data");
+          }
+        ).__LINKGO_DRAFTS_TEST_API__;
+        const variant = (await api.listDrafts())[0].variants[0];
+        const invoke = (
+          window as unknown as {
+            __TAURI_INTERNALS__: {
+              invoke: (command: string, args: unknown) => Promise<unknown>;
+            };
+          }
+        ).__TAURI_INTERNALS__.invoke;
+        await invoke("linkgo_draft_quality_fail", {
+          input: {
+            qualityRunId: variant.qualityScorecard!.run.id,
+            draftVariantId: variant.id,
+            errorMessage: "Interrupted",
+          },
+        });
+      });
+    await makeDraftApprovalEligible(page);
+    await openApprovals(page);
+    const restored = await checkApprovalReadiness(page);
+    expect(restored.eligibleDraftIds).toEqual([1]);
+    expect(restored.created).toBe(true);
+    await openDrafts(page);
+    await expect(panel.getByText("Passed", { exact: true })).toBeVisible();
+  });
+}
+
+test("approval status schema requires the displayed revision for approval", () => {
+  for (const contentRevision of [undefined, null, 0, -1, 1.5, "1"]) {
+    expect(
+      setApprovalStatusSchema.safeParse({
+        id: 1,
+        status: "approved",
+        contentRevision,
+      }).success,
+    ).toBe(false);
+  }
+  expect(
+    setApprovalStatusSchema.safeParse({
+      id: 1,
+      status: "approved",
+      contentRevision: 2,
+    }).success,
+  ).toBe(true);
+  expect(
+    setApprovalStatusSchema.safeParse({ id: 1, status: "changes_requested" })
+      .success,
+  ).toBe(true);
+});
+
+test("approval status schema rejects statuses owned by scheduling and publishing", () => {
+  for (const status of ["scheduled", "published"]) {
+    expect(
+      setApprovalStatusSchema.safeParse({ id: 1, status, contentRevision: 1 })
+        .success,
+    ).toBe(false);
+  }
+  for (const status of ["needs_review", "rejected", "cancelled"]) {
+    expect(setApprovalStatusSchema.safeParse({ id: 1, status }).success).toBe(
+      true,
+    );
+  }
+});
+
+for (const initiallyApproved of [false, true]) {
+  test(`content edits revoke ${initiallyApproved ? "approved" : "pending"} review readiness across reload`, async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await createReadyDraft(page, cleanVariant());
+    await makeDraftApprovalEligible(page);
+    await openApprovals(page);
+    await createReview(page);
+    if (initiallyApproved)
+      await page.getByRole("button", { name: "Approve", exact: true }).click();
+
+    await page.evaluate(async () => {
+      const api = (
+        window as unknown as {
+          __LINKGO_DRAFTS_TEST_API__: typeof import("../src/features/drafts/data");
+        }
+      ).__LINKGO_DRAFTS_TEST_API__;
+      await api.updateDraftVariant({
+        id: 1,
+        body: "We tested 18 interviews and changed our conclusion.",
+      });
+      (
+        window as unknown as {
+          __LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__: () => void;
+        }
+      ).__LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__();
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await openApprovals(page);
+    await expect(getBadge(page, "Changes requested")).toBeVisible();
+    await expect(getBadge(page, "Approved")).toBeHidden();
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText(
+        /Content changed or historical review revision is unknown/,
+      ),
+    ).toBeVisible();
+
+    await openDrafts(page);
+    const auditPanel = page.getByRole("region", { name: /AI audit/ });
+    await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
+    await expect(
+      auditPanel.getByText("Completed", { exact: true }),
+    ).toBeVisible();
+    await openApprovals(page);
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeDisabled();
+    await makeDraftApprovalEligible(page);
+    await openDrafts(page);
+    await openApprovals(page);
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(getBadge(page, "Approved")).toBeVisible();
+  });
+}
+
+test("normalized no-op edits preserve the reviewed revision and approval", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
+  await openApprovals(page);
+  await createReview(page);
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  const revisions = await page.evaluate(async () => {
+    const api = (
+      window as unknown as {
+        __LINKGO_DRAFTS_TEST_API__: typeof import("../src/features/drafts/data");
+      }
+    ).__LINKGO_DRAFTS_TEST_API__;
+    const before = (await api.listDrafts())[0].variants[0];
+    await api.updateDraftVariant({ id: before.id, body: `  ${before.body}  ` });
+    const after = (await api.listDrafts())[0].variants[0];
+    return [before.content_revision, after.content_revision];
+  });
+  expect(revisions[0]).toBe(revisions[1]);
+  await openDrafts(page);
+  await openApprovals(page);
+  await expect(getBadge(page, "Approved")).toBeVisible();
+  await expect(page.getByText(/This content is not approved/)).toBeHidden();
+});
 
 test("creates, previews, approves, schedules, and publishes an approval", async ({
   page,
@@ -233,6 +453,62 @@ test("LinkedIn OAuth publish rechecks approval state before submitting", async (
   expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
 });
 
+test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await countLinkedInPublishInvokes(page);
+  await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
+  await openApprovals(page);
+  await createReview(page);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeVisible();
+
+  // A new AI audit on the same revision leaves the approval `approved`.
+  await setApprovalAiAuditState(page, "running");
+
+  const result = await publishViaTestApi(page, {
+    approvalId: 1,
+    commentary: "Unready approval should be blocked.",
+    idempotencyKey: "approval:1:linkedin:unready",
+  });
+  expect(result).toEqual({
+    ok: false,
+    message:
+      "Approval is stale or not ready. Reload and run current AI audit and quality checks.",
+  });
+  expect(await getPublishAttemptCount(page)).toBe(0);
+  expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
+
+  await openSafety(page);
+  await openApprovals(page);
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Schedule", exact: true }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Mark published" }),
+  ).toBeHidden();
+  await expect(
+    page.getByText("This revision is not ready for approval."),
+  ).toBeVisible();
+
+  // A real failed outcome is still recordable and revokes the approval.
+  await page.getByRole("button", { name: "Record failure" }).click();
+  await page.getByLabel("Failure reason").fill("Posted manually, then failed.");
+  await page.getByRole("button", { name: "Record attempt" }).click();
+  await expect.poll(() => getPublishAttemptCount(page)).toBe(1);
+  await expect(getBadge(page, "Failed").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Record failure" }),
+  ).toBeHidden();
+});
+
 test("LinkedIn OAuth publish preflight blocks duplicate successes and stale schedules", async ({
   page,
 }) => {
@@ -386,6 +662,81 @@ test("successful publish attempts require a LinkedIn URL or platform ID", async 
     .getByLabel("LinkedIn post URL")
     .fill("https://www.linkedin.com/posts/manual-success/");
   await expect(recordButton).toBeEnabled();
+});
+
+test("publish attempt schema trims evidence and rejects non-LinkedIn URLs", () => {
+  const parsed = recordPublishAttemptSchema.parse({
+    approvalId: 1,
+    status: "succeeded",
+    externalPostUrl: "  https://linkedin.com/feed/update/1/  ",
+    platformPostId: "   ",
+  });
+  expect(parsed.externalPostUrl).toBe("https://linkedin.com/feed/update/1/");
+  expect(parsed.platformPostId).toBe("");
+  for (const input of [
+    { status: "succeeded", externalPostUrl: "https://example.com/x" },
+    { status: "succeeded", externalPostUrl: "  ", platformPostId: "\t" },
+    { status: "succeeded", platformPostId: "p".repeat(201) },
+    { status: "failed", errorMessage: "   " },
+    { status: "failed", errorMessage: "e".repeat(1001) },
+  ]) {
+    expect(
+      recordPublishAttemptSchema.safeParse({ approvalId: 1, ...input }).success,
+      JSON.stringify(input),
+    ).toBe(false);
+  }
+});
+
+test("mark published rejects a non-LinkedIn URL and records nothing", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
+  await openApprovals(page);
+  await createReview(page);
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Mark published" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Record publish attempt" });
+  const recordButton = dialog.getByRole("button", { name: "Record attempt" });
+  await dialog.getByLabel("LinkedIn post URL").fill("https://example.com/x");
+  await expect(
+    dialog.getByText(
+      "LinkedIn post URL must start with https://www.linkedin.com/",
+    ),
+  ).toBeVisible();
+  await expect(recordButton).toBeDisabled();
+  expect(await getPublishAttemptCount(page)).toBe(0);
+
+  // The native command enforces the same rule when the form is bypassed.
+  const message = await page.evaluate(async () => {
+    const invoke = (
+      window as unknown as {
+        __TAURI_INTERNALS__: {
+          invoke: (command: string, args: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__.invoke;
+    try {
+      await invoke("linkgo_approval_record_publish_attempt", {
+        input: {
+          approvalId: 1,
+          status: "succeeded",
+          externalPostUrl: "https://example.com/x",
+        },
+      });
+      return "";
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  });
+  expect(message).toBe(
+    "LinkedIn post URL must start with https://www.linkedin.com/",
+  );
+  expect(await getPublishAttemptCount(page)).toBe(0);
+  await expect(getBadge(page, "Approved")).toBeVisible();
 });
 
 test("failed publish attempts require a failure reason", async ({ page }) => {
@@ -806,7 +1157,7 @@ async function setApprovalStatusThroughMockSql(
         throw new Error("Tauri invoke mock was not initialized");
       }
 
-      await invoke("plugin:sql|execute", {
+      await invoke("__linkgo_test_sql|execute", {
         query: `UPDATE approvals
         SET status = $1, updated_at = datetime('now')
         WHERE id = $2`,
@@ -868,7 +1219,7 @@ async function enableKillSwitchThroughMockSql(
       throw new Error("Tauri invoke mock was not initialized");
     }
 
-    await invoke("plugin:sql|execute", {
+    await invoke("__linkgo_test_sql|execute", {
       query: `UPDATE safety_settings
       SET global_kill_switch = $1,
         kill_switch_reason = $2,
@@ -971,7 +1322,7 @@ async function setApprovalAiAuditState(
         SET severity = 'block', message = 'AI audit blocked approval.'
         WHERE rule_key = 'safety'`,
     };
-    await invoke("plugin:sql|execute", {
+    await invoke("__linkgo_test_sql|execute", {
       query: queryByState[nextState],
       values: [],
     });
@@ -1058,7 +1409,8 @@ async function makeDraftApprovalEligible(page: Page): Promise<void> {
     const variantId = drafts[0]?.variants.find(
       (candidate) => candidate.status === "selected",
     )?.id;
-    if (variantId === undefined) throw new Error("Selected variant was not found");
+    if (variantId === undefined)
+      throw new Error("Selected variant was not found");
     await api.runDraftQualityLoop({ draftVariantId: variantId });
   });
 }

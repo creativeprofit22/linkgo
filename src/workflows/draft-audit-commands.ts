@@ -10,6 +10,7 @@ import type {
   ReconcileStalePlannerDraftAuditsResult,
 } from "@/features/drafts/types";
 import { IS_TAURI, IS_TEST } from "@/lib/env";
+import { invokeCommand, toNativeCommandError } from "@/lib/tauri";
 import type { PlannerDraftAuditProvenance } from "@/workflows/draft-audit";
 import type { PlannerDraftAuditClaim } from "@/workflows/types";
 import { z } from "zod";
@@ -78,13 +79,18 @@ async function invokeDraftAuditCommand<T>(
 ): Promise<T> {
   const injected = getInjectedInvoke();
   if (injected) {
-    return resultSchema.parse(await injected(command, { input }));
+    let result: unknown;
+    try {
+      result = await injected(command, { input });
+    } catch (error: unknown) {
+      throw toNativeCommandError(error);
+    }
+    return resultSchema.parse(result);
   }
   if (!IS_TAURI) {
     throw new Error("Planner draft auditing requires the Linkgo desktop app");
   }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return resultSchema.parse(await invoke<unknown>(command, { input }));
+  return resultSchema.parse(await invokeCommand(command, { input }));
 }
 
 export function claimNativePlannerDraftAudit(

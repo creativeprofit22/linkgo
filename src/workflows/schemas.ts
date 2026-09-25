@@ -72,3 +72,13 @@ export const createWorkflowArtifactSchema = z.object({
   artifactId: positiveIdSchema,
   summary: optionalSummarySchema,
 });
+
+/** Native result of the workflow mutation commands: the affected row id. */
+export const workflowMutationResultSchema = z
+  .object({ id: positiveIdSchema })
+  .strict();
+
+/** Native result of `linkgo_workflow_resume_run`. */
+export const resumeWorkflowRunResultSchema = z
+  .object({ linkedAgentIsActive: z.boolean() })
+  .strict();

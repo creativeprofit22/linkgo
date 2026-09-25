@@ -3,13 +3,12 @@ import {
   applyDraftQualityScore,
   claimDraftQuality,
   completeDraftAiAuditRun,
-  consumeCompletedDraftAiAuditOutput,
   continueDraftQuality,
   failDraftQuality,
   resumeDraftQuality,
 } from "@/features/drafts/data";
-import { getDb } from "@/lib/db";
 import { draftQualityScoreInputSchema } from "@/features/drafts/schemas";
+import { toDraftQualitySettlement } from "@/features/drafts/quality-settlement";
 import type {
   ClaimDraftQualityInput,
   ContinueDraftQualityInput,
@@ -44,23 +43,9 @@ async function scoreClaim(
       throw new Error(
         "Quality provider identity did not match the durable claim",
       );
-    const settlement = await applyDraftQualityScore({
-      campaignId: parsed.campaignId,
-      draftVariantId: parsed.draftVariantId,
-      qualityRunId: parsed.qualityRunId,
-      attemptId: parsed.attemptId,
-      contentRevision: parsed.contentRevision,
-      hook: parsed.hook,
-      body: parsed.body,
-      cta: parsed.cta,
-      hashtags: parsed.hashtags,
-      threshold: parsed.threshold,
-      rewriteAllowed: parsed.rewriteAllowed,
-      priorCategoryFeedback: parsed.priorCategoryFeedback,
-      categoryScores: parsed.categoryScores,
-      ...(parsed.rewrite === undefined ? {} : { rewrite: parsed.rewrite }),
-      agentRunId: claim.agentRunId,
-    });
+    const settlement = await applyDraftQualityScore(
+      toDraftQualitySettlement(parsed, claim.agentRunId),
+    );
     const result = settlement as {
       status?: string;
       aiAuditRunId?: number | null;
@@ -75,30 +60,12 @@ async function scoreClaim(
       parsed.rewrite !== undefined
     ) {
       await startAgentRun({ id: result.agentRunId });
-      const db = await getDb();
-      const text = [
-        parsed.rewrite.hook,
-        parsed.rewrite.body,
-        parsed.rewrite.cta,
-        parsed.rewrite.hashtags,
-      ].join("\n\n");
-      const auditOutput = await consumeCompletedDraftAiAuditOutput(
-        db,
-        {
-          campaignId: claim.campaignId,
-          draftVariantId: claim.draftVariantId,
-          contentRevision: result.contentRevision,
-          auditRunId: result.aiAuditRunId,
-          text,
-        },
-        result.agentRunId,
-      );
+      // Native completion reads the rewrite auditor's own findings and checks
+      // them against the stored rewrite text.
       await completeDraftAiAuditRun({
         auditRunId: result.aiAuditRunId,
         draftVariantId: claim.draftVariantId,
         contentRevision: result.contentRevision,
-        summary: auditOutput.summary,
-        findings: auditOutput.findings,
       });
       const next = (await continueDraftQuality({
         qualityRunId: claim.qualityRunId,

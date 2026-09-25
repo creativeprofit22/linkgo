@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { normalizedSourceConnectorBatchInputSchema } from "@/features/source-imports/connectors";
+import { sourceImportBatchStatusSchema } from "@/features/source-imports/record-schemas";
 import type { PreparedSourceImportBatchInput } from "@/features/source-imports/types";
 
 export const MAX_SOURCE_IMPORT_ROWS = 50;
@@ -36,28 +37,6 @@ const SOURCE_IMPORT_FIELD_LABELS: Record<
   sourceKeyword: "Source keyword",
   notes: "Notes",
 };
-
-export const sourceImportBatchStatusSchema = z.enum([
-  "processing",
-  "completed",
-  "completed_with_errors",
-  "failed",
-]);
-
-export const sourceImportItemStatusSchema = z.enum([
-  "pending",
-  "accepted",
-  "duplicate",
-  "rejected",
-]);
-
-export const sourceImportPolicyRuleKeySchema = z.enum([
-  "",
-  "source",
-  "age",
-  "banned_topic",
-  "already_contacted",
-]);
 
 export const sourceImportRowSchema = z.strictObject({
   url: z.string().trim().min(1, "LinkedIn post URL is required").max(1000),
@@ -225,3 +204,14 @@ export function parseSourceImportText(
     }),
   };
 }
+
+/** Native result of `linkgo_source_import_write_batch`. */
+export const sourceImportBatchResultSchema = z.strictObject({
+  batchId: z.number().int().positive(),
+  status: sourceImportBatchStatusSchema,
+  totalCount: z.number().int().min(1).max(MAX_SOURCE_IMPORT_ROWS),
+  acceptedCount: z.number().int().min(0),
+  duplicateCount: z.number().int().min(0),
+  rejectedCount: z.number().int().min(0),
+  errorMessage: z.string(),
+});

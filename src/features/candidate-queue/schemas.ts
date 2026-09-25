@@ -182,3 +182,89 @@ export const dismissDiscoveryItemSchema = z.object({
   id: z.number().int().positive(),
   campaignId: z.number().int().positive(),
 });
+
+export const candidateIdSchema = z.number().int().positive();
+
+/** Native result of the candidate mutation commands: the affected row id. */
+export const candidateMutationResultSchema = z
+  .object({ id: z.number().int().positive() })
+  .strict();
+
+/** Native list caps (see `src-tauri/src/candidate_queue_store.rs`). */
+export const CANDIDATE_LIST_LIMIT = 500;
+export const DISCOVERY_LIST_LIMIT = 200;
+
+const rowIdSchema = z.number().int().positive();
+
+/** Native `linkgo_candidate_list` row: a candidate joined with its target. */
+export const candidateWithTargetRowSchema = z
+  .object({
+    id: rowIdSchema,
+    campaign_id: rowIdSchema,
+    target_post_id: rowIdSchema,
+    source_keyword: z.string(),
+    status: candidateStatusSchema,
+    relevance_score: z.number().int().min(0).max(100).nullable(),
+    score_reason: z.string(),
+    notes: z.string(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    campaign_name: z.string(),
+    target_id: rowIdSchema,
+    target_platform: candidatePlatformSchema,
+    target_url: z.string(),
+    target_normalized_url: z.string(),
+    target_platform_resource_urn: z.string(),
+    target_author_name: z.string(),
+    target_author_profile_url: z.string(),
+    target_posted_at: z.string().nullable(),
+    target_content: z.string(),
+    target_content_hash: z.string(),
+    target_created_at: z.string(),
+    target_updated_at: z.string(),
+  })
+  .strict();
+
+export const candidateWithTargetRowListSchema = z
+  .array(candidateWithTargetRowSchema)
+  .max(CANDIDATE_LIST_LIMIT);
+
+/**
+ * Native `linkgo_candidate_list` result: the capped rows plus `totalCount`,
+ * the number of candidates matching the filter before the cap.
+ */
+export const candidateListPageSchema = z.strictObject({
+  rows: candidateWithTargetRowListSchema,
+  totalCount: z.number().int().nonnegative(),
+});
+
+/** Native discovery-item row (list and `research_posts` insert results). */
+export const candidateDiscoveryItemRowSchema = z
+  .object({
+    id: rowIdSchema,
+    campaign_id: rowIdSchema,
+    agent_run_id: rowIdSchema.nullable(),
+    workflow_run_id: rowIdSchema.nullable(),
+    kind: candidateDiscoveryKindSchema,
+    title: z.string(),
+    keyword: z.string(),
+    rationale: z.string(),
+    source_keyword: z.string(),
+    confidence_score: z.number().int().min(0).max(100).nullable(),
+    status: candidateDiscoveryStatusSchema,
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .strict();
+
+export const candidateDiscoveryItemListSchema = z
+  .array(candidateDiscoveryItemRowSchema)
+  .max(DISCOVERY_LIST_LIMIT);
+
+/** Native `linkgo_candidate_agent_run_context` result. */
+export const candidateAgentRunContextSchema = z
+  .object({
+    seedKeywords: z.array(z.string()).max(12),
+    scoringCandidateIds: z.array(rowIdSchema).max(50),
+  })
+  .strict();

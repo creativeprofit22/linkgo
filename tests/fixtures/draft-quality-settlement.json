@@ -1,0 +1,35 @@
+{
+  "qualityRunId": 1,
+  "draftVariantId": 1,
+  "attemptId": 1,
+  "contentRevision": 1,
+  "agentRunId": 1,
+  "categoryScores": [
+    {
+      "categoryKey": "hook_strength",
+      "score": 78,
+      "feedback": "The hook is concrete."
+    },
+    {
+      "categoryKey": "authenticity",
+      "score": 78,
+      "feedback": "The voice matches the supplied draft."
+    },
+    {
+      "categoryKey": "linkedin_fit",
+      "score": 78,
+      "feedback": "The format fits the audience."
+    },
+    {
+      "categoryKey": "specificity",
+      "score": 78,
+      "feedback": "The example is specific."
+    },
+    {
+      "categoryKey": "narrative_structure",
+      "score": 78,
+      "feedback": "The argument has a clear progression."
+    }
+  ],
+  "summary": "Revision 1: overall quality 78/100 (threshold 70). hook_strength: 78/100; authenticity: 78/100; linkedin_fit: 78/100; specificity: 78/100; narrative_structure: 78/100."
+}

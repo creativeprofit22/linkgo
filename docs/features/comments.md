@@ -37,7 +37,6 @@ The first slice keeps one comment thread per candidate target through `UNIQUE(ca
 
 Public functions live in `src/features/comments/data.ts`:
 
-- `auditCommentVariant(body)`
 - `getCommentAuditSeverity(findings)`
 - `listCommentThreads(campaignId?)`
 - `listCommentEligibleCandidates(campaignId?)`
@@ -50,6 +49,15 @@ Public functions live in `src/features/comments/data.ts`:
 - `recordCommentAttempt(input)`
 
 Inputs are validated in `src/features/comments/schemas.ts`.
+
+The five mutations and the publish gate are native commands in `src-tauri/src/comment_threads.rs`: `linkgo_comment_thread_create`, `linkgo_comment_thread_update`, `linkgo_comment_variant_update`, `linkgo_comment_variant_set_status`, `linkgo_comment_thread_set_status` (each returns `{ id }`) and `linkgo_comment_assert_can_publish`. Each re-reads the thread, variant and campaign and writes on one pinned `BEGIN IMMEDIATE` connection, so any failure rolls back every row. Inputs reject unknown fields. The publish gate compares `commentary` with the escaped selected variant byte-for-byte, re-resolves the target URN and requires the `comment-thread:{id}:linkedin:` idempotency prefix. Kill-switch and daily-limit rejections still commit their blocked rate-limit event. Real-SQLite tests: `src-tauri/src/comment_threads_tests.rs`.
+
+Reads are native too (`src-tauri/src/comment_reads.rs`); the renderer has no direct SQL access to comment tables.
+
+- `linkgo_comment_thread_list` returns up to 500 threads, open ones first, with their variants, audits and attempts, plus `totalCount` (threads matching the filter before the cap), all read in one transaction. `listCommentThreadPage` returns `{ items, totalCount }`; `listCommentThreads` returns only the items. When truncated, the Comments screen shows "Showing the first 500 of N", uses `totalCount` for Total, and labels status counts as covering the shown rows.
+- `linkgo_comment_eligible_candidates` returns up to 200 shortlisted or drafted candidates that have no thread yet.
+
+Response shapes are checked by strict schemas in `src/features/comments/record-schemas.ts`. Tests: `src-tauri/src/comment_reads_tests.rs`.
 
 The local comment body cap is 1,250 characters. This is a Linkgo conservative cap, not a verified LinkedIn API limit.
 
@@ -67,7 +75,7 @@ The local comment body cap is 1,250 characters. This is a Linkgo conservative ca
 
 ## Audit rules
 
-Deterministic local rules check:
+Audit findings are computed natively (`src-tauri/src/comment_audit.rs`) whenever a variant is created or its body changes, so the renderer cannot supply its own findings. The port keeps the old renderer semantics: length counts UTF-16 units, and `\b` and digits are ASCII-only. Deterministic rules check:
 
 - Required non-empty body.
 - Linkgo 1,250-character cap.

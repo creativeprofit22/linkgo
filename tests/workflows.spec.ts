@@ -1723,8 +1723,12 @@ test("reconciles workflow-linked schedule rejection", async ({ page }) => {
   await prepareWorkflowLinkedScheduleAgent(page);
 
   await openApprovals(page);
-  page.once("dialog", async (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Reject" }).click();
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Reject this approval?" })
+    .getByRole("button", { name: "Reject approval" })
+    .click();
+  await expect(page.getByRole("dialog")).toBeHidden();
 
   const trace = await getWorkflowTraceState(page);
   expect(trace.runs[0]).toMatchObject({
@@ -1746,6 +1750,55 @@ test("reconciles workflow-linked schedule rejection", async ({ page }) => {
       expect.objectContaining({ event_type: "step_blocked" }),
     ]),
   );
+});
+
+test("records the reviewer's rejection reason on linked workflow runs", async ({
+  page,
+}) => {
+  const reason = "Tone is off-brand for this author";
+  await prepareWorkflowLinkedScheduleAgent(page);
+
+  await openApprovals(page);
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  const confirmation = page.getByRole("dialog", {
+    name: "Reject this approval?",
+  });
+  await confirmation.getByLabel("Reason (optional)").fill(reason);
+  await expect(confirmation).toContainText(`${reason.length}/1000`);
+  await confirmation.getByRole("button", { name: "Reject approval" }).click();
+  await expect(confirmation).toBeHidden();
+
+  await expect(page.getByText("Reviewer notes")).toBeVisible();
+  await expect(page.getByText(reason, { exact: true })).toBeVisible();
+
+  const trace = await getWorkflowTraceState(page);
+  expect(
+    trace.steps.find((step) => step.step_key === "schedule"),
+  ).toMatchObject({
+    status: "blocked",
+    error_message: `Approval rejected: ${reason}`,
+  });
+  expect(trace.executions[0]).toMatchObject({
+    status: "cancelled",
+    error_summary: `Approval rejected: ${reason}`,
+  });
+  const agentRuns = await page.evaluate(() => {
+    const readAgentRuns = (
+      window as unknown as {
+        __LINKGO_SQL_AGENT_RUNS__?: () => Array<{
+          id: number;
+          status: string;
+          error_message: string;
+        }>;
+      }
+    ).__LINKGO_SQL_AGENT_RUNS__;
+    if (!readAgentRuns) throw new Error("Agent run test state is unavailable");
+    return readAgentRuns();
+  });
+  expect(agentRuns.find((run) => run.id === 1)).toMatchObject({
+    status: "cancelled",
+    error_message: `Approval rejected: ${reason}`,
+  });
 });
 
 test("cancels a failed workflow-linked schedule continuation", async ({
@@ -2010,7 +2063,7 @@ async function executeSql(
       }
     ).__TAURI_INTERNALS__;
     if (!internals) throw new Error("Tauri mocks unavailable");
-    return internals.invoke("plugin:sql|execute", sqlArgs);
+    return internals.invoke("__linkgo_test_sql|execute", sqlArgs);
   }, args);
 }
 
@@ -2166,11 +2219,28 @@ async function seedWorkflowApproval(page: Page): Promise<void> {
       "UPDATE drafts SET status = 'ready_for_review', updated_at = datetime('now') WHERE id = $1",
     values: [1],
   });
+  await seedApprovalReadiness(page, 1);
   await executeSql(page, {
     query:
       "INSERT INTO approvals (campaign_id, draft_id, draft_variant_id, status, reviewer_notes, updated_at) VALUES ($1, $2, $3, 'needs_review', $4, datetime('now'))",
     values: [1, 1, 1, "Review workflow-linked schedule metadata."],
   });
+}
+
+async function seedApprovalReadiness(
+  page: Page,
+  draftVariantId: number,
+): Promise<void> {
+  await page.evaluate((variantId) => {
+    const seed = (
+      window as unknown as {
+        __LINKGO_SQL_SEED_APPROVAL_READINESS__?: (variantId: number) => void;
+      }
+    ).__LINKGO_SQL_SEED_APPROVAL_READINESS__;
+    if (seed === undefined)
+      throw new Error("Approval readiness seed API unavailable");
+    seed(variantId);
+  }, draftVariantId);
 }
 
 async function readArchivedDraftMutationState(page: Page) {

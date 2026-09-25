@@ -20,6 +20,7 @@ import {
   type CreateSourceImportBatchInput,
   type SourceImportBatchResult,
 } from "@/features/source-imports";
+import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -40,6 +41,7 @@ const statusHeadings: Record<CandidateStatus, string> = {
 export function CandidateQueueView(): React.ReactNode {
   const {
     candidates,
+    candidateTotalCount,
     discoveryItems,
     campaigns,
     selectedCampaignId,
@@ -61,7 +63,14 @@ export function CandidateQueueView(): React.ReactNode {
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
   const sourceImports = useSourceImports(selectedCampaignId);
   const candidatePolicy = useCandidatePolicy(selectedCampaignId);
-  const summary = getCandidateSummary(candidates, discoveryItems.length);
+  const summary = getCandidateSummary(
+    candidates,
+    candidateTotalCount,
+    discoveryItems.length,
+  );
+  // Scored/shortlisted/average and per-status counts are computed from the
+  // capped rows; label them when the list is truncated.
+  const shownSuffix = summary.truncated ? " (shown)" : "";
   const groupedCandidates = groupCandidatesByStatus(candidates);
 
   const handleSourceImport = async (
@@ -188,13 +197,25 @@ export function CandidateQueueView(): React.ReactNode {
               label="Suggestions"
               value={String(summary.suggestions)}
             />
-            <SummaryCard label="Scored" value={String(summary.scored)} />
             <SummaryCard
-              label="Shortlisted"
+              label={`Scored${shownSuffix}`}
+              value={String(summary.scored)}
+            />
+            <SummaryCard
+              label={`Shortlisted${shownSuffix}`}
               value={String(summary.shortlisted)}
             />
-            <SummaryCard label="Average score" value={summary.averageScore} />
+            <SummaryCard
+              label={`Average score${shownSuffix}`}
+              value={summary.averageScore}
+            />
           </div>
+
+          <ListTruncationNotice
+            shownCount={candidates.length}
+            totalCount={candidateTotalCount}
+            noun="candidates"
+          />
 
           <section className="space-y-3">
             <div className="flex items-center justify-between">
@@ -260,6 +281,7 @@ export function CandidateQueueView(): React.ReactNode {
                       <span className="text-muted-foreground text-xs">
                         {statusCandidates.length} candidate
                         {statusCandidates.length === 1 ? "" : "s"}
+                        {summary.truncated ? " shown" : ""}
                       </span>
                     </div>
                     <div className="grid gap-4 xl:grid-cols-2">
@@ -285,9 +307,11 @@ export function CandidateQueueView(): React.ReactNode {
 
 function getCandidateSummary(
   candidates: CandidateWithTarget[],
+  totalCount: number,
   suggestionCount: number,
 ): {
   total: number;
+  truncated: boolean;
   suggestions: number;
   scored: number;
   shortlisted: number;
@@ -303,7 +327,8 @@ function getCandidateSummary(
   );
 
   return {
-    total: candidates.length,
+    total: Math.max(totalCount, candidates.length),
+    truncated: totalCount > candidates.length,
     suggestions: suggestionCount,
     scored: scoredCandidates.length,
     shortlisted: candidates.filter(

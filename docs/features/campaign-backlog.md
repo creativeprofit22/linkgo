@@ -26,6 +26,8 @@ Each row stores:
 
 Campaign deletion cascades backlog rows. Deleting a recurrence parent clears `recurrence_parent_id` on its successor so later history remains readable. `autopilot_plans.campaign_backlog_item_id` is a unique optional reverse link; deleting a planner-created backlog row clears that plan link without reopening the source batch.
 
+The dashboard read is native (`linkgo_campaign_backlog_dashboard` in `src-tauri/src/planning_reads.rs`). It takes an optional positive campaign, an owner filter (`all`, `operator` or `linkgo`) and a view (`open` or `history`), and rejects unknown fields and any other value; filter values are always bound, never built into the SQL. The items, open-work summary and total count come from one transaction. Open items are capped at 500 (previously unbounded) and history keeps its 100-row cap. Tests: `src-tauri/src/planning_reads_tests.rs`.
+
 ## Data contracts
 
 `src/features/campaign-backlog/data.ts` exports:

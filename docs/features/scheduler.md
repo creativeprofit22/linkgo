@@ -20,6 +20,7 @@ Native commands:
 - `linkgo_scheduler_start`
 - `linkgo_scheduler_stop`
 - `linkgo_scheduler_tick`
+- `linkgo_scheduler_dashboard_get` (`src-tauri/src/scheduler_store.rs`): the renderer's only scheduler read. It takes an optional positive `campaignId` and rejects unknown fields. It recreates a missing settings row and returns the settings, the kill switch, summary counts, up to 20 due jobs, 50 recent events and 25 recent attempts, all from one transaction. The renderer has no direct SQL access to scheduler tables. Tests: `src-tauri/src/scheduler_store_tests.rs`.
 
 ## Schema
 

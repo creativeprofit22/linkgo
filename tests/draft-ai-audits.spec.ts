@@ -66,7 +66,7 @@ async function seedUnrelatedCampaign(page: Page): Promise<number> {
       }
     ).__TAURI_INTERNALS__;
     if (internals === undefined) throw new Error("Tauri mocks unavailable");
-    const result = (await internals.invoke("plugin:sql|execute", {
+    const result = (await internals.invoke("__linkgo_test_sql|execute", {
       query: `INSERT INTO campaigns (
         name, product, audience, voice, tone, auto_pilot,
         daily_post_limit, daily_comment_limit, updated_at
@@ -132,7 +132,7 @@ async function replaceStoredVariantAuditText(
         }
       ).__TAURI_INTERNALS__;
       if (internals === undefined) throw new Error("Tauri mocks unavailable");
-      await internals.invoke("plugin:sql|execute", {
+      await internals.invoke("__linkgo_test_sql|execute", {
         query: `UPDATE draft_variants
           SET hook = $1, body = $2, cta = $3, hashtags = $4
           WHERE id = $5`,
@@ -527,12 +527,24 @@ test("starts one exact-revision run and completes with six findings", async ({
       } catch (error) {
         duplicateError = error instanceof Error ? error.message : String(error);
       }
+      // The auditor's own persisted output is what native completion reads.
+      await (
+        window as unknown as {
+          __TAURI_INTERNALS__: {
+            invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+          };
+        }
+      ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+        input: {
+          auditRunId: run.id,
+          summary: "Six provider-authored findings accepted.",
+          findings: findings,
+        },
+      });
       await data.completeDraftAiAuditRun({
         auditRunId: run.id,
         draftVariantId: variant.id,
         contentRevision: variant.contentRevision,
-        summary: "Six provider-authored findings accepted.",
-        findings,
       });
       return { run, duplicateError };
     },
@@ -589,11 +601,23 @@ test("listDrafts exposes only current-revision AI audit state", async ({
         draftVariantId: variants.completed.id,
         contentRevision: variants.completed.contentRevision,
       });
+      // The auditor's own persisted output is what native completion reads.
+      await (
+        window as unknown as {
+          __TAURI_INTERNALS__: {
+            invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+          };
+        }
+      ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+        input: {
+          auditRunId: completedRun.id,
+          findings: [...findings].reverse(),
+        },
+      });
       await data.completeDraftAiAuditRun({
         auditRunId: completedRun.id,
         draftVariantId: variants.completed.id,
         contentRevision: variants.completed.contentRevision,
-        findings: [...findings].reverse(),
       });
 
       const failedRun = await data.startDraftAiAuditRun({
@@ -611,11 +635,20 @@ test("listDrafts exposes only current-revision AI audit state", async ({
         draftVariantId: variants.staleCompleted.id,
         contentRevision: variants.staleCompleted.contentRevision,
       });
+      // The auditor's own persisted output is what native completion reads.
+      await (
+        window as unknown as {
+          __TAURI_INTERNALS__: {
+            invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+          };
+        }
+      ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+        input: { auditRunId: staleRun.id, findings: findings },
+      });
       await data.completeDraftAiAuditRun({
         auditRunId: staleRun.id,
         draftVariantId: variants.staleCompleted.id,
         contentRevision: variants.staleCompleted.contentRevision,
-        findings,
       });
       await data.updateDraftVariant({
         id: variants.staleCompleted.id,
@@ -700,12 +733,24 @@ test("keeps the current AI audit revision for normalized no-op edits", async ({
         .__LINKGO_SQL_DRAFT_VARIANTS__()
         .find((candidate) => candidate.id === variant.id);
 
+      // The auditor's own persisted output is what native completion reads.
+      await (
+        window as unknown as {
+          __TAURI_INTERNALS__: {
+            invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+          };
+        }
+      ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+        input: {
+          auditRunId: run.id,
+          summary: "The normalized no-op preserved this audit revision.",
+          findings: findings,
+        },
+      });
       await data.completeDraftAiAuditRun({
         auditRunId: run.id,
         draftVariantId: variant.id,
         contentRevision: variant.contentRevision,
-        summary: "The normalized no-op preserved this audit revision.",
-        findings,
       });
 
       return storedVariant;
@@ -790,11 +835,20 @@ test("rejects stale revisions and records a failure for the original run", async
 
       let completionError = "";
       try {
+        // The auditor's own persisted output is what native completion reads.
+        await (
+          window as unknown as {
+            __TAURI_INTERNALS__: {
+              invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+            };
+          }
+        ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+          input: { auditRunId: run.id, findings: findings },
+        });
         await data.completeDraftAiAuditRun({
           auditRunId: run.id,
           draftVariantId: variant.id,
           contentRevision: variant.contentRevision,
-          findings,
         });
       } catch (error) {
         completionError =
@@ -867,11 +921,20 @@ test("validates six categories before writing and rolls back partial completion"
       }));
       let validationError = "";
       try {
+        // The auditor's own persisted output is what native completion reads.
+        await (
+          window as unknown as {
+            __TAURI_INTERNALS__: {
+              invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+            };
+          }
+        ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+          input: { auditRunId: run.id, findings: duplicateFindings },
+        });
         await data.completeDraftAiAuditRun({
           auditRunId: run.id,
           draftVariantId: variant.id,
           contentRevision: variant.contentRevision,
-          findings: duplicateFindings,
         });
       } catch (error) {
         validationError =
@@ -885,11 +948,20 @@ test("validates six categories before writing and rolls back partial completion"
       ).__LINKGO_FAIL_DRAFT_AI_AUDIT_FINDING_INSERT_AT__ = 3;
       let insertionError = "";
       try {
+        // The auditor's own persisted output is what native completion reads.
+        await (
+          window as unknown as {
+            __TAURI_INTERNALS__: {
+              invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+            };
+          }
+        ).__TAURI_INTERNALS__.invoke("linkgo_test_record_auditor_output", {
+          input: { auditRunId: run.id, findings: findings },
+        });
         await data.completeDraftAiAuditRun({
           auditRunId: run.id,
           draftVariantId: variant.id,
           contentRevision: variant.contentRevision,
-          findings,
         });
       } catch (error) {
         insertionError = error instanceof Error ? error.message : String(error);

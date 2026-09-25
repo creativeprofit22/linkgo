@@ -1,5 +1,10 @@
 import { z } from "zod";
+import type { InvokeArgs } from "@tauri-apps/api/core";
 import { IS_TEST, IS_TAURI } from "@/lib/env";
+import {
+  invokeCommand as invokeNativeCommand,
+  toNativeCommandError,
+} from "@/lib/tauri";
 import { agentProviderKeySchema } from "@/agent/schemas";
 import {
   AGENT_TOOL_NAMES,
@@ -51,12 +56,17 @@ function getInjectedInvoke(): InvokeFn | null {
 
 async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
   const injected = getInjectedInvoke();
-  if (injected) return injected(cmd, args);
+  if (injected) {
+    try {
+      return await injected(cmd, args);
+    } catch (error: unknown) {
+      throw toNativeCommandError(error);
+    }
+  }
   if (!IS_TAURI) {
     throw new Error("Provider-backed agent runs require the Tauri runtime");
   }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke(cmd, args as Record<string, unknown> | undefined);
+  return invokeNativeCommand(cmd, args as InvokeArgs | undefined);
 }
 
 export interface TauriAgentProviderCommandInput extends AgentProviderStreamOptions {

@@ -1,6 +1,7 @@
 import { relevanceScoringContextSchema } from "@/features/candidate-queue/schemas";
 import type { RelevanceScoringContext } from "@/features/candidate-queue/types";
-import { getDb, type LinkgoDatabase } from "@/lib/db";
+import { invokeCommand } from "@/lib/tauri";
+import { plannerScoringScopeRowsSchema } from "@/workflows/record-schemas";
 import {
   claimNativeRelevanceScoring,
   failNativeRelevanceScoring,
@@ -96,41 +97,11 @@ function compactExcerpt(content: string): string {
   return content.trim().replace(/\s+/gu, " ").slice(0, 1_200);
 }
 
-async function loadHeader(
-  db: LinkgoDatabase,
-  workflowRunId: number,
-): Promise<PlannerScoringHeaderRow> {
-  const rows = await db.select<PlannerScoringHeaderRow[]>(
-    `SELECT
-      wr.id AS workflow_run_id,
-      wr.status AS workflow_status,
-      wr.current_step_key,
-      ws.id AS workflow_step_id,
-      ws.status AS score_step_status,
-      c.id AS campaign_id,
-      c.name AS campaign_name,
-      c.product AS campaign_product,
-      c.audience AS campaign_audience,
-      c.voice AS campaign_voice,
-      c.tone AS campaign_tone,
-      c.status AS campaign_status,
-      ap.id AS autopilot_plan_id,
-      ap.status AS plan_status,
-      ap.source_import_batch_id,
-      sib.campaign_id AS source_campaign_id
-    FROM workflow_runs wr
-    INNER JOIN campaigns c ON c.id = wr.campaign_id
-    INNER JOIN workflow_steps ws
-      ON ws.workflow_run_id = wr.id
-     AND ws.step_key = 'score'
-    INNER JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
-    INNER JOIN source_import_batches sib ON sib.id = ap.source_import_batch_id
-    WHERE wr.id = $1
-    LIMIT 1`,
-    [workflowRunId],
-  );
-  const header = rows[0];
-  if (header === undefined) {
+/** Validates the planner scope header; messages are unchanged. */
+function assertHeader(
+  header: PlannerScoringHeaderRow | null,
+): PlannerScoringHeaderRow {
+  if (header === null) {
     throw new Error("Planner scoring workflow scope was not found");
   }
   if (header.plan_status !== "planned") {
@@ -154,37 +125,21 @@ async function loadHeader(
   return header;
 }
 
+/**
+ * Loads the planner scoring scope. The header, candidate artifacts (capped at
+ * 500) and campaign keywords are read natively in one transaction
+ * (`workflow_store::planner_scoring_scope`); validation stays here.
+ */
 export async function loadPlannerScoringScope(
   workflowRunId: number,
-  existingDb?: LinkgoDatabase,
 ): Promise<PlannerScoringScope> {
-  const db = existingDb ?? (await getDb());
-  const header = await loadHeader(db, workflowRunId);
-  const artifactRows = await db.select<PlannerCandidateArtifactRow[]>(
-    `SELECT
-      wa.artifact_id,
-      wa.id AS artifact_order,
-      wa.workflow_step_id,
-      cp.id AS candidate_id,
-      cp.campaign_id AS candidate_campaign_id,
-      cp.status AS candidate_status,
-      cp.relevance_score,
-      cp.source_keyword,
-      tp.author_name,
-      tp.author_profile_url,
-      tp.posted_at,
-      tp.url AS source_url,
-      tp.content
-    FROM workflow_artifacts wa
-    LEFT JOIN candidate_posts cp
-      ON wa.artifact_type = 'candidate_post'
-     AND cp.id = wa.artifact_id
-    LEFT JOIN target_posts tp ON tp.id = cp.target_post_id
-    WHERE wa.workflow_run_id = $1
-      AND wa.artifact_type = 'candidate_post'
-    ORDER BY wa.id ASC, wa.artifact_id ASC`,
-    [workflowRunId],
+  const rows = plannerScoringScopeRowsSchema.parse(
+    await invokeCommand("linkgo_workflow_planner_scoring_scope", {
+      input: { id: workflowRunId },
+    }),
   );
+  const header = assertHeader(rows.header);
+  const artifactRows: PlannerCandidateArtifactRow[] = rows.artifacts;
   if (artifactRows.length === 0) {
     throw new Error("No candidate scope is attached to this score step");
   }
@@ -226,13 +181,6 @@ export async function loadPlannerScoringScope(
     });
   }
 
-  const keywordRows = await db.select<Array<{ keyword: string }>>(
-    `SELECT keyword FROM campaign_keywords
-      WHERE campaign_id = $1
-      ORDER BY id ASC
-      LIMIT 12`,
-    [header.campaign_id],
-  );
   const alreadyScoredCandidates = currentCandidates.filter(
     (candidate) => candidate.relevanceScore !== null,
   );
@@ -267,7 +215,7 @@ export async function loadPlannerScoringScope(
       audience: header.campaign_audience,
       voice: header.campaign_voice,
       tone: header.campaign_tone,
-      keywords: keywordRows.map((row) => row.keyword),
+      keywords: rows.keywords,
     },
   };
 }

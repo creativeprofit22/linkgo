@@ -32,7 +32,9 @@ test("settings page renders launch-on-login state", async ({ page }) => {
 
   await expect(page.getByText("Startup", { exact: true })).toBeVisible();
   await expect(page.getByText("Launch Linkgo at login")).toBeVisible();
-  await expect(page.getByRole("switch", { name: "Launch Linkgo at login" })).toBeVisible();
+  await expect(
+    page.getByRole("switch", { name: "Launch Linkgo at login" }),
+  ).toBeVisible();
   await expect(page.getByText("Status: Disabled")).toBeVisible();
 });
 
@@ -92,12 +94,16 @@ test("launch-on-login failure keeps previous state and shows error", async ({
 }) => {
   await openSettings(page);
   await page.evaluate(() => {
-    (window as unknown as Record<string, unknown>).__LINKGO_FAIL_AUTOSTART_ENABLE__ = true;
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_FAIL_AUTOSTART_ENABLE__ = true;
   });
 
   await page.getByRole("switch", { name: "Launch Linkgo at login" }).click();
   await expect(page.getByText("Status: Disabled")).toBeVisible();
-  await expect(page.getByText("Last error: Autostart enable failed")).toBeVisible();
+  await expect(
+    page.getByText("Last error: Autostart enable failed"),
+  ).toBeVisible();
 
   const row = await getAppSettings(page);
   expect(row.launch_on_login_enabled).toBe(0);

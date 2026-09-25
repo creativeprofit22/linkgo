@@ -36,11 +36,6 @@
     "global-shortcut:allow-register-all",
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-unregister-all",
-    "sql:default",
-    "sql:allow-execute",
-    "sql:allow-select",
-    "sql:allow-close",
-    "sql:allow-load",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled"

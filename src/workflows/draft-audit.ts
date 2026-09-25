@@ -4,33 +4,15 @@ import {
 } from "@/agent/provider-catalog";
 import { agentProviderKeySchema } from "@/agent/schemas";
 import { startAgentRun } from "@/features/agent-runtime/data";
-import {
-  boundDraftAiAuditError,
-  consumeCompletedDraftAiAuditOutput,
-  loadDraftAiAuditSnapshot,
-  parseCanonicalDraftAuditText,
-} from "@/features/drafts/data";
-import { getDb, type LinkgoDatabase } from "@/lib/db";
+import { boundDraftAiAuditError } from "@/features/drafts/data";
+import { invokeCommand } from "@/lib/tauri";
+import { plannerDraftAuditScopeRowsSchema } from "@/workflows/record-schemas";
 import {
   claimNativePlannerDraftAudit,
   completeNativePlannerDraftAudit,
   failNativePlannerDraftAudit,
 } from "@/workflows/draft-audit-commands";
 import type { WorkflowRunWithDetails } from "@/workflows/types";
-
-interface PlannerDraftAuditScopeRow {
-  campaign_id: number;
-  workflow_step_id: number;
-  draft_id: number;
-  request_id: number;
-  provider_key: string;
-  model_name: string;
-  request_run_id: number | null;
-  request_step_id: number | null;
-  request_campaign_id: number;
-  created_draft_id: number | null;
-  draft_campaign_id: number;
-}
 
 export interface PlannerDraftAuditProvenance {
   workflowRunId: number;
@@ -50,7 +32,6 @@ export interface PlannerDraftAuditExecutorResult {
 }
 
 export async function loadPlannerDraftAuditProvenance(
-  db: LinkgoDatabase,
   run: WorkflowRunWithDetails,
 ): Promise<PlannerDraftAuditProvenance> {
   if (run.autopilot_plan_id === null || run.current_step_key !== "audit") {
@@ -62,33 +43,12 @@ export async function loadPlannerDraftAuditProvenance(
     throw new Error("Planner draft audit steps were not found");
   }
 
-  const rows = await db.select<PlannerDraftAuditScopeRow[]>(
-    `SELECT
-      wr.campaign_id,
-      ws.id AS workflow_step_id,
-      wa.artifact_id AS draft_id,
-      dgr.id AS request_id,
-      dgr.provider_key,
-      dgr.model_name,
-      dgr.workflow_run_id AS request_run_id,
-      dgr.workflow_step_id AS request_step_id,
-      dgr.campaign_id AS request_campaign_id,
-      dgr.created_draft_id,
-      d.campaign_id AS draft_campaign_id
-    FROM workflow_runs wr
-    INNER JOIN workflow_steps ws
-      ON ws.workflow_run_id = wr.id AND ws.step_key = 'audit'
-    INNER JOIN workflow_artifacts wa
-      ON wa.workflow_run_id = wr.id AND wa.artifact_type = 'draft'
-    INNER JOIN drafts d ON d.id = wa.artifact_id
-    INNER JOIN draft_generation_requests dgr
-      ON dgr.created_draft_id = d.id AND dgr.status = 'saved'
-    INNER JOIN autopilot_plans ap
-      ON ap.workflow_run_id = wr.id
-      AND ap.campaign_id = wr.campaign_id
-      AND ap.status = 'planned'
-    WHERE wr.id = $1`,
-    [run.id],
+  // Native reads the saved-draft provenance rows (at most two, so an
+  // ambiguous scope is still rejected below); validation stays here.
+  const rows = plannerDraftAuditScopeRowsSchema.parse(
+    await invokeCommand("linkgo_workflow_planner_draft_audit_scope", {
+      input: { id: run.id },
+    }),
   );
   if (rows.length !== 1 || rows[0] === undefined) {
     throw new Error(
@@ -143,8 +103,7 @@ async function failClaim(agentRunId: number, caught: unknown): Promise<never> {
 export async function runPlannerDraftAuditExecutor(
   run: WorkflowRunWithDetails,
 ): Promise<PlannerDraftAuditExecutorResult> {
-  const db = await getDb();
-  const provenance = await loadPlannerDraftAuditProvenance(db, run);
+  const provenance = await loadPlannerDraftAuditProvenance(run);
   let completed = 0;
 
   for (;;) {
@@ -157,30 +116,11 @@ export async function runPlannerDraftAuditExecutor(
       ) {
         throw new Error("Planner draft audit claim provenance did not match");
       }
-      const snapshot = await loadDraftAiAuditSnapshot(db, claim.draftVariantId);
-      if (
-        snapshot.campaign_id !== provenance.campaignId ||
-        snapshot.content_revision !== claim.contentRevision
-      ) {
-        throw new Error("Planner draft audit claim points to a stale revision");
-      }
-      const text = parseCanonicalDraftAuditText(snapshot);
       await startAgentRun({ id: claim.agentRunId });
-      const output = await consumeCompletedDraftAiAuditOutput(
-        db,
-        {
-          campaignId: provenance.campaignId,
-          draftVariantId: claim.draftVariantId,
-          contentRevision: claim.contentRevision,
-          auditRunId: claim.auditRunId,
-          text,
-        },
-        claim.agentRunId,
-      );
+      // Native completion re-checks the revision and reads the auditor's own
+      // persisted output against the stored audit request.
       const settlement = await completeNativePlannerDraftAudit({
         agentRunId: claim.agentRunId,
-        summary: output.summary,
-        findings: output.findings,
       });
       completed += 1;
       if (settlement.terminal) {
