@@ -4,9 +4,11 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ## Audit status
 
-**Audited:** August 25, 2026
+**Reviewed:** September 10, 2026 (refresh of the September 5 review)
 
-**Repository baseline:** `main` at `009187f` (`chore(db): enforce renderer transaction allowlist`) plus the current uncommitted Section 8A implementation. The schema is ordered through Migration 33. Audit-only scratch logs were excluded.
+**Repository baseline:** `6443368` (`test: synchronize draft failure and approval setup`). This review began with existing edits to `roadmap.md` and untracked `docs/verification/2026-09-05-baseline.md`; their findings and historical evidence are retained, with superseded claims corrected below. The schema is ordered through Migration 33. Only this roadmap is changed; application code and the existing verification note are untouched.
+
+**Scope:** Source and test review across frontend features, agent/workflow orchestration, native commands, migrations, authentication, publishing, scheduler, capabilities, and CI; compared all 20 sections against implementation and feature documentation. Evidence labels distinguish commands observed in this session (**RUNTIME**), source inspection (**CODE**), inferred failure consequences (**DEDUCED**), and boundaries not exercised (**UNVERIFIED**). Historical harness classifications remain in the September 5 verification note; current process results do not claim a Roadmap phase transition or classifier acceptance.
 
 **Status summary:** 5 sections implemented, 15 partial (including one externally blocked), and 0 not started.
 
@@ -17,17 +19,34 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ### Audit evidence
 
-- **Quality gate — failing:** ESLint, TypeScript/Vite build, renderer-transaction guard, and `cargo fmt --check` pass. The current tree fails `cargo test` because the Migration 32 order assertion still expects `[31, 32]` after Migration 33; Clippy reports three `useless_vec` errors in new draft-quality tests; Playwright has one real prompt-contract failure, while the remaining browser tests could not run because the expected Chromium binary is missing locally. Repository LF content is Prettier-clean; local `core.autocrlf=true` causes false formatting failures on checked-out CRLF files.
+- **Application verification — RUNTIME:** Separate commands completed successfully: `bun run lint`, `bun run build` (TypeScript/Vite), `bun run check:renderer-transactions` (six guard tests; 105/105 allowlisted statements), `cargo test --manifest-path src-tauri/Cargo.toml` (176 library tests; zero failed), `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, and `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`. This establishes the current Windows source/test baseline, not packaged desktop behavior or release readiness.
+- **Browser verification — RUNTIME, incomplete:** Fresh Playwright inventory lists 273 tests in 25 files. `bunx --no-install playwright test --shard=1/3 --reporter=line --output=test-results/audit-20260910-1` exited 1: 12 tests passed and 80 failed at browser launch because Chromium headless shell revision 1217 is absent. No application assertion was reached in those 80 cases; the other two shards were not run. No browser packages were installed. The preserved [September 5 verification note](docs/verification/2026-09-05-baseline.md) separately records 273 historical passing tests and accepted harness rows; the previous blanket statement that no accepted checks existed was stale. Neither that history nor the current partial run establishes a complete current browser/release pass. `bun run check` was not rerun against the known missing-browser prerequisite.
+- **Formatting — RUNTIME, failed baseline:** `bunx --no-install prettier --check .` exited 1 in eight pre-existing files: `eslint.config.js`, six test files (`approvals`, `candidate-queue`, `helpers/tauri-mocks`, `integrations`, `scheduler`, `settings`), and the untracked September 5 verification note. No formatter repairs were applied. This is a verification prerequisite, not a newly introduced application defect.
 - **Transaction integrity — unresolved P0:** The static guard prevents growth but allowlists 105 control statements, including 46 renderer-managed `BEGIN` blocks across 10 files: agent runtime (6), approvals (2), candidate policy (1), candidate queue (3), comments (6), drafts (13), metrics (3), safety (2), source imports (3), and workflows (7). Separate plugin-SQL calls still lack guaranteed connection affinity; the existing mock still cannot prove production rollback or concurrency behavior.
-- **Security boundary — high priority:** Both `main` and `settings` webviews retain SQL load/select/execute plus webview-creation permissions, and CSP still permits arbitrary `http:` and `https:` connections. An unused native command can return AI provider secrets to renderer code. Custom provider Base URLs are accepted without URL, HTTPS, or private-network validation, allowing native requests to operator-supplied destinations.
-- **Supply chain:** `bun audit --production` reports 6 advisories (4 high, 2 moderate) in the Vite/PostCSS/Nanoid build chain. `cargo audit` reports 4 vulnerabilities (`quick-xml` twice, `rkyv`, and `rsa`) plus 20 warnings. Reachability and safe upgrades still require dependency-tree review; CI does not run either audit, pin actions to commit SHAs, or scan repository history for secrets.
+- **Security boundary — CODE, defense-in-depth:** `src-tauri/capabilities/default.json:5-43` grants both webviews SQL load/select/execute and webview creation; `src-tauri/tauri.conf.json:31` allows arbitrary HTTP/HTTPS connections. `src-tauri/src/auth/commands.rs:214` exposes AI provider secrets to a renderer caller. These increase the consequences of renderer compromise; they do not establish an anonymous remote exploit. Base URL validation at `auth/commands.rs:153-165` only checks presence for custom providers; `agent_runtime.rs:94-96,864-874` accepts the stored destination and sends bearer credentials. Require explicit destination consent, HTTPS by default, and a controlled local-development exception; assess redirects/private destinations at the same native boundary.
+- **Supply chain — RUNTIME/CODE:** Fresh `bun audit --production` exited 1 with 6 advisories (4 high, 2 moderate) through Vite/PostCSS/Nanoid. Fresh `cargo audit --file src-tauri/Cargo.lock` exited 1 with 4 vulnerabilities (`quick-xml` twice: RUSTSEC-2026-0194/0195; `rkyv`: RUSTSEC-2026-0235; `rsa`: RUSTSEC-2023-0071) and 10 warnings, superseding the previous unverified 20-warning count. `cargo tree -i` places `quick-xml 0.39.4` beneath `plist`/Tauri utilities; `rkyv` and `rsa` do not appear in the current target's enabled dependency tree. These are lockfile advisory matches, not demonstrated application exploits or proof that all affected APIs ship. Review enabled features, other supported targets, build-time inputs, and reachable APIs before selecting upgrades or dated exceptions. `.github/workflows/ci.yml` still lacks dependency/history-secret scans and uses tag-based rather than SHA-pinned actions.
 - **Positive controls:** No frontend HTML/eval sink was found. Provider secrets normally stay native, model-selected tools are replaced by native schemas and allowlisted, draft text is explicitly treated as untrusted content, credentials use the OS keyring by default, and LinkedIn publishing/commenting remain human approval-gated.
-- **Roadmap/documentation drift:** Section 8A now exists but is not releasable until its failing Rust, Clippy, and prompt-contract tests pass. `docs/ARCHITECTURE.md` still denies renderer transaction control, while README omits the quality loop.
+- **Roadmap/documentation drift — [spec], CODE:** All 20 section statuses were rechecked; retain 5 Implemented and 15 Partial/Blocked. Section 8A exists but planner/background ownership remains missing. `src/agent/tools.ts:75-82` adds `score_draft_quality` to the six original contracts; Section 1 now records seven. `docs/ARCHITECTURE.md:26` describes the migrated capability pattern but should explicitly identify the remaining legacy renderer transactions. `docs/features/candidate-policy.md:5` still says 3C is next; `docs/ROADMAP_MAPPING.md:192` says audit UI/workflow execution is absent despite the delivered attended path; README omits the quality loop. Correct supporting documents alongside the affected slices, without promoting incomplete sections.
 - **External dependency:** Section 3 still requires one production source connector that passes LinkedIn/API terms, permissions, access, and permitted-use review. It remains blocked on that decision.
+
+### Correctness findings and acceptance checks
+
+1. **[standards] P0 — Legacy renderer atomicity (CODE/DEDUCED):** `src/features/approvals/data.ts:434-435` still opens a renderer transaction; the guard reports 105 allowlisted control statements across the existing legacy paths. Independent pooled calls cannot establish pinned-connection ownership. Move each mutation to a native transaction; prove rollback after every intermediate write and isolation with concurrent real-SQLite callers. Installed `tauri-plugin-sql 2.4.0/src/wrapper.rs:146-166` confirms execution delegates each call to `pool.execute(query)` rather than a transaction-owned connection. The guard is a freeze, not proof of atomicity.
+2. **[standards] P1 — Scheduler settlement can split state (CODE/DEDUCED):** `src-tauri/src/scheduler/mod.rs:431-630` separately writes publish attempts, approvals, jobs, audit events, and error items. A late database error can leave a successful external publish with incomplete local settlement. Commit each local outcome on one connection; keep network I/O outside the transaction and add an explicit ambiguous-outcome recovery path. Test interrupted finalization, retry/terminal rollback, and stale-lock overlap. Existing success-history checks (`auth/publish.rs:205-247`) help but cannot establish remote exactly-once delivery.
+3. **[standards] P1 — Quality recovery orphans agent lifecycle (CODE/DEDUCED):** `src-tauri/src/draft_quality.rs:452-481` fails quality runs and scoring attempts without terminalizing their linked `agent_runs`. Resume can create replacement work while the old agent artifact remains queued/running. Settle agent state and lifecycle events atomically with failure/reconciliation; test repeated recovery and rejection of late results from the previous attempt.
+4. **[standards] P1 — Quality eligibility lacks a native chokepoint (CODE):** `src/features/approvals/data.ts:464-475` validates audit/quality eligibility in the renderer, while `src-tauri/src/approval_scheduling.rs:122-129` trusts approval status. Move creation and eligibility into the native approval transaction, preserving approval-gated publishing; verify current revision, audit, and passing score and reject stale or failed eligibility through direct native calls. Treat this as an integrity/trust-boundary gap, not evidence that the normal UI skips human approval.
+5. **[standards] P1 — Manual external success can be lost before recording (CODE/DEDUCED):** `src-tauri/src/auth/publish.rs:467-540` preflights, sends the post/comment, and returns without durably reserving or settling that external attempt. `src/features/approvals/components/publish-linkedin-dialog.tsx:76-116` records success in a later renderer call and explicitly handles recording failure. If the app exits or recording fails after remote success, local eligibility can permit a duplicate retry; a disabled dialog button is not cross-caller exclusion. Move reservation and settlement into shared native orchestration used by manual and scheduled publishing, retain human approval, and represent unknown remote outcomes for operator reconciliation rather than blind retry. Test competing command calls, interrupted delivery/recording, and manual-versus-worker overlap without live publishing. This is a source-confirmed gap with an inferred duplicate consequence, not a reproduced LinkedIn incident.
+6. **[standards] P2 — Approval campaign loads can overwrite newer selection (CODE/DEDUCED):** `src/features/approvals/hooks/use-approvals.ts:73-87,121-125` unconditionally commits async results, and selection starts an unhandled load while the selection-dependent effect starts another. A slower previous campaign response can populate the current campaign view; a rejected selection load can escape error handling. Add request ownership/cancellation and one handled loading path. Test A→B selection with A resolving last, selection-load failure, and mutation refresh after selection changes; stale data must never become an actionable current-campaign view.
+
+**Verification limits:** Browser tests use mocked Tauri/native behavior and do not establish production plugin-SQL connection affinity. Native SQLx tests passed, but packaged desktop startup/IPC, OS keyring behavior, live providers/LinkedIn calls, crash/power-loss recovery, other operating systems, full-history secret scanning, and advisory exploitability were not verified. No installed `gitleaks` executable or matching tool-catalog scanner was available; no scanner was installed. No paid or external publishing actions were performed. Stale-lock overlap remains a test requirement, not a reproduced duplicate publish. Rust compilation/tests and the requested strict Clippy invocation now pass as observed commands; historical classifier decisions are not rewritten.
+
+**Security triage:** Three overstatements were excluded: broad webview privileges are conditional renderer-compromise impact, not anonymous remote access; opt-in plaintext credential fallback is not the keyring default; lockfile-only advisories are not proof of reachable Windows runtime vulnerabilities. Current source search found no renderer HTML/eval sink, but this was not a full-history credential scan or exhaustive injection proof. No security fixes were applied in this documentation-only review.
+
+**Prior-review reference (retained, not re-fetched this session):** The [n8n pooled SQLite query runner](https://github.com/n8n-io/n8n/blob/b436bfa584c08dffd15bec80038de1da209af16b/packages/@n8n/typeorm/src/driver/sqlite-pooled/SqliteReadWriteQueryRunner.ts#L86-L145) leases one connection across BEGIN/COMMIT/ROLLBACK. Use Linkgo's existing native SQLx patterns to achieve the same ownership, not a new dependency.
 
 | Roadmap                               | Status                | Evidence and remaining work                                                                                                                                                                                              |
 | ------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1 Agent runtime                       | **Implemented**       | The provider/model loop and all six Zod tool contracts exist.                                                                                                                                                            |
+| 1 Agent runtime                       | **Implemented**       | The provider/model loop, six original Zod tool contracts, and the quality-scoring contract exist.                                                                                                                        |
 | 2 Streaming + model layer             | **Partial**           | Provider-neutral execution and event streaming exist; roadmap-specific lifecycle progress and full side-effect integration remain incomplete.                                                                            |
 | 3 Campaign + autopilot queue          | **Partial / Blocked** | Campaigns, guarded connector-neutral local intake, recurring backlog planning, and the bounded idempotent Roadmap 3D local planner exist. One compliant production connector is the sole remaining access/terms blocker. |
 | 4 Keyword + trend discovery           | **Partial**           | Structured operator-triggered suggestions exist; expansion from real posts and competitor/source imports does not.                                                                                                       |
@@ -50,12 +69,17 @@ Linkgo is a programmatic LinkedIn growth agent: code handles approved source int
 
 ## Priority queue
 
-1. **P0 — Restore the release gate:** Fix the Migration 32 order assertion, three draft-quality Clippy errors, and auditor prompt-contract regression. Install the pinned Playwright Chromium and rerun all 273 tests plus the complete `bun run check`; do not mark Section 8A complete before this passes.
-2. **P0 — Finish renderer transaction remediation:** Treat the allowlist as a freeze, not completion. Migrate all 46 atomic mutations to capability-specific native commands with pinned SQLx connections, add real-SQLite rollback/concurrency tests, and reduce the allowlist to zero before autonomous workflow expansion.
-3. **P1 — Close renderer secret and network exposure:** Remove the unused provider-secret command, validate custom Base URLs at native ingress (HTTPS by default; explicit local-development exception), split main/settings capabilities, remove renderer SQL access after migration, and narrow CSP `connect-src` to required origins.
-4. **P1 — Remediate and gate dependencies:** Trace the Bun/Rust advisory paths, upgrade or document unreachable exceptions, add dependency and repository-history secret scans to CI, and pin third-party GitHub Actions by commit SHA.
-5. **P2 — Complete Section 8 ownership:** After the gate and security work, add planner/background ownership and policy-driven quality execution while preserving human approval gates.
-6. **P2 — Synchronize documentation:** Correct architecture transaction claims, roadmap mapping, README feature status, and CI verification notes after implementation matches them.
+1. **P0 — Finish renderer transaction remediation, starting with approvals:** Move approval creation/eligibility and the remaining 46 legacy BEGIN blocks to capability-specific native commands with pinned SQLx connections. Add real-SQLite rollback/concurrency tests and shrink the 105-statement allowlist to zero before unattended workflow expansion. Enforce current-revision audit/quality eligibility at the native boundary, not only in UI queries.
+2. **P1 — Unify manual and scheduled publishing recovery:** Add one native durable reservation/settlement path for posts and comments, then atomically settle local success/retry/terminal outcomes. Distinguish ambiguous remote success from safe retry; test interruption after external success, concurrent manual calls, manual-versus-worker overlap, and overlapping stale claims. Fence settlement so a previous owner cannot overwrite a reclaimed job. Preserve stable request identity without assuming LinkedIn guarantees exactly-once delivery. This precedes additional destinations and workers (Sections 11, 12, 13, 17).
+3. **P1 — Repair quality-loop recovery:** Fail/cancel linked agent work and append lifecycle events in the same transaction as quality recovery. Resume must create one replacement attempt, reject old results, and remain idempotent across reloads (Sections 8, 11).
+4. **P1 — Reduce renderer secret and network exposure:** Remove the unused provider-secret command, validate provider destinations at native ingress and execution, split main/settings capabilities, remove renderer SQL access after migration, and narrow CSP. Keep explicit operator-approved local provider support rather than silently breaking it.
+5. **P1 — Remediate and gate dependencies:** Trace current Bun/Rust advisory paths, upgrade or record reviewed exceptions, add dependency and repository-history secret scans to CI, and pin third-party GitHub Actions by commit SHA. Verify release artifacts, not just development dependency counts.
+6. **Release prerequisite — Complete verification:** Provision the pinned Playwright Chromium browser through an approved setup or CI, then rerun all 273 tests in bounded shards and reconcile every test identity. Resolve the eight baseline formatting failures without discarding existing documentation work; complete `bun run check`. Keep the now-passing Rust tests, formatting, and strict Clippy gates. Add real native integration coverage for the integrity/recovery findings; neither a missing browser nor a host timeout establishes an application regression.
+7. **P2 — Complete Section 8 ownership, then workflow integration:** After integrity, recovery, and security work, add planner-owned quality execution, followed by approval/schedule/metric artifacts and controlled background orchestration (Sections 2, 5, 8, 11). Keep every external publish/comment human approval-gated; parallel workers come later.
+8. **P2 — Fix approval selection ownership:** Guard against out-of-order campaign loads, consolidate duplicate selection fetches, and handle failures visibly before expanding the approval UI (Section 10). Add race/error regression tests.
+9. **P2 — Synchronize supporting documentation:** Explicitly distinguish migrated capabilities from legacy transactions, correct the stale candidate-policy next step and audit mapping, and update README quality-loop coverage and verification notes with each slice. No new database tables are needed for this documentation update.
+
+**Parallel external decision:** Review one compliant production connector for Section 3; continue using local structured imports until approval/access is available. Do not let this external blocker delay the local integrity fixes above.
 
 ## Delivered campaign-to-audit sequence
 
@@ -78,7 +102,7 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 - Pattern: `gg-framework/packages/gg-agent/src/agent-loop.ts`, `gg-framework/packages/gg-agent/src/types.ts`.
 - Build tools as Zod schemas: `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, `collect_metrics`.
 
-**Evidence:** The provider/model loop and six typed Zod tool contracts are implemented.
+**Evidence:** The provider/model loop and all six original typed Zod tool contracts are implemented, plus the seventh `score_draft_quality` contract introduced by 8A (`src/agent/tools.ts:75-82`).
 
 ## 2. Streaming + model layer — Partial
 
@@ -152,7 +176,7 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 
 **Evidence:** Migration 33 persists revision-scoped runs, immutable attempts, and all five canonical category scores. An explicit operator action scores against 70, allows at most two atomic rewrites, re-runs the current AI audit, re-scores serially, supports stale recovery/resume, and gates new approvals without approving or publishing.
 
-**Remaining:** Add planner/background ownership and policy-driven automatic execution while preserving human approval gates.
+**Remaining:** Repair linked agent lifecycle recovery, then add planner/background ownership and policy-driven automatic execution while preserving human approval gates. Approval eligibility must also be enforced at the native boundary.
 
 ## 9. Content calendar — Implemented
 
@@ -172,7 +196,7 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 
 **Evidence:** Human approvals are durable and can continue paused runtime work.
 
-**Remaining:** Add shareable review links and wait URLs.
+**Remaining:** First move approval creation/current-revision eligibility into one native transaction and fix stale campaign-load ownership. Then add shareable review links and wait URLs.
 
 ## 11. Durable workflow engine — Partial
 
@@ -182,7 +206,7 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 
 **Evidence:** Typed resumable steps, workflow events and attempts, agent-run artifacts, planner-linked `candidate_post` and saved `draft` artifact flow, and attended planner-owned AI audit execution exist. Score and audit claims reject duplicate active attempts and retain durable retry history.
 
-**Remaining:** Complete approval/schedule/metric artifact flow and owned background jobs.
+**Remaining:** Repair linked quality-agent recovery and publishing settlement before completing approval/schedule/metric artifact flow and owned background jobs.
 
 ## 12. Publishing + scheduling — Partial
 
@@ -193,9 +217,9 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
   - Blotato `POST https://backend.blotato.com/v2/posts` examples in n8n workflow repos.
 - Include retries, idempotency keys, duplicate prevention, and platform IDs.
 
-**Evidence:** Native LinkedIn scheduling, retries, idempotency, duplicate prevention, and platform IDs exist.
+**Evidence:** Native LinkedIn scheduling, retry records, request identities, prior-success checks, and platform IDs exist. These controls do not establish exactly-once remote delivery or atomic local settlement.
 
-**Remaining:** Introduce the destination abstraction and verified additional providers.
+**Remaining:** Unify manual/worker attempt reservation, atomic settlement, stale-owner fencing, and ambiguous-outcome reconciliation first. Then introduce the destination abstraction and verified additional providers.
 
 ## 13. Comment/reply agent — Partial
 
@@ -205,7 +229,7 @@ The safe default remains local structured source import. Arbitrary LinkedIn feed
 
 **Evidence:** Approval-gated manual comment variants and LinkedIn API posting exist.
 
-**Remaining:** Add provider-generated comments and owned background work while retaining stricter anti-spam limits.
+**Remaining:** Close the manual remote-success/local-recording gap through shared native publishing recovery first. Then add provider-generated comments and owned background work while retaining human approval and stricter anti-spam limits.
 
 ## 14. LinkedIn API formatting — Partial
 
