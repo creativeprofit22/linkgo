@@ -1,0 +1,1531 @@
+{
+  "version": 1,
+  "boundaries": [
+    {
+      "identity": {
+        "from": "src/agent/dry-run.ts",
+        "to": "src/features/drafts/types/index.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "DRAFT_CONTENT_INTENTS": 1
+        },
+        "rule": "agent-persistence"
+      },
+      "owner": "agent / drafts",
+      "rationale": "Dry-run fixtures consume feature-owned content intent constants.",
+      "removeWhen": "Introduce an agent-owned input contract without feature runtime imports during persistence ownership work."
+    },
+    {
+      "identity": {
+        "from": "src/agent/schemas.ts",
+        "to": "src/features/drafts/types/index.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "DRAFT_CONTENT_INTENTS": 1
+        },
+        "rule": "agent-persistence"
+      },
+      "owner": "agent / drafts",
+      "rationale": "Tool schema currently shares feature-owned intent constants.",
+      "removeWhen": "Move the shared intent contract to its reviewed owner without changing accepted inputs."
+    },
+    {
+      "identity": {
+        "from": "src/agent/tools.ts",
+        "to": "src/features/candidate-queue/data.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "applyRelevanceScoresFromTool": 1,
+          "insertDiscoveryItemsFromTool": 1
+        },
+        "rule": "agent-persistence"
+      },
+      "owner": "agent / candidate-queue",
+      "rationale": "Tool implementations currently call renderer persistence capabilities.",
+      "removeWhen": "Persistence phase c8b29ee9-aae4-483f-a052-91ca45d2c72e supplies typed tool capability adapters without agent persistence policy."
+    },
+    {
+      "identity": {
+        "from": "src/components/title-bar.tsx",
+        "to": "@tauri-apps/api/webviewWindow",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "ui-native"
+      },
+      "owner": "desktop shell",
+      "rationale": "Existing title bar obtains its webview window directly.",
+      "removeWhen": "Capability phase 47899093-c810-4a1f-abd0-0cde07120589 routes window actions through a reviewed frontend wrapper."
+    },
+    {
+      "identity": {
+        "from": "src/components/window-frame.tsx",
+        "to": "@tauri-apps/api/webviewWindow",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "ui-native"
+      },
+      "owner": "desktop shell",
+      "rationale": "Existing frame configures its webview window directly.",
+      "removeWhen": "Capability phase 47899093-c810-4a1f-abd0-0cde07120589 routes frame actions through a reviewed frontend wrapper."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/components/agent-event-list.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentRunEventType": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime UI",
+      "rationale": "Event presentation imports a type through the mixed runtime barrel.",
+      "removeWhen": "Import the event contract from a declared pure contract entry point."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/components/agent-run-card.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PROVIDER_LABELS": 1,
+          "getAgentPlaybook": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime UI",
+      "rationale": "Run cards read metadata through the mixed runtime barrel.",
+      "removeWhen": "Expose presentation metadata through feature contracts instead of executable agent exports."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/components/agent-status-badge.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentRunStatus": 1,
+          "AgentToolCallStatus": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime UI",
+      "rationale": "Status types are obtained through the mixed barrel.",
+      "removeWhen": "Import status contracts directly from the declared contract entry point."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/components/agent-tool-contract-list.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentToolMetadata": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime UI",
+      "rationale": "Tool metadata type is obtained through the mixed barrel.",
+      "removeWhen": "Publish a non-executable tool metadata contract and update this importer."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/components/create-agent-run-dialog.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookKey": 1,
+          "AgentProviderKey": 1,
+          "AgentRole": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime UI",
+      "rationale": "Dialog contracts currently use the mixed barrel.",
+      "removeWhen": "Use declared provider/role and feature playbook contracts without the runtime barrel."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/components/create-agent-run-dialog.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PROVIDER_KEYS": 1,
+          "AGENT_PROVIDER_LABELS": 1,
+          "AGENT_ROLES": 1,
+          "DEFAULT_AGENT_MODELS": 1,
+          "getDefaultPlaybookForRole": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime UI",
+      "rationale": "Dialog options and defaults currently come through executable exports.",
+      "removeWhen": "Expose these options via pure contracts or a typed feature API while preserving defaults."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/hooks/use-agent-runtime.ts",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentToolMetadata": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime UI",
+      "rationale": "Presentation state uses metadata through the mixed barrel.",
+      "removeWhen": "Import a public tool metadata contract without runtime exports."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/hooks/use-agent-runtime.ts",
+        "to": "src/workflows/data.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "listWorkflowRuns": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "agent-runtime / workflows",
+      "rationale": "The hook queries workflow persistence directly.",
+      "removeWhen": "Persistence phase c8b29ee9-aae4-483f-a052-91ca45d2c72e exposes the run projection through a typed feature capability."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/provider-readiness.ts",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentProviderKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "agent-runtime",
+      "rationale": "Readiness helper imports its type from the mixed barrel.",
+      "removeWhen": "Use the declared provider catalog contract directly."
+    },
+    {
+      "identity": {
+        "from": "src/features/agent-runtime/types/index.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "agent-runtime / playbooks",
+      "rationale": "Playbook key type is colocated with executable playbook lookup.",
+      "removeWhen": "Separate the playbook contract preserving exports, then redirect this type import."
+    },
+    {
+      "identity": {
+        "from": "src/features/autopilot-planner/components/autopilot-plan-card.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PROVIDER_LABELS": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "autopilot-planner UI",
+      "rationale": "Provider labels use the mixed barrel.",
+      "removeWhen": "Use the declared provider catalog presentation contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/autopilot-planner/components/autopilot-plan-card.tsx",
+        "to": "src/features/source-imports/connectors.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "getSourceConnector": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "autopilot-planner / source-imports",
+      "rationale": "Plan cards consume connector metadata through a private registry helper.",
+      "removeWhen": "Publish the needed connector metadata via a reviewed source-imports public contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/candidate-queue/types/index.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "candidate-queue / playbooks",
+      "rationale": "Candidate run types depend on the executable playbook module.",
+      "removeWhen": "Extract the playbook key contract preserving existing exports and redirect this import."
+    },
+    {
+      "identity": {
+        "from": "src/features/comments/components/comment-thread-card.tsx",
+        "to": "src/features/linkedin-actions/urn.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "resolveLinkedInTargetUrn": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "comments / linkedin-actions",
+      "rationale": "Thread display uses a private URN helper.",
+      "removeWhen": "Publishing phase be3b48b1-95a3-4ff1-947e-f777618972b0 provides a public tested normalization contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/comments/components/comment-variant-card.tsx",
+        "to": "src/features/approvals/linkedin-format.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "escapeLinkedInLittleText": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "comments / approvals",
+      "rationale": "Comment preview shares approval-private LinkedIn formatting.",
+      "removeWhen": "Publishing phase be3b48b1-95a3-4ff1-947e-f777618972b0 defines the shared formatting contract with parity tests."
+    },
+    {
+      "identity": {
+        "from": "src/features/comments/components/publish-linkedin-comment-dialog.tsx",
+        "to": "src/features/approvals/linkedin-format.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "escapeLinkedInLittleText": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "comments / approvals",
+      "rationale": "Publish confirmation shares approval-private formatting.",
+      "removeWhen": "Publishing phase be3b48b1-95a3-4ff1-947e-f777618972b0 exposes a public formatting contract while retaining human confirmation."
+    },
+    {
+      "identity": {
+        "from": "src/features/drafts/components/generate-draft-dialog.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PROVIDER_KEYS": 1,
+          "DEFAULT_AGENT_MODELS": 1,
+          "PROVIDER_LABELS": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "drafts UI",
+      "rationale": "Provider options use the mixed agent barrel.",
+      "removeWhen": "Use the declared provider catalog contract without changing options."
+    },
+    {
+      "identity": {
+        "from": "src/features/drafts/components/generate-draft-dialog.tsx",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookKey": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "drafts / playbooks",
+      "rationale": "Dialog type comes from executable playbook lookup.",
+      "removeWhen": "Expose and consume a pure playbook key contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/drafts/data.ts",
+        "to": "src/agent/providers.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "DEFAULT_AGENT_MODELS": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "drafts",
+      "rationale": "Draft defaults use the provider implementation module.",
+      "removeWhen": "Use the declared provider catalog contract directly."
+    },
+    {
+      "identity": {
+        "from": "src/features/drafts/hooks/use-drafts.ts",
+        "to": "src/features/drafts/quality-loop.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "resumeDraftQualityLoop": 1,
+          "runDraftQualityLoop": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "drafts / workflows",
+      "rationale": "The draft hook directly starts feature-local provider and persistence orchestration.",
+      "removeWhen": "Quality recovery f8393c97-e558-446a-a416-0fd175ca1b5a and persistence work provide a typed feature capability over workflow-owned orchestration."
+    },
+    {
+      "identity": {
+        "from": "src/features/drafts/schemas.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PLAYBOOK_KEYS": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "drafts / playbooks",
+      "rationale": "Draft validation constants come from executable playbook lookup.",
+      "removeWhen": "Separate and consume the playbook key contract preserving validation."
+    },
+    {
+      "identity": {
+        "from": "src/features/drafts/schemas.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PLAYBOOK_KEYS": 1
+        },
+        "rule": "contract-executable"
+      },
+      "owner": "drafts / playbooks",
+      "rationale": "A schema contract depends on the executable playbook module.",
+      "removeWhen": "Move playbook keys to a declared pure contract and redirect schema imports."
+    },
+    {
+      "identity": {
+        "from": "src/features/drafts/types/index.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "drafts / playbooks",
+      "rationale": "Draft type imports use executable playbook ownership.",
+      "removeWhen": "Separate the public playbook key contract preserving exports."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/components/playbook-card.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentRole": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "playbooks UI",
+      "rationale": "Role types are obtained through the mixed barrel.",
+      "removeWhen": "Import the role type from the declared agent types contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/data.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "playbooks",
+      "rationale": "Feature data types reference executable agent playbooks.",
+      "removeWhen": "Publish a pure playbook key contract and redirect imports."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/data.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "getAgentPlaybook": 1,
+          "listAgentPlaybookDefinitions": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "playbooks / agent",
+      "rationale": "Feature data reads code-owned agent playbook definitions directly.",
+      "removeWhen": "Declare a narrowly reviewed metadata capability distinct from runtime execution and move these calls behind it."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/schemas.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PLAYBOOK_KEYS": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "playbooks",
+      "rationale": "Schema keys come from an executable agent module.",
+      "removeWhen": "Extract and consume the pure playbook key contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/schemas.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PLAYBOOK_KEYS": 1
+        },
+        "rule": "contract-executable"
+      },
+      "owner": "playbooks",
+      "rationale": "Public schemas import an executable playbook module.",
+      "removeWhen": "Use a pure playbook keys contract preserving accepted values."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/types/index.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "export",
+        "bindings": {
+          "AgentPlaybookDefinition as AgentPlaybookDefinition": 1,
+          "AgentPlaybookKey as AgentPlaybookKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "playbooks",
+      "rationale": "Public feature types re-export types owned by the mixed playbook module.",
+      "removeWhen": "Move definitions to a pure public contract while preserving these public exports."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/types/index.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookDefinition": 1,
+          "AgentPlaybookKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "playbooks",
+      "rationale": "Feature types depend on executable agent playbook ownership.",
+      "removeWhen": "Separate the definition/key contract and redirect these exact imports."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/types/index.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "value",
+        "form": "export",
+        "bindings": {
+          "AGENT_PLAYBOOK_KEYS as AGENT_PLAYBOOK_KEYS": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "playbooks",
+      "rationale": "Feature contracts re-export keys through an executable agent module.",
+      "removeWhen": "Preserve the public key export while sourcing it from a pure contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/playbooks/types/index.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "value",
+        "form": "export",
+        "bindings": {
+          "AGENT_PLAYBOOK_KEYS as AGENT_PLAYBOOK_KEYS": 1
+        },
+        "rule": "contract-executable"
+      },
+      "owner": "playbooks",
+      "rationale": "A contract barrel takes an executable playbook dependency.",
+      "removeWhen": "Separate pure keys from playbook execution and update the re-export."
+    },
+    {
+      "identity": {
+        "from": "src/features/workflows/components/score-workflow-dialog.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentProviderKey": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "workflows UI",
+      "rationale": "Provider type is consumed through the mixed barrel.",
+      "removeWhen": "Use the declared provider catalog contract."
+    },
+    {
+      "identity": {
+        "from": "src/features/workflows/components/score-workflow-dialog.tsx",
+        "to": "src/agent/index.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "AGENT_PROVIDER_KEYS": 1,
+          "AGENT_PROVIDER_LABELS": 1,
+          "DEFAULT_AGENT_MODELS": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "workflows UI",
+      "rationale": "Scoring provider choices come from the mixed barrel.",
+      "removeWhen": "Use public provider metadata without executable agent exports."
+    },
+    {
+      "identity": {
+        "from": "src/features/workflows/components/score-workflow-dialog.tsx",
+        "to": "src/features/agent-runtime/provider-readiness.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "isAgentProviderReady": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "workflows / agent-runtime",
+      "rationale": "Scoring dialog uses a private readiness helper.",
+      "removeWhen": "Expose readiness through the typed agent-runtime feature API with contract tests."
+    },
+    {
+      "identity": {
+        "from": "src/features/workflows/hooks/use-workflows.ts",
+        "to": "src/workflows/data.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "addWorkflowNote": 1,
+          "cancelWorkflowRun": 1,
+          "createWorkflowRun": 1,
+          "executeWorkflowRun": 1,
+          "listWorkflowRuns": 1,
+          "resumeWorkflowRun": 1,
+          "setWorkflowStepStatus": 1,
+          "startWorkflowRun": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "workflows",
+      "rationale": "The UI hook directly uses durable workflow internals.",
+      "removeWhen": "Persistence phase c8b29ee9-aae4-483f-a052-91ca45d2c72e introduces typed feature adapters over workflow capabilities."
+    },
+    {
+      "identity": {
+        "from": "src/hooks/use-app-shortcuts.ts",
+        "to": "@tauri-apps/api/window",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "ui-native"
+      },
+      "owner": "desktop shell",
+      "rationale": "Shortcut hook controls native windows directly.",
+      "removeWhen": "Capability phase 47899093-c810-4a1f-abd0-0cde07120589 supplies a reviewed window wrapper."
+    },
+    {
+      "identity": {
+        "from": "src/hooks/use-app-shortcuts.ts",
+        "to": "@tauri-apps/plugin-global-shortcut",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "ui-native"
+      },
+      "owner": "desktop shell",
+      "rationale": "Shortcut lifecycle currently registers its native plugin directly.",
+      "removeWhen": "Capability phase 47899093-c810-4a1f-abd0-0cde07120589 moves shortcut lifecycle behind a reviewed adapter."
+    },
+    {
+      "identity": {
+        "from": "src/main.tsx",
+        "to": "@tauri-apps/api/window",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "ui-native"
+      },
+      "owner": "app composition",
+      "rationale": "Startup obtains native window state directly.",
+      "removeWhen": "Capability review replaces this direct window dependency with the shared wrapper."
+    },
+    {
+      "identity": {
+        "from": "src/main.tsx",
+        "to": "src/features/drafts/quality-loop.ts",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "app composition / drafts",
+      "rationale": "Startup reconciliation imports private quality orchestration.",
+      "removeWhen": "Quality recovery phase f8393c97-e558-446a-a416-0fd175ca1b5a exposes reconciliation through a typed feature capability."
+    },
+    {
+      "identity": {
+        "from": "src/main.tsx",
+        "to": "src/features/drafts/quality-loop.ts",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "app composition / drafts",
+      "rationale": "App composition directly accesses quality orchestration.",
+      "removeWhen": "Workflow ownership and quality recovery provide a typed startup reconciliation adapter."
+    },
+    {
+      "identity": {
+        "from": "src/main.tsx",
+        "to": "src/workflows/data.ts",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "ui-runtime"
+      },
+      "owner": "app composition / workflows",
+      "rationale": "Startup accesses workflow persistence directly.",
+      "removeWhen": "Native persistence work exposes bounded reconciliation through the workflow feature API."
+    },
+    {
+      "identity": {
+        "from": "src/pages/home.tsx",
+        "to": "src/features/campaigns/components/campaigns-view.tsx",
+        "kind": "value",
+        "form": "dynamic",
+        "bindings": {
+          "*": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "app composition / campaigns",
+      "rationale": "Home lazy-loads the private campaign view instead of its public index.",
+      "removeWhen": "Preserve lazy loading while importing the campaign public UI entry point."
+    },
+    {
+      "identity": {
+        "from": "src/pages/settings.tsx",
+        "to": "src/features/settings/hooks/use-settings.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "useSettings": 1
+        },
+        "rule": "private-feature"
+      },
+      "owner": "app composition / settings",
+      "rationale": "Settings page imports its feature hook through a private path.",
+      "removeWhen": "Expose the required settings UI contract through its public entry point."
+    },
+    {
+      "identity": {
+        "from": "src/workflows/executor.ts",
+        "to": "src/agent/messages.ts",
+        "kind": "value",
+        "form": "import",
+        "bindings": {
+          "roleForWorkflowStep": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "workflows / agent",
+      "rationale": "Workflow executor directly consumes agent message policy.",
+      "removeWhen": "Move role selection into a declared orchestration capability or reviewed pure mapping contract."
+    },
+    {
+      "identity": {
+        "from": "src/workflows/relevance-scoring-commands.ts",
+        "to": "src/agent/playbooks.ts",
+        "kind": "type",
+        "form": "import",
+        "bindings": {
+          "AgentPlaybookKey": 1
+        },
+        "rule": "agent-consumer"
+      },
+      "owner": "workflows / playbooks",
+      "rationale": "Native scoring adapter types reference executable playbook ownership.",
+      "removeWhen": "Consume a pure playbook key contract preserving native input shapes."
+    }
+  ],
+  "cycles": [
+    {
+      "owner": "agent / workflows / candidate-queue / drafts",
+      "rationale": "The mixed agent barrel, tool persistence, feature agent execution and workflow executor form the existing runtime component, including literal lazy imports.",
+      "removeWhen": "Persistence phase c8b29ee9-aae4-483f-a052-91ca45d2c72e separates typed capabilities from orchestration and removes the exact return edges with contract tests.",
+      "identity": {
+        "kind": "runtime",
+        "nodes": [
+          "src/agent/index.ts",
+          "src/agent/tools.ts",
+          "src/features/agent-runtime/data.ts",
+          "src/features/candidate-queue/data.ts",
+          "src/features/drafts/data.ts",
+          "src/workflows/data.ts",
+          "src/workflows/draft-audit.ts",
+          "src/workflows/executor.ts"
+        ],
+        "edges": [
+          {
+            "identity": {
+              "from": "src/agent/index.ts",
+              "to": "src/agent/tools.ts",
+              "kind": "value",
+              "form": "export-star",
+              "bindings": {
+                "*": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/agent/tools.ts",
+              "to": "src/features/candidate-queue/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "applyRelevanceScoresFromTool": 1,
+                "insertDiscoveryItemsFromTool": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/agent-runtime/data.ts",
+              "to": "src/agent/index.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "AGENT_TOOL_METADATA": 1,
+                "agentConversationSchema": 1,
+                "agentToolRegistry": 1,
+                "buildAgentMessages": 1,
+                "createConfiguredAgentProvider": 1,
+                "getAgentPlaybook": 1,
+                "getAgentToolRegistryForRole": 1,
+                "runAgentLoop": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/agent-runtime/data.ts",
+              "to": "src/workflows/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "listWorkflowRuns": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/candidate-queue/data.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "dynamic",
+              "bindings": {
+                "*": 2
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/drafts/data.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "dynamic",
+              "bindings": {
+                "*": 2
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/data.ts",
+              "to": "src/workflows/executor.ts",
+              "kind": "value",
+              "form": "dynamic",
+              "bindings": {
+                "*": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/draft-audit.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "startAgentRun": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/draft-audit.ts",
+              "to": "src/features/drafts/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "boundDraftAiAuditError": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/executor.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "createAgentRun": 1,
+                "listAgentRuns": 1,
+                "startAgentRun": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/executor.ts",
+              "to": "src/workflows/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "PLANNER_DRAFT_SAVE_ONLY_MESSAGE": 1,
+                "createWorkflowArtifact": 1,
+                "createWorkflowStepExecution": 1,
+                "listWorkflowRuns": 1,
+                "setWorkflowStepStatus": 1,
+                "startWorkflowRun": 1,
+                "updateWorkflowStepExecution": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/executor.ts",
+              "to": "src/workflows/draft-audit.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "runPlannerDraftAuditExecutor": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "owner": "agent / workflows / candidate-queue / drafts",
+      "rationale": "Type edges add provider readiness and native draft-audit command contracts to the runtime component; the complete graph must not grow either.",
+      "removeWhen": "Persistence and quality recovery work separate shared input contracts from orchestration, then prune the exact complete component after contract tests.",
+      "identity": {
+        "kind": "type-involving",
+        "nodes": [
+          "src/agent/index.ts",
+          "src/agent/tools.ts",
+          "src/features/agent-runtime/data.ts",
+          "src/features/agent-runtime/provider-readiness.ts",
+          "src/features/candidate-queue/data.ts",
+          "src/features/drafts/data.ts",
+          "src/workflows/data.ts",
+          "src/workflows/draft-audit-commands.ts",
+          "src/workflows/draft-audit.ts",
+          "src/workflows/executor.ts"
+        ],
+        "edges": [
+          {
+            "identity": {
+              "from": "src/agent/index.ts",
+              "to": "src/agent/tools.ts",
+              "kind": "value",
+              "form": "export-star",
+              "bindings": {
+                "*": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/agent/tools.ts",
+              "to": "src/features/candidate-queue/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "applyRelevanceScoresFromTool": 1,
+                "insertDiscoveryItemsFromTool": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/agent-runtime/data.ts",
+              "to": "src/agent/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "AgentLoopResult": 1,
+                "AgentModelRequest": 1,
+                "AgentProgressEvent": 1,
+                "AgentToolMetadata": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/agent-runtime/data.ts",
+              "to": "src/agent/index.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "AGENT_TOOL_METADATA": 1,
+                "agentConversationSchema": 1,
+                "agentToolRegistry": 1,
+                "buildAgentMessages": 1,
+                "createConfiguredAgentProvider": 1,
+                "getAgentPlaybook": 1,
+                "getAgentToolRegistryForRole": 1,
+                "runAgentLoop": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/agent-runtime/data.ts",
+              "to": "src/features/agent-runtime/provider-readiness.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "isAgentProviderReady": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/agent-runtime/data.ts",
+              "to": "src/workflows/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "listWorkflowRuns": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/agent-runtime/provider-readiness.ts",
+              "to": "src/agent/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "AgentProviderKey": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/candidate-queue/data.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "dynamic",
+              "bindings": {
+                "*": 2
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/drafts/data.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "dynamic",
+              "bindings": {
+                "*": 2
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/drafts/data.ts",
+              "to": "src/workflows/draft-audit-commands.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "reconcileStaleNativePlannerDraftAudits": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/data.ts",
+              "to": "src/workflows/executor.ts",
+              "kind": "value",
+              "form": "dynamic",
+              "bindings": {
+                "*": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/draft-audit-commands.ts",
+              "to": "src/workflows/draft-audit.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "PlannerDraftAuditProvenance": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/draft-audit.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "startAgentRun": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/draft-audit.ts",
+              "to": "src/features/drafts/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "boundDraftAiAuditError": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/draft-audit.ts",
+              "to": "src/workflows/draft-audit-commands.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "claimNativePlannerDraftAudit": 1,
+                "completeNativePlannerDraftAudit": 1,
+                "failNativePlannerDraftAudit": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/executor.ts",
+              "to": "src/features/agent-runtime/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "createAgentRun": 1,
+                "listAgentRuns": 1,
+                "startAgentRun": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/executor.ts",
+              "to": "src/workflows/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "PLANNER_DRAFT_SAVE_ONLY_MESSAGE": 1,
+                "createWorkflowArtifact": 1,
+                "createWorkflowStepExecution": 1,
+                "listWorkflowRuns": 1,
+                "setWorkflowStepStatus": 1,
+                "startWorkflowRun": 1,
+                "updateWorkflowStepExecution": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/executor.ts",
+              "to": "src/workflows/draft-audit.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "runPlannerDraftAuditExecutor": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "owner": "agent / playbooks / candidate-queue / drafts / workflows",
+      "rationale": "Existing playbook, agent and feature contracts mutually reference role, candidate and draft types. This component has no runtime cycle.",
+      "removeWhen": "Introduce directed shared contracts preserving public exports and remove these type return edges with contract/build tests.",
+      "identity": {
+        "kind": "type-involving",
+        "nodes": [
+          "src/agent/playbooks.ts",
+          "src/agent/types.ts",
+          "src/features/candidate-queue/types/index.ts",
+          "src/features/drafts/types/index.ts",
+          "src/workflows/types.ts"
+        ],
+        "edges": [
+          {
+            "identity": {
+              "from": "src/agent/playbooks.ts",
+              "to": "src/agent/types.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "AgentRole": 1,
+                "AgentToolName": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/agent/types.ts",
+              "to": "src/agent/playbooks.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "AgentPlaybookKey": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/agent/types.ts",
+              "to": "src/workflows/types.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "WorkflowStepKey": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/candidate-queue/types/index.ts",
+              "to": "src/agent/playbooks.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "AgentPlaybookKey": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/drafts/types/index.ts",
+              "to": "src/agent/playbooks.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "AgentPlaybookKey": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/drafts/types/index.ts",
+              "to": "src/agent/types.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "AgentProviderKey": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/drafts/types/index.ts",
+              "to": "src/features/candidate-queue/types/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "CandidateWithTarget": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/workflows/types.ts",
+              "to": "src/features/drafts/types/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "DraftContentIntent": 1,
+                "DraftStatus": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "owner": "candidate-queue / source-imports",
+      "rationale": "Source import types reference the candidate UI barrel, while candidate UI composes source import views/hooks. Only the type-inclusive graph is cyclic.",
+      "removeWhen": "Redirect source-import contracts to the candidate public type entry point, preserving views and hooks, then prune this exact component.",
+      "identity": {
+        "kind": "type-involving",
+        "nodes": [
+          "src/features/candidate-queue/components/candidate-queue-view.tsx",
+          "src/features/candidate-queue/index.ts",
+          "src/features/source-imports/components/import-source-posts-dialog.tsx",
+          "src/features/source-imports/components/source-import-batch-list.tsx",
+          "src/features/source-imports/data.ts",
+          "src/features/source-imports/hooks/use-source-imports.ts",
+          "src/features/source-imports/index.ts",
+          "src/features/source-imports/schemas.ts",
+          "src/features/source-imports/types/index.ts"
+        ],
+        "edges": [
+          {
+            "identity": {
+              "from": "src/features/candidate-queue/components/candidate-queue-view.tsx",
+              "to": "src/features/source-imports/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "CreateSourceImportBatchInput": 1,
+                "SourceImportBatchResult": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/candidate-queue/components/candidate-queue-view.tsx",
+              "to": "src/features/source-imports/index.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "ImportSourcePostsDialog": 1,
+                "SourceImportBatchList": 1,
+                "useSourceImports": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/candidate-queue/index.ts",
+              "to": "src/features/candidate-queue/components/candidate-queue-view.tsx",
+              "kind": "value",
+              "form": "export",
+              "bindings": {
+                "CandidateQueueView as CandidateQueueView": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/components/import-source-posts-dialog.tsx",
+              "to": "src/features/source-imports/schemas.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "MAX_SOURCE_IMPORT_ROWS": 1,
+                "MAX_SOURCE_IMPORT_TEXT_LENGTH": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/components/import-source-posts-dialog.tsx",
+              "to": "src/features/source-imports/types/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "CreateSourceImportBatchInput": 1,
+                "SourceImportBatchResult": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/components/source-import-batch-list.tsx",
+              "to": "src/features/source-imports/types/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "SourceImportBatchDetail": 1,
+                "SourceImportBatchStatus": 1,
+                "SourceImportItemStatus": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/data.ts",
+              "to": "src/features/source-imports/schemas.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "parseSourceImportText": 1,
+                "sourceImportBatchResultSchema": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/data.ts",
+              "to": "src/features/source-imports/types/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "CreateSourceImportBatchInput": 1,
+                "SourceImportBatchResult": 1,
+                "SourceImportsDashboard": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/hooks/use-source-imports.ts",
+              "to": "src/features/source-imports/data.ts",
+              "kind": "value",
+              "form": "import",
+              "bindings": {
+                "createSourceImportBatch": 1,
+                "listSourceImportBatches": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/hooks/use-source-imports.ts",
+              "to": "src/features/source-imports/types/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "CreateSourceImportBatchInput": 1,
+                "SourceImportBatchDetail": 1,
+                "SourceImportBatchResult": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/index.ts",
+              "to": "src/features/source-imports/components/import-source-posts-dialog.tsx",
+              "kind": "value",
+              "form": "export",
+              "bindings": {
+                "ImportSourcePostsDialog as ImportSourcePostsDialog": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/index.ts",
+              "to": "src/features/source-imports/components/source-import-batch-list.tsx",
+              "kind": "value",
+              "form": "export",
+              "bindings": {
+                "SourceImportBatchList as SourceImportBatchList": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/index.ts",
+              "to": "src/features/source-imports/hooks/use-source-imports.ts",
+              "kind": "value",
+              "form": "export",
+              "bindings": {
+                "useSourceImports as useSourceImports": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/index.ts",
+              "to": "src/features/source-imports/types/index.ts",
+              "kind": "type",
+              "form": "export",
+              "bindings": {
+                "CreateSourceImportBatchInput as CreateSourceImportBatchInput": 1,
+                "SourceImportBatch as SourceImportBatch": 1,
+                "SourceImportBatchDetail as SourceImportBatchDetail": 1,
+                "SourceImportBatchResult as SourceImportBatchResult": 1,
+                "SourceImportBatchStatus as SourceImportBatchStatus": 1,
+                "SourceImportInputRow as SourceImportInputRow": 1,
+                "SourceImportItem as SourceImportItem": 1,
+                "SourceImportItemStatus as SourceImportItemStatus": 1,
+                "SourceImportSourceType as SourceImportSourceType": 1,
+                "SourceImportsDashboard as SourceImportsDashboard": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/schemas.ts",
+              "to": "src/features/source-imports/types/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "PreparedSourceImportBatchInput": 1
+              }
+            }
+          },
+          {
+            "identity": {
+              "from": "src/features/source-imports/types/index.ts",
+              "to": "src/features/candidate-queue/index.ts",
+              "kind": "type",
+              "form": "import",
+              "bindings": {
+                "CandidateWithTarget": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

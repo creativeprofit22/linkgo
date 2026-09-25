@@ -1,7 +1,8 @@
 # Linkgo Agent Rules
 
 - Build Linkgo feature-by-feature; keep the app runnable after every slice.
-- Every feature needs a migration, types, schemas, data API, hook, UI, docs, and tests.
+- Every feature needs types, schemas, a typed capability/data API, docs, and applicable tests. Add a migration only when storage changes; add a hook/UI when applicable.
+- Follow `docs/CONTRIBUTING.md` and `docs/architecture-boundaries.md`. Run `bun run check:architecture`; new exception identities require architecture review, and removals require pruning exact stale allowances.
 - Keep agent/runtime code out of UI folders. Use `src/agent` for model/tool contracts and `src/workflows` for durable orchestration when those slices land.
 - Store shared frontend infrastructure in `src/lib`; keep Tauri-only OS integration in `src-tauri`.
 - LinkedIn publishing and commenting must stay human approval-gated.

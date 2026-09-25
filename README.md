@@ -15,9 +15,33 @@ Current status: the app shell, Campaigns slice, persistent Campaign Backlog slic
 
 ## Setup
 
+For the Windows desktop app and full verification gate, install the
+[Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows):
+Microsoft C++ Build Tools with **Desktop development with C++** (including the
+Windows SDK), Microsoft Edge WebView2 Runtime, and Rust via rustup using the MSVC
+toolchain. MSI packaging additionally requires the Windows VBSCRIPT optional
+feature; packaging is not part of the verification baseline.
+
+Use **Bun 1.4.2**, pinned in `package.json` and CI (latest stable verified on
+2026-09-14), plus Node.js for the installed Playwright CLI. This baseline used
+Node 22.20.0. `rust-toolchain.toml` selects `stable` with rustfmt and Clippy,
+not a numeric Rust pin; record `rustc --version` and `cargo --version` when
+reporting results. The current baseline used Rust/Cargo 1.97.1.
+
+From the repository root:
+
 ```bash
-bun install
+bun --version
+bun install --frozen-lockfile
+node node_modules/@playwright/test/cli.js install chromium
+bun run check
 ```
+
+Chromium is a separate download selected by the installed Playwright 1.59.1
+package. A system Chrome installation or WebView2 does not replace it. Missing
+browser executables are setup failures, not demonstrated application defects.
+The full gate needs the native build prerequisites even though Playwright runs
+against a local browser preview with injected Tauri mocks.
 
 ## Development
 
@@ -29,17 +53,41 @@ bun run tauri:dev
 ## Verification
 
 ```bash
+bun run check:renderer-transactions
+bun run check:architecture
 bun run format:check
+bun run format:rust:check
 bun run lint
+bun run lint:rust
 bun run build
 bun run test
 bun run test:rust
 ```
 
-Use `bun run check` for the full quality gate. GitHub Actions runs this gate on
-Windows for pull requests, `main`, version tags, and published releases. Version
-tags and published releases also build and retain the MSI and NSIS installers as
-workflow artifacts.
+Use `bun run check` for the full quality gate, in the order shown above. Formatting
+checks all supported nonignored repository files with `prettier --check .` and all
+Rust workspace members with `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check`.
+Strict Clippy checks all targets and features with
+`cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`.
+The Rust toolchain includes the required rustfmt and Clippy components.
+
+Run `bun run format` to repair Prettier formatting across the same repository-wide
+scope, including tests and root configuration files. Both Prettier commands respect
+`.prettierignore`; review the resulting diff before committing.
+
+The gate stops on the first failure; later checks are not counted as passes.
+Existing formatting failures must remain visible until separately remediated, and
+an interrupted run remains incomplete rather than a release pass.
+GitHub Actions runs this same gate on Windows for pull requests, `main`, version
+tags, and published releases. Only after the quality job succeeds do version tags
+and published releases build and retain the MSI and NSIS installers as workflow
+artifacts.
+
+The [2026-09-14 audit and current re-verification](docs/verification/2026-09-14-app-audit.md)
+record individual exits, browser inventory reconciliation, and environment details.
+Passing this gate does not verify packaged installation/startup, real desktop IPC
+or keyring, live OAuth/AI/LinkedIn, native scheduler crash recovery, or other
+platforms. Browser-only development is a preview, not native persistence.
 
 ## Project structure
 
@@ -75,11 +123,18 @@ tests/                  Playwright specs and Tauri IPC mocks
 
 Every new roadmap feature lands one slice at a time:
 
-1. SQL migration in `src-tauri/src/migrations`.
+1. SQL migration in `src-tauri/src/migrations` when storage changes; no unused tables.
 2. Types and Zod schemas in `src/features/<feature>` or shared orchestration folders such as `src/workflows`.
-3. Data API with typed SQL boundaries.
-4. React hook for state/actions.
-5. UI components.
-6. Docs and Playwright coverage.
+3. Typed feature capability/data API, with authoritative durable mutations in native code.
+4. React hook for state/actions when applicable.
+5. UI components when the slice needs UI.
+6. Docs and applicable contract, Playwright and native SQLite tests.
+
+Follow the [contributor checklist](docs/CONTRIBUTING.md) and
+[architecture boundaries](docs/architecture-boundaries.md). The architecture gate
+checks resolved imports and runtime/type dependency cycles against a finite,
+reviewed legacy inventory. New allowances require architecture review; deleting
+an import also requires pruning its exact stale allowance. Current implementation
+results and limits are in [boundary verification](docs/verification/modular-architecture-boundaries.md).
 
 LinkedIn publishing and commenting are OAuth-backed and approval-gated; the scheduler only publishes already-approved scheduled posts while Linkgo is running or hidden to tray. API commenting requires LinkedIn Community Management access and `w_member_social_feed`. Metric refresh is opt-in, runs only while Linkgo is open or hidden to tray, requires approved `r_member_social_feed` read access, and collects LinkedIn reactions/comments only. Source import accepts bounded local post metadata through the closed `local_json` connector contract, enforces campaign source, age, banned-topic, and prior-contact rules before candidate writes, and never makes an external request. The opt-in native Autopilot Planner consumes only terminal policy-enforced source batches and creates local backlog/workflow/candidate-artifact records. The planner never invokes a model. Planner-linked scoring is separately operator-confirmed in Workflows, excludes `dry_run`, sends bounded approved context through the native credential boundary, and commits an exact score set atomically. Planner-linked drafting is separately operator-triggered, uses fixed intent routes and bounded untrusted reference data, and advances only after explicit transactional save. No planner, scoring, or drafting path invokes a scheduler publish command, comment command, scraper, browser automation, or remote connector.

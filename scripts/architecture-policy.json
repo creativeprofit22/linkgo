@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "featurePublic": ["index.ts", "data.ts", "schemas.ts", "types/index.ts"],
+  "agentContracts": [
+    "src/agent/types.ts",
+    "src/agent/schemas.ts",
+    "src/agent/provider-catalog.ts"
+  ],
+  "workflowContracts": ["src/workflows/types.ts"],
+  "featureOrchestration": ["src/features/drafts/quality-loop.ts"],
+  "agentAdapters": [
+    "src/features/agent-runtime/data.ts",
+    "src/workflows/relevance-scoring.ts"
+  ],
+  "database": ["src/lib/db.ts"],
+  "assets": [".css", ".svg", ".png", ".jpg", ".webp", ".json"],
+  "rules": [
+    "private-feature",
+    "ui-runtime",
+    "ui-database",
+    "ui-native",
+    "infrastructure-upward",
+    "workflow-ui",
+    "workflow-persistence",
+    "agent-persistence",
+    "agent-ui",
+    "agent-consumer",
+    "contract-executable"
+  ]
+}

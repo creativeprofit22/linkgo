@@ -20,11 +20,15 @@
     "test:rust": "cd src-tauri && cargo test",
     "test:renderer-transactions": "node --test scripts/check-renderer-transactions.test.mjs",
     "check:renderer-transactions": "bun run test:renderer-transactions && node scripts/check-renderer-transactions.mjs",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\" \"docs/**/*.md\" \"*.md\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"docs/**/*.md\" \"*.md\"",
+    "test:architecture": "node --test scripts/check-architecture.test.mjs",
+    "check:architecture": "bun run test:architecture && node scripts/check-architecture.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "format:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
+    "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
     "lint": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts --fix",
-    "check": "bun run check:renderer-transactions && bun run format:check && bun run lint && bun run build && bun run test && bun run test:rust"
+    "check": "bun run check:renderer-transactions && bun run check:architecture && bun run format:check && bun run format:rust:check && bun run lint && bun run lint:rust && bun run build && bun run test && bun run test:rust"
   },
   "dependencies": {
     "@tailwindcss/vite": "4.2.4",

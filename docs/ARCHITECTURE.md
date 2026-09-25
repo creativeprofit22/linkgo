@@ -9,7 +9,9 @@ Linkgo is a Tauri v2 desktop app with a React frontend and local SQLite database
 - `src/components/` owns reusable desktop shell and UI primitives.
 - `src/features/<feature>/` owns product slices: types, schemas, data, hooks, components, and exports.
 - `src/workflows/` owns durable orchestration contracts, workflow state-machine data access, and resumable run history.
-- `src/agent/` owns tool schemas, provider interfaces, dry-run provider logic, and model-loop adapters. `src/agent/index.ts` is the public runtime contract boundary; UI imports `src/features/agent-runtime`, not runtime loop internals.
+- `src/agent/` owns tool schemas, provider interfaces, dry-run provider logic, and model-loop adapters. Its current index mixes runtime and contracts; it is not a safe UI contract. UI composes `src/features/agent-runtime`, not agent loop internals.
+
+The [enforced boundary map](architecture-boundaries.md) defines current versus target ownership, public feature entry points, exact legacy exceptions and native responsibilities. The machine policy is [architecture-policy.json](../scripts/architecture-policy.json). Feature UI calls typed APIs/hooks; workflows coordinate capabilities; agents own model/tool contracts; native modules own authoritative durable mutations, credentials and OS integration.
 
 ## Attended draft quality loop
 
@@ -19,11 +21,11 @@ Provider calls are serial and outside transactions. Strict schemas and echoed ca
 
 ## Tauri boundary
 
-Rust code should only handle work that needs OS integration, app lifecycle, plugins, native credential access, local background workers, or durable migrations.
+Rust owns authoritative durable mutations as well as OS integration, app lifecycle, plugins, native credentials, background workers and migrations. Existing renderer persistence is finite migration debt, not the target ownership model.
 
 The scheduler lives in `src-tauri/src/scheduler` because due-job execution must continue while the webview is hidden to tray and must reuse native LinkedIn OAuth credentials without exposing tokens to React.
 
-Frontend feature code uses `src/lib/db.ts` for independent SQLite reads and single-statement writes. Multi-statement mutations that require connection affinity use restricted native commands backed by the managed SQLx pool; renderer code does not issue `BEGIN`/`COMMIT` through `@tauri-apps/plugin-sql` for those capabilities. Frontend scheduler controls call native `linkgo_scheduler_*` commands for start, stop, status, and bounded manual ticks.
+The renderer has no SQL access. Every feature reads and writes through bounded, feature-specific native commands (`invokeCommand` in `src/lib/tauri.ts`) backed by the managed SQLx pool. Writes run in pinned transactions with native validation and ownership checks, and reads are capped. The renderer holds no `sql:*` permission (`src-tauri/capabilities/default.json`), and `src/lib/db.ts` has been removed. The ESLint `no-restricted-imports`/`no-restricted-syntax` rules and `bun run check:renderer-transactions` fail on any renderer import of `@tauri-apps/plugin-sql` or `@/lib/db`, any `plugin:sql|*` command, or any transaction statement. The Rust side still uses `tauri_plugin_sql` migration definitions, which the native startup migrator applies. Frontend scheduler controls call native `linkgo_scheduler_*` commands for start, stop, status, and bounded manual ticks.
 
 The local Autopilot Planner lives in `src-tauri/src/autopilot_planner.rs`. Native `linkgo_autopilot_planner_*` commands own status, start, stop, and bounded tick behavior because the worker must continue while the webview is hidden to tray, coordinate concurrent ticks with SQLite, and obey the process lifecycle. The worker stops when Linkgo quits. Every source-batch materialization runs in one `BEGIN IMMEDIATE` SQLite transaction with no network or model call inside it.
 
@@ -54,7 +56,7 @@ All-scored scope advances without a provider call. All-removed scope blocks with
 
 ## Planner-linked draft boundary
 
-`src/workflows/draft-generation.ts` owns optional workflow scope validation and draft-step lifecycle; `src/features/drafts/data.ts` owns provider request persistence and transaction-aware draft writes. A generation request commits before the provider starts. The agent run carries `workflow_run_id` but deliberately omits `workflow_step_id`, preventing generic agent reconciliation from completing the human-gated draft step.
+`src-tauri/src/draft_generation.rs` owns optional workflow scope validation, the draft-step lifecycle, request persistence and generated-draft saves (native, one pinned transaction per mutation); `src/features/drafts/data.ts` only orchestrates the provider run between native commands. A generation request commits before the provider starts. The agent run carries `workflow_run_id` but deliberately omits `workflow_step_id`, preventing generic agent reconciliation from completing the human-gated draft step.
 
 The trusted prompt summary contains only code-owned intent instructions plus explicit operator angle/voice notes. Campaign and candidate fields live in bounded `input_context_json` reference data and are serialized between untrusted-data delimiters. The `draft_post` arguments carry the provider-authored variants; completed input and output must preserve those normalized variants and match the durable request ID, campaign, candidate, intent, and exact 3–5 count.
 
@@ -64,14 +66,14 @@ Provider success leaves linked `draft` work running. Only explicit save uses one
 
 Each new feature must add:
 
-1. A modular migration under `src-tauri/src/migrations`.
+1. A modular migration under `src-tauri/src/migrations` when storage changes; never pre-create unused tables.
 2. Feature types under `src/features/<feature>/types`.
 3. Zod schemas under `src/features/<feature>/schemas.ts`.
-4. SQL data functions under `src/features/<feature>/data.ts`.
-5. A React hook for UI state/actions.
-6. Components under `src/features/<feature>/components`.
-7. Documentation under `docs/features`.
-8. Playwright tests.
+4. Typed capability/data functions under `src/features/<feature>/data.ts`, with native durable ownership.
+5. A React hook for UI state/actions when applicable.
+6. Components under `src/features/<feature>/components` when UI is needed.
+7. Documentation under `docs/features` and declared public boundaries.
+8. Applicable contract, browser and native SQLite tests; run the architecture gate. See [CONTRIBUTING](CONTRIBUTING.md).
 
 ## Database conventions
 
