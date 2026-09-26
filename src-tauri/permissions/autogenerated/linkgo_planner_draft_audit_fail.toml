@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-planner-draft-audit-fail"
+description = "Enables the linkgo_planner_draft_audit_fail command without any pre-configured scope."
+commands.allow = ["linkgo_planner_draft_audit_fail"]
+
+[[permission]]
+identifier = "deny-linkgo-planner-draft-audit-fail"
+description = "Denies the linkgo_planner_draft_audit_fail command without any pre-configured scope."
+commands.deny = ["linkgo_planner_draft_audit_fail"]

@@ -7,20 +7,8 @@ import { IS_TAURI } from "@/lib/env";
 export function MainTitleBar(): React.ReactNode {
   const handleOpenSettings = async (): Promise<void> => {
     if (!IS_TAURI) return;
-    const { createWindow } = await import("@/lib/window");
-    await createWindow("settings", {
-      title: "Settings",
-      url: "/settings",
-      width: 640,
-      height: 520,
-      resizable: true,
-      maximizable: true,
-      minimizable: false,
-      decorations: false,
-      transparent: true,
-      shadow: false,
-      parent: "main",
-    });
+    const { openSettingsWindow } = await import("@/lib/window");
+    await openSettingsWindow();
   };
 
   return (

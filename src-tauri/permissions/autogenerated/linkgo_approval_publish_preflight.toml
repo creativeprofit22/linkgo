@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-approval-publish-preflight"
+description = "Enables the linkgo_approval_publish_preflight command without any pre-configured scope."
+commands.allow = ["linkgo_approval_publish_preflight"]
+
+[[permission]]
+identifier = "deny-linkgo-approval-publish-preflight"
+description = "Denies the linkgo_approval_publish_preflight command without any pre-configured scope."
+commands.deny = ["linkgo_approval_publish_preflight"]

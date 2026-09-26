@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-campaign-backlog-update"
+description = "Enables the linkgo_campaign_backlog_update command without any pre-configured scope."
+commands.allow = ["linkgo_campaign_backlog_update"]
+
+[[permission]]
+identifier = "deny-linkgo-campaign-backlog-update"
+description = "Denies the linkgo_campaign_backlog_update command without any pre-configured scope."
+commands.deny = ["linkgo_campaign_backlog_update"]

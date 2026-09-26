@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-source-import-write-batch"
+description = "Enables the linkgo_source_import_write_batch command without any pre-configured scope."
+commands.allow = ["linkgo_source_import_write_batch"]
+
+[[permission]]
+identifier = "deny-linkgo-source-import-write-batch"
+description = "Denies the linkgo_source_import_write_batch command without any pre-configured scope."
+commands.deny = ["linkgo_source_import_write_batch"]

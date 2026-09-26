@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-settings-launch-on-login-sync"
+description = "Enables the linkgo_settings_launch_on_login_sync command without any pre-configured scope."
+commands.allow = ["linkgo_settings_launch_on_login_sync"]
+
+[[permission]]
+identifier = "deny-linkgo-settings-launch-on-login-sync"
+description = "Denies the linkgo_settings_launch_on_login_sync command without any pre-configured scope."
+commands.deny = ["linkgo_settings_launch_on_login_sync"]

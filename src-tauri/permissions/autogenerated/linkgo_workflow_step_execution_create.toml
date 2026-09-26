@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-workflow-step-execution-create"
+description = "Enables the linkgo_workflow_step_execution_create command without any pre-configured scope."
+commands.allow = ["linkgo_workflow_step_execution_create"]
+
+[[permission]]
+identifier = "deny-linkgo-workflow-step-execution-create"
+description = "Denies the linkgo_workflow_step_execution_create command without any pre-configured scope."
+commands.deny = ["linkgo_workflow_step_execution_create"]

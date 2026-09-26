@@ -1,0 +1,11 @@
+# Linkgo app commands granted to the `settings` window. The settings page only
+# records launch-on-login state; it gets no publishing, credential, draft or
+# agent commands.
+
+[[set]]
+identifier = "settings-commands"
+description = "Linkgo commands used by the settings window."
+permissions = [
+  "allow-linkgo-settings-launch-on-login-sync",
+  "allow-linkgo-settings-launch-on-login-error-record",
+]

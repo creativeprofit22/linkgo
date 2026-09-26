@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-draft-create"
+description = "Enables the linkgo_draft_create command without any pre-configured scope."
+commands.allow = ["linkgo_draft_create"]
+
+[[permission]]
+identifier = "deny-linkgo-draft-create"
+description = "Denies the linkgo_draft_create command without any pre-configured scope."
+commands.deny = ["linkgo_draft_create"]

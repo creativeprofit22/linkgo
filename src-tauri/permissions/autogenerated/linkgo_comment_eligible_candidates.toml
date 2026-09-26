@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-comment-eligible-candidates"
+description = "Enables the linkgo_comment_eligible_candidates command without any pre-configured scope."
+commands.allow = ["linkgo_comment_eligible_candidates"]
+
+[[permission]]
+identifier = "deny-linkgo-comment-eligible-candidates"
+description = "Denies the linkgo_comment_eligible_candidates command without any pre-configured scope."
+commands.deny = ["linkgo_comment_eligible_candidates"]

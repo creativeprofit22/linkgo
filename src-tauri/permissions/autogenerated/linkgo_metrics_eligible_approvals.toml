@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-metrics-eligible-approvals"
+description = "Enables the linkgo_metrics_eligible_approvals command without any pre-configured scope."
+commands.allow = ["linkgo_metrics_eligible_approvals"]
+
+[[permission]]
+identifier = "deny-linkgo-metrics-eligible-approvals"
+description = "Denies the linkgo_metrics_eligible_approvals command without any pre-configured scope."
+commands.deny = ["linkgo_metrics_eligible_approvals"]

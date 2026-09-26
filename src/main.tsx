@@ -208,6 +208,14 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
 function RootShell(): React.ReactNode {
   useEffect(() => {
     if (!IS_TAURI) return;
+    void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      void getCurrentWindow()
+        .show()
+        .catch(() => {});
+    });
+    // The settings window's capability grants only launch-on-login commands;
+    // draft reconciliation runs once from the main window.
+    if (PageComponent === SettingsPage) return;
     void import("@/features/drafts/data")
       .then(({ reconcileStaleDraftQuality }) => reconcileStaleDraftQuality())
       .catch((error: unknown) => {
@@ -220,11 +228,6 @@ function RootShell(): React.ReactNode {
       .catch((error: unknown) => {
         console.error("Draft AI audit startup reconciliation failed", error);
       });
-    void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-      void getCurrentWindow()
-        .show()
-        .catch(() => {});
-    });
   }, []);
 
   return <PageComponent />;

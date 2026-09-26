@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-draft-ai-audit-reconcile"
+description = "Enables the linkgo_draft_ai_audit_reconcile command without any pre-configured scope."
+commands.allow = ["linkgo_draft_ai_audit_reconcile"]
+
+[[permission]]
+identifier = "deny-linkgo-draft-ai-audit-reconcile"
+description = "Denies the linkgo_draft_ai_audit_reconcile command without any pre-configured scope."
+commands.deny = ["linkgo_draft_ai_audit_reconcile"]

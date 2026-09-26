@@ -44,6 +44,12 @@ A failed change keeps the prior state and shows `Launch-on-login setting was not
 
 The OS autostart state is read and changed through the autostart plugin first, never inside a database transaction. Native commands in `src-tauri/src/settings.rs` then mirror it into the singleton `app_settings` row: `linkgo_settings_launch_on_login_sync` (recreates a missing row, stores the OS state and sync time, and keeps or replaces the last error) and `linkgo_settings_launch_on_login_error_record` (error text bounded to 500 UTF-16 units). Each runs in one transaction. The renderer has no direct SQL access to this table.
 
+## Window and permissions
+
+The Settings window is created natively by `linkgo_window_open_settings` (`src-tauri/src/window_commands.rs`) with a fixed label (`settings`), route (`/settings`), size and parent; it focuses an existing Settings window instead of opening a second one. The renderer cannot create webviews or choose their URLs.
+
+The `settings` window has its own capability (`src-tauri/capabilities/settings.json`): the two launch-on-login commands above, `autostart:allow-enable/disable/is-enabled`, event listening and its own window controls. It cannot call publishing, credential, draft, agent or other main-window commands. Startup draft reconciliation runs only in the main window. See `docs/security/capability-matrix.md`.
+
 ## Exclusions
 
 - No hidden startup args in this slice.

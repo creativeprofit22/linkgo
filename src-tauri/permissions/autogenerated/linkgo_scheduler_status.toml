@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-scheduler-status"
+description = "Enables the linkgo_scheduler_status command without any pre-configured scope."
+commands.allow = ["linkgo_scheduler_status"]
+
+[[permission]]
+identifier = "deny-linkgo-scheduler-status"
+description = "Denies the linkgo_scheduler_status command without any pre-configured scope."
+commands.deny = ["linkgo_scheduler_status"]

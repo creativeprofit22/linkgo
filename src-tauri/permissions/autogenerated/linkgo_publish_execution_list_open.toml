@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-publish-execution-list-open"
+description = "Enables the linkgo_publish_execution_list_open command without any pre-configured scope."
+commands.allow = ["linkgo_publish_execution_list_open"]
+
+[[permission]]
+identifier = "deny-linkgo-publish-execution-list-open"
+description = "Denies the linkgo_publish_execution_list_open command without any pre-configured scope."
+commands.deny = ["linkgo_publish_execution_list_open"]

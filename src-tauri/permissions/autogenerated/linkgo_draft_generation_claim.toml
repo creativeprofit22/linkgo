@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-draft-generation-claim"
+description = "Enables the linkgo_draft_generation_claim command without any pre-configured scope."
+commands.allow = ["linkgo_draft_generation_claim"]
+
+[[permission]]
+identifier = "deny-linkgo-draft-generation-claim"
+description = "Denies the linkgo_draft_generation_claim command without any pre-configured scope."
+commands.deny = ["linkgo_draft_generation_claim"]

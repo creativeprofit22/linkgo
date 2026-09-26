@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-planner-draft-audit-complete"
+description = "Enables the linkgo_planner_draft_audit_complete command without any pre-configured scope."
+commands.allow = ["linkgo_planner_draft_audit_complete"]
+
+[[permission]]
+identifier = "deny-linkgo-planner-draft-audit-complete"
+description = "Denies the linkgo_planner_draft_audit_complete command without any pre-configured scope."
+commands.deny = ["linkgo_planner_draft_audit_complete"]

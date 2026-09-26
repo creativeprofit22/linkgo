@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-relevance-scoring-claim"
+description = "Enables the linkgo_relevance_scoring_claim command without any pre-configured scope."
+commands.allow = ["linkgo_relevance_scoring_claim"]
+
+[[permission]]
+identifier = "deny-linkgo-relevance-scoring-claim"
+description = "Denies the linkgo_relevance_scoring_claim command without any pre-configured scope."
+commands.deny = ["linkgo_relevance_scoring_claim"]

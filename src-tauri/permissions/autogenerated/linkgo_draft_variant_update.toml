@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-draft-variant-update"
+description = "Enables the linkgo_draft_variant_update command without any pre-configured scope."
+commands.allow = ["linkgo_draft_variant_update"]
+
+[[permission]]
+identifier = "deny-linkgo-draft-variant-update"
+description = "Denies the linkgo_draft_variant_update command without any pre-configured scope."
+commands.deny = ["linkgo_draft_variant_update"]

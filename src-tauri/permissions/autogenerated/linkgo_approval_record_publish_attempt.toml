@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-approval-record-publish-attempt"
+description = "Enables the linkgo_approval_record_publish_attempt command without any pre-configured scope."
+commands.allow = ["linkgo_approval_record_publish_attempt"]
+
+[[permission]]
+identifier = "deny-linkgo-approval-record-publish-attempt"
+description = "Denies the linkgo_approval_record_publish_attempt command without any pre-configured scope."
+commands.deny = ["linkgo_approval_record_publish_attempt"]

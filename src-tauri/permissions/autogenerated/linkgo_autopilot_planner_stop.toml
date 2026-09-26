@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-autopilot-planner-stop"
+description = "Enables the linkgo_autopilot_planner_stop command without any pre-configured scope."
+commands.allow = ["linkgo_autopilot_planner_stop"]
+
+[[permission]]
+identifier = "deny-linkgo-autopilot-planner-stop"
+description = "Denies the linkgo_autopilot_planner_stop command without any pre-configured scope."
+commands.deny = ["linkgo_autopilot_planner_stop"]

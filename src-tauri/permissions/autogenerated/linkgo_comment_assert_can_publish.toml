@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-comment-assert-can-publish"
+description = "Enables the linkgo_comment_assert_can_publish command without any pre-configured scope."
+commands.allow = ["linkgo_comment_assert_can_publish"]
+
+[[permission]]
+identifier = "deny-linkgo-comment-assert-can-publish"
+description = "Denies the linkgo_comment_assert_can_publish command without any pre-configured scope."
+commands.deny = ["linkgo_comment_assert_can_publish"]

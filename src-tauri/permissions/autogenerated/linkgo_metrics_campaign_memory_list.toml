@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-metrics-campaign-memory-list"
+description = "Enables the linkgo_metrics_campaign_memory_list command without any pre-configured scope."
+commands.allow = ["linkgo_metrics_campaign_memory_list"]
+
+[[permission]]
+identifier = "deny-linkgo-metrics-campaign-memory-list"
+description = "Denies the linkgo_metrics_campaign_memory_list command without any pre-configured scope."
+commands.deny = ["linkgo_metrics_campaign_memory_list"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-safety-set-global-kill-switch"
+description = "Enables the linkgo_safety_set_global_kill_switch command without any pre-configured scope."
+commands.allow = ["linkgo_safety_set_global_kill_switch"]
+
+[[permission]]
+identifier = "deny-linkgo-safety-set-global-kill-switch"
+description = "Denies the linkgo_safety_set_global_kill_switch command without any pre-configured scope."
+commands.deny = ["linkgo_safety_set_global_kill_switch"]

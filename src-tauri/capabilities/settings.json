@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings",
+  "description": "Settings window: launch-on-login state only (autostart plugin plus its two audit commands) and its own window controls.",
+  "windows": ["settings"],
+  "permissions": [
+    "settings-commands",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-maximized"
+  ]
+}

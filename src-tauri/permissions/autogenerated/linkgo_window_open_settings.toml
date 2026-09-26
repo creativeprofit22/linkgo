@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-window-open-settings"
+description = "Enables the linkgo_window_open_settings command without any pre-configured scope."
+commands.allow = ["linkgo_window_open_settings"]
+
+[[permission]]
+identifier = "deny-linkgo-window-open-settings"
+description = "Denies the linkgo_window_open_settings command without any pre-configured scope."
+commands.deny = ["linkgo_window_open_settings"]

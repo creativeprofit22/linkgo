@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Main Linkgo window: app commands it uses, its own window controls, event listening for OAuth callbacks and window resize, and the show-window global shortcut.",
+  "windows": ["main"],
+  "permissions": [
+    "main-commands",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-maximized",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
+  ]
+}

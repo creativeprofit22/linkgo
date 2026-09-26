@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-candidate-policy-update"
+description = "Enables the linkgo_candidate_policy_update command without any pre-configured scope."
+commands.allow = ["linkgo_candidate_policy_update"]
+
+[[permission]]
+identifier = "deny-linkgo-candidate-policy-update"
+description = "Denies the linkgo_candidate_policy_update command without any pre-configured scope."
+commands.deny = ["linkgo_candidate_policy_update"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-metrics-set-campaign-memory-status"
+description = "Enables the linkgo_metrics_set_campaign_memory_status command without any pre-configured scope."
+commands.allow = ["linkgo_metrics_set_campaign_memory_status"]
+
+[[permission]]
+identifier = "deny-linkgo-metrics-set-campaign-memory-status"
+description = "Denies the linkgo_metrics_set_campaign_memory_status command without any pre-configured scope."
+commands.deny = ["linkgo_metrics_set_campaign_memory_status"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-agent-settle-approved-continuation"
+description = "Enables the linkgo_agent_settle_approved_continuation command without any pre-configured scope."
+commands.allow = ["linkgo_agent_settle_approved_continuation"]
+
+[[permission]]
+identifier = "deny-linkgo-agent-settle-approved-continuation"
+description = "Denies the linkgo_agent_settle_approved_continuation command without any pre-configured scope."
+commands.deny = ["linkgo_agent_settle_approved_continuation"]

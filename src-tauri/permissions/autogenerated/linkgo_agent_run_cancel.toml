@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-agent-run-cancel"
+description = "Enables the linkgo_agent_run_cancel command without any pre-configured scope."
+commands.allow = ["linkgo_agent_run_cancel"]
+
+[[permission]]
+identifier = "deny-linkgo-agent-run-cancel"
+description = "Denies the linkgo_agent_run_cancel command without any pre-configured scope."
+commands.deny = ["linkgo_agent_run_cancel"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-relevance-scoring-reconcile"
+description = "Enables the linkgo_relevance_scoring_reconcile command without any pre-configured scope."
+commands.allow = ["linkgo_relevance_scoring_reconcile"]
+
+[[permission]]
+identifier = "deny-linkgo-relevance-scoring-reconcile"
+description = "Denies the linkgo_relevance_scoring_reconcile command without any pre-configured scope."
+commands.deny = ["linkgo_relevance_scoring_reconcile"]

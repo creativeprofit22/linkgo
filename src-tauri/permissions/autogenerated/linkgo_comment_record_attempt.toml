@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-comment-record-attempt"
+description = "Enables the linkgo_comment_record_attempt command without any pre-configured scope."
+commands.allow = ["linkgo_comment_record_attempt"]
+
+[[permission]]
+identifier = "deny-linkgo-comment-record-attempt"
+description = "Denies the linkgo_comment_record_attempt command without any pre-configured scope."
+commands.deny = ["linkgo_comment_record_attempt"]

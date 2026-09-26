@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-approval-eligible-drafts"
+description = "Enables the linkgo_approval_eligible_drafts command without any pre-configured scope."
+commands.allow = ["linkgo_approval_eligible_drafts"]
+
+[[permission]]
+identifier = "deny-linkgo-approval-eligible-drafts"
+description = "Denies the linkgo_approval_eligible_drafts command without any pre-configured scope."
+commands.deny = ["linkgo_approval_eligible_drafts"]

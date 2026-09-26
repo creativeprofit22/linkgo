@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-safety-settings-get"
+description = "Enables the linkgo_safety_settings_get command without any pre-configured scope."
+commands.allow = ["linkgo_safety_settings_get"]
+
+[[permission]]
+identifier = "deny-linkgo-safety-settings-get"
+description = "Denies the linkgo_safety_settings_get command without any pre-configured scope."
+commands.deny = ["linkgo_safety_settings_get"]

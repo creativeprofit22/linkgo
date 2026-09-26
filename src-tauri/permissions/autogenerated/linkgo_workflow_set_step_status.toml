@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-workflow-set-step-status"
+description = "Enables the linkgo_workflow_set_step_status command without any pre-configured scope."
+commands.allow = ["linkgo_workflow_set_step_status"]
+
+[[permission]]
+identifier = "deny-linkgo-workflow-set-step-status"
+description = "Denies the linkgo_workflow_set_step_status command without any pre-configured scope."
+commands.deny = ["linkgo_workflow_set_step_status"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-linkedin-publish-comment"
+description = "Enables the linkgo_linkedin_publish_comment command without any pre-configured scope."
+commands.allow = ["linkgo_linkedin_publish_comment"]
+
+[[permission]]
+identifier = "deny-linkgo-linkedin-publish-comment"
+description = "Denies the linkgo_linkedin_publish_comment command without any pre-configured scope."
+commands.deny = ["linkgo_linkedin_publish_comment"]

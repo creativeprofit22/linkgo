@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-agent-run-fail-after-persistence-error"
+description = "Enables the linkgo_agent_run_fail_after_persistence_error command without any pre-configured scope."
+commands.allow = ["linkgo_agent_run_fail_after_persistence_error"]
+
+[[permission]]
+identifier = "deny-linkgo-agent-run-fail-after-persistence-error"
+description = "Denies the linkgo_agent_run_fail_after_persistence_error command without any pre-configured scope."
+commands.deny = ["linkgo_agent_run_fail_after_persistence_error"]

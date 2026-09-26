@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-scheduler-dashboard-get"
+description = "Enables the linkgo_scheduler_dashboard_get command without any pre-configured scope."
+commands.allow = ["linkgo_scheduler_dashboard_get"]
+
+[[permission]]
+identifier = "deny-linkgo-scheduler-dashboard-get"
+description = "Denies the linkgo_scheduler_dashboard_get command without any pre-configured scope."
+commands.deny = ["linkgo_scheduler_dashboard_get"]
