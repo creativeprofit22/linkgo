@@ -2,11 +2,29 @@
 import { expect, test } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 import { readFileSync } from "node:fs";
+import { createServer as createNetServer } from "node:net";
 import { createServer, type ViteDevServer } from "vite";
+
+// Vite treats `port: 0` as its default (5173), which Windows may reserve
+// (EACCES). Ask the OS for a genuinely free loopback port instead.
+async function findFreePort(): Promise<number> {
+  const probe = createNetServer();
+  await new Promise<void>((resolve, reject) => {
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", resolve);
+  });
+  const address = probe.address();
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  if (address === null || typeof address === "string") {
+    throw new Error("Could not resolve a free loopback port");
+  }
+  return address.port;
+}
+
 let componentServer: ViteDevServer;
 test.beforeAll(async () => {
   componentServer = await createServer({
-    server: { host: "127.0.0.1", port: 0, strictPort: false },
+    server: { host: "127.0.0.1", port: await findFreePort(), strictPort: true },
   });
   await componentServer.listen();
 });
