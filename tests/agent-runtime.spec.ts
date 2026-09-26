@@ -58,6 +58,51 @@ test("persists a completed dry-run with tool calls and events", async ({
   expect(runs[0]?.iteration_count).toBe(2);
 });
 
+test("failed quality-owned agent offers no Start and points to Drafts", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await page.evaluate(async () => {
+    const w = window as unknown as {
+      __LINKGO_SQL_SEED_QUALITY_RECOVERY__: (
+        status: string,
+        attempt: number,
+        stale: boolean,
+      ) => Promise<{ qualityRunId: number; draftVariantId: number }>;
+      __LINKGO_SQL_QUALITY_RECOVERY_SNAPSHOT__: () => {
+        draftQualityAttempts: { id: number; run_id: number }[];
+      };
+      __TAURI_INTERNALS__: {
+        invoke: (command: string, args: unknown) => Promise<unknown>;
+      };
+    };
+    // A running quality loop whose scorer agent is then failed by the loop.
+    const scope = await w.__LINKGO_SQL_SEED_QUALITY_RECOVERY__(
+      "running",
+      1,
+      false,
+    );
+    const attempt = w
+      .__LINKGO_SQL_QUALITY_RECOVERY_SNAPSHOT__()
+      .draftQualityAttempts.find((row) => row.run_id === scope.qualityRunId);
+    await w.__TAURI_INTERNALS__.invoke("linkgo_draft_quality_fail", {
+      input: {
+        ...scope,
+        attemptId: attempt?.id,
+        errorMessage: "Provider failed",
+      },
+    });
+  });
+  await openAgentRuntime(page);
+
+  await expect(getBadge(page, "Failed").first()).toBeVisible();
+  await expect(
+    page.getByText("Owned by the draft quality loop — resume it from Drafts."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Start / })).toHaveCount(0);
+});
+
 test("dry-run researcher persists discovery items through research_posts", async ({
   page,
 }) => {

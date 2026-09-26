@@ -17,6 +17,7 @@ use sqlx::{Row, SqliteConnection, SqlitePool};
 use tauri::State;
 
 use crate::agent_providers::AGENT_PROVIDER_KEYS;
+use crate::agent_run_store::{fail_active_agent as fail_shared_agent, FailedAgent};
 use crate::db_transaction::{settle, Settlement};
 use crate::js_text::{js_trim, utf16_len, utf16_prefix};
 
@@ -598,39 +599,38 @@ pub struct FailDraftAiAuditInput {
     pub agent_run_id: Option<i64>,
 }
 
-async fn fail_agent(
+/// Fails a linked auditor agent through the shared agent primitive, keeping
+/// this command's storage error contract.
+async fn fail_active_agent(
     connection: &mut SqliteConnection,
     agent_run_id: i64,
     error_message: &str,
+) -> Result<FailedAgent, String> {
+    fail_shared_agent(connection, agent_run_id, error_message)
+        .await
+        .map_err(|_| STORAGE_ERROR.to_string())
+}
+
+/// Shared audit-run failure primitive: fails a `pending`/`running` audit run
+/// inside the caller's transaction. Returns whether a row was settled; terminal
+/// runs are untouched so repeated settlement is idempotent.
+pub(crate) async fn fail_active_audit_run(
+    connection: &mut SqliteConnection,
+    audit_run_id: i64,
+    error_message: &str,
 ) -> Result<bool, String> {
     let failed = sqlx::query(
-        "UPDATE agent_runs
+        "UPDATE draft_ai_audit_runs
          SET status = 'failed', error_message = ?1, completed_at = datetime('now'),
              updated_at = datetime('now')
-         WHERE id = ?2 AND status IN ('queued', 'running', 'waiting_approval')",
+         WHERE id = ?2 AND status IN ('pending', 'running')",
     )
     .bind(error_message)
-    .bind(agent_run_id)
+    .bind(audit_run_id)
     .execute(&mut *connection)
     .await
     .map_err(storage_error)?;
-    if failed.rows_affected() != 1 {
-        return Ok(false);
-    }
-    sqlx::query("DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = ?1")
-        .bind(agent_run_id)
-        .execute(&mut *connection)
-        .await
-        .map_err(storage_error)?;
-    sqlx::query(
-        "INSERT INTO agent_run_events (agent_run_id, event_type, summary) VALUES (?1, 'run_failed', ?2)",
-    )
-    .bind(agent_run_id)
-    .bind(error_message)
-    .execute(&mut *connection)
-    .await
-    .map_err(storage_error)?;
-    Ok(true)
+    Ok(failed.rows_affected() == 1)
 }
 
 pub(crate) async fn fail(
@@ -652,22 +652,11 @@ pub(crate) async fn fail(
             {
                 return Err("Draft AI audit run does not match this draft revision".to_string());
             }
-            let failed = sqlx::query(
-                "UPDATE draft_ai_audit_runs
-                 SET status = 'failed', error_message = ?1, completed_at = datetime('now'),
-                     updated_at = datetime('now')
-                 WHERE id = ?2 AND status IN ('pending', 'running')",
-            )
-            .bind(&error_message)
-            .bind(run.id)
-            .execute(&mut *connection)
-            .await
-            .map_err(storage_error)?;
-            if failed.rows_affected() != 1 {
+            if !fail_active_audit_run(connection, run.id, &error_message).await? {
                 return Err("Draft AI audit run is not active".to_string());
             }
             if let Some(agent_run_id) = run.agent_run_id.or(input.agent_run_id) {
-                fail_agent(connection, agent_run_id, &error_message).await?;
+                fail_active_agent(connection, agent_run_id, &error_message).await?;
             }
             Ok(Settlement::Accepted(load_run(connection, run.id).await?))
         })
@@ -696,26 +685,6 @@ pub struct ReconcileDraftAiAuditOutput {
     pub failed_audit_run_ids: Vec<i64>,
     pub failed_agent_run_ids: Vec<i64>,
     pub cleared_approval_checkpoint_count: i64,
-}
-
-/// Fails an active auditor agent; returns (failed, cleared checkpoints).
-async fn fail_stale_agent(
-    connection: &mut SqliteConnection,
-    agent_run_id: i64,
-    error_message: &str,
-) -> Result<(bool, i64), String> {
-    let cleared: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM agent_run_approval_checkpoints WHERE agent_run_id = ?1",
-    )
-    .bind(agent_run_id)
-    .fetch_one(&mut *connection)
-    .await
-    .map_err(storage_error)?;
-    if fail_agent(connection, agent_run_id, error_message).await? {
-        Ok((true, cleared))
-    } else {
-        Ok((false, 0))
-    }
 }
 
 /// Port of the standalone part of `reconcileDraftAiAuditLifecycle`
@@ -747,6 +716,14 @@ pub(crate) async fn reconcile(
                  LEFT JOIN agent_runs ar ON ar.id = dar.agent_run_id
                  WHERE dar.status IN ('pending', 'running')
                    AND dar.workflow_step_execution_id IS NULL
+                   -- Rewrite audits owned by an active quality run are settled
+                   -- atomically by the quality reconciler, never here.
+                   AND NOT EXISTS (
+                     SELECT 1 FROM draft_quality_runs qr
+                     WHERE qr.status IN ('pending', 'running')
+                       AND (qr.active_ai_audit_run_id = dar.id
+                         OR EXISTS (SELECT 1 FROM draft_quality_attempts a
+                                    WHERE a.run_id = qr.id AND a.ai_audit_run_id = dar.id)))
                    AND (
                      (dar.agent_run_id IS NULL
                        AND datetime(dar.updated_at) <= datetime('now', ?1))
@@ -777,31 +754,18 @@ pub(crate) async fn reconcile(
                         "Draft AI audit did not reach terminal settlement within {EXECUTION_STALE_MINUTES} minutes of its last lifecycle activity."
                     ),
                 };
-                let failed = sqlx::query(
-                    "UPDATE draft_ai_audit_runs
-                     SET status = 'failed', error_message = ?1, completed_at = datetime('now'),
-                         updated_at = datetime('now')
-                     WHERE id = ?2 AND draft_variant_id = ?3 AND content_revision = ?4
-                       AND status IN ('pending', 'running')",
-                )
-                .bind(&message)
-                .bind(id)
-                .bind(row.get::<i64, _>("draft_variant_id"))
-                .bind(row.get::<i64, _>("content_revision"))
-                .execute(&mut *connection)
-                .await
-                .map_err(storage_error)?;
-                if failed.rows_affected() != 1 {
+                // Rows were selected under this transaction's write lock, so
+                // the shared primitive settles exactly the selected revision.
+                if !fail_active_audit_run(connection, id, &message).await? {
                     continue;
                 }
                 output.failed_audit_run_ids.push(id);
                 if let Some(agent_run_id) = agent_run_id {
-                    let (agent_failed, cleared) =
-                        fail_stale_agent(connection, agent_run_id, &message).await?;
-                    if agent_failed {
+                    let settled = fail_active_agent(connection, agent_run_id, &message).await?;
+                    if settled.failed {
                         output.failed_agent_run_ids.push(agent_run_id);
                     }
-                    output.cleared_approval_checkpoint_count += cleared;
+                    output.cleared_approval_checkpoint_count += settled.cleared_checkpoints;
                 }
             }
             let orphans: Vec<i64> = sqlx::query_scalar(
@@ -827,12 +791,11 @@ pub(crate) async fn reconcile(
                 "Draft AI audit agent was interrupted before linking and remained orphaned for more than {RESERVATION_STALE_MINUTES} minutes."
             );
             for agent_run_id in orphans {
-                let (agent_failed, cleared) =
-                    fail_stale_agent(connection, agent_run_id, &orphan_message).await?;
-                if agent_failed {
+                let settled = fail_active_agent(connection, agent_run_id, &orphan_message).await?;
+                if settled.failed {
                     output.failed_agent_run_ids.push(agent_run_id);
                 }
-                output.cleared_approval_checkpoint_count += cleared;
+                output.cleared_approval_checkpoint_count += settled.cleared_checkpoints;
             }
             Ok(Settlement::Accepted(output))
         })

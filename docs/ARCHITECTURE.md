@@ -17,7 +17,9 @@ The [enforced boundary map](architecture-boundaries.md) defines current versus t
 
 The Draft variant UI starts a bounded quality loop only after a completed canonical non-blocking current-revision AI audit. Native Tauri commands own all multi-statement writes in one immediate SQLx transaction: claim, score settlement, rewrite/revision increment, deterministic audit regeneration, re-audit reservation, continuation, failure, resume, and stale reconciliation.
 
-Provider calls are serial and outside transactions. Strict schemas and echoed campaign/variant/run/attempt/revision identity are validated before settlement. A score below 70 permits at most two evidence-grounded rewrites; each is AI-audited before re-scoring. Failure, stale content, blocking audit, exhaustion, or missing rewrite ends durably without approval or external action. Claims older than 15 minutes become explicitly resumable. New approvals require a passed current-revision quality run with score at least 70.
+Provider calls are serial and outside transactions. Strict schemas and echoed campaign/variant/run/attempt/revision identity are validated before settlement. A score below 70 permits at most two evidence-grounded rewrites; each is AI-audited before re-scoring. Failure, stale content, blocking audit, exhaustion, or missing rewrite ends durably without approval or external action. Runs with no activity on the run, its active agent or its active audit for 15 minutes become explicitly resumable.
+
+Recovery has a single owner, `draft_quality.rs`. Fail, reconcile and resume settle the run, its attempts, linked scorer/auditor agents (via `agent_run_store::fail_active_agent`) and linked rewrite audits (via `draft_ai_audits::fail_active_audit_run`) in the same transaction. The draft AI-audit reconciler defers quality-owned audits. Late failures, starts and settlements from a prior attempt are rejected natively. New approvals require a passed current-revision quality run with score at least 70.
 
 ## Tauri boundary
 

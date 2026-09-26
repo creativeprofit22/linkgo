@@ -63,8 +63,12 @@ export function AgentRunCard({
   onCancelRun,
 }: AgentRunCardProps): React.ReactNode {
   const checkpoint = run.checkpoint;
-  const startableStatus =
+  const restartableStatus =
     checkpoint === null && ["queued", "failed"].includes(run.status);
+  // Native start rejects quality-loop agents that are no longer active.
+  const startBlockedByQualityLoop =
+    restartableStatus && run.qualityStartBlocked;
+  const startableStatus = restartableStatus && !run.qualityStartBlocked;
   const providerLabel = AGENT_PROVIDER_LABELS[run.provider_key];
   const playbook = getAgentPlaybook(run.playbook_key);
   const canStart = startableStatus && !killSwitchEnabled && providerConnected;
@@ -192,6 +196,11 @@ export function AgentRunCard({
                   />
                   {resuming ? "Resuming…" : resumeLabel}
                 </Button>
+              )}
+              {startBlockedByQualityLoop && (
+                <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
+                  Owned by the draft quality loop — resume it from Drafts.
+                </p>
               )}
               {startBlockedByMissingProvider && (
                 <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">

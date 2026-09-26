@@ -512,6 +512,135 @@ test("scored attempt renders native-shaped category scores in the scorecard", as
   await expect(items.first()).toContainText("Authenticity");
 });
 
+for (const scenario of [
+  {
+    name: "stale attempt keeps the provider error",
+    settlementError: "Quality attempt is no longer active",
+    description: "Quality provider exploded mid-score",
+  },
+  {
+    name: "reconciled run keeps the provider error",
+    settlementError: "Active quality run was not found",
+    description: "Quality provider exploded mid-score",
+  },
+  {
+    name: "unknown settlement failure is reported as unsettled",
+    settlementError: "database is locked",
+    description: "Draft quality failure could not be settled",
+  },
+]) {
+  test(`rejected failure settlement: ${scenario.name}`, async ({ page }) => {
+    const variantId = await page.evaluate(async (settlementError) => {
+      const w = window as unknown as {
+        __LINKGO_SQL_SEED_QUALITY_RECOVERY__: (
+          status: string,
+          attempt: number,
+          stale: boolean,
+        ) => Promise<{ qualityRunId: number; draftVariantId: number }>;
+        __TAURI_INTERNALS__: {
+          invoke: (command: string, args?: unknown) => Promise<unknown>;
+        };
+      };
+      const scope = await w.__LINKGO_SQL_SEED_QUALITY_RECOVERY__(
+        "failed",
+        1,
+        false,
+      );
+      const internals = w.__TAURI_INTERNALS__;
+      const original = internals.invoke.bind(internals);
+      internals.invoke = (command: string, args?: unknown) => {
+        // Native rejects with the raw `Err(String)` payload.
+        if (command === "linkgo_agent_run_validation")
+          return Promise.reject("Quality provider exploded mid-score");
+        if (command === "linkgo_draft_quality_fail")
+          return Promise.reject(settlementError);
+        return original(command, args);
+      };
+      return scope.draftVariantId;
+    }, scenario.settlementError);
+
+    await page.getByRole("button", { name: "Campaigns" }).click();
+    await page.getByRole("button", { name: "Drafts" }).click();
+    const panel = page.getByRole("region", { name: "Draft quality" }).filter({
+      has: page.locator(`#quality-${variantId}-title`),
+    });
+    await panel.getByRole("button", { name: "Resume quality loop" }).click();
+
+    const toast = page
+      .locator("[data-sonner-toast]")
+      .filter({ hasText: "Draft quality loop stopped" });
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText(scenario.description);
+    await expect(toast).not.toContainText(scenario.settlementError);
+  });
+}
+
+test("oversized provider error is bounded before failure settlement", async ({
+  page,
+}) => {
+  const variantId = await page.evaluate(async () => {
+    const w = window as unknown as {
+      __LINKGO_SQL_SEED_QUALITY_RECOVERY__: (
+        status: string,
+        attempt: number,
+        stale: boolean,
+      ) => Promise<{ qualityRunId: number; draftVariantId: number }>;
+      __LINKGO_FAIL_MESSAGES__: string[];
+      __TAURI_INTERNALS__: {
+        invoke: (command: string, args?: unknown) => Promise<unknown>;
+      };
+    };
+    const scope = await w.__LINKGO_SQL_SEED_QUALITY_RECOVERY__(
+      "failed",
+      1,
+      false,
+    );
+    w.__LINKGO_FAIL_MESSAGES__ = [];
+    const internals = w.__TAURI_INTERNALS__;
+    const original = internals.invoke.bind(internals);
+    internals.invoke = (command: string, args?: unknown) => {
+      if (command === "linkgo_agent_run_validation")
+        return Promise.reject("x".repeat(1500));
+      if (command === "linkgo_draft_quality_fail")
+        w.__LINKGO_FAIL_MESSAGES__.push(
+          String(
+            (args as { input: { errorMessage: unknown } }).input.errorMessage,
+          ),
+        );
+      return original(command, args);
+    };
+    return scope.draftVariantId;
+  });
+
+  await page.getByRole("button", { name: "Campaigns" }).click();
+  await page.getByRole("button", { name: "Drafts" }).click();
+  const panel = page.getByRole("region", { name: "Draft quality" }).filter({
+    has: page.locator(`#quality-${variantId}-title`),
+  });
+  await panel.getByRole("button", { name: "Resume quality loop" }).click();
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __LINKGO_FAIL_MESSAGES__: string[] })
+            .__LINKGO_FAIL_MESSAGES__,
+      ),
+    )
+    .toHaveLength(1);
+  const [sent] = await page.evaluate(
+    () =>
+      (window as unknown as { __LINKGO_FAIL_MESSAGES__: string[] })
+        .__LINKGO_FAIL_MESSAGES__,
+  );
+  expect([...(sent ?? "")].length).toBeLessThanOrEqual(1000);
+  expect(sent).toMatch(/^x+…$/);
+  await expect(panel.getByText("Failed", { exact: true })).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Resume quality loop" }),
+  ).toBeEnabled();
+});
+
 test("quality panel stacks at 320px without horizontal overflow", async ({
   page,
 }) => {

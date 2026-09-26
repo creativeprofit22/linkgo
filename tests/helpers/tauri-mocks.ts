@@ -2764,6 +2764,30 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         : [];
     }
 
+    /**
+     * Mirrors native `draft_quality::quality_start_blocked_sql`: 1 when the
+     * agent scores a quality attempt or runs its rewrite audit, and is not the
+     * active agent of that attempt's running quality run.
+     */
+    function qualityStartBlocked(agentRunId: number): 0 | 1 {
+      const blocked = draftQualityAttempts.some((attempt) => {
+        const audit = draftAiAuditRuns.find(
+          (row) => row.id === attempt.ai_audit_run_id,
+        );
+        const linked =
+          attempt.agent_run_id === agentRunId ||
+          audit?.agent_run_id === agentRunId;
+        if (!linked) return false;
+        return !draftQualityRuns.some(
+          (run) =>
+            run.id === attempt.run_id &&
+            run.status === "running" &&
+            run.active_agent_run_id === agentRunId,
+        );
+      });
+      return blocked ? 1 : 0;
+    }
+
     function selectAgentRunJoin(values: unknown[]): unknown[] {
       const campaignId = typeof values[0] === "number" ? values[0] : null;
       return agentRuns
@@ -13059,17 +13083,69 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const run = draftQualityRuns.find(
         (row) => row.id === Number(input.qualityRunId),
       );
+      const runAttempts = draftQualityAttempts
+        .filter((attempt) => attempt.run_id === Number(input.qualityRunId))
+        .sort((left, right) => left.attempt_number - right.attempt_number);
+      // Mirrors native: only the loop owning the latest attempt may fail it.
+      if (runAttempts.at(-1)?.id !== Number(input.attemptId))
+        return Promise.reject(new Error("Quality attempt is no longer active"));
       if (!run || run.status !== "running")
         return Promise.reject(new Error("Active quality run was not found"));
+      const message = String(input.errorMessage ?? "").trim();
+      const now = new Date().toISOString();
       run.status = "failed";
-      run.active_agent_run_id = null;
-      run.error_message = String(input.errorMessage ?? "").trim();
-      draftQualityAttempts
-        .filter(
-          (attempt) =>
-            attempt.run_id === run.id && attempt.status === "scoring",
-        )
+      run.error_message = message;
+      runAttempts
+        .filter((attempt) => attempt.status === "scoring")
         .forEach((attempt) => (attempt.status = "failed"));
+      // Mirrors native linked settlement: rewrite audits and agents fail too.
+      const auditIds = new Set<number>(
+        [
+          run.active_ai_audit_run_id,
+          ...runAttempts.map((attempt) => attempt.ai_audit_run_id),
+        ].filter((id): id is number => id !== null),
+      );
+      const agentIds = new Set<number>(
+        [
+          run.active_agent_run_id,
+          ...runAttempts.map((attempt) => attempt.agent_run_id),
+        ].filter((id): id is number => id !== null),
+      );
+      for (const audit of draftAiAuditRuns) {
+        if (!auditIds.has(audit.id)) continue;
+        if (audit.agent_run_id !== null) agentIds.add(audit.agent_run_id);
+        if (audit.status !== "pending" && audit.status !== "running") continue;
+        audit.status = "failed";
+        audit.error_message = message;
+        audit.completed_at = now;
+        audit.updated_at = now;
+      }
+      for (const agent of agentRuns) {
+        if (!agentIds.has(agent.id)) continue;
+        if (
+          agent.status !== "queued" &&
+          agent.status !== "running" &&
+          agent.status !== "waiting_approval"
+        )
+          continue;
+        agent.status = "failed";
+        agent.error_message = message;
+        agent.completed_at = now;
+        agent.updated_at = now;
+        removeRows(
+          agentApprovalCheckpoints,
+          (row) => row.agent_run_id === agent.id,
+        );
+        agentRunEvents.push({
+          id: nextAgentRunEventId++,
+          agent_run_id: agent.id,
+          event_type: "run_failed",
+          summary: message,
+          created_at: now,
+        });
+      }
+      run.active_agent_run_id = null;
+      run.active_ai_audit_run_id = null;
       return Promise.resolve(null);
     }
 
@@ -19973,7 +20049,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                     "campaign_name",
                     "campaign_status",
                   ]),
-                );
+                )
+                .map((row) => ({
+                  ...row,
+                  quality_start_blocked: qualityStartBlocked(Number(row.id)),
+                }));
               const runIds = runs.map((run) => Number(run.id));
               const eventCounts = new Map<number, number>();
               return withCampaignGate(input.campaignId, {

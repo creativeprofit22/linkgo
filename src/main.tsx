@@ -209,6 +209,11 @@ function RootShell(): React.ReactNode {
   useEffect(() => {
     if (!IS_TAURI) return;
     void import("@/features/drafts/data")
+      .then(({ reconcileStaleDraftQuality }) => reconcileStaleDraftQuality())
+      .catch((error: unknown) => {
+        console.error("Draft quality startup reconciliation failed", error);
+      });
+    void import("@/features/drafts/data")
       .then(({ reconcileDraftAiAuditLifecycle }) =>
         reconcileDraftAiAuditLifecycle(),
       )

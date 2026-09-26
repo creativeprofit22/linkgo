@@ -290,6 +290,35 @@ export const applyDraftQualityScoreInputSchema = z
   })
   .strict();
 
+/** Native fail input; `attemptId` binds the failure to the loop's own attempt. */
+export const failDraftQualityInputSchema = z
+  .object({
+    qualityRunId: z.number().int().positive(),
+    draftVariantId: z.number().int().positive(),
+    attemptId: z.number().int().positive(),
+    errorMessage: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+
+/** Native `ClaimPayload` returned by claim, continue, and resume. */
+export const draftQualityClaimResultSchema = z
+  .object({
+    qualityRunId: z.number().int().positive(),
+    attemptId: z.number().int().positive(),
+    agentRunId: z.number().int().positive(),
+    campaignId: z.number().int().positive(),
+    draftVariantId: z.number().int().positive(),
+    contentRevision: z.number().int().min(1),
+  })
+  .strict();
+
+/** Native `ReconcilePayload` returned by stale quality-run reconciliation. */
+export const draftQualityReconcileResultSchema = z
+  .object({
+    reconciledRunIds: z.array(z.number().int().positive()),
+  })
+  .strict();
+
 export const draftVariantInputSchema = z.object({
   hook: z.string().trim().max(500).default(""),
   body: z.string().trim().max(3000).default(""),

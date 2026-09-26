@@ -1,0 +1,44 @@
+# Draft quality lifecycle recovery
+
+Baseline: `d9ee1e0f9ddad097017e869658e2c540987227a4` (2026-09-26, clean tree).
+
+## Reproduction (before the fix)
+
+The reproduction tests are in `src-tauri/src/draft_quality_lifecycle_tests.rs`. They run on a real migrated SQLite database stored in a temp file, with a four-connection pool. Command: `cargo test --lib lifecycle_tests`. Before the fix, 9 of 10 failed.
+
+| Gap                                | Test                                                                | Observed at baseline                                                                                                        | Verdict                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| G1 fail                            | `fail_settles_linked_scorer_agent_events_and_checkpoint`            | Quality run `failed`, scorer agent still `waiting_approval`, approval checkpoint kept, no `run_failed` event                | **Confirmed**                                                                                                                              |
+| G1 fail (rewrite audit)            | `fail_while_awaiting_rewrite_audit_settles_audit_and_its_agent`     | Rewrite audit run still `running`; its auditor agent still `running`                                                        | **Confirmed**                                                                                                                              |
+| G1 reconcile                       | `reconcile_settles_linked_scorer_and_is_idempotent`                 | Run reconciled; scorer agent still `running`                                                                                | **Confirmed**                                                                                                                              |
+| G1 reconcile (rewrite audit)       | `reconcile_awaiting_rewrite_audit_settles_the_whole_group`          | Audit run and its agent still `running`                                                                                     | **Confirmed**                                                                                                                              |
+| G2 re-claim (never started)        | `stale_loop_cannot_reclaim_a_failed_quality_agent`                  | After the quality run failed, a stale loop's `start_run` claimed the still-`queued` scorer and set it to `running`          | **Confirmed**                                                                                                                              |
+| G2 re-claim (agent already failed) | `failed_agent_of_settled_attempt_cannot_be_reclaimed`               | `start_run` re-claimed an already `failed` scorer of a failed quality run                                                   | **Confirmed**                                                                                                                              |
+| G3 late fail                       | `late_fail_from_prior_attempt_cannot_fail_the_resumed_run`          | A `fail` sent by the prior loop after Resume was accepted and failed the new attempt                                        | **Confirmed**                                                                                                                              |
+| G4 staleness                       | `recent_linked_activity_defers_quality_reconcile`                   | The run was reconciled even though its rewrite-audit agent had just been updated                                            | **Confirmed**                                                                                                                              |
+| G4 dual reconcilers                | `audit_reconciler_leaves_quality_owned_audits_to_the_quality_owner` | `draft_ai_audits::reconcile` failed a quality-owned rewrite audit, even though the quality run was fresh and not reconciled | **Confirmed** (audit side). The quality run staying `running` was inferred from the code, because the test stopped at the first assertion. |
+| G5 resume race                     | `concurrent_resumes_create_exactly_one_replacement_attempt`         | Two concurrent resumes on separate connections produced exactly one new attempt and one new agent                           | **Not a defect.** `BEGIN IMMEDIATE` and `status='failed'` already serialize resume.                                                        |
+
+### Consequences: confirmed vs inferred
+
+- **Confirmed:** after fail or reconcile, linked agents and rewrite audits stay active; approval checkpoints survive; no `run_failed` history is written; stale loops can re-claim quality agents; a prior loop can fail a resumed run.
+- **Inferred, not reproduced end to end:** a re-claimed agent could spend provider tokens and record tool calls after recovery. The quality score itself cannot be settled, because the existing `apply` identity checks reject it; the regression suite below covers that.
+
+## After the fix
+
+All 10 reproduction tests and 9 added regression tests pass (`cargo test --lib lifecycle_tests`: 19 passed). The full native suite passes (`cargo test --lib`: 570 passed).
+
+| Gap | Fix                                                                                                                                                      | Regression coverage                                                                                                                                                                                                            |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G1  | `settle_linked_records` runs in the fail, reconcile and resume transactions and uses the shared `fail_active_agent` / `fail_active_audit_run` primitives | Linked-settlement tests above; rollback on an injected agent-event failure (fail) and an injected audit-write failure (reconcile); repeated reconcile leaves an identical snapshot; resume settles leftovers from older builds |
+| G2  | `start_run` calls `draft_quality::assert_agent_startable`                                                                                                | Stale re-claim of a queued scorer, a failed scorer and a settled rewrite auditor is rejected                                                                                                                                   |
+| G3  | `FailInput.attemptId` must be the latest attempt                                                                                                         | A late fail after resume leaves an identical snapshot                                                                                                                                                                          |
+| G4  | Quality staleness uses the newest of run, active-agent and active-audit activity; the AI-audit reconciler skips quality-owned audits                     | Recent-activity deferral; the audit reconciler leaves a quality-owned audit running                                                                                                                                            |
+| G5  | Unchanged (already serialized)                                                                                                                           | Two concurrent resumes on separate connections produce one attempt and one agent                                                                                                                                               |
+
+Unchanged policy, still asserted:
+
+- A late prior-attempt score settlement is rejected without writes.
+- Resume is rejected after a revision change (`Draft changed before quality resume`) and without a completed, non-blocking current AI audit.
+- The three-attempt cap holds (`Quality rewrite limit is exhausted`, no writes).
+- An exhausted rewrite budget carries into the resumed scorer (`rewriteAllowed:false`) and ends in `needs_revision`.

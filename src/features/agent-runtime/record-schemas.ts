@@ -49,6 +49,8 @@ export const agentRunListSnapshotSchema = z.strictObject({
         ...agentRunShape,
         campaign_name: z.string(),
         campaign_status: campaignStatusSchema,
+        // 1 when native start would reject this draft-quality-owned agent.
+        quality_start_blocked: z.number().int().min(0).max(1),
       }),
     )
     .max(200),

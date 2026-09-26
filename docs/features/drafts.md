@@ -19,6 +19,29 @@ AI draft generation is operator-triggered and save-gated: generated text stays i
 
 Native quality settlement replaces the rewritten variant's deterministic findings in the same transaction as its text and revision update. It records the four required rules (`required_text`, `total_length`, `external_link`, `hashtag_limit`) plus applicable `weak_hook` and `specificity` warnings, bound to the persisted revision. A passing AI audit or quality score cannot override a deterministic block. Audit insertion failure rolls back the whole settlement; other variants' findings remain untouched.
 
+### Quality-loop recovery
+
+`src-tauri/src/draft_quality.rs` is the single durable lifecycle owner of a quality run and everything linked to it: its attempts, each attempt's scorer agent, and each rewrite's AI audit run with its auditor agent. Every transition below happens in one `BEGIN IMMEDIATE` transaction; if any linked write fails, the whole transition rolls back. Provider calls stay outside transactions, in the thin `quality-loop.ts` adapter.
+
+| Transition                                                                          | Run                 | Attempt               | Linked agents                                                            | Linked rewrite audit           |
+| ----------------------------------------------------------------------------------- | ------------------- | --------------------- | ------------------------------------------------------------------------ | ------------------------------ |
+| Claim / Resume                                                                      | `running`           | new `scoring` attempt | new scorer agent `queued`                                                | —                              |
+| Score below 70 with rewrite                                                         | `running`           | `rewritten`           | scorer `completed`; auditor agent `queued`                               | reserved as `running`          |
+| Fail (loop error)                                                                   | `failed`            | `scoring` → `failed`  | nonterminal → `failed` + `run_failed` event, approval checkpoint removed | `pending`/`running` → `failed` |
+| Reconcile (no activity for 15 min on the run, its active agent or its active audit) | `failed`, resumable | same as Fail          | same as Fail                                                             | same as Fail                   |
+
+Settlement never rewrites terminal records (completed scorers, completed audits), so repeated fail or reconcile calls are idempotent. The run's active agent and audit links are cleared, and attempts keep theirs as history. Resume also settles leftovers written by older builds before appending its attempt.
+
+The draft AI-audit reconciler skips rewrite audits owned by an active quality run, so only the quality reconciler settles that group. Quality reconciliation runs at app startup (alongside the AI-audit reconciler, independently) and again whenever Drafts loads, so interrupted scorer and rewrite-audit records are settled even if Drafts is never opened.
+
+Late results from an earlier loop are rejected without writes:
+
+- **Fail** requires `attemptId` to be the run's latest attempt (`Quality attempt is no longer active`).
+- **Agent start/re-claim** of a quality-linked agent requires it to be the active agent of a `running` quality run.
+- **Score settlement** requires the exact run, attempt, active agent and completed evidence.
+
+**Operator behavior.** A failed or reconciled run shows **Resume quality loop**. Resume appends exactly one attempt, even when two windows click it at once. It is refused if the draft changed since the run started, or if the latest AI audit for the current revision is not completed and non-blocking (run **AI audit** again first). It is also refused once three attempts exist. The two-rewrite budget carries over. Nothing in recovery approves, schedules or publishes. Real-SQLite tests: `src-tauri/src/draft_quality_lifecycle_tests.rs`. Findings: `docs/verification/draft-quality-lifecycle-recovery.md`.
+
 `tests/fixtures/draft-deterministic-audits.json` is exercised against the TypeScript checker, Rust settlement/checker, and browser mock. Its boundary cases cover ECMAScript trimming, UTF-16 character counts, Unicode hashtags, and warning semantics. No new schema is required for this regeneration fix.
 
 ## Schema

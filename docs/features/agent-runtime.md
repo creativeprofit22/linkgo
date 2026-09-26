@@ -62,6 +62,10 @@ Rejection in Approvals atomically rejects the linked pending tool, cancels the r
 
 Checkpoints survive app restart. Recovery is bounded to approval interrupts and post-approval continuations; crashes during unrelated non-approval tool execution are not replayed.
 
+Feature lifecycle owners fail linked agents through one shared primitive, `agent_run_store::fail_active_agent`. Inside the owner's transaction, it fails a `queued`/`running`/`waiting_approval` run, removes its approval checkpoint and records one `run_failed` event; terminal runs are left untouched. Draft AI audits and the draft quality loop use it. Quality-linked scorer and rewrite-auditor agents can be started only while they are the active agent of a running quality run (`draft_quality::assert_agent_startable`). A stale loop therefore cannot re-claim an agent that quality recovery already settled. See Drafts → Quality-loop recovery.
+
+The Agent Runtime list mirrors that guard. `linkgo_agent_run_list` returns `quality_start_blocked` (0/1) per run, computed from the same SQL predicate (`draft_quality::quality_start_blocked_sql`) that `assert_agent_startable` uses. The data API maps it to `AgentRunWithDetails.qualityStartBlocked`. A queued or failed run with the flag set shows no **Start** button; it shows "Owned by the draft quality loop — resume it from Drafts." instead. The frontend cannot infer ownership from `input_context_json`, because a rewrite auditor carries the same `auditRequest` as a standalone audit agent.
+
 Migration 21 fails pre-checkpoint `waiting_approval` runs closed because their exact provider conversation cannot be reconstructed. Operators must restart those failed legacy runs.
 
 Playbooks shape prompts only. Disabling a playbook hides it from new runtime creation while historical runs remain readable.

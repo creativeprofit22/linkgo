@@ -53,7 +53,7 @@ for (const state of ["running", "failed"] as const) {
             invoke: (
               command: string,
               args: unknown,
-            ) => Promise<{ qualityRunId: number }>;
+            ) => Promise<{ qualityRunId: number; attemptId: number }>;
           };
         }
       ).__TAURI_INTERNALS__.invoke;
@@ -69,6 +69,7 @@ for (const state of ["running", "failed"] as const) {
           input: {
             qualityRunId: claim.qualityRunId,
             draftVariantId: variant.id,
+            attemptId: claim.attemptId,
             errorMessage: "Interrupted latest quality run",
           },
         });
@@ -109,6 +110,7 @@ for (const state of ["running", "failed"] as const) {
           input: {
             qualityRunId: variant.qualityScorecard!.run.id,
             draftVariantId: variant.id,
+            attemptId: variant.qualityScorecard!.attempts.at(-1)!.id,
             errorMessage: "Interrupted",
           },
         });

@@ -15,7 +15,8 @@
 //!   ambiguous scope.
 //! - `linkgo_agent_run_list`: agent runs with tool calls, events and approval
 //!   checkpoints from one transaction (runs capped at 200, events per run at
-//!   100).
+//!   100). Each run carries `quality_start_blocked` (0/1), the
+//!   `draft_quality::assert_agent_startable` predicate.
 //! - `linkgo_agent_run_validation`: the single agent-run row checked before
 //!   any provider call.
 //!
@@ -496,8 +497,12 @@ pub(crate) async fn list_agent_runs(
         positive(id, "Campaign id")?;
     }
     let mut tx = pool.begin().await.map_err(read_error)?;
+    // Same predicate as `draft_quality::assert_agent_startable`, so the UI
+    // hides Start exactly when the native start would reject it.
+    let quality_start_blocked = crate::draft_quality::quality_start_blocked_sql("ar.id");
     let sql = format!(
-        "SELECT {AGENT_RUN_COLUMNS}, c.name AS campaign_name, c.status AS campaign_status
+        "SELECT {AGENT_RUN_COLUMNS}, c.name AS campaign_name, c.status AS campaign_status,
+                {quality_start_blocked} AS quality_start_blocked
          FROM agent_runs ar
          INNER JOIN campaigns c ON c.id = ar.campaign_id
          WHERE (?1 IS NULL OR ar.campaign_id = ?1)

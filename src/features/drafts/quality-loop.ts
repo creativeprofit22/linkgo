@@ -1,6 +1,7 @@
 import { listAgentRuns, startAgentRun } from "@/features/agent-runtime/data";
 import {
   applyDraftQualityScore,
+  boundDraftQualityError,
   claimDraftQuality,
   completeDraftAiAuditRun,
   continueDraftQuality,
@@ -12,11 +13,10 @@ import { toDraftQualitySettlement } from "@/features/drafts/quality-settlement";
 import type {
   ClaimDraftQualityInput,
   ContinueDraftQualityInput,
+  DraftQualityClaimResult,
 } from "@/features/drafts/types";
 
-async function scoreClaim(
-  claim: Awaited<ReturnType<typeof claimDraftQuality>>,
-): Promise<unknown> {
+async function scoreClaim(claim: DraftQualityClaimResult): Promise<unknown> {
   try {
     await startAgentRun({ id: claim.agentRunId });
     const agent = (await listAgentRuns(claim.campaignId)).find(
@@ -67,22 +67,48 @@ async function scoreClaim(
         draftVariantId: claim.draftVariantId,
         contentRevision: result.contentRevision,
       });
-      const next = (await continueDraftQuality({
+      const next = await continueDraftQuality({
         qualityRunId: claim.qualityRunId,
         draftVariantId: claim.draftVariantId,
-      })) as typeof claim;
+      });
       return await scoreClaim(next);
     }
     return settlement;
   } catch (error) {
-    await failDraftQuality({
-      qualityRunId: claim.qualityRunId,
-      draftVariantId: claim.draftVariantId,
-      errorMessage:
-        error instanceof Error ? error.message : "Quality loop failed",
-    });
+    const errorMessage = boundDraftQualityError(error);
+    try {
+      await failDraftQuality({
+        qualityRunId: claim.qualityRunId,
+        draftVariantId: claim.draftVariantId,
+        attemptId: claim.attemptId,
+        errorMessage,
+      });
+    } catch (settlementError) {
+      // Reconcile or a newer attempt already settled the run natively; the
+      // provider failure is still the operator-facing reason.
+      if (isAlreadySettledError(settlementError))
+        throw Object.assign(new Error(errorMessage), {
+          cause: settlementError,
+        });
+      throw Object.assign(
+        new Error("Draft quality failure could not be settled"),
+        { cause: settlementError },
+      );
+    }
     throw error;
   }
+}
+
+const ALREADY_SETTLED_MESSAGES: readonly string[] = [
+  "Quality attempt is no longer active",
+  "Active quality run was not found",
+];
+
+function isAlreadySettledError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    ALREADY_SETTLED_MESSAGES.some((known) => error.message.includes(known))
+  );
 }
 
 export async function runDraftQualityLoop(
@@ -94,9 +120,5 @@ export async function runDraftQualityLoop(
 export async function resumeDraftQualityLoop(
   input: ContinueDraftQualityInput,
 ): Promise<unknown> {
-  return scoreClaim(
-    (await resumeDraftQuality(input)) as Awaited<
-      ReturnType<typeof claimDraftQuality>
-    >,
-  );
+  return scoreClaim(await resumeDraftQuality(input));
 }

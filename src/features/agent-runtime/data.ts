@@ -61,6 +61,7 @@ import {
 interface AgentRunRow extends AgentRun {
   campaign_name: string;
   campaign_status: CampaignStatus;
+  quality_start_blocked: number;
 }
 
 interface AgentRunValidationRow extends AgentRun {
@@ -132,6 +133,7 @@ function mapRunWithDetails(
     },
     workflowRun,
     checkpoint,
+    qualityStartBlocked: row.quality_start_blocked === 1,
     inputContext: parseAgentInputContext(row.input_context_json),
     toolCalls: toolCalls.map(parseToolCallJson),
     events,

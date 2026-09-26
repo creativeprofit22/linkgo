@@ -94,6 +94,59 @@ fn storage_error(_: sqlx::Error) -> String {
     STORAGE_ERROR.to_string()
 }
 
+/// Outcome of [`fail_active_agent`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FailedAgent {
+    pub failed: bool,
+    pub cleared_checkpoints: i64,
+}
+
+/// Shared agent failure primitive for lifecycle owners (draft AI audits,
+/// draft quality). Runs inside the caller's transaction: fails a nonterminal
+/// agent, deletes its approval checkpoint and records `run_failed`. Terminal
+/// agents are left untouched, so repeated settlement is idempotent.
+pub(crate) async fn fail_active_agent(
+    connection: &mut SqliteConnection,
+    agent_run_id: i64,
+    error_message: &str,
+) -> Result<FailedAgent, String> {
+    let failed = sqlx::query(
+        "UPDATE agent_runs
+         SET status = 'failed', error_message = ?1, completed_at = datetime('now'),
+             updated_at = datetime('now')
+         WHERE id = ?2 AND status IN ('queued', 'running', 'waiting_approval')",
+    )
+    .bind(error_message)
+    .bind(agent_run_id)
+    .execute(&mut *connection)
+    .await
+    .map_err(storage_error)?;
+    if failed.rows_affected() != 1 {
+        return Ok(FailedAgent {
+            failed: false,
+            cleared_checkpoints: 0,
+        });
+    }
+    let cleared = sqlx::query("DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = ?1")
+        .bind(agent_run_id)
+        .execute(&mut *connection)
+        .await
+        .map_err(storage_error)?
+        .rows_affected();
+    sqlx::query(
+        "INSERT INTO agent_run_events (agent_run_id, event_type, summary) VALUES (?1, 'run_failed', ?2)",
+    )
+    .bind(agent_run_id)
+    .bind(error_message)
+    .execute(&mut *connection)
+    .await
+    .map_err(storage_error)?;
+    Ok(FailedAgent {
+        failed: true,
+        cleared_checkpoints: i64::try_from(cleared).unwrap_or(i64::MAX),
+    })
+}
+
 fn positive(value: i64, label: &str) -> Result<(), String> {
     if value <= 0 {
         return Err(format!("{label} must be a positive integer"));
@@ -532,6 +585,7 @@ pub(crate) async fn start_run(
             if has_checkpoint.is_some() {
                 return Err("Use approval continuation recovery for this agent run".to_string());
             }
+            crate::draft_quality::assert_agent_startable(connection, input.id).await?;
             sqlx::query("INSERT OR IGNORE INTO safety_settings (id) VALUES (1)")
                 .execute(&mut *connection)
                 .await

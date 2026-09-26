@@ -39,6 +39,8 @@ pub struct RunInput {
 pub struct FailInput {
     pub quality_run_id: i64,
     pub draft_variant_id: i64,
+    /// The attempt the failing loop owns; only the run's latest attempt may fail it.
+    pub attempt_id: i64,
     pub error_message: String,
 }
 #[derive(Debug, Deserialize)]
@@ -102,6 +104,10 @@ pub struct SettlementPayload {
 pub struct ReconcilePayload {
     pub reconciled_run_ids: Vec<i64>,
 }
+
+const RECONCILED_MESSAGE: &str = "Quality loop was interrupted and can be resumed.";
+const STALE_ATTEMPT_MESSAGE: &str = "Quality attempt is no longer active";
+const SUPERSEDED_MESSAGE: &str = "Superseded by a resumed quality attempt.";
 
 fn db_error(label: &'static str) -> impl FnOnce(sqlx::Error) -> String {
     move |error| format!("{label}: {error}")
@@ -737,14 +743,110 @@ pub(crate) async fn continue_with_pool(
     finish(&mut c, r).await
 }
 
+/// Settles every lifecycle record linked to a quality run inside the caller's
+/// transaction: `scoring` attempts, the active and attempt scorer agents, the
+/// active and attempt rewrite audits (and their auditor agents). Terminal
+/// records are untouched, so repeated settlement is idempotent. Clears the
+/// run's `active_*` links; attempts keep theirs as history.
+async fn settle_linked_records(
+    c: &mut SqliteConnection,
+    run_id: i64,
+    message: &str,
+) -> Result<(), String> {
+    sqlx::query("UPDATE draft_quality_attempts SET status='failed',completed_at=datetime('now'),updated_at=datetime('now') WHERE run_id=?1 AND status='scoring'").bind(run_id).execute(&mut *c).await.map_err(db_error("Could not fail quality attempt"))?;
+    let audits: Vec<i64> = sqlx::query_scalar(
+        "SELECT active_ai_audit_run_id FROM draft_quality_runs WHERE id=?1 AND active_ai_audit_run_id IS NOT NULL
+         UNION SELECT ai_audit_run_id FROM draft_quality_attempts WHERE run_id=?1 AND ai_audit_run_id IS NOT NULL
+         ORDER BY 1",
+    )
+    .bind(run_id)
+    .fetch_all(&mut *c)
+    .await
+    .map_err(db_error("Could not load linked quality audits"))?;
+    for audit in audits {
+        crate::draft_ai_audits::fail_active_audit_run(c, audit, message)
+            .await
+            .map_err(|_| "Could not settle linked quality audit".to_string())?;
+    }
+    let agents: Vec<i64> = sqlx::query_scalar(
+        "SELECT active_agent_run_id FROM draft_quality_runs WHERE id=?1 AND active_agent_run_id IS NOT NULL
+         UNION SELECT agent_run_id FROM draft_quality_attempts WHERE run_id=?1 AND agent_run_id IS NOT NULL
+         UNION SELECT dar.agent_run_id FROM draft_ai_audit_runs dar
+           WHERE dar.agent_run_id IS NOT NULL AND (
+             dar.id=(SELECT active_ai_audit_run_id FROM draft_quality_runs WHERE id=?1)
+             OR dar.id IN (SELECT ai_audit_run_id FROM draft_quality_attempts WHERE run_id=?1))
+         ORDER BY 1",
+    )
+    .bind(run_id)
+    .fetch_all(&mut *c)
+    .await
+    .map_err(db_error("Could not load linked quality agents"))?;
+    for agent in agents {
+        crate::agent_run_store::fail_active_agent(c, agent, message)
+            .await
+            .map_err(|_| "Could not settle linked quality agent".to_string())?;
+    }
+    sqlx::query("UPDATE draft_quality_runs SET active_agent_run_id=NULL,active_ai_audit_run_id=NULL WHERE id=?1").bind(run_id).execute(&mut *c).await.map_err(db_error("Could not clear quality run links"))?;
+    Ok(())
+}
+
+/// Start guard used by the agent runtime: an agent linked to a quality attempt
+/// (as scorer or rewrite auditor) may only start while it is the active agent
+/// of a running quality run. Stops stale loops from re-claiming agents that
+/// quality recovery already settled. Unlinked agents are unaffected.
+pub(crate) async fn assert_agent_startable(
+    c: &mut SqliteConnection,
+    agent_run_id: i64,
+) -> Result<(), String> {
+    let sql = format!("SELECT {}", quality_start_blocked_sql("?1"));
+    let blocked: i64 = sqlx::query_scalar(&sql)
+        .bind(agent_run_id)
+        .fetch_one(&mut *c)
+        .await
+        .map_err(db_error("Could not check quality agent ownership"))?;
+    if blocked != 0 {
+        return Err(STALE_ATTEMPT_MESSAGE.into());
+    }
+    Ok(())
+}
+
+/// The single SQL predicate behind `assert_agent_startable`, shared with the
+/// Agent Runtime list read so the UI hides Start exactly when native start
+/// would reject it. `agent_id` is a trusted SQL expression (a column or a
+/// bind placeholder), never user text. Evaluates to 1 when the agent is linked
+/// to a quality attempt (as scorer, or as the agent of the attempt's rewrite
+/// audit) and is not the active agent of that attempt's running quality run.
+pub(crate) fn quality_start_blocked_sql(agent_id: &str) -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM draft_quality_attempts a
+           LEFT JOIN draft_ai_audit_runs dar ON dar.id=a.ai_audit_run_id
+           WHERE (a.agent_run_id={agent_id} OR dar.agent_run_id={agent_id})
+             AND NOT EXISTS (SELECT 1 FROM draft_quality_runs qr
+               WHERE qr.id=a.run_id AND qr.status='running' AND qr.active_agent_run_id={agent_id}))"
+    )
+}
+
 async fn fail_on_connection(c: &mut SqliteConnection, input: &FailInput) -> Result<(), String> {
     bounded(&input.error_message, 1000, "Quality error", false)?;
+    // A late failure from an older loop (another window, or a loop that was
+    // reconciled and later resumed) must not fail the replacement attempt.
+    let latest: Option<i64> = sqlx::query_scalar(
+        "SELECT a.id FROM draft_quality_attempts a JOIN draft_quality_runs qr ON qr.id=a.run_id
+         WHERE a.run_id=?1 AND qr.draft_variant_id=?2 ORDER BY a.attempt_number DESC LIMIT 1",
+    )
+    .bind(input.quality_run_id)
+    .bind(input.draft_variant_id)
+    .fetch_optional(&mut *c)
+    .await
+    .map_err(db_error("Could not load quality attempt"))?;
+    if latest != Some(input.attempt_id) {
+        return Err(STALE_ATTEMPT_MESSAGE.into());
+    }
     let result=sqlx::query("UPDATE draft_quality_runs SET status='failed',error_message=?1,completed_at=datetime('now'),updated_at=datetime('now') WHERE id=?2 AND draft_variant_id=?3 AND status IN ('pending','running')").bind(input.error_message.trim()).bind(input.quality_run_id).bind(input.draft_variant_id).execute(&mut *c).await.map_err(db_error("Could not fail quality run"))?;
     if result.rows_affected() != 1 {
         return Err("Active quality run was not found".into());
     }
-    sqlx::query("UPDATE draft_quality_attempts SET status='failed',completed_at=datetime('now'),updated_at=datetime('now') WHERE run_id=?1 AND status='scoring'").bind(input.quality_run_id).execute(&mut *c).await.map_err(db_error("Could not fail quality attempt"))?;
-    Ok(())
+    settle_linked_records(c, input.quality_run_id, input.error_message.trim()).await
 }
 pub(crate) async fn fail_with_pool(pool: &SqlitePool, input: FailInput) -> Result<(), String> {
     let mut c = begin(pool).await?;
@@ -759,10 +861,10 @@ async fn reconcile_on_connection(
     if !(1..=100).contains(&input.limit) {
         return Err("Reconcile limit is invalid".into());
     }
-    let ids:Vec<i64>=sqlx::query_scalar("SELECT id FROM draft_quality_runs WHERE status IN ('pending','running') AND datetime(updated_at)<=datetime('now','-15 minutes') ORDER BY updated_at,id LIMIT ?1").bind(input.limit).fetch_all(&mut *c).await.map_err(db_error("Could not find stale quality runs"))?;
+    let ids:Vec<i64>=sqlx::query_scalar("SELECT qr.id FROM draft_quality_runs qr LEFT JOIN agent_runs ar ON ar.id=qr.active_agent_run_id LEFT JOIN draft_ai_audit_runs dar ON dar.id=qr.active_ai_audit_run_id WHERE qr.status IN ('pending','running') AND max(datetime(qr.updated_at),COALESCE(datetime(ar.updated_at),datetime(qr.updated_at)),COALESCE(datetime(dar.updated_at),datetime(qr.updated_at)))<=datetime('now','-15 minutes') ORDER BY qr.updated_at,qr.id LIMIT ?1").bind(input.limit).fetch_all(&mut *c).await.map_err(db_error("Could not find stale quality runs"))?;
     for id in &ids {
-        sqlx::query("UPDATE draft_quality_runs SET status='failed',error_message='Quality loop was interrupted and can be resumed.',completed_at=datetime('now'),updated_at=datetime('now') WHERE id=?1").bind(id).execute(&mut *c).await.map_err(db_error("Could not reconcile stale quality run"))?;
-        sqlx::query("UPDATE draft_quality_attempts SET status='failed',completed_at=datetime('now'),updated_at=datetime('now') WHERE run_id=?1 AND status='scoring'").bind(id).execute(&mut *c).await.map_err(db_error("Could not reconcile stale quality attempt"))?;
+        sqlx::query("UPDATE draft_quality_runs SET status='failed',error_message=?2,completed_at=datetime('now'),updated_at=datetime('now') WHERE id=?1").bind(id).bind(RECONCILED_MESSAGE).execute(&mut *c).await.map_err(db_error("Could not reconcile stale quality run"))?;
+        settle_linked_records(c, *id, RECONCILED_MESSAGE).await?;
     }
     Ok(ReconcilePayload {
         reconciled_run_ids: ids,
@@ -791,6 +893,9 @@ async fn resume_on_connection(
         return Err("Draft changed before quality resume".into());
     }
     require_latest_quality_run(c, input, revision).await?;
+    // Databases written before linked settlement may still hold active
+    // records from the failed attempt; settle them before appending.
+    settle_linked_records(c, input.quality_run_id, SUPERSEDED_MESSAGE).await?;
     let attempt_number: i64 = sqlx::query_scalar(
         "SELECT COALESCE(MAX(attempt_number),0)+1 FROM draft_quality_attempts WHERE run_id=?1",
     )
@@ -893,6 +998,10 @@ pub async fn linkgo_draft_quality_resume(
 ) -> Result<ClaimPayload, String> {
     resume_with_pool(&pool, input).await
 }
+
+#[cfg(test)]
+#[path = "draft_quality_lifecycle_tests.rs"]
+mod lifecycle_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1143,7 +1252,14 @@ mod tests {
         .unwrap()
     }
 
-    async fn durable_snapshot(pool: &SqlitePool) -> Vec<Vec<String>> {
+    async fn latest_attempt_id(pool: &SqlitePool) -> i64 {
+        sqlx::query_scalar("SELECT id FROM draft_quality_attempts WHERE run_id=1 ORDER BY attempt_number DESC LIMIT 1")
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    pub(super) async fn durable_snapshot(pool: &SqlitePool) -> Vec<Vec<String>> {
         let mut snapshot = Vec::new();
         for table in [
             "draft_quality_runs",
@@ -1300,6 +1416,7 @@ mod tests {
                 FailInput {
                     quality_run_id: 1,
                     draft_variant_id: 1,
+                    attempt_id: latest_attempt_id(&pool).await,
                     error_message: "Interrupted".into(),
                 },
             )
@@ -1427,6 +1544,7 @@ mod tests {
                         FailInput {
                             quality_run_id: 1,
                             draft_variant_id: 1,
+                            attempt_id: latest_attempt_id(&pool).await,
                             error_message: "Interrupted".into(),
                         },
                     )
@@ -1507,6 +1625,7 @@ mod tests {
                         FailInput {
                             quality_run_id: 1,
                             draft_variant_id: 1,
+                            attempt_id: latest_attempt_id(&pool).await,
                             error_message: "Interrupted again".into(),
                         },
                     )

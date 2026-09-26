@@ -93,6 +93,11 @@ export type AgentRunWithDetails = AgentRun & {
   campaign: AgentCampaignSnapshot;
   workflowRun: WorkflowRunWithDetails | null;
   checkpoint: AgentRunApprovalCheckpoint | null;
+  /**
+   * True when the draft quality loop owns this scorer/rewrite auditor and it is
+   * not the active agent of a running quality run; native start rejects it.
+   */
+  qualityStartBlocked: boolean;
   inputContext: AgentInputContext;
   toolCalls: AgentToolCallWithJson[];
   events: AgentRunEvent[];

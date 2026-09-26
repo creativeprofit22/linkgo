@@ -338,6 +338,8 @@ async fn agent_run_reads_return_runs_and_related_rows() {
     assert_eq!(all.tool_calls.len(), 1);
     assert_eq!(all.events.len(), 1);
     assert!(all.checkpoints.is_empty());
+    // Unlinked agents are never blocked by draft-quality ownership.
+    assert!(all.runs.iter().all(|run| run["quality_start_blocked"] == 0));
     let one = list_agent_runs(
         &f.pool,
         WorkflowRunListInput {

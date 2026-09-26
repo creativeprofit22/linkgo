@@ -261,7 +261,19 @@ export interface ContinueDraftQualityInput {
 }
 
 export interface FailDraftQualityInput extends ContinueDraftQualityInput {
+  /** The attempt this loop claimed; native rejects failures from older attempts. */
+  attemptId: number;
   errorMessage: string;
+}
+
+/** Durable claim identity returned by native claim, continue, and resume. */
+export interface DraftQualityClaimResult {
+  qualityRunId: number;
+  attemptId: number;
+  agentRunId: number;
+  campaignId: number;
+  draftVariantId: number;
+  contentRevision: number;
 }
 
 export interface ReconcileDraftQualityResult {

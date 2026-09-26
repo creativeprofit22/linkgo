@@ -15,6 +15,9 @@ import {
   draftGenerationSettleResultSchema,
   draftMutationResultSchema,
   applyDraftQualityScoreInputSchema,
+  failDraftQualityInputSchema,
+  draftQualityClaimResultSchema,
+  draftQualityReconcileResultSchema,
   completeDraftAiAuditRunSchema,
   dismissDraftGenerationRequestSchema,
   draftAiAuditFindingRowsSchema,
@@ -71,6 +74,7 @@ import type {
   ClaimDraftQualityInput,
   ContinueDraftQualityInput,
   DraftQualityCategoryScore,
+  DraftQualityClaimResult,
   DraftQualityRun,
   DraftQualityScorecard,
   FailDraftQualityInput,
@@ -697,17 +701,12 @@ export async function dismissDraftGenerationRequest(id: number): Promise<void> {
 
 export async function claimDraftQuality(
   input: ClaimDraftQualityInput,
-): Promise<{
-  qualityRunId: number;
-  attemptId: number;
-  agentRunId: number;
-  campaignId: number;
-  draftVariantId: number;
-  contentRevision: number;
-}> {
-  return invokeCommand("linkgo_draft_quality_claim", {
-    input: { providerKey: "dry_run", modelName: "dry-run-local", ...input },
-  });
+): Promise<DraftQualityClaimResult> {
+  return draftQualityClaimResultSchema.parse(
+    await invokeCommand("linkgo_draft_quality_claim", {
+      input: { providerKey: "dry_run", modelName: "dry-run-local", ...input },
+    }),
+  );
 }
 
 export async function applyDraftQualityScore(
@@ -720,28 +719,36 @@ export async function applyDraftQualityScore(
 
 export async function continueDraftQuality(
   input: ContinueDraftQualityInput,
-): Promise<unknown> {
-  return invokeCommand("linkgo_draft_quality_continue", { input });
+): Promise<DraftQualityClaimResult> {
+  return draftQualityClaimResultSchema.parse(
+    await invokeCommand("linkgo_draft_quality_continue", { input }),
+  );
 }
 
 export async function resumeDraftQuality(
   input: ContinueDraftQualityInput,
-): Promise<unknown> {
-  return invokeCommand("linkgo_draft_quality_resume", { input });
+): Promise<DraftQualityClaimResult> {
+  return draftQualityClaimResultSchema.parse(
+    await invokeCommand("linkgo_draft_quality_resume", { input }),
+  );
 }
 
 export async function failDraftQuality(
   input: FailDraftQualityInput,
 ): Promise<void> {
-  await invokeCommand("linkgo_draft_quality_fail", { input });
+  await invokeCommand("linkgo_draft_quality_fail", {
+    input: failDraftQualityInputSchema.parse(input),
+  });
 }
 
 export async function reconcileStaleDraftQuality(
   limit = 25,
 ): Promise<ReconcileDraftQualityResult> {
-  return invokeCommand("linkgo_draft_quality_reconcile_stale", {
-    input: { limit },
-  });
+  return draftQualityReconcileResultSchema.parse(
+    await invokeCommand("linkgo_draft_quality_reconcile_stale", {
+      input: { limit },
+    }),
+  );
 }
 
 export async function listDrafts(
@@ -902,11 +909,27 @@ export async function archiveDraft(id: number): Promise<void> {
   await updateDraft({ id: parsed.id, status: "archived" });
 }
 
+/**
+ * Bounds an error to the native 1–1000 char settlement contract: blank
+ * messages fall back, long ones are cut to at most 999 UTF-16 units plus "…"
+ * (never more than 1000 native chars).
+ */
+export function boundErrorMessage(caught: unknown, fallback: string): string {
+  const detail = caught instanceof Error ? caught.message : "";
+  if (detail.trim().length === 0) return fallback;
+  if (detail.length <= 1000) return detail;
+  // Never split a surrogate pair: a lone surrogate fails native JSON decoding.
+  const code = detail.charCodeAt(998);
+  const end = code >= 0xd800 && code <= 0xdbff ? 998 : 999;
+  return `${detail.slice(0, end)}…`;
+}
+
 export function boundDraftAiAuditError(caught: unknown): string {
-  const detail =
-    caught instanceof Error ? caught.message : "Draft AI audit failed";
-  if (detail.length <= 1000) return detail || "Draft AI audit failed";
-  return `${detail.slice(0, 999)}…`;
+  return boundErrorMessage(caught, "Draft AI audit failed");
+}
+
+export function boundDraftQualityError(caught: unknown): string {
+  return boundErrorMessage(caught, "Quality loop failed");
 }
 
 /**
