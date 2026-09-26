@@ -8,6 +8,11 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 
 use crate::auth::{storage::AuthStorage, StoredCredential};
+use crate::net::destination::{validate_provider_destination, LocalConsent};
+use crate::net::transport::{
+    provider_http_client, read_bounded_json, truncate_error_message, TransportPolicy,
+    PROVIDER_MAX_RESPONSE_BYTES,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -91,13 +96,51 @@ fn default_base_url(provider_key: &str) -> Option<&'static str> {
     }
 }
 
-fn provider_base_url(provider_key: &str, stored_base_url: Option<&str>) -> Result<String, String> {
-    if let Some(base_url) = stored_base_url.filter(|value| !value.trim().is_empty()) {
-        return Ok(base_url.trim().to_string());
-    }
-    default_base_url(provider_key)
-        .map(ToString::to_string)
-        .ok_or_else(|| "Provider execution requires a Base URL override".to_string())
+/// A provider Base URL that passed the destination policy at execution time,
+/// plus the transport permissions it grants.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProviderEndpoint {
+    base_url: String,
+    policy: TransportPolicy,
+}
+
+/// Re-validates the stored Base URL (or the built-in default) right before a
+/// request carries the API key. Values saved by older builds without consent
+/// fail closed with an actionable error instead of silently falling back.
+fn resolve_endpoint(
+    stored_base_url: Option<&str>,
+    default_url: Option<&str>,
+    allow_local_destination: bool,
+) -> Result<ProviderEndpoint, String> {
+    let stored = stored_base_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let consent = if stored.is_some() {
+        LocalConsent::from_flag(allow_local_destination)
+    } else {
+        LocalConsent::Denied
+    };
+    let raw = stored
+        .or(default_url)
+        .ok_or_else(|| "Provider execution requires a Base URL override".to_string())?;
+    let destination =
+        validate_provider_destination(raw, consent).map_err(|error| error.to_string())?;
+    Ok(ProviderEndpoint {
+        policy: TransportPolicy::for_destination(&destination, consent),
+        base_url: destination.as_str().to_string(),
+    })
+}
+
+fn provider_endpoint(
+    provider_key: &str,
+    stored_base_url: Option<&str>,
+    allow_local_destination: bool,
+) -> Result<ProviderEndpoint, String> {
+    resolve_endpoint(
+        stored_base_url,
+        default_base_url(provider_key),
+        allow_local_destination,
+    )
 }
 
 fn completions_url(base_url: &str) -> String {
@@ -120,12 +163,8 @@ fn anthropic_messages_url(base_url: &str) -> String {
     }
 }
 
-fn gemini_code_assist_url(stored_base_url: Option<&str>) -> String {
-    let base_url = stored_base_url
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or(GEMINI_CODE_ASSIST_BASE_URL)
-        .trim()
-        .trim_end_matches('/');
+fn gemini_code_assist_url(base_url: &str) -> String {
+    let base_url = base_url.trim().trim_end_matches('/');
     if base_url.ends_with(":generateContent") {
         base_url.to_string()
     } else if base_url.ends_with(GEMINI_CODE_ASSIST_VERSION) {
@@ -852,33 +891,52 @@ fn gemini_payload(input: &AgentProviderStreamInput) -> Value {
 }
 
 fn parse_provider_error(response_json: &Value) -> String {
-    response_json
+    let message = response_json
         .get("error")
         .and_then(|error| error.get("message"))
         .and_then(Value::as_str)
         .or_else(|| response_json.get("message").and_then(Value::as_str))
-        .unwrap_or("Provider request failed")
-        .to_string()
+        .unwrap_or("Provider request failed");
+    truncate_error_message(message)
+}
+
+/// Sends a provider request and reads a bounded JSON response. Redirect
+/// responses are never followed and surface as a failed request.
+fn send_provider_request(request: reqwest::blocking::RequestBuilder) -> Result<Value, String> {
+    let response = request
+        .send()
+        .map_err(|_| "Provider request failed".to_string())?;
+    let status = response.status();
+    if status.is_redirection() {
+        return Err(format!(
+            "Provider request was redirected (HTTP {}); redirects are not followed. Check the Base URL",
+            status.as_u16()
+        ));
+    }
+    let response_json =
+        read_bounded_json::<Value>(response, PROVIDER_MAX_RESPONSE_BYTES).map_err(|error| {
+            if error.contains("limit") {
+                "Provider response was too large".to_string()
+            } else {
+                "Provider response was not valid JSON".to_string()
+            }
+        })?;
+    if !status.is_success() {
+        return Err(parse_provider_error(&response_json));
+    }
+    Ok(response_json)
 }
 
 fn execute_openai_compatible(
     input: &AgentProviderStreamInput,
     api_key: &str,
-    base_url: &str,
+    endpoint: &ProviderEndpoint,
 ) -> Result<AgentProviderStreamResult, String> {
-    let response = reqwest::blocking::Client::new()
-        .post(completions_url(base_url))
+    let request = provider_http_client(endpoint.policy)?
+        .post(completions_url(&endpoint.base_url))
         .bearer_auth(api_key)
-        .json(&openai_payload(input))
-        .send()
-        .map_err(|_| "Provider request failed".to_string())?;
-    let status = response.status();
-    let response_json = response
-        .json::<Value>()
-        .map_err(|_| "Provider response was not valid JSON".to_string())?;
-    if !status.is_success() {
-        return Err(parse_provider_error(&response_json));
-    }
+        .json(&openai_payload(input));
+    let response_json = send_provider_request(request)?;
 
     let (tools, _) = native_agent_provider_options(input);
     Ok(AgentProviderStreamResult {
@@ -889,11 +947,11 @@ fn execute_openai_compatible(
 fn execute_anthropic_compatible(
     input: &AgentProviderStreamInput,
     api_key: &str,
-    base_url: &str,
+    endpoint: &ProviderEndpoint,
 ) -> Result<AgentProviderStreamResult, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = provider_http_client(endpoint.policy)?;
     let mut request = client
-        .post(anthropic_messages_url(base_url))
+        .post(anthropic_messages_url(&endpoint.base_url))
         .header("anthropic-version", "2023-06-01")
         .json(&anthropic_payload(input));
     if api_key.starts_with("sk-ant-oat") {
@@ -905,16 +963,7 @@ fn execute_anthropic_compatible(
         request = request.header("x-api-key", api_key);
     }
 
-    let response = request
-        .send()
-        .map_err(|_| "Provider request failed".to_string())?;
-    let status = response.status();
-    let response_json = response
-        .json::<Value>()
-        .map_err(|_| "Provider response was not valid JSON".to_string())?;
-    if !status.is_success() {
-        return Err(parse_provider_error(&response_json));
-    }
+    let response_json = send_provider_request(request)?;
 
     let (tools, _) = native_agent_provider_options(input);
     Ok(AgentProviderStreamResult {
@@ -925,23 +974,15 @@ fn execute_anthropic_compatible(
 fn execute_gemini_code_assist(
     input: &AgentProviderStreamInput,
     api_key: &str,
-    stored_base_url: Option<&str>,
+    endpoint: &ProviderEndpoint,
 ) -> Result<AgentProviderStreamResult, String> {
-    let response = reqwest::blocking::Client::new()
-        .post(gemini_code_assist_url(stored_base_url))
+    let request = provider_http_client(endpoint.policy)?
+        .post(gemini_code_assist_url(&endpoint.base_url))
         .bearer_auth(api_key)
         .header("User-Agent", GEMINI_CLI_USER_AGENT)
         .header("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
-        .json(&gemini_payload(input))
-        .send()
-        .map_err(|_| "Provider request failed".to_string())?;
-    let status = response.status();
-    let response_json = response
-        .json::<Value>()
-        .map_err(|_| "Provider response was not valid JSON".to_string())?;
-    if !status.is_success() {
-        return Err(parse_provider_error(&response_json));
-    }
+        .json(&gemini_payload(input));
+    let response_json = send_provider_request(request)?;
 
     let (tools, _) = native_agent_provider_options(input);
     Ok(AgentProviderStreamResult {
@@ -963,20 +1004,25 @@ pub fn linkgo_agent_provider_stream(
     };
     let transport = provider_transport(&input.provider_key)
         .ok_or_else(|| format!("Unsupported agent provider: {}", input.provider_key))?;
+    let stored_base_url = credentials.base_url.as_deref();
+    let allow_local = credentials.allow_local_destination;
     match transport {
         ProviderTransport::OpenAiCompatible => {
-            let base_url = provider_base_url(&input.provider_key, credentials.base_url.as_deref())?;
-            execute_openai_compatible(&input, &credentials.api_key, &base_url)
+            let endpoint = provider_endpoint(&input.provider_key, stored_base_url, allow_local)?;
+            execute_openai_compatible(&input, &credentials.api_key, &endpoint)
         }
         ProviderTransport::AnthropicCompatible => {
-            let base_url = provider_base_url(&input.provider_key, credentials.base_url.as_deref())?;
-            execute_anthropic_compatible(&input, &credentials.api_key, &base_url)
+            let endpoint = provider_endpoint(&input.provider_key, stored_base_url, allow_local)?;
+            execute_anthropic_compatible(&input, &credentials.api_key, &endpoint)
         }
-        ProviderTransport::GeminiCodeAssist => execute_gemini_code_assist(
-            &input,
-            &credentials.api_key,
-            credentials.base_url.as_deref(),
-        ),
+        ProviderTransport::GeminiCodeAssist => {
+            let endpoint = resolve_endpoint(
+                stored_base_url,
+                Some(GEMINI_CODE_ASSIST_BASE_URL),
+                allow_local,
+            )?;
+            execute_gemini_code_assist(&input, &credentials.api_key, &endpoint)
+        }
     }
 }
 
@@ -1366,6 +1412,49 @@ mod tests {
     }
 
     #[test]
+    fn execution_revalidates_stored_destinations() {
+        let default = provider_endpoint("openai", None, false).expect("default");
+        assert_eq!(
+            completions_url(&default.base_url),
+            "https://api.openai.com/v1/chat/completions"
+        );
+        assert_eq!(default.policy, TransportPolicy::PUBLIC_HTTPS);
+
+        // Values stored by older builds without consent fail closed.
+        for stored in [
+            "http://localhost:11434/v1",
+            "http://169.254.169.254/latest",
+            "https://10.0.0.5/v1",
+            "http://api.example.com/v1",
+            "file:///etc/passwd",
+        ] {
+            assert!(
+                provider_endpoint("custom", Some(stored), false).is_err(),
+                "{stored} must be rejected at execution"
+            );
+        }
+
+        let local = provider_endpoint("custom", Some("http://localhost:11434/v1"), true)
+            .expect("consented local endpoint");
+        assert_eq!(
+            completions_url(&local.base_url),
+            "http://localhost:11434/v1/chat/completions"
+        );
+        assert_ne!(local.policy, TransportPolicy::PUBLIC_HTTPS);
+
+        // Consent never loosens public destinations.
+        assert!(provider_endpoint("custom", Some("http://api.example.com/v1"), true).is_err());
+        assert!(provider_endpoint("custom", None, true).is_err());
+    }
+
+    #[test]
+    fn provider_error_messages_are_truncated() {
+        let long = "x".repeat(10_000);
+        let message = parse_provider_error(&json!({ "error": { "message": long } }));
+        assert!(message.chars().count() <= 501);
+    }
+
+    #[test]
     fn serializes_anthropic_compatible_payload_and_response_chunks() {
         let input = AgentProviderStreamInput {
             provider_key: "anthropic".to_string(),
@@ -1450,8 +1539,10 @@ mod tests {
         };
 
         let payload = gemini_payload(&input);
+        let endpoint =
+            resolve_endpoint(None, Some(GEMINI_CODE_ASSIST_BASE_URL), false).expect("default");
         assert_eq!(
-            gemini_code_assist_url(None),
+            gemini_code_assist_url(&endpoint.base_url),
             "https://cloudcode-pa.googleapis.com/v1internal:generateContent"
         );
         assert_eq!(payload["model"], "gemini-2.5-flash");

@@ -62,6 +62,7 @@ export const saveApiKeySchema = z
     apiKey: z.string().trim().min(8).max(4000),
     baseUrl: z.string().trim().optional().or(z.literal("")),
     accountLabel: z.string().trim().max(120).optional(),
+    allowLocalDestination: z.boolean().optional(),
   })
   .superRefine((input, context) => {
     if (input.providerKey !== "custom") return;
@@ -94,16 +95,6 @@ export const oauthCodeSchema = z.object({
 
 export const logoutSchema = z.object({
   providerKey: authProviderKeySchema,
-});
-
-export const providerSecretInputSchema = z.object({
-  providerKey: authProviderKeySchema.exclude(["linkedin"]),
-});
-
-export const providerSecretSchema = z.object({
-  providerKey: authProviderKeySchema.exclude(["linkedin"]),
-  apiKey: z.string().min(1),
-  baseUrl: z.string().optional(),
 });
 
 export const authProgressEventSchema = z.object({

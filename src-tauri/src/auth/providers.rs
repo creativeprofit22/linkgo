@@ -211,10 +211,6 @@ pub fn provider_supports_api_key(provider_key: &str) -> bool {
     })
 }
 
-pub fn is_ai_api_key_provider(provider_key: &str) -> bool {
-    provider_key != "linkedin" && provider_supports_api_key(provider_key)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{auth_providers, AUTH_PROVIDER_KEYS, GG_AI_PROVIDER_KEYS};

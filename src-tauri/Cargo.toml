@@ -24,7 +24,8 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 oauth2 = { version = "5", default-features = false }
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio"] }
-tokio = { version = "1", features = ["macros", "sync", "time"] }
+# `net` powers the provider transport's private-address-filtering DNS resolver.
+tokio = { version = "1", features = ["macros", "net", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 chrono = "0.4.45"
 chrono-tz = "0.10.4"

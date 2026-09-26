@@ -9963,6 +9963,21 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (secret !== undefined) delete secret.baseUrl;
     };
 
+    // Mirrors native safe_status for a Base URL saved by an older build that
+    // the destination policy now rejects.
+    w.__LINKGO_AUTH_REQUIRE_REAUTH__ = (
+      providerKey: string,
+      lastError: string,
+    ): void => {
+      const account = connectedAccounts.find(
+        (candidate) => candidate.provider_key === providerKey,
+      );
+      if (account === undefined)
+        throw new Error("Connected account unavailable");
+      account.status = "reauth_required";
+      account.last_error = lastError;
+    };
+
     function nativeScoringInput<T>(args?: unknown): T {
       return ((args as { input?: T } | undefined)?.input ?? {}) as T;
     }
@@ -20467,15 +20482,52 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                     baseUrl?: string;
                     base_url?: string;
                     accountLabel?: string;
+                    allowLocalDestination?: boolean;
                   };
                 }
               | undefined
           )?.input ?? {};
         const providerKey = input.providerKey ?? input.provider_key ?? "openai";
-        const apiKey = input.apiKey ?? input.api_key ?? "sk-test-secret";
+        const apiKey = input.apiKey ?? input.api_key ?? "test-key-00000000";
         const baseUrl = input.baseUrl ?? input.base_url;
         if (providerKey === "custom" && !baseUrl?.trim()) {
           throw new Error("Custom provider requires a Base URL override");
+        }
+        // Simplified mirror of the native destination policy
+        // (src-tauri/src/net/destination.rs), which stays authoritative.
+        if (baseUrl?.trim()) {
+          let parsed: URL;
+          try {
+            parsed = new URL(baseUrl.trim());
+          } catch {
+            throw new Error("Base URL is not a valid URL");
+          }
+          if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+            throw new Error("Base URL must start with https://");
+          }
+          if (parsed.username !== "" || parsed.password !== "") {
+            throw new Error("Base URL must not include a username or password");
+          }
+          const host = parsed.hostname.toLowerCase();
+          const local =
+            host === "localhost" ||
+            host.endsWith(".localhost") ||
+            host === "[::1]" ||
+            /^(127|10)\./.test(host) ||
+            /^192\.168\./.test(host) ||
+            /^169\.254\./.test(host) ||
+            /^198\.1[89]\./.test(host) ||
+            /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+          if (local && input.allowLocalDestination !== true) {
+            throw new Error(
+              "Base URL points to this computer or a private network. Reconnect the provider and allow the local endpoint to use it",
+            );
+          }
+          if (!local && parsed.protocol === "http:") {
+            throw new Error(
+              "Base URL must use https:// unless it is an allowed local endpoint",
+            );
+          }
         }
         providerSecrets[providerKey] = {
           apiKey,
@@ -20511,22 +20563,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         if (existingIndex >= 0) connectedAccounts[existingIndex] = account;
         else connectedAccounts.push(account);
         return Promise.resolve(getAuthStatusMock());
-      }
-      if (cmd === "linkgo_auth_provider_secret") {
-        const input =
-          (
-            args as
-              | { input?: { providerKey?: string; provider_key?: string } }
-              | undefined
-          )?.input ?? {};
-        const providerKey = input.providerKey ?? input.provider_key ?? "openai";
-        const secret = providerSecrets[providerKey];
-        if (secret === undefined) throw new Error("Provider is not connected");
-        return Promise.resolve({
-          providerKey,
-          apiKey: secret.apiKey,
-          ...(secret.baseUrl ? { baseUrl: secret.baseUrl } : {}),
-        });
       }
       if (cmd === "linkgo_auth_oauth_start") {
         return Promise.resolve({

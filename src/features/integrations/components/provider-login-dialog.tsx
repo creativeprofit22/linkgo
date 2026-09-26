@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { needsLocalDestinationConsent } from "@/features/integrations/destination";
 import type {
   AuthProvider,
   AuthProviderKey,
@@ -58,6 +59,13 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** Matches the native LocalWithoutConsent destination error. */
+function isLocalConsentRequiredError(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message.includes("allow the local endpoint")
+  );
+}
+
 export function ProviderLoginDialog({
   provider,
   account,
@@ -73,6 +81,7 @@ export function ProviderLoginDialog({
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [accountLabel, setAccountLabel] = useState("");
+  const [allowLocalDestination, setAllowLocalDestination] = useState(false);
   const [oauthStart, setOauthStart] = useState<OAuthStartResult | null>(null);
   const [oauthCode, setOauthCode] = useState("");
   const [copiedAuthUrl, setCopiedAuthUrl] = useState(false);
@@ -83,6 +92,11 @@ export function ProviderLoginDialog({
   const supportsApiKey = provider.methods.includes("api_key");
   const supportsOAuth = provider.methods.includes("oauth");
   const requiresBaseUrl = provider.key === "custom";
+  // Native policy is authoritative; when it rejects a destination the
+  // renderer hint missed, show the consent checkbox anyway.
+  const [nativeRequiresConsent, setNativeRequiresConsent] = useState(false);
+  const showLocalConsent =
+    nativeRequiresConsent || needsLocalDestinationConsent(baseUrl);
   const canSaveApiKey =
     !busy &&
     apiKey.trim().length >= 8 &&
@@ -101,10 +115,16 @@ export function ProviderLoginDialog({
         apiKey,
         baseUrl: baseUrl.trim() || undefined,
         accountLabel: accountLabel.trim() || undefined,
+        allowLocalDestination: showLocalConsent && allowLocalDestination,
       });
       setApiKey("");
       setBaseUrl("");
       setAccountLabel("");
+      setAllowLocalDestination(false);
+      setNativeRequiresConsent(false);
+    } catch (caught) {
+      // The caller already reports the error; only react to the consent case.
+      if (isLocalConsentRequiredError(caught)) setNativeRequiresConsent(true);
     } finally {
       setBusy(false);
     }
@@ -225,13 +245,44 @@ export function ProviderLoginDialog({
                       ? "Required, e.g. https://api.example.com/v1"
                       : "Optional advanced override"
                   }
-                  onChange={(event) => setBaseUrl(event.target.value)}
+                  onChange={(event) => {
+                    setBaseUrl(event.target.value);
+                    setNativeRequiresConsent(false);
+                  }}
                 />
                 <p className="text-muted-foreground text-xs">
                   {requiresBaseUrl
                     ? "Custom API providers need an OpenAI-compatible endpoint."
-                    : "GG AI uses provider defaults unless you set this."}
+                    : "GG AI uses provider defaults unless you set this."}{" "}
+                  Use https:// for hosted providers.
                 </p>
+                {showLocalConsent && (
+                  <div className="flex items-start gap-2 rounded-md border p-2">
+                    <input
+                      id={`${provider.key}-allow-local`}
+                      type="checkbox"
+                      className="mt-0.5 size-4"
+                      checked={allowLocalDestination}
+                      aria-describedby={`${provider.key}-allow-local-hint`}
+                      onChange={(event) =>
+                        setAllowLocalDestination(event.target.checked)
+                      }
+                    />
+                    <div className="space-y-1">
+                      <Label htmlFor={`${provider.key}-allow-local`}>
+                        Allow this local/private endpoint (this computer or
+                        network only)
+                      </Label>
+                      <p
+                        id={`${provider.key}-allow-local-hint`}
+                        className="text-muted-foreground text-xs"
+                      >
+                        Your API key will be sent to this address. Plain http://
+                        is only allowed for local endpoints.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor={`${provider.key}-label`}>Account label</Label>

@@ -34,6 +34,7 @@ mod metric_refresh;
 mod metrics;
 mod metrics_reads;
 mod migrations;
+mod net;
 mod planner_draft_audits;
 mod planning_reads;
 mod playbooks;
@@ -103,7 +104,6 @@ pub fn run() {
             approvals::linkgo_approval_record_publish_attempt,
             auth::commands::linkgo_auth_status,
             auth::commands::linkgo_auth_api_key,
-            auth::commands::linkgo_auth_provider_secret,
             auth::commands::linkgo_auth_oauth_start,
             auth::commands::linkgo_auth_oauth_code,
             auth::commands::linkgo_auth_logout,

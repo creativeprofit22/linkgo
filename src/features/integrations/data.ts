@@ -13,8 +13,6 @@ import {
   oauthCodeSchema,
   oauthStartResultSchema,
   oauthStartSchema,
-  providerSecretInputSchema,
-  providerSecretSchema,
   saveApiKeySchema,
 } from "@/features/integrations/schemas";
 import type {
@@ -24,8 +22,6 @@ import type {
   OAuthCodeInput,
   OAuthStartInput,
   OAuthStartResult,
-  ProviderSecret,
-  ProviderSecretInput,
   SaveApiKeyInput,
 } from "@/features/integrations/types";
 
@@ -139,16 +135,6 @@ export async function checkProvider(input: LogoutInput): Promise<AuthStatus> {
   return authStatusSchema.parse(result);
 }
 
-export async function getProviderSecret(
-  input: ProviderSecretInput,
-): Promise<ProviderSecret> {
-  const parsed = providerSecretInputSchema.parse(input);
-  const result = await invokeMutation("linkgo_auth_provider_secret", {
-    input: parsed,
-  });
-  return providerSecretSchema.parse(result);
-}
-
 export async function subscribeToAuthProgress(
   handler: (event: AuthProgressEvent) => void,
 ): Promise<UnlistenFn> {
@@ -177,7 +163,6 @@ if (IS_TEST && typeof window !== "undefined") {
         startOAuth: typeof startOAuth;
         submitOAuthCode: typeof submitOAuthCode;
         disconnectProvider: typeof disconnectProvider;
-        getProviderSecret: typeof getProviderSecret;
       };
     }
   ).__LINKGO_INTEGRATIONS_TEST_API__ = {
@@ -186,6 +171,5 @@ if (IS_TEST && typeof window !== "undefined") {
     startOAuth,
     submitOAuthCode,
     disconnectProvider,
-    getProviderSecret,
   };
 }

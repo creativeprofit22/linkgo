@@ -7,12 +7,12 @@ use super::{
     linkedin::{exchange_linkedin_code, refresh_linkedin_credential, start_linkedin_oauth},
     oauth::{persist_pending_oauth_session, verify_and_take_oauth_session},
     providers::{
-        auth_providers, is_ai_api_key_provider, is_known_provider, provider_label,
-        provider_supports_api_key, AuthProvider,
+        auth_providers, is_known_provider, provider_label, provider_supports_api_key, AuthProvider,
     },
     redact_error, ApiKeyCredentials, AuthMethod, ConnectionStatus, SafeCredentialStatus,
     StoredCredential,
 };
+use crate::net::destination::{validate_provider_destination, LocalConsent, ProviderDestination};
 use crate::publishing::{
     service::{execute, ExecuteContext},
     store::ReserveRequest,
@@ -74,6 +74,10 @@ pub struct SaveApiKeyInput {
     pub api_key: String,
     pub base_url: Option<String>,
     pub account_label: Option<String>,
+    /// Explicit consent for a loopback/private Base URL. Native policy stays
+    /// authoritative; the renderer only relays the user's choice.
+    #[serde(default)]
+    pub allow_local_destination: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -104,14 +108,6 @@ pub struct OAuthCodeInput {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderInput {
     pub provider_key: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderSecretPayload {
-    pub provider_key: String,
-    pub api_key: String,
-    pub base_url: Option<String>,
 }
 
 fn timestamp_string(value: Option<i64>) -> Option<String> {
@@ -154,19 +150,30 @@ fn ensure_known_provider(provider_key: &str) -> Result<(), String> {
     }
 }
 
-fn ensure_api_key_input(input: &SaveApiKeyInput) -> Result<(), String> {
+/// Validates API-key input and returns the policy-checked Base URL to store.
+/// The Base URL must pass the native destination policy before any secret is
+/// persisted next to it.
+fn validated_destination(input: &SaveApiKeyInput) -> Result<Option<ProviderDestination>, String> {
     if input.api_key.trim().len() < 8 {
         return Err("API key is too short".to_string());
     }
-    if input.provider_key == "custom"
-        && input
-            .base_url
-            .as_ref()
-            .is_none_or(|base_url| base_url.trim().is_empty())
-    {
-        return Err("Custom provider requires a Base URL override".to_string());
-    }
-    Ok(())
+    let base_url = input
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let Some(base_url) = base_url else {
+        if input.provider_key == "custom" {
+            return Err("Custom provider requires a Base URL override".to_string());
+        }
+        return Ok(None);
+    };
+    let destination = validate_provider_destination(
+        base_url,
+        LocalConsent::from_flag(input.allow_local_destination),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(Some(destination))
 }
 
 #[tauri::command]
@@ -194,13 +201,21 @@ pub fn linkgo_auth_api_key(
     if !provider_supports_api_key(&input.provider_key) {
         return Err("Provider does not support API-key auth".to_string());
     }
-    ensure_api_key_input(&input)?;
+    let destination = validated_destination(&input)?;
+    // Consent is only stored for destinations that actually are local, so it
+    // can never relax transport protections for a public host.
+    let allow_local_destination = input.allow_local_destination
+        && destination
+            .as_ref()
+            .is_some_and(ProviderDestination::is_local);
+    let base_url = destination.map(|destination| destination.as_str().to_string());
     let storage = AuthStorage::new(&app)?;
     storage.save(StoredCredential::ApiKey(ApiKeyCredentials {
         api_key: input.api_key.trim().to_string(),
-        base_url: input.base_url.filter(|value| !value.trim().is_empty()),
+        base_url,
         account_label: input.account_label.filter(|value| !value.trim().is_empty()),
         provider_key: input.provider_key.clone(),
+        allow_local_destination,
     }))?;
     emit_auth_progress(
         &app,
@@ -212,29 +227,6 @@ pub fn linkgo_auth_api_key(
         },
     );
     linkgo_auth_status(app).map_err(redact_error)
-}
-
-#[tauri::command]
-pub fn linkgo_auth_provider_secret(
-    app: AppHandle,
-    input: ProviderInput,
-) -> Result<ProviderSecretPayload, String> {
-    ensure_known_provider(&input.provider_key)?;
-    if !is_ai_api_key_provider(&input.provider_key) {
-        return Err("Provider secret is only available for AI API-key providers".to_string());
-    }
-
-    let storage = AuthStorage::new(&app)?;
-    match storage.load(&input.provider_key).map_err(redact_error)? {
-        Some(StoredCredential::ApiKey(credentials)) => Ok(ProviderSecretPayload {
-            provider_key: input.provider_key,
-            api_key: credentials.api_key,
-            base_url: credentials.base_url,
-        }),
-        Some(_) => Err("Provider is not connected with API-key auth".to_string()),
-        None => Err("Provider is not connected".to_string()),
-    }
-    .map_err(redact_error)
 }
 
 #[tauri::command]
@@ -410,7 +402,7 @@ pub async fn linkgo_linkedin_publish_comment(
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_api_key_input, SaveApiKeyInput};
+    use super::{validated_destination, SaveApiKeyInput};
     use crate::auth::publish::{
         credentials_need_refresh, has_linkedin_publish_scope, linkedin_oauth_credentials,
         merge_refreshed_linkedin_credential,
@@ -433,9 +425,68 @@ mod tests {
     fn api_key_input(provider_key: &str, base_url: Option<&str>) -> SaveApiKeyInput {
         SaveApiKeyInput {
             provider_key: provider_key.to_string(),
-            api_key: "sk-test-secret".to_string(),
+            api_key: "test-key-00000000".to_string(),
             base_url: base_url.map(str::to_string),
             account_label: None,
+            allow_local_destination: false,
+        }
+    }
+
+    fn consented(mut input: SaveApiKeyInput) -> SaveApiKeyInput {
+        input.allow_local_destination = true;
+        input
+    }
+
+    fn ensure_api_key_input(input: &SaveApiKeyInput) -> Result<Option<String>, String> {
+        Ok(validated_destination(input)?.map(|destination| destination.as_str().to_string()))
+    }
+
+    #[test]
+    fn base_url_is_normalized_after_policy_validation() {
+        let stored = ensure_api_key_input(&api_key_input(
+            "custom",
+            Some(" https://API.Example.com/v1 "),
+        ))
+        .unwrap();
+        assert_eq!(stored.as_deref(), Some("https://api.example.com/v1"));
+    }
+
+    #[test]
+    fn rejects_insecure_or_unsafe_base_urls_before_saving() {
+        for base_url in [
+            "http://api.example.com/v1",
+            "ftp://example.com",
+            "https://user:pw@example.com",
+            "file:///C:/secrets",
+        ] {
+            assert!(
+                ensure_api_key_input(&api_key_input("custom", Some(base_url))).is_err(),
+                "{base_url} must be rejected"
+            );
+            assert!(
+                ensure_api_key_input(&consented(api_key_input("custom", Some(base_url)))).is_err(),
+                "{base_url} must be rejected even with local consent"
+            );
+        }
+    }
+
+    #[test]
+    fn local_base_urls_require_explicit_consent() {
+        for base_url in [
+            "http://localhost:11434/v1",
+            "http://169.254.169.254/latest",
+            "http://192.168.1.20:8080/v1",
+            "http://[::1]:1234/v1",
+        ] {
+            let error = ensure_api_key_input(&api_key_input("openai", Some(base_url))).unwrap_err();
+            assert!(
+                error.contains("allow the local endpoint"),
+                "{base_url}: {error}"
+            );
+            assert!(
+                ensure_api_key_input(&consented(api_key_input("openai", Some(base_url)))).is_ok(),
+                "{base_url} must be allowed with consent"
+            );
         }
     }
 
@@ -466,6 +517,7 @@ mod tests {
             base_url: None,
             account_label: None,
             provider_key: "linkedin".to_string(),
+            allow_local_destination: false,
         })))
         .unwrap_err();
         assert_eq!(error, "LinkedIn is not connected with OAuth");

@@ -509,6 +509,7 @@ mod tests {
             base_url: None,
             account_label: None,
             provider_key: "linkedin".to_string(),
+            allow_local_destination: false,
         })))
         .unwrap_err();
         assert_eq!(error, "LinkedIn is not connected with OAuth");

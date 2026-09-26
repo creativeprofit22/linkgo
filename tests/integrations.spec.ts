@@ -188,3 +188,141 @@ test("shows a failed-copy message when OAuth URL copy is unavailable", async ({
     "Could not copy automatically. Open the authorization URL and copy it from your browser address bar.",
   );
 });
+
+test("rejects plain-HTTP public Base URL even with local consent", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("http://api.example.com/v1");
+  const consent = dialog.getByLabel(
+    "Allow this local/private endpoint (this computer or network only)",
+  );
+  await expect(consent).toBeVisible();
+  await consent.check();
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+
+  await expect(
+    page.getByText(
+      "Base URL must use https:// unless it is an allowed local endpoint",
+    ),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("Provider API key")).toHaveValue(
+    "test-key-00000000",
+  );
+  await expect(page.getByText("Provider connected")).toBeHidden();
+});
+
+test("requires explicit consent before saving a localhost Base URL", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
+  const baseUrl = dialog.getByLabel("Base URL override (required)");
+  const consent = dialog.getByLabel(
+    "Allow this local/private endpoint (this computer or network only)",
+  );
+
+  await baseUrl.fill("https://custom.example.com/v1");
+  await expect(consent).toBeHidden();
+
+  await baseUrl.fill("http://localhost:11434/v1");
+  await expect(consent).toBeVisible();
+  await expect(consent).not.toBeChecked();
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(
+    page.getByText(/allow the local endpoint to use it/).first(),
+  ).toBeVisible();
+
+  await consent.check();
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Provider connected")).toBeVisible();
+});
+
+test("shows reauth status and a reconnect path for a disallowed saved Base URL", async ({
+  page,
+}) => {
+  const reauthMessage =
+    "Base URL points to this computer or a private network. Reconnect the provider and allow the local endpoint to use it";
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://custom.example.com/v1");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Provider connected")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.evaluate((message) => {
+    (
+      window as unknown as {
+        __LINKGO_AUTH_REQUIRE_REAUTH__: (key: string, error: string) => void;
+      }
+    ).__LINKGO_AUTH_REQUIRE_REAUTH__("custom", message);
+  }, reauthMessage);
+  await page.getByRole("button", { name: "Refresh" }).click();
+
+  await expect(customCard.getByText("Reauth required")).toBeVisible();
+  await expect(customCard.getByText(reauthMessage)).toBeVisible();
+  await customCard.getByRole("button", { name: "Connect" }).click();
+  await expect(dialog.getByLabel("Provider API key")).toBeVisible();
+});
+
+test("offers local consent when the native policy flags a Base URL the renderer hint missed", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+
+  const customCard = page
+    .getByText("Custom API", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await customCard.getByRole("button", { name: "Connect" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
+  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
+  await dialog
+    .getByLabel("Base URL override (required)")
+    .fill("https://198.18.0.1/v1");
+  const consent = dialog.getByLabel(
+    "Allow this local/private endpoint (this computer or network only)",
+  );
+  await expect(consent).toBeHidden();
+
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(
+    page.getByText(/allow the local endpoint to use it/).first(),
+  ).toBeVisible();
+  await expect(consent).toBeVisible();
+  await expect(consent).not.toBeChecked();
+
+  await consent.check();
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(page.getByText("Provider connected")).toBeVisible();
+});

@@ -77,6 +77,8 @@ export interface SaveApiKeyInput {
   apiKey: string;
   baseUrl?: string | undefined;
   accountLabel?: string | undefined;
+  /** Explicit consent to use a loopback/private or plain-HTTP Base URL. */
+  allowLocalDestination?: boolean | undefined;
 }
 
 export interface OAuthStartInput {
@@ -99,16 +101,6 @@ export interface OAuthCodeInput {
 
 export interface LogoutInput {
   providerKey: AuthProviderKey;
-}
-
-export interface ProviderSecretInput {
-  providerKey: AuthProviderKey;
-}
-
-export interface ProviderSecret {
-  providerKey: AuthProviderKey;
-  apiKey: string;
-  baseUrl?: string | undefined;
 }
 
 export interface AuthProgressEvent {

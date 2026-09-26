@@ -7,6 +7,9 @@ use serde_json::{json, Value};
 use std::time::Duration;
 
 use super::redact_error;
+use crate::net::transport::{
+    read_bounded_json, read_bounded_text, truncate_error_message, LINKEDIN_MAX_RESPONSE_BYTES,
+};
 
 const LINKEDIN_USERINFO_ENDPOINT: &str = "https://api.linkedin.com/v2/userinfo";
 const LINKEDIN_UGC_POSTS_ENDPOINT: &str = "https://api.linkedin.com/v2/ugcPosts";
@@ -18,12 +21,28 @@ const LINKEDIN_MAX_COMMENT_TEXT_CHARS: usize = 1250;
 const LINKEDIN_CONNECT_TIMEOUT_SECONDS: u64 = 10;
 const LINKEDIN_REQUEST_TIMEOUT_SECONDS: u64 = 30;
 
+/// LinkedIn endpoints are fixed HTTPS URLs. Redirects are never followed so a
+/// bearer token or replayed request body cannot be forwarded elsewhere.
 pub(super) fn linkedin_http_client() -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .https_only(true)
         .connect_timeout(Duration::from_secs(LINKEDIN_CONNECT_TIMEOUT_SECONDS))
         .timeout(Duration::from_secs(LINKEDIN_REQUEST_TIMEOUT_SECONDS))
         .build()
         .map_err(redact_error)
+}
+
+/// Bounded body read for LinkedIn responses (1 MiB cap).
+pub(super) fn linkedin_body_text(response: reqwest::blocking::Response) -> Result<String, String> {
+    read_bounded_text(response, LINKEDIN_MAX_RESPONSE_BYTES).map_err(redact_error)
+}
+
+/// Bounded JSON read for LinkedIn responses (1 MiB cap).
+pub(super) fn linkedin_body_json<T: serde::de::DeserializeOwned>(
+    response: reqwest::blocking::Response,
+) -> Result<T, String> {
+    read_bounded_json(response, LINKEDIN_MAX_RESPONSE_BYTES).map_err(redact_error)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -278,7 +297,7 @@ fn linked_in_api_message(body: &str) -> Option<String> {
                         .as_str()
                         .map(str::trim)
                         .filter(|message| !message.is_empty())
-                        .map(ToString::to_string)
+                        .map(truncate_error_message)
                         .or_else(|| {
                             field
                                 .as_i64()
@@ -288,7 +307,7 @@ fn linked_in_api_message(body: &str) -> Option<String> {
             });
     }
 
-    Some(trimmed.chars().take(500).collect())
+    Some(truncate_error_message(trimmed))
 }
 
 pub fn extract_publish_result(
@@ -435,11 +454,11 @@ pub fn get_linkedin_userinfo(access_token: &str) -> Result<LinkedInUserInfo, Str
 
     let status = response.status();
     if !status.is_success() {
-        let error_text = response.text().unwrap_or_default();
+        let error_text = linkedin_body_text(response).unwrap_or_default();
         return Err(linked_in_api_error(status, &error_text));
     }
 
-    let userinfo = response.json::<Value>().map_err(redact_error)?;
+    let userinfo = linkedin_body_json::<Value>(response)?;
 
     userinfo_response_to_userinfo(userinfo)
 }
@@ -539,14 +558,12 @@ pub fn publish_linkedin_member_post(
 
     let status = response.status();
     if !status.is_success() {
-        let error_text = response.text().unwrap_or_default();
+        let error_text = linkedin_body_text(response).unwrap_or_default();
         return Err(classify_create_status(status, &error_text));
     }
 
     let headers = response.headers().clone();
-    let body = response
-        .text()
-        .map_err(|error| ambiguous_after_success(redact_error(error)))?;
+    let body = linkedin_body_text(response).map_err(ambiguous_after_success)?;
     extract_publish_result(&headers, &body).map_err(ambiguous_after_success)
 }
 
@@ -571,11 +588,11 @@ pub fn get_linkedin_social_metadata(
 
     let status = response.status();
     if !status.is_success() {
-        let error_text = response.text().unwrap_or_default();
+        let error_text = linkedin_body_text(response).unwrap_or_default();
         return Err(linked_in_api_error(status, &error_text));
     }
 
-    let body = response.text().map_err(redact_error)?;
+    let body = linkedin_body_text(response)?;
     extract_social_metadata_result(&body)
 }
 
@@ -605,14 +622,12 @@ pub fn publish_linkedin_member_comment(
 
     let status = response.status();
     if !status.is_success() {
-        let error_text = response.text().unwrap_or_default();
+        let error_text = linkedin_body_text(response).unwrap_or_default();
         return Err(classify_create_status(status, &error_text));
     }
 
     let headers = response.headers().clone();
-    let body = response
-        .text()
-        .map_err(|error| ambiguous_after_success(redact_error(error)))?;
+    let body = linkedin_body_text(response).map_err(ambiguous_after_success)?;
     extract_comment_publish_result(&headers, &body, target_urn).map_err(ambiguous_after_success)
 }
 
@@ -840,6 +855,32 @@ mod tests {
             error,
             "LinkedIn API request failed with HTTP 429 Too Many Requests: Resource level throttle limit reached"
         );
+    }
+
+    #[test]
+    fn api_error_truncates_long_json_message() {
+        let body = json!({ "message": "x".repeat(10_000) }).to_string();
+        let error = linked_in_api_error(reqwest::StatusCode::BAD_REQUEST, &body);
+
+        let prefix = "LinkedIn API request failed with HTTP 400 Bad Request: ";
+        let message = error
+            .strip_prefix(prefix)
+            .unwrap_or_else(|| panic!("unexpected error format: {error}"));
+        assert!(message.chars().count() <= 501);
+        assert!(message.ends_with('…'));
+    }
+
+    #[test]
+    fn api_error_truncates_long_non_json_body() {
+        let body = "y".repeat(10_000);
+        let error = linked_in_api_error(reqwest::StatusCode::BAD_GATEWAY, &body);
+
+        let prefix = "LinkedIn API request failed with HTTP 502 Bad Gateway: ";
+        let message = error
+            .strip_prefix(prefix)
+            .unwrap_or_else(|| panic!("unexpected error format: {error}"));
+        assert!(message.chars().count() <= 501);
+        assert!(message.ends_with('…'));
     }
 
     #[test]

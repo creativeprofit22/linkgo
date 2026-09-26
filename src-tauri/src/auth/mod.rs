@@ -6,6 +6,7 @@ pub mod providers;
 pub mod publish;
 pub mod storage;
 
+use crate::net::destination::{validate_provider_destination, LocalConsent};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -50,6 +51,11 @@ pub struct ApiKeyCredentials {
     pub base_url: Option<String>,
     pub account_label: Option<String>,
     pub provider_key: String,
+    /// Explicit user consent to send this credential to a loopback/private
+    /// Base URL (see `net::destination`). Absent in entries saved by older
+    /// builds, which therefore default to no consent.
+    #[serde(default)]
+    pub allow_local_destination: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,21 +111,37 @@ impl StoredCredential {
                     last_error: String::new(),
                 }
             }
-            StoredCredential::ApiKey(credentials) => SafeCredentialStatus {
-                provider_key: credentials.provider_key.clone(),
-                auth_method: AuthMethod::ApiKey,
-                status: ConnectionStatus::Connected,
-                scopes: Vec::new(),
-                account_label: credentials.account_label.clone().unwrap_or_default(),
-                account_id: String::new(),
-                expires_at: None,
-                refresh_expires_at: None,
-                has_base_url_override: credentials
+            StoredCredential::ApiKey(credentials) => {
+                let base_url = credentials
                     .base_url
-                    .as_ref()
-                    .is_some_and(|base_url| !base_url.trim().is_empty()),
-                last_error: String::new(),
-            },
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|base_url| !base_url.is_empty());
+                // Mirror the execution-time re-validation so a Base URL saved
+                // by an older build without consent is not reported as ready.
+                // The error text is user-safe and never includes the URL.
+                let (status, last_error) = match base_url.map(|raw| {
+                    validate_provider_destination(
+                        raw,
+                        LocalConsent::from_flag(credentials.allow_local_destination),
+                    )
+                }) {
+                    Some(Err(error)) => (ConnectionStatus::ReauthRequired, error.to_string()),
+                    _ => (ConnectionStatus::Connected, String::new()),
+                };
+                SafeCredentialStatus {
+                    provider_key: credentials.provider_key.clone(),
+                    auth_method: AuthMethod::ApiKey,
+                    status,
+                    scopes: Vec::new(),
+                    account_label: credentials.account_label.clone().unwrap_or_default(),
+                    account_id: String::new(),
+                    expires_at: None,
+                    refresh_expires_at: None,
+                    has_base_url_override: base_url.is_some(),
+                    last_error,
+                }
+            }
         }
     }
 }
@@ -160,7 +182,53 @@ pub fn redact_error(error: impl ToString) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{redact_error, redact_secret};
+    use super::{
+        redact_error, redact_secret, ApiKeyCredentials, ConnectionStatus, StoredCredential,
+    };
+
+    fn api_key_status(
+        base_url: Option<&str>,
+        allow_local_destination: bool,
+    ) -> (ConnectionStatus, String) {
+        let credential = StoredCredential::ApiKey(ApiKeyCredentials {
+            api_key: "sk-test-secret".to_string(),
+            base_url: base_url.map(str::to_string),
+            account_label: None,
+            provider_key: "custom".to_string(),
+            allow_local_destination,
+        });
+        let status = credential.safe_status();
+        (status.status, status.last_error)
+    }
+
+    #[test]
+    fn api_key_status_flags_disallowed_base_url_for_reauth() {
+        let (status, last_error) = api_key_status(Some("http://localhost:11434/v1"), false);
+        assert_eq!(status, ConnectionStatus::ReauthRequired);
+        assert!(!last_error.is_empty());
+        assert!(!last_error.contains("localhost"));
+        assert!(!last_error.contains("sk-test"));
+    }
+
+    #[test]
+    fn api_key_status_connected_for_allowed_base_urls() {
+        for (base_url, consent) in [
+            (Some("http://localhost:11434/v1"), true),
+            (Some("https://api.example.com/v1"), false),
+            (Some("   "), false),
+            (None, false),
+        ] {
+            let (status, last_error) = api_key_status(base_url, consent);
+            assert_eq!(status, ConnectionStatus::Connected, "{base_url:?}");
+            assert_eq!(last_error, "", "{base_url:?}");
+        }
+    }
+
+    #[test]
+    fn api_key_status_flags_insecure_public_base_url() {
+        let (status, _) = api_key_status(Some("http://api.example.com/v1"), true);
+        assert_eq!(status, ConnectionStatus::ReauthRequired);
+    }
 
     #[test]
     fn redacts_secret_values_and_secret_errors() {

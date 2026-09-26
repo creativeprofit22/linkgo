@@ -21,7 +21,8 @@ GG AI providers exposed in Linkgo:
 
 - The React UI only receives provider status, labels, scopes, expiry metadata, and redacted errors during normal browsing.
 - API keys, access tokens, refresh tokens, and LinkedIn client secrets stay out of SQLite and rendered UI.
-- Provider API keys are returned to the webview only for an explicit operator-triggered agent run.
+- Provider API keys and Base URLs never cross IPC: there is no renderer command that returns them (the former `linkgo_auth_provider_secret` was removed and a Rust test keeps it unregistered). Provider requests run natively.
+- The OS keyring is the default store. The plaintext file fallback exists only when `LINKGO_CREDENTIAL_FILE_FALLBACK` is set for development.
 - SQLite integration tables intentionally store no secret columns.
 - Auth progress is emitted as native events so the UI can stay responsive during OAuth.
 
@@ -30,7 +31,24 @@ GG AI providers exposed in Linkgo:
 - GG AI providers use API-key/token auth.
 - Gemini is labeled as a Gemini Code Assist access token to avoid confusing it with a normal AI Studio key.
 - Every API-key provider can save an optional base URL override; GG AI defaults are used when the field is blank.
-- Custom providers use OpenAI-compatible endpoints and should include a base URL.
+- Custom providers use OpenAI-compatible endpoints and must include a base URL.
+
+## Provider destinations and local-provider consent
+
+The native destination policy (`src-tauri/src/net/destination.rs`) checks every Base URL when it is saved and again right before each provider request:
+
+- `https://` to a public host is allowed.
+- Usernames/passwords in the URL, query strings, fragments, whitespace/control characters, URLs over 2048 characters and non-http(s) schemes are always rejected.
+- Loopback (`localhost`, `*.localhost`, `127.0.0.0/8`, `::1`), private, link-local (including `169.254.169.254`), CGNAT, ULA and other non-public IP literals — including IPv4-mapped IPv6 — need explicit consent: the **Allow this local/private endpoint** checkbox in the connect dialog. It appears for such URLs and for any `http://` URL.
+- Plain `http://` is allowed only for consented local endpoints; `http://` to a public host is rejected even with consent.
+- Consent is stored inside the keyring entry (`allow_local_destination`), not in SQLite, so no migration is needed.
+
+Transport (`src-tauri/src/net/transport.rs`): environment proxies are ignored, redirects are never followed (a redirect response fails the request, so `x-api-key`/`Authorization` headers and bodies cannot be forwarded), connect timeout 10 s, total 120 s, HTTPS-only for non-consented destinations, DNS answers pointing at private networks are dropped for non-consented hosts, responses are capped at 8 MiB (LinkedIn 1 MiB) and provider error text at 500 characters.
+
+**Re-save requirement:** a Base URL saved by an older build that points at a local/private address, or uses `http://`, now fails with an actionable error. The native status re-checks the saved Base URL against the same policy, so such a provider shows **Reauth required** with that error on its Integrations card and is not treated as ready for agent runs. Reconnect the provider and tick the consent checkbox (or switch to `https://`).
+
+Consented local endpoints are trusted by design. See `docs/security/threat-model.md`.
+
 - LinkedIn uses 3-legged OAuth with state validation and manual authorization-code entry after native config is present.
 - The OAuth dialog exposes the generated authorization URL and a copy button for manual browser handoff.
 - LinkedIn token refresh runs through the native boundary when refresh credentials are available.

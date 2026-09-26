@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    linkedin_api::linkedin_http_client,
+    linkedin_api::{linkedin_body_json, linkedin_http_client},
     oauth::{build_authorization_url, create_oauth_security_material},
     redact_error, unix_timestamp, OAuthCredentials, StoredCredential,
 };
@@ -130,9 +130,8 @@ pub fn exchange_linkedin_code(
         .send()
         .map_err(redact_error)?
         .error_for_status()
-        .map_err(redact_error)?
-        .json::<LinkedInTokenResponse>()
         .map_err(redact_error)?;
+    let response = linkedin_body_json::<LinkedInTokenResponse>(response)?;
 
     Ok(token_response_to_credential(response))
 }
@@ -165,9 +164,8 @@ pub fn refresh_linkedin_credential(
         .send()
         .map_err(redact_error)?
         .error_for_status()
-        .map_err(redact_error)?
-        .json::<LinkedInTokenResponse>()
         .map_err(redact_error)?;
+    let response = linkedin_body_json::<LinkedInTokenResponse>(response)?;
 
     Ok(token_response_to_credential(response))
 }
