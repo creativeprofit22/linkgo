@@ -14,33 +14,32 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { assertApprovalCanPublishViaLinkedIn } from "@/features/approvals/data";
-import { PUBLISH_ERROR_MESSAGE_MAX_CHARS } from "@/features/approvals/schemas";
-import type {
-  ApprovalWithDetails,
-  RecordPublishAttemptInput,
-} from "@/features/approvals/types";
-import { publishLinkedInPost } from "@/features/linkedin-actions";
+import type { ApprovalWithDetails } from "@/features/approvals/types";
+import {
+  OUTCOME_UNKNOWN_TITLE,
+  OutcomeUnknownAlert,
+  publishLinkedInPost,
+  type ExecutionOutcome,
+} from "@/features/linkedin-actions";
 
 interface PublishLinkedInDialogProps {
   approval: ApprovalWithDetails;
   commentary: string;
-  onPublishResult: (input: RecordPublishAttemptInput) => Promise<void>;
+  /** Refreshes approvals after native code settled the publish outcome. */
+  onPublished: () => Promise<void> | void;
+  /** Locks the trigger, e.g. while a publish execution is still open. */
+  disabled?: boolean;
+}
+
+interface UnknownOutcomeState {
+  executionId: number;
+  message: string;
 }
 
 const CONFIRMATION_TEXT = "Publish now";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "LinkedIn publish failed";
-}
-
-function truncateErrorMessage(message: string): string {
-  const trimmed = message.trim();
-  if (trimmed === "") return "LinkedIn publish failed";
-  if (trimmed.length <= PUBLISH_ERROR_MESSAGE_MAX_CHARS) return trimmed;
-  // Length is counted in UTF-16 units (as Zod does); never split a surrogate.
-  let head = trimmed.slice(0, PUBLISH_ERROR_MESSAGE_MAX_CHARS - 1);
-  if (/[\uD800-\uDBFF]$/.test(head)) head = head.slice(0, -1);
-  return `${head.trimEnd()}…`;
 }
 
 function getPublishScheduleJobId(
@@ -58,19 +57,73 @@ function getIdempotencyKey(approval: ApprovalWithDetails): string {
 export function PublishLinkedInDialog({
   approval,
   commentary,
-  onPublishResult,
+  onPublished,
+  disabled = false,
 }: PublishLinkedInDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [confirmationText, setConfirmationText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [unknownOutcome, setUnknownOutcome] =
+    useState<UnknownOutcomeState | null>(null);
   const confirmationMatches = confirmationText.trim() === CONFIRMATION_TEXT;
   const scheduleJobId = getPublishScheduleJobId(approval);
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setUnknownOutcome(null);
+      setConfirmationText("");
+    }
+  };
+
+  const refresh = async (): Promise<void> => {
+    try {
+      await onPublished();
+    } catch {
+      // The parent hook reports its own load errors.
+    }
+  };
+
+  const showOutcome = (outcome: ExecutionOutcome): void => {
+    switch (outcome.status) {
+      case "succeeded":
+        toast.success("Published to LinkedIn", {
+          description: outcome.platformId || outcome.externalUrl,
+        });
+        handleOpenChange(false);
+        return;
+      case "failed":
+        toast.error("LinkedIn publish failed", {
+          description: outcome.message,
+        });
+        handleOpenChange(false);
+        return;
+      case "blocked":
+        toast.error("LinkedIn publish blocked", {
+          description: outcome.message,
+        });
+        handleOpenChange(false);
+        return;
+      case "outcomeUnknown":
+      case "staleOwner":
+        setConfirmationText("");
+        setUnknownOutcome({
+          executionId: outcome.executionId,
+          message: outcome.message,
+        });
+        toast.warning(OUTCOME_UNKNOWN_TITLE, {
+          description:
+            "Do not publish again. Check LinkedIn and reconcile in Safety.",
+        });
+        return;
+    }
+  };
 
   const handleSubmit = async (
     event: SyntheticEvent<HTMLFormElement>,
   ): Promise<void> => {
     event.preventDefault();
-    if (!confirmationMatches) return;
+    if (!confirmationMatches || disabled || unknownOutcome !== null) return;
 
     setSubmitting(true);
     const publishInput = {
@@ -84,64 +137,33 @@ export function PublishLinkedInDialog({
         approvalId: approval.id,
         ...(scheduleJobId === undefined ? {} : { scheduleJobId }),
       });
-      const result = await publishLinkedInPost(publishInput).catch(
-        async (caught: unknown) => {
-          const message = getErrorMessage(caught);
-          try {
-            await onPublishResult({
-              approvalId: approval.id,
-              ...(scheduleJobId === undefined ? {} : { scheduleJobId }),
-              status: "failed",
-              externalPostUrl: "",
-              platformPostId: "",
-              // Provider/OAuth errors can be long; truncate so the failure is
-              // still recorded instead of rejected by the length limit.
-              errorMessage: truncateErrorMessage(message),
-            });
-            toast.error("LinkedIn publish failed", { description: message });
-          } catch (recordError) {
-            toast.error("LinkedIn publish failed, and local recording failed", {
-              description: `${message} Record error: ${getErrorMessage(recordError)}`,
-            });
-          }
-          return null;
-        },
-      );
-
-      if (result !== null) {
-        try {
-          await onPublishResult({
-            approvalId: approval.id,
-            ...(scheduleJobId === undefined ? {} : { scheduleJobId }),
-            status: "succeeded",
-            externalPostUrl: result.externalPostUrl,
-            platformPostId: result.platformPostId,
-            errorMessage: "",
-          });
-          toast.success("Published to LinkedIn", {
-            description: result.platformPostId || result.externalPostUrl,
-          });
-          setConfirmationText("");
-        } catch (caught) {
-          toast.error("Published to LinkedIn, but local recording failed", {
-            description: `${getErrorMessage(caught)} Platform ID: ${result.platformPostId}`,
-          });
-        }
-      }
-      setOpen(false);
     } catch (caught) {
       toast.error("LinkedIn publish blocked", {
         description: getErrorMessage(caught),
       });
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      // Native code records the attempt, approval, schedule job, audit, and
+      // error queue in one transaction; the renderer only reports the outcome.
+      const outcome = await publishLinkedInPost(publishInput);
+      showOutcome(outcome);
+    } catch (caught) {
+      toast.error("LinkedIn publish failed", {
+        description: getErrorMessage(caught),
+      });
     } finally {
+      await refresh();
       setSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm">
+        <Button type="button" size="sm" disabled={disabled}>
           <Send className="size-4" /> Publish via LinkedIn
         </Button>
       </DialogTrigger>
@@ -168,6 +190,14 @@ export function PublishLinkedInDialog({
             sending.
           </div>
 
+          {unknownOutcome !== null && (
+            <OutcomeUnknownAlert
+              itemLabel="post"
+              executionId={unknownOutcome.executionId}
+              message={unknownOutcome.message}
+            />
+          )}
+
           <div className="space-y-2">
             <Label htmlFor={`publish-linkedin-confirm-${approval.id}`}>
               Type “{CONFIRMATION_TEXT}” to confirm
@@ -176,6 +206,7 @@ export function PublishLinkedInDialog({
               id={`publish-linkedin-confirm-${approval.id}`}
               value={confirmationText}
               autoComplete="off"
+              disabled={unknownOutcome !== null}
               placeholder={CONFIRMATION_TEXT}
               aria-describedby={`publish-linkedin-help-${approval.id}`}
               onChange={(event) => setConfirmationText(event.target.value)}
@@ -192,12 +223,17 @@ export function PublishLinkedInDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={submitting}
             >
-              Cancel
+              {unknownOutcome === null ? "Cancel" : "Close"}
             </Button>
-            <Button type="submit" disabled={submitting || !confirmationMatches}>
+            <Button
+              type="submit"
+              disabled={
+                submitting || !confirmationMatches || unknownOutcome !== null
+              }
+            >
               {submitting ? "Publishing…" : "Publish via LinkedIn"}
             </Button>
           </DialogFooter>

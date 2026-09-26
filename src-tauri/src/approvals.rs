@@ -96,6 +96,16 @@ pub(crate) fn validate_record_publish_attempt(
     })
 }
 
+/// How strictly a publish attempt is gated. `Operator` records what a person
+/// reports and enforces every gate. `RemoteConfirmed` settles a LinkedIn call
+/// the publishing service already made: the attempt row is always written,
+/// because refusing it would hide a post that really exists.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PublishRecordMode {
+    Operator,
+    RemoteConfirmed,
+}
+
 struct ApprovalState {
     id: i64,
     campaign_id: i64,
@@ -103,9 +113,10 @@ struct ApprovalState {
     reviewed_content_revision: Option<i64>,
 }
 
-async fn execute_record_publish_attempt(
+pub(crate) async fn execute_record_publish_attempt(
     connection: &mut SqliteConnection,
     input: &ValidPublishAttempt,
+    mode: PublishRecordMode,
 ) -> Result<i64, String> {
     let row = sqlx::query(
         "SELECT a.id, a.campaign_id, c.status AS campaign_status, a.status,
@@ -135,13 +146,24 @@ async fn execute_record_publish_attempt(
             .map_err(|error| error.to_string())?,
     };
 
-    if campaign_status == "archived" {
+    let operator = mode == PublishRecordMode::Operator;
+    if operator {
+        crate::publishing::store::ensure_no_open_execution(
+            connection,
+            crate::publishing::types::ExecutionKind::Post,
+            input.approval_id,
+        )
+        .await?;
+    }
+    if campaign_status == "archived" && operator {
         return Err("Campaign is archived".to_string());
     }
-    if !matches!(
-        approval.status.as_str(),
-        "approved" | "scheduled" | "published"
-    ) {
+    if operator
+        && !matches!(
+            approval.status.as_str(),
+            "approved" | "scheduled" | "published"
+        )
+    {
         return Err(
             "Only approved, scheduled, or published posts can record publish attempts".to_string(),
         );
@@ -178,9 +200,16 @@ async fn execute_record_publish_attempt(
             STORAGE_ERROR,
         )
         .await?;
-    if input.status == "succeeded" && !ready {
+    if input.status == "succeeded" && !ready && operator {
         return Err(STALE_APPROVAL_ERROR.to_string());
     }
+    // A confirmed remote post whose approval went stale mid-flight cannot be
+    // marked `published` (the transition trigger refuses), so the attempt row
+    // records the truth and the approval is left for the operator.
+    let can_transition = matches!(
+        approval.status.as_str(),
+        "approved" | "scheduled" | "published"
+    );
 
     let attempt_id = sqlx::query(
         "INSERT INTO publish_attempts (
@@ -200,13 +229,15 @@ async fn execute_record_publish_attempt(
     .last_insert_rowid();
 
     if input.status == "succeeded" {
-        sqlx::query(
-            "UPDATE approvals SET status = 'published', updated_at = datetime('now') WHERE id = ?1",
-        )
-        .bind(input.approval_id)
-        .execute(&mut *connection)
-        .await
-        .map_err(|error| error.to_string())?;
+        if ready && can_transition {
+            sqlx::query(
+                "UPDATE approvals SET status = 'published', updated_at = datetime('now') WHERE id = ?1",
+            )
+            .bind(input.approval_id)
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| error.to_string())?;
+        }
         if let Some(schedule_job_id) = input.schedule_job_id {
             sqlx::query(
                 "UPDATE schedule_jobs SET status = 'completed', updated_at = datetime('now') WHERE id = ?1",
@@ -216,7 +247,7 @@ async fn execute_record_publish_attempt(
             .await
             .map_err(|error| error.to_string())?;
         }
-    } else if approval.status != "published" {
+    } else if can_transition && approval.status != "published" {
         sqlx::query("UPDATE approvals SET status = ?2, updated_at = datetime('now') WHERE id = ?1")
             .bind(input.approval_id)
             .bind(if ready {
@@ -320,7 +351,8 @@ pub(crate) async fn record_publish_attempt(
         .await
         .map_err(|error| error.to_string())?;
 
-    match execute_record_publish_attempt(&mut connection, &input).await {
+    match execute_record_publish_attempt(&mut connection, &input, PublishRecordMode::Operator).await
+    {
         Ok(attempt_id) => {
             if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
                 let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
@@ -375,6 +407,7 @@ mod tests {
              INSERT INTO approval_ready_variants VALUES (1, 1, 1, 1);
              CREATE TABLE schedule_jobs (id INTEGER PRIMARY KEY, approval_id INTEGER NOT NULL, status TEXT NOT NULL, updated_at TEXT);
              CREATE TABLE publish_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL, schedule_job_id INTEGER, platform TEXT NOT NULL, status TEXT NOT NULL, external_post_url TEXT NOT NULL, platform_post_id TEXT NOT NULL, error_message TEXT NOT NULL);
+             CREATE TABLE publish_executions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject_id INTEGER NOT NULL, status TEXT NOT NULL);
              CREATE TABLE safety_audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER, subject_type TEXT NOT NULL, subject_id INTEGER, event_type TEXT NOT NULL, severity TEXT NOT NULL, summary TEXT NOT NULL, metadata_json TEXT NOT NULL);
              CREATE TABLE error_queue_items (id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER, source_type TEXT NOT NULL, source_id INTEGER, title TEXT NOT NULL, detail TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL, updated_at TEXT);",
         )
@@ -656,6 +689,25 @@ mod tests {
         assert_eq!(count(&pool, "publish_attempts").await, 0);
         assert_eq!(count(&pool, "safety_audit_events").await, 0);
         assert_eq!(approval_status(&pool).await, "scheduled");
+    }
+
+    #[tokio::test]
+    async fn manual_record_is_refused_while_an_execution_is_open() {
+        let pool = test_pool().await;
+        seed_scheduled(&pool).await;
+        pool.execute(
+            "INSERT INTO publish_executions (kind, subject_id, status) VALUES ('post', 1, 'outcome_unknown')",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            record_publish_attempt(&pool, input("succeeded"))
+                .await
+                .unwrap_err(),
+            crate::publishing::store::OPEN_EXECUTION_ERROR
+        );
+        assert_eq!(count(&pool, "publish_attempts").await, 0);
     }
 
     #[tokio::test]

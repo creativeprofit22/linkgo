@@ -7,12 +7,15 @@ use std::sync::{
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
-use crate::auth::{
-    publish::{
-        compose_linkedin_commentary, escape_linkedin_little_text, publish_approved_linkedin_post,
-        sqlite_pool, LinkedInPublishPostInput,
-    },
-    redact_error,
+use crate::auth::publish::{
+    compose_linkedin_commentary, escape_linkedin_little_text, sqlite_pool, LinkedInPublishPostInput,
+};
+use crate::publishing::{
+    recovery,
+    service::{execute, ExecuteContext},
+    store::ReserveRequest,
+    transport::{LinkedInTransport, LiveLinkedInTransport},
+    types::{ExecutionCaller, ExecutionOutcome},
 };
 
 const LOCK_STALE_MINUTES: i64 = 10;
@@ -237,41 +240,6 @@ async fn insert_scheduler_event(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn insert_safety_audit_event(
-    pool: &SqlitePool,
-    campaign_id: i64,
-    subject_type: &str,
-    subject_id: i64,
-    event_type: &str,
-    severity: &str,
-    summary: &str,
-    metadata_json: &str,
-) -> Result<(), String> {
-    sqlx::query(
-        "INSERT INTO safety_audit_events (
-            campaign_id,
-            subject_type,
-            subject_id,
-            event_type,
-            severity,
-            summary,
-            metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(campaign_id)
-    .bind(subject_type)
-    .bind(subject_id)
-    .bind(event_type)
-    .bind(severity)
-    .bind(summary)
-    .bind(metadata_json)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not record safety audit event".to_string())?;
-    Ok(())
-}
-
 async fn kill_switch_block_reason(pool: &SqlitePool) -> Result<Option<String>, String> {
     let row = sqlx::query(
         "SELECT global_kill_switch, kill_switch_reason FROM safety_settings WHERE id = 1",
@@ -326,6 +294,12 @@ async fn select_due_jobs(pool: &SqlitePool, max_jobs: i64) -> Result<Vec<DueSche
                 sj.locked_at IS NULL
                 OR datetime(sj.locked_at) <= datetime('now', ?)
             )
+            AND NOT EXISTS (
+                SELECT 1 FROM publish_executions pe
+                WHERE pe.kind = 'post'
+                    AND pe.subject_id = sj.approval_id
+                    AND pe.status IN ('reserved', 'in_flight', 'outcome_unknown')
+            )
         ORDER BY datetime(sj.scheduled_for) ASC, sj.id ASC
         LIMIT ?",
     )
@@ -369,6 +343,12 @@ async fn claim_job(
             AND (
                 locked_at IS NULL
                 OR datetime(locked_at) <= datetime('now', ?)
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM publish_executions pe
+                WHERE pe.kind = 'post'
+                    AND pe.subject_id = schedule_jobs.approval_id
+                    AND pe.status IN ('reserved', 'in_flight', 'outcome_unknown')
             )",
     )
     .bind(runner_id)
@@ -396,243 +376,22 @@ async fn claim_job(
     Ok(claimed)
 }
 
-async fn insert_publish_attempt(
-    pool: &SqlitePool,
-    approval_id: i64,
-    schedule_job_id: i64,
-    status: &str,
-    external_post_url: &str,
-    platform_post_id: &str,
-    error_message: &str,
-) -> Result<(), String> {
-    sqlx::query(
-        "INSERT INTO publish_attempts (
-            approval_id,
-            schedule_job_id,
-            platform,
-            status,
-            external_post_url,
-            platform_post_id,
-            error_message
-        ) VALUES (?, ?, 'linkedin', ?, ?, ?, ?)",
-    )
-    .bind(approval_id)
-    .bind(schedule_job_id)
-    .bind(status)
-    .bind(external_post_url)
-    .bind(platform_post_id)
-    .bind(error_message)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not record publish attempt".to_string())?;
-    Ok(())
-}
-
-async fn mark_success(
-    pool: &SqlitePool,
-    job: &DueScheduleJob,
-    platform_post_id: &str,
-    external_post_url: &str,
-) -> Result<(), String> {
-    insert_publish_attempt(
-        pool,
-        job.approval_id,
-        job.id,
-        "succeeded",
-        external_post_url,
-        platform_post_id,
-        "",
-    )
-    .await?;
-    sqlx::query(
-        "UPDATE approvals
-        SET status = 'published', updated_at = datetime('now')
-        WHERE id = ?",
-    )
-    .bind(job.approval_id)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not update approval after scheduled publish".to_string())?;
-    sqlx::query(
-        "UPDATE schedule_jobs
-        SET
-            status = 'completed',
-            locked_at = NULL,
-            locked_by = NULL,
-            last_error = '',
-            updated_at = datetime('now')
-        WHERE id = ?",
-    )
-    .bind(job.id)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not complete schedule job".to_string())?;
-    insert_safety_audit_event(
-        pool,
-        job.campaign_id,
-        "schedule_job",
-        job.id,
-        "publish_succeeded",
-        "info",
-        "Scheduled LinkedIn post was published.",
-        &format!("{{\"platformPostId\":\"{}\"}}", platform_post_id),
-    )
-    .await?;
-    insert_scheduler_event(
-        pool,
-        Some(job.campaign_id),
-        Some(job.approval_id),
-        Some(job.id),
-        "job_published",
-        "info",
-        "Scheduled LinkedIn post was published.",
-        &format!("{{\"platformPostId\":\"{}\"}}", platform_post_id),
-    )
-    .await?;
-    Ok(())
-}
-
-async fn mark_retry(
-    pool: &SqlitePool,
-    job: &DueScheduleJob,
-    error: &str,
-    retry_backoff_minutes: i64,
-) -> Result<(), String> {
-    insert_publish_attempt(pool, job.approval_id, job.id, "failed", "", "", error).await?;
-    let next_attempt_epoch = compute_next_attempt_unix_seconds(
-        unix_timestamp(),
-        job.attempt_count,
-        retry_backoff_minutes,
-    );
-    sqlx::query(
-        "UPDATE schedule_jobs
-        SET
-            next_attempt_at = datetime(?, 'unixepoch'),
-            locked_at = NULL,
-            locked_by = NULL,
-            last_error = ?,
-            updated_at = datetime('now')
-        WHERE id = ?",
-    )
-    .bind(next_attempt_epoch)
-    .bind(error)
-    .bind(job.id)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not schedule retry for schedule job".to_string())?;
-    insert_safety_audit_event(
-        pool,
-        job.campaign_id,
-        "schedule_job",
-        job.id,
-        "publish_failed",
-        "warning",
-        "Scheduled LinkedIn publish failed and will retry.",
-        &format!("{{\"attemptCount\":{}}}", job.attempt_count),
-    )
-    .await?;
-    insert_scheduler_event(
-        pool,
-        Some(job.campaign_id),
-        Some(job.approval_id),
-        Some(job.id),
-        "job_retry_scheduled",
-        "warning",
-        "Scheduled LinkedIn publish failed and will retry.",
-        &format!("{{\"attemptCount\":{}}}", job.attempt_count),
-    )
-    .await?;
-    Ok(())
-}
-
-async fn mark_terminal_failure(
-    pool: &SqlitePool,
-    job: &DueScheduleJob,
-    error: &str,
-) -> Result<(), String> {
-    insert_publish_attempt(pool, job.approval_id, job.id, "failed", "", "", error).await?;
-    sqlx::query(
-        "UPDATE approvals
-        SET status = 'approved', updated_at = datetime('now')
-        WHERE id = ?",
-    )
-    .bind(job.approval_id)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not restore approval after scheduler failure".to_string())?;
-    sqlx::query(
-        "UPDATE schedule_jobs
-        SET
-            status = 'failed',
-            locked_at = NULL,
-            locked_by = NULL,
-            last_error = ?,
-            updated_at = datetime('now')
-        WHERE id = ?",
-    )
-    .bind(error)
-    .bind(job.id)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not fail schedule job".to_string())?;
-    sqlx::query(
-        "INSERT OR IGNORE INTO error_queue_items (
-            campaign_id,
-            source_type,
-            source_id,
-            title,
-            detail,
-            severity,
-            status,
-            updated_at
-        ) VALUES (?, 'schedule_job', ?, 'Scheduled publish failed', ?, 'error', 'open', datetime('now'))",
-    )
-    .bind(job.campaign_id)
-    .bind(job.id)
-    .bind(error)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not create scheduler error queue item".to_string())?;
-    sqlx::query(
-        "UPDATE error_queue_items
-        SET detail = ?, status = 'open', updated_at = datetime('now')
-        WHERE source_type = 'schedule_job'
-            AND source_id = ?
-            AND status IN ('open', 'in_progress', 'awaiting_review')",
-    )
-    .bind(error)
-    .bind(job.id)
-    .execute(pool)
-    .await
-    .map_err(|_| "Could not update scheduler error queue item".to_string())?;
-    insert_safety_audit_event(
-        pool,
-        job.campaign_id,
-        "schedule_job",
-        job.id,
-        "publish_failed",
-        "warning",
-        "Scheduled LinkedIn publish failed permanently.",
-        &format!("{{\"attemptCount\":{}}}", job.attempt_count),
-    )
-    .await?;
-    insert_scheduler_event(
-        pool,
-        Some(job.campaign_id),
-        Some(job.approval_id),
-        Some(job.id),
-        "job_failed",
-        "error",
-        "Scheduled LinkedIn publish failed permanently.",
-        &format!("{{\"attemptCount\":{}}}", job.attempt_count),
-    )
-    .await?;
-    Ok(())
-}
-
 async fn run_tick(app: &AppHandle, runner_id: &str) -> Result<SchedulerTickResult, String> {
     let pool = sqlite_pool(app).await?;
-    let settings = load_settings(&pool).await?;
+    let transport: Arc<dyn LinkedInTransport> = Arc::new(LiveLinkedInTransport::new(app.clone()));
+    run_tick_with(&pool, transport, runner_id, unix_timestamp()).await
+}
+
+/// One scheduler tick. Publishing goes through the shared execution service;
+/// the scheduler only selects and claims due jobs. Retries happen only after
+/// a definite failure, never after an ambiguous outcome.
+pub(crate) async fn run_tick_with(
+    pool: &SqlitePool,
+    transport: Arc<dyn LinkedInTransport>,
+    runner_id: &str,
+    now_epoch: i64,
+) -> Result<SchedulerTickResult, String> {
+    let settings = load_settings(pool).await?;
     let mut result = SchedulerTickResult {
         claimed: 0,
         published: 0,
@@ -642,7 +401,7 @@ async fn run_tick(app: &AppHandle, runner_id: &str) -> Result<SchedulerTickResul
     };
 
     insert_scheduler_event(
-        &pool,
+        pool,
         None,
         None,
         None,
@@ -653,12 +412,14 @@ async fn run_tick(app: &AppHandle, runner_id: &str) -> Result<SchedulerTickResul
     )
     .await?;
 
-    let due_jobs = select_due_jobs(&pool, settings.max_jobs_per_tick).await?;
-    if is_kill_switch_enabled(&pool).await? {
+    recovery::sweep(pool, settings.retry_backoff_minutes, now_epoch).await?;
+
+    let due_jobs = select_due_jobs(pool, settings.max_jobs_per_tick).await?;
+    if is_kill_switch_enabled(pool).await? {
         for job in due_jobs {
             result.blocked += 1;
             insert_scheduler_event(
-                &pool,
+                pool,
                 Some(job.campaign_id),
                 Some(job.approval_id),
                 Some(job.id),
@@ -670,7 +431,7 @@ async fn run_tick(app: &AppHandle, runner_id: &str) -> Result<SchedulerTickResul
             .await?;
         }
         insert_scheduler_event(
-            &pool,
+            pool,
             None,
             None,
             None,
@@ -684,7 +445,7 @@ async fn run_tick(app: &AppHandle, runner_id: &str) -> Result<SchedulerTickResul
     }
 
     for mut job in due_jobs {
-        if !claim_job(&pool, &mut job, runner_id).await? {
+        if !claim_job(pool, &mut job, runner_id).await? {
             continue;
         }
         result.claimed += 1;
@@ -698,32 +459,38 @@ async fn run_tick(app: &AppHandle, runner_id: &str) -> Result<SchedulerTickResul
             idempotency_key: format!("approval:{}:linkedin:{}", job.approval_id, job.id),
         };
 
-        match publish_approved_linkedin_post(app, input) {
-            Ok(publish) => {
-                mark_success(
-                    &pool,
-                    &job,
-                    &publish.platform_post_id,
-                    &publish.external_post_url,
-                )
-                .await?;
-                result.published += 1;
-            }
-            Err(error) => {
-                let redacted = redact_error(error);
+        let outcome = execute(
+            ExecuteContext {
+                pool,
+                transport: transport.clone(),
+                caller: ExecutionCaller::Scheduler,
+                retry_backoff_minutes: settings.retry_backoff_minutes,
+                now_epoch,
+            },
+            ReserveRequest::Post(input),
+        )
+        .await?;
+        match outcome {
+            ExecutionOutcome::Succeeded { .. } => result.published += 1,
+            ExecutionOutcome::Failed { .. } => {
                 if job.attempt_count >= job.max_attempts {
-                    mark_terminal_failure(&pool, &job, &redacted).await?;
                     result.failed += 1;
                 } else {
-                    mark_retry(&pool, &job, &redacted, settings.retry_backoff_minutes).await?;
                     result.retry_scheduled += 1;
                 }
+            }
+            ExecutionOutcome::OutcomeUnknown { .. } | ExecutionOutcome::StaleOwner { .. } => {
+                result.blocked += 1
+            }
+            ExecutionOutcome::Blocked { message } => {
+                result.blocked += 1;
+                release_blocked_job(pool, &job, &message).await?;
             }
         }
     }
 
     insert_scheduler_event(
-        &pool,
+        pool,
         None,
         None,
         None,
@@ -738,6 +505,37 @@ async fn run_tick(app: &AppHandle, runner_id: &str) -> Result<SchedulerTickResul
     .await?;
 
     Ok(result)
+}
+
+/// A policy gate refused before any LinkedIn call. Release the claim and undo
+/// the attempt count so the refusal does not consume a retry.
+async fn release_blocked_job(
+    pool: &SqlitePool,
+    job: &DueScheduleJob,
+    message: &str,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE schedule_jobs
+        SET locked_at = NULL, locked_by = NULL, last_error = ?,
+            attempt_count = MAX(attempt_count - 1, 0), updated_at = datetime('now')
+        WHERE id = ?",
+    )
+    .bind(message)
+    .bind(job.id)
+    .execute(pool)
+    .await
+    .map_err(|_| "Could not release blocked schedule job".to_string())?;
+    insert_scheduler_event(
+        pool,
+        Some(job.campaign_id),
+        Some(job.approval_id),
+        Some(job.id),
+        "job_blocked",
+        "warning",
+        "Scheduler skipped a due job because a publish gate refused it.",
+        &serde_json::json!({ "reason": message }).to_string(),
+    )
+    .await
 }
 
 fn current_worker() -> (bool, Option<String>) {
@@ -822,6 +620,12 @@ pub fn linkgo_scheduler_start(app: AppHandle) -> Result<SchedulerStatusPayload, 
     }
 
     if let Some((runner_id, stop)) = should_spawn {
+        let settings = tauri::async_runtime::block_on(load_settings(&pool))?;
+        tauri::async_runtime::block_on(recovery::sweep(
+            &pool,
+            settings.retry_backoff_minutes,
+            unix_timestamp(),
+        ))?;
         tauri::async_runtime::block_on(insert_scheduler_event(
             &pool,
             None,

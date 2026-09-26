@@ -18,6 +18,10 @@ import {
 import { PublishLinkedInCommentDialog } from "@/features/comments/components/publish-linkedin-comment-dialog";
 import { RecordCommentAttemptDialog } from "@/features/comments/components/record-comment-attempt-dialog";
 import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
+import {
+  PublishLockNotice,
+  type PublishLock,
+} from "@/features/publish-reconciliation";
 import type {
   CommentThreadWithDetails,
   RecordCommentAttemptInput,
@@ -31,11 +35,14 @@ interface CommentThreadCardProps {
   thread: CommentThreadWithDetails;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
+  /** Open native publish execution for this thread; the native gate decides. */
+  publishLock: PublishLock | null;
   onUpdateThread: (input: UpdateCommentThreadInput) => Promise<void>;
   onUpdateVariant: (input: UpdateCommentVariantInput) => Promise<void>;
   onSetVariantStatus: (input: SetCommentVariantStatusInput) => Promise<void>;
   onSetReviewStatus: (input: SetCommentThreadStatusInput) => Promise<void>;
   onRecordAttempt: (input: RecordCommentAttemptInput) => Promise<void>;
+  onPublished: () => Promise<void> | void;
 }
 
 const editableStatuses = [
@@ -51,11 +58,13 @@ export function CommentThreadCard({
   thread,
   killSwitchEnabled,
   killSwitchReason,
+  publishLock,
   onUpdateThread,
   onUpdateVariant,
   onSetVariantStatus,
   onSetReviewStatus,
   onRecordAttempt,
+  onPublished,
 }: CommentThreadCardProps): React.ReactNode {
   const archived = thread.campaign_status === "archived";
   const isTerminal = terminalStatuses.includes(thread.status);
@@ -76,6 +85,7 @@ export function CommentThreadCard({
     canRecordAttempt &&
     !killSwitchEnabled &&
     selectedVariantReady &&
+    publishLock === null &&
     targetUrn !== "";
   const [operatorNotes, setOperatorNotes] = useState(thread.operator_notes);
   const [reviewerNotes, setReviewerNotes] = useState(thread.reviewer_notes);
@@ -307,12 +317,17 @@ export function CommentThreadCard({
                 {killSwitchReason ? `: ${killSwitchReason}` : "."}
               </p>
             ) : canRecordAttempt && targetUrn ? (
-              <PublishLinkedInCommentDialog
-                thread={thread}
-                targetUrn={targetUrn}
-                onPublishResult={onRecordAttempt}
-                disabled={!canPostViaLinkedIn}
-              />
+              <>
+                <PublishLinkedInCommentDialog
+                  thread={thread}
+                  targetUrn={targetUrn}
+                  onPublished={onPublished}
+                  disabled={!canPostViaLinkedIn}
+                />
+                {publishLock !== null && (
+                  <PublishLockNotice lock={publishLock} />
+                )}
+              </>
             ) : canRecordAttempt ? (
               <p className="text-muted-foreground text-sm">
                 LinkedIn target URN could not be resolved from the candidate

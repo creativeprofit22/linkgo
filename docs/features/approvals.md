@@ -179,3 +179,7 @@ node node_modules/@playwright/test/cli.js test tests/approvals.spec.ts tests/dra
 ```
 
 These checks cover bypassed UI transitions, stale evidence and reviewer revisions, each content field, no-op edits, migration preservation, reload, and re-audit/re-score recovery. They do not exercise live LinkedIn publishing or redesign IPC permissions.
+
+## Publishing execution
+
+"Publish via LinkedIn" calls `linkgo_linkedin_publish_post`. That command reserves, publishes and records the attempt natively through the shared execution service ([publishing-execution.md](publishing-execution.md)) and returns a typed `ExecutionOutcome`: `succeeded`, `failed`, `outcomeUnknown`, `blocked` or `staleOwner`. The renderer no longer calls `linkgo_approval_record_publish_attempt` after publishing. That command is only for posts made outside Linkgo, and it is refused while the approval has an open execution. An `outcomeUnknown` result keeps a persistent warning in the dialog and must be reconciled in Safety before the approval can be published again. The Approvals view also loads open executions (`listOpenPublishExecutions`) with each campaign refresh. While the approval has one, the card disables "Publish via LinkedIn" and shows "Awaiting reconciliation in Safety" (`outcome_unknown`) or "Publishing in progress" (`reserved`/`in_flight`). This is only a hint; the native reservation gate stays authoritative.

@@ -15,17 +15,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { escapeLinkedInLittleText } from "@/features/approvals/linkedin-format";
 import { assertCommentCanPublishViaLinkedIn } from "@/features/comments/data";
-import type {
-  CommentThreadWithDetails,
-  RecordCommentAttemptInput,
-} from "@/features/comments/types";
-import { publishLinkedInComment } from "@/features/linkedin-actions";
+import type { CommentThreadWithDetails } from "@/features/comments/types";
+import {
+  OUTCOME_UNKNOWN_TITLE,
+  OutcomeUnknownAlert,
+  publishLinkedInComment,
+  type ExecutionOutcome,
+} from "@/features/linkedin-actions";
 
 interface PublishLinkedInCommentDialogProps {
   thread: CommentThreadWithDetails;
   targetUrn: string;
-  onPublishResult: (input: RecordCommentAttemptInput) => Promise<void>;
+  /** Refreshes comment threads after native code settled the outcome. */
+  onPublished: () => Promise<void> | void;
   disabled?: boolean;
+}
+
+interface UnknownOutcomeState {
+  executionId: number;
+  message: string;
 }
 
 const CONFIRMATION_TEXT = "Post comment";
@@ -43,23 +51,76 @@ function getIdempotencyKey(threadId: number): string {
 export function PublishLinkedInCommentDialog({
   thread,
   targetUrn,
-  onPublishResult,
+  onPublished,
   disabled = false,
 }: PublishLinkedInCommentDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [confirmationText, setConfirmationText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [unknownOutcome, setUnknownOutcome] =
+    useState<UnknownOutcomeState | null>(null);
   const confirmationMatches = confirmationText.trim() === CONFIRMATION_TEXT;
   const commentary = escapeLinkedInLittleText(
     thread.selectedVariant?.body ?? "",
   );
   const idempotencyKey = getIdempotencyKey(thread.id);
 
+  const handleOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setUnknownOutcome(null);
+      setConfirmationText("");
+    }
+  };
+
+  const refresh = async (): Promise<void> => {
+    try {
+      await onPublished();
+    } catch {
+      // The parent hook reports its own load errors.
+    }
+  };
+
+  const showOutcome = (outcome: ExecutionOutcome): void => {
+    switch (outcome.status) {
+      case "succeeded":
+        toast.success("Comment posted to LinkedIn", {
+          description: outcome.platformId || outcome.externalUrl,
+        });
+        handleOpenChange(false);
+        return;
+      case "failed":
+        toast.error("LinkedIn comment failed", {
+          description: outcome.message,
+        });
+        handleOpenChange(false);
+        return;
+      case "blocked":
+        toast.error("LinkedIn comment blocked", {
+          description: outcome.message,
+        });
+        handleOpenChange(false);
+        return;
+      case "outcomeUnknown":
+      case "staleOwner":
+        setConfirmationText("");
+        setUnknownOutcome({
+          executionId: outcome.executionId,
+          message: outcome.message,
+        });
+        toast.warning(OUTCOME_UNKNOWN_TITLE, {
+          description:
+            "Do not post again. Check LinkedIn and reconcile in Safety.",
+        });
+        return;
+    }
+  };
+
   const handleSubmit = async (
     event: SyntheticEvent<HTMLFormElement>,
   ): Promise<void> => {
     event.preventDefault();
-    if (!confirmationMatches || disabled) return;
+    if (!confirmationMatches || disabled || unknownOutcome !== null) return;
 
     setSubmitting(true);
     const publishInput = {
@@ -70,61 +131,33 @@ export function PublishLinkedInCommentDialog({
     };
     try {
       await assertCommentCanPublishViaLinkedIn(publishInput);
-      const result = await publishLinkedInComment(publishInput, {
-        skipPreflight: true,
-      }).catch(async (caught: unknown) => {
-        const message = getErrorMessage(caught);
-        try {
-          await onPublishResult({
-            commentThreadId: thread.id,
-            status: "failed",
-            externalCommentUrl: "",
-            platformCommentId: "",
-            idempotencyKey: "",
-            errorMessage: message,
-          });
-          toast.error("LinkedIn comment failed", { description: message });
-        } catch (recordError) {
-          toast.error("LinkedIn comment failed, and local recording failed", {
-            description: `${message} Record error: ${getErrorMessage(recordError)}`,
-          });
-        }
-        return null;
-      });
-
-      if (result !== null) {
-        try {
-          await onPublishResult({
-            commentThreadId: thread.id,
-            status: "succeeded",
-            externalCommentUrl: result.externalCommentUrl,
-            platformCommentId:
-              result.platformCommentUrn || result.platformCommentId,
-            idempotencyKey,
-            errorMessage: "",
-          });
-          toast.success("Comment posted to LinkedIn", {
-            description: result.platformCommentUrn || result.platformCommentId,
-          });
-          setConfirmationText("");
-        } catch (caught) {
-          toast.error("Posted to LinkedIn, but local recording failed", {
-            description: `${getErrorMessage(caught)} Platform ID: ${result.platformCommentId}`,
-          });
-        }
-      }
-      setOpen(false);
     } catch (caught) {
       toast.error("LinkedIn comment blocked", {
         description: getErrorMessage(caught),
       });
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      // Native code records the attempt, thread status, audit, and error
+      // queue in one transaction; the renderer only reports the outcome.
+      const outcome = await publishLinkedInComment(publishInput, {
+        skipPreflight: true,
+      });
+      showOutcome(outcome);
+    } catch (caught) {
+      toast.error("LinkedIn comment failed", {
+        description: getErrorMessage(caught),
+      });
     } finally {
+      await refresh();
       setSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" disabled={disabled}>
           <Send className="size-4" /> Post via LinkedIn
@@ -164,6 +197,14 @@ export function PublishLinkedInCommentDialog({
             before sending.
           </div>
 
+          {unknownOutcome !== null && (
+            <OutcomeUnknownAlert
+              itemLabel="comment"
+              executionId={unknownOutcome.executionId}
+              message={unknownOutcome.message}
+            />
+          )}
+
           <div className="space-y-2">
             <Label htmlFor={`publish-linkedin-comment-confirm-${thread.id}`}>
               Type “{CONFIRMATION_TEXT}” to confirm
@@ -172,6 +213,7 @@ export function PublishLinkedInCommentDialog({
               id={`publish-linkedin-comment-confirm-${thread.id}`}
               value={confirmationText}
               autoComplete="off"
+              disabled={unknownOutcome !== null}
               placeholder={CONFIRMATION_TEXT}
               aria-describedby={`publish-linkedin-comment-help-${thread.id}`}
               onChange={(event) => setConfirmationText(event.target.value)}
@@ -188,12 +230,17 @@ export function PublishLinkedInCommentDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={submitting}
             >
-              Cancel
+              {unknownOutcome === null ? "Cancel" : "Close"}
             </Button>
-            <Button type="submit" disabled={submitting || !confirmationMatches}>
+            <Button
+              type="submit"
+              disabled={
+                submitting || !confirmationMatches || unknownOutcome !== null
+              }
+            >
               {submitting ? "Posting…" : "Post via LinkedIn"}
             </Button>
           </DialogFooter>

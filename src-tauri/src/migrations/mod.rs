@@ -26,6 +26,7 @@ pub mod planner_draft_audits;
 pub mod planner_draft_generation;
 pub mod playbooks;
 pub mod provider_parity;
+pub mod publish_executions;
 pub mod relevance_scoring;
 pub mod safety;
 pub mod scheduler;
@@ -74,6 +75,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(draft_quality_tool::migrations());
     migrations.extend(approval_readiness::migrations());
     migrations.extend(latest_draft_quality::migrations());
+    migrations.extend(publish_executions::migrations());
     migrations
 }
 

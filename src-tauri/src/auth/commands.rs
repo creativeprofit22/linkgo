@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use super::publish::{
-    self, LinkedInPublishCommentInput, LinkedInPublishCommentResult, LinkedInPublishPostInput,
-    LinkedInPublishPostResult,
-};
+use super::publish::{self, sqlite_pool, LinkedInPublishCommentInput, LinkedInPublishPostInput};
 use super::storage::AuthStorage;
 use super::{
     linkedin::{exchange_linkedin_code, refresh_linkedin_credential, start_linkedin_oauth},
@@ -16,6 +13,13 @@ use super::{
     redact_error, ApiKeyCredentials, AuthMethod, ConnectionStatus, SafeCredentialStatus,
     StoredCredential,
 };
+use crate::publishing::{
+    service::{execute, ExecuteContext},
+    store::ReserveRequest,
+    transport::LiveLinkedInTransport,
+    types::{ExecutionCaller, ExecutionOutcome},
+};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -356,20 +360,52 @@ pub fn linkgo_auth_check(
     linkgo_auth_status(app).map_err(redact_error)
 }
 
-#[tauri::command]
-pub fn linkgo_linkedin_publish_post(
-    app: AppHandle,
-    input: LinkedInPublishPostInput,
-) -> Result<LinkedInPublishPostResult, String> {
-    publish::publish_approved_linkedin_post(&app, input)
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default()
 }
 
+async fn execute_manual(
+    app: AppHandle,
+    request: ReserveRequest,
+) -> Result<ExecutionOutcome, String> {
+    let pool = sqlite_pool(&app).await?;
+    let now_epoch = unix_now();
+    // Release or surface a crashed earlier execution of this item before
+    // reserving, even while the scheduler worker is stopped.
+    crate::publishing::recovery::sweep_with_saved_settings(&pool, now_epoch).await?;
+    execute(
+        ExecuteContext {
+            pool: &pool,
+            transport: Arc::new(LiveLinkedInTransport::new(app.clone())),
+            caller: ExecutionCaller::Manual,
+            retry_backoff_minutes: 0,
+            now_epoch,
+        },
+        request,
+    )
+    .await
+}
+
+/// Manual post publish through the shared execution service: reservation,
+/// LinkedIn call and settlement all happen natively in one command.
 #[tauri::command]
-pub fn linkgo_linkedin_publish_comment(
+pub async fn linkgo_linkedin_publish_post(
+    app: AppHandle,
+    input: LinkedInPublishPostInput,
+) -> Result<ExecutionOutcome, String> {
+    execute_manual(app, ReserveRequest::Post(input)).await
+}
+
+/// Manual comment publish through the shared execution service.
+#[tauri::command]
+pub async fn linkgo_linkedin_publish_comment(
     app: AppHandle,
     input: LinkedInPublishCommentInput,
-) -> Result<LinkedInPublishCommentResult, String> {
-    publish::publish_approved_linkedin_comment(&app, input)
+) -> Result<ExecutionOutcome, String> {
+    execute_manual(app, ReserveRequest::Comment(input)).await
 }
 
 #[cfg(test)]

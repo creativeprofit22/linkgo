@@ -7,11 +7,6 @@ export const linkedInPublishPostInputSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(200),
 });
 
-export const linkedInPublishPostResultSchema = z.object({
-  platformPostId: z.string().trim().min(1),
-  externalPostUrl: z.string().trim().default(""),
-});
-
 export const linkedInPublishCommentInputSchema = z.object({
   commentThreadId: z.number().int().positive(),
   commentary: z.string().trim().min(1).max(1250),
@@ -19,8 +14,32 @@ export const linkedInPublishCommentInputSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(200),
 });
 
-export const linkedInPublishCommentResultSchema = z.object({
-  platformCommentId: z.string().trim().min(1),
-  platformCommentUrn: z.string().trim().default(""),
-  externalCommentUrl: z.string().trim().default(""),
-});
+const executionIdSchema = z.number().int().positive();
+
+export const executionOutcomeSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("succeeded"),
+    executionId: executionIdSchema,
+    platformId: z.string(),
+    externalUrl: z.string(),
+  }),
+  z.object({
+    status: z.literal("failed"),
+    executionId: executionIdSchema,
+    message: z.string(),
+  }),
+  z.object({
+    status: z.literal("outcomeUnknown"),
+    executionId: executionIdSchema,
+    message: z.string(),
+  }),
+  z.object({
+    status: z.literal("blocked"),
+    message: z.string(),
+  }),
+  z.object({
+    status: z.literal("staleOwner"),
+    executionId: executionIdSchema,
+    message: z.string(),
+  }),
+]);

@@ -315,6 +315,91 @@ async function getErrorQueueItems(page: Page): Promise<ErrorQueueItemRow[]> {
   });
 }
 
+test("Safety reconciles an outcome-unknown publish only after typed confirmation", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const now = new Date().toISOString();
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_PUBLISH_EXECUTIONS__ = [
+      {
+        id: 7,
+        kind: "post",
+        subjectId: 3,
+        campaignId: 1,
+        campaignName: "Launch",
+        scheduleJobId: null,
+        caller: "scheduler",
+        status: "outcome_unknown",
+        fence: 2,
+        remoteOutcome: "ambiguous",
+        remoteStatusCode: 503,
+        errorMessage: "LinkedIn API request failed with HTTP 503",
+        reservedAt: now,
+        sentAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 8,
+        kind: "comment",
+        subjectId: 4,
+        campaignId: 1,
+        campaignName: "Launch",
+        scheduleJobId: null,
+        caller: "manual",
+        status: "in_flight",
+        fence: 1,
+        remoteOutcome: "",
+        remoteStatusCode: null,
+        errorMessage: "",
+        reservedAt: now,
+        sentAt: now,
+        updatedAt: now,
+      },
+    ];
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await openSafety(page);
+
+  await expect(page.getByText("Publishing needs reconciliation")).toBeVisible();
+  const inFlight = page.getByLabel("Comment execution 8");
+  await expect(inFlight.getByText("In progress")).toBeVisible();
+  await expect(inFlight.getByRole("button", { name: "Reconcile" })).toHaveCount(
+    0,
+  );
+
+  const unknown = page.getByLabel("Post execution 7");
+  await unknown.getByRole("button", { name: "Reconcile" }).click();
+  const dialog = page.getByRole("dialog", { name: "Reconcile post publish" });
+  await dialog.getByLabel("Posted on LinkedIn").check();
+  const submit = dialog.getByRole("button", { name: "Reconcile" });
+  await dialog
+    .getByLabel("LinkedIn URL or URN")
+    .fill("https://www.linkedin.com/feed/update/urn:li:share:123/");
+  await expect(submit).toBeDisabled();
+  await dialog.getByLabel("Type “RECONCILE” to confirm").fill("reconcile");
+  await expect(submit).toBeDisabled();
+  await dialog.getByLabel("Type “RECONCILE” to confirm").fill("RECONCILE");
+  await submit.click();
+
+  await expect(page.getByLabel("Post execution 7")).toHaveCount(0);
+  const inputs = await page.evaluate(
+    () =>
+      (window as unknown as Record<string, unknown>)
+        .__LINKGO_PUBLISH_EXECUTION_RECONCILE_INPUTS__,
+  );
+  expect(inputs).toEqual([
+    {
+      executionId: 7,
+      fence: 2,
+      resolution: "posted",
+      externalUrl: "https://www.linkedin.com/feed/update/urn:li:share:123/",
+      confirmation: "RECONCILE",
+    },
+  ]);
+});
+
 async function openSafety(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Safety/ }).click();
   await expect(

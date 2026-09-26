@@ -470,6 +470,36 @@ Constraints: checked platform and checked status values.
 
 Indexes: `idx_publish_attempts_approval_id`, `idx_publish_attempts_schedule_job_id`, `idx_publish_attempts_status`.
 
+### `publish_executions` (Migration 37)
+
+Durable ledger of LinkedIn create attempts made by the shared publishing execution service. See `docs/features/publishing-execution.md`.
+
+| Column                                                       | Type           | Notes                                                                                                                        |
+| ------------------------------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                         | INTEGER        | Primary key                                                                                                                  |
+| `kind`                                                       | TEXT           | `post` or `comment`                                                                                                          |
+| `subject_id`                                                 | INTEGER        | Approval id (post) or comment thread id (comment)                                                                            |
+| `campaign_id`                                                | INTEGER        | References `campaigns(id)` cascade delete                                                                                    |
+| `schedule_job_id`                                            | INTEGER        | Nullable; set for scheduler posts                                                                                            |
+| `caller`                                                     | TEXT           | `manual` or `scheduler`                                                                                                      |
+| `status`                                                     | TEXT           | `reserved`, `in_flight`, `succeeded`, `failed`, `outcome_unknown`, `abandoned`, `reconciled_posted`, `reconciled_not_posted` |
+| `owner_token` / `fence`                                      | TEXT / INTEGER | Ownership fence; every owner write must match both                                                                           |
+| `idempotency_key` / `content_hash`                           | TEXT           | Key presented at reservation; FNV-1a hash of the exact commentary                                                            |
+| `remote_outcome`                                             | TEXT           | `''`, `created`, `rejected`, `ambiguous`                                                                                     |
+| `remote_status_code`                                         | INTEGER        | Nullable HTTP status                                                                                                         |
+| `remote_platform_id` / `remote_urn` / `remote_url`           | TEXT           | LinkedIn identity evidence                                                                                                   |
+| `error_message`                                              | TEXT           | Redacted failure or ambiguity reason                                                                                         |
+| `attempt_id`                                                 | INTEGER        | Linked `publish_attempts` / `comment_attempts` row after settlement                                                          |
+| `reserved_at`, `sent_at`, `remote_recorded_at`, `settled_at` | TEXT           | Lifecycle timestamps                                                                                                         |
+| `reconciliation_note`                                        | TEXT           | Operator note                                                                                                                |
+| `created_at`, `updated_at`                                   | TEXT           | SQLite datetime                                                                                                              |
+
+Indexes: partial unique `idx_publish_executions_one_open_per_subject` on `(kind, subject_id)` where status is `reserved`, `in_flight` or `outcome_unknown`; plus `idx_publish_executions_status`, `idx_publish_executions_campaign`, `idx_publish_executions_schedule_job`.
+
+### `publish_execution_events` (Migration 37)
+
+Append-only lifecycle log per execution: `execution_id` (cascade), `event_type` (`reserved`, `sent`, `settled`, `outcome_unknown`, `abandoned`, `recovered`, `stale_owner`, `reconciled`), `fence`, `summary`, `metadata_json`, `created_at`. Index `idx_publish_execution_events_execution`. The LinkedIn answer is recorded on the execution row itself (`remote_outcome`, `remote_status_code`, `remote_recorded_at`), not as an event; the CHECK list also allows `remote_recorded`, which is reserved and currently unused.
+
 ### `content_calendar_slots`
 
 Stores one local planning slot for one approved approval.

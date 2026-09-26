@@ -22,25 +22,34 @@ import type {
   ScheduleApprovalInput,
   SetApprovalStatusInput,
 } from "@/features/approvals/types";
+import {
+  PublishLockNotice,
+  type PublishLock,
+} from "@/features/publish-reconciliation";
 
 interface ApprovalCardProps {
   approval: ApprovalWithDetails;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
+  /** Open native publish execution for this approval; the native gate decides. */
+  publishLock: PublishLock | null;
   onSetStatus: (input: SetApprovalStatusInput) => Promise<void>;
   onSchedule: (input: ScheduleApprovalInput) => Promise<void>;
   onCancelSchedule: (input: CancelScheduleInput) => Promise<void>;
   onRecordPublishAttempt: (input: RecordPublishAttemptInput) => Promise<void>;
+  onPublished: () => Promise<void> | void;
 }
 
 export function ApprovalCard({
   approval,
   killSwitchEnabled,
   killSwitchReason,
+  publishLock,
   onSetStatus,
   onSchedule,
   onCancelSchedule,
   onRecordPublishAttempt,
+  onPublished,
 }: ApprovalCardProps): React.ReactNode {
   const authorName = approval.draft.target_author_name || "Unknown author";
   const rawCommentary = composeLinkedInCommentary(approval.variant);
@@ -220,8 +229,12 @@ export function ApprovalCard({
               <PublishLinkedInDialog
                 approval={approval}
                 commentary={escapedCommentary}
-                onPublishResult={onRecordPublishAttempt}
+                onPublished={onPublished}
+                disabled={publishLock !== null}
               />
+            )}
+            {canPublishViaLinkedIn && publishLock !== null && (
+              <PublishLockNotice lock={publishLock} />
             )}
             {canRecordFailure && (
               <RecordPublishAttemptDialog

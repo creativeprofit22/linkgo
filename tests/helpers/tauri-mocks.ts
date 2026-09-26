@@ -11246,9 +11246,56 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       label: "main",
     };
 
+    const OPEN_EXECUTION_MESSAGE =
+      "Another publish for this item is in progress or awaiting reconciliation";
+    type MockOpenPublishExecution = {
+      id: number;
+      kind: "post" | "comment";
+      subjectId: number;
+      campaignId: number;
+      campaignName: string;
+      scheduleJobId: number | null;
+      caller: "manual" | "scheduler";
+      status: "reserved" | "in_flight" | "outcome_unknown";
+      fence: number;
+      remoteOutcome: "" | "created" | "rejected" | "ambiguous";
+      remoteStatusCode: number | null;
+      errorMessage: string;
+      reservedAt: string;
+      sentAt: string | null;
+      updatedAt: string;
+    };
+    // Read lazily: specs seed `__LINKGO_PUBLISH_EXECUTIONS__` in init scripts
+    // that run after this mock is installed.
+    const publishExecutionStore = (): MockOpenPublishExecution[] => {
+      if (!Array.isArray(w.__LINKGO_PUBLISH_EXECUTIONS__)) {
+        w.__LINKGO_PUBLISH_EXECUTIONS__ = [];
+      }
+      return w.__LINKGO_PUBLISH_EXECUTIONS__ as MockOpenPublishExecution[];
+    };
+    let nextPublishExecutionId = 1000;
+    const hasOpenPublishExecution = (
+      kind: "post" | "comment",
+      subjectId: unknown,
+    ): boolean =>
+      publishExecutionStore().some(
+        (execution) =>
+          execution.kind === kind && execution.subjectId === subjectId,
+      );
+
     const recordCommentAttemptCommand = (args: unknown) => {
       const invokes = Number(w.__LINKGO_COMMENT_RECORD_ATTEMPT_INVOKES__ ?? 0);
       w.__LINKGO_COMMENT_RECORD_ATTEMPT_INVOKES__ = invokes + 1;
+      const threadId = (args as { input?: { commentThreadId?: number } })?.input
+        ?.commentThreadId;
+      if (hasOpenPublishExecution("comment", threadId)) {
+        throw new Error(OPEN_EXECUTION_MESSAGE);
+      }
+      return settleCommentAttempt(args);
+    };
+
+    /** Native comment attempt settlement shared by record and publish. */
+    const settleCommentAttempt = (args: unknown) => {
       const input = (
         args as {
           input?: {
@@ -11411,6 +11458,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     const recordPublishAttemptCommand = (args: unknown) => {
       const invokes = Number(w.__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ ?? 0);
       w.__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ = invokes + 1;
+      const approvalId = (args as { input?: { approvalId?: number } })?.input
+        ?.approvalId;
+      if (hasOpenPublishExecution("post", approvalId)) {
+        throw new Error(OPEN_EXECUTION_MESSAGE);
+      }
+      return settlePublishAttempt(args);
+    };
+
+    /** Native post attempt settlement shared by record and publish. */
+    const settlePublishAttempt = (args: unknown) => {
       const input = (
         args as {
           input?: {
@@ -20762,15 +20819,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return Promise.resolve(runMetricRefreshTickMock());
       }
       if (cmd === "linkgo_linkedin_publish_comment") {
+        // Mirrors native execution: LinkedIn call plus attempt/thread/audit/
+        // error settlement in one transaction, returning an ExecutionOutcome.
         const input =
           (
             args as
               | {
                   input?: {
                     commentThreadId?: number;
-                    comment_thread_id?: number;
                     targetUrn?: string;
-                    target_urn?: string;
+                    idempotencyKey?: string;
                   };
                 }
               | undefined
@@ -20779,24 +20837,59 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ ?? 0,
         );
         w.__LINKGO_LINKEDIN_COMMENT_INVOKES__ = commentInvokes + 1;
+        const commentThreadId = input.commentThreadId ?? 1;
+        if (hasOpenPublishExecution("comment", commentThreadId)) {
+          return Promise.resolve({
+            status: "blocked",
+            message: OPEN_EXECUTION_MESSAGE,
+          });
+        }
+        const executionId = nextPublishExecutionId;
+        nextPublishExecutionId += 1;
+        const outcome = w.__LINKGO_LINKEDIN_COMMENT_OUTCOME__;
+        if (outcome !== undefined) {
+          return Promise.resolve(outcome);
+        }
         const error = w.__LINKGO_LINKEDIN_COMMENT_ERROR__;
         if (typeof error === "string" && error.trim() !== "") {
-          throw new Error(error);
+          return settleCommentAttempt({
+            input: {
+              commentThreadId,
+              status: "failed",
+              idempotencyKey: input.idempotencyKey,
+              errorMessage: error,
+            },
+          }).then(() => ({ status: "failed", executionId, message: error }));
         }
-        const result = w.__LINKGO_LINKEDIN_COMMENT_RESULT__;
-        if (result !== undefined) {
-          return Promise.resolve(result);
-        }
-        const commentThreadId =
-          input.commentThreadId ?? input.comment_thread_id ?? 1;
-        const targetUrn =
-          input.targetUrn ?? input.target_urn ?? "urn:li:ugcPost:test";
-        const platformCommentId = `test-comment-${commentThreadId}`;
-        return Promise.resolve({
-          platformCommentId,
-          platformCommentUrn: `urn:li:comment:(${targetUrn},${platformCommentId})`,
-          externalCommentUrl: `https://www.linkedin.com/feed/update/${targetUrn}/`,
-        });
+        const targetUrn = input.targetUrn ?? "urn:li:ugcPost:test";
+        const override = w.__LINKGO_LINKEDIN_COMMENT_RESULT__ as
+          | {
+              platformCommentId?: string;
+              platformCommentUrn?: string;
+              externalCommentUrl?: string;
+            }
+          | undefined;
+        const platformId =
+          override?.platformCommentUrn ||
+          override?.platformCommentId ||
+          `urn:li:comment:(${targetUrn},test-comment-${commentThreadId})`;
+        const externalUrl =
+          override?.externalCommentUrl ??
+          `https://www.linkedin.com/feed/update/${targetUrn}/`;
+        return settleCommentAttempt({
+          input: {
+            commentThreadId,
+            status: "succeeded",
+            idempotencyKey: input.idempotencyKey,
+            externalCommentUrl: externalUrl,
+            platformCommentId: platformId,
+          },
+        }).then(() => ({
+          status: "succeeded",
+          executionId,
+          platformId,
+          externalUrl,
+        }));
       }
       if (cmd === "linkgo_linkedin_publish_post") {
         const input =
@@ -20805,24 +20898,158 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               | {
                   input?: {
                     approvalId?: number;
-                    approval_id?: number;
+                    scheduleJobId?: number;
                   };
                 }
               | undefined
           )?.input ?? {};
+        const approvalId = input.approvalId ?? 1;
+        if (hasOpenPublishExecution("post", approvalId)) {
+          return Promise.resolve({
+            status: "blocked",
+            message: OPEN_EXECUTION_MESSAGE,
+          });
+        }
+        const executionId = nextPublishExecutionId;
+        nextPublishExecutionId += 1;
+        const outcome = w.__LINKGO_LINKEDIN_PUBLISH_OUTCOME__;
+        if (outcome !== undefined) {
+          return Promise.resolve(outcome);
+        }
+        const scheduleJob =
+          input.scheduleJobId === undefined
+            ? {}
+            : { scheduleJobId: input.scheduleJobId };
         const error = w.__LINKGO_LINKEDIN_PUBLISH_ERROR__;
         if (typeof error === "string" && error.trim() !== "") {
-          throw new Error(error);
+          return settlePublishAttempt({
+            input: {
+              approvalId,
+              ...scheduleJob,
+              status: "failed",
+              errorMessage: error,
+            },
+          }).then(() => ({ status: "failed", executionId, message: error }));
         }
-        const result = w.__LINKGO_LINKEDIN_PUBLISH_RESULT__;
-        if (result !== undefined) {
-          return Promise.resolve(result);
+        const override = w.__LINKGO_LINKEDIN_PUBLISH_RESULT__ as
+          | { platformPostId?: string; externalPostUrl?: string }
+          | undefined;
+        if (override !== undefined && !override.platformPostId?.trim()) {
+          // Native classifies a 2xx without a parseable id as ambiguous.
+          const now = new Date().toISOString();
+          publishExecutionStore().push({
+            id: executionId,
+            kind: "post",
+            subjectId: approvalId,
+            campaignId: 1,
+            campaignName: "Campaign",
+            scheduleJobId: input.scheduleJobId ?? null,
+            caller: "manual",
+            status: "outcome_unknown",
+            fence: 1,
+            remoteOutcome: "ambiguous",
+            remoteStatusCode: null,
+            errorMessage:
+              "LinkedIn accepted the request but the response could not be read",
+            reservedAt: now,
+            sentAt: now,
+            updatedAt: now,
+          });
+          return Promise.resolve({
+            status: "outcomeUnknown",
+            executionId,
+            message:
+              "LinkedIn accepted the request but the response could not be read",
+          });
         }
-        const approvalId = input.approvalId ?? input.approval_id ?? 1;
-        const platformPostId = `urn:li:ugcPost:test-${approvalId}`;
+        const platformId =
+          override?.platformPostId ?? `urn:li:ugcPost:test-${approvalId}`;
+        const externalUrl =
+          override?.externalPostUrl ??
+          `https://www.linkedin.com/feed/update/${platformId}/`;
+        return settlePublishAttempt({
+          input: {
+            approvalId,
+            ...scheduleJob,
+            status: "succeeded",
+            externalPostUrl: externalUrl,
+            platformPostId: platformId,
+          },
+        }).then(() => ({
+          status: "succeeded",
+          executionId,
+          platformId,
+          externalUrl,
+        }));
+      }
+      if (cmd === "linkgo_publish_execution_list_open") {
+        return Promise.resolve(
+          publishExecutionStore().map((row) => ({ ...row })),
+        );
+      }
+      if (cmd === "linkgo_publish_execution_reconcile") {
+        const input =
+          (
+            args as
+              | {
+                  input?: {
+                    executionId?: number;
+                    fence?: number;
+                    resolution?: string;
+                    externalUrl?: string;
+                    note?: string;
+                    confirmation?: string;
+                  };
+                }
+              | undefined
+          )?.input ?? {};
+        w.__LINKGO_PUBLISH_EXECUTION_RECONCILE_INPUTS__ = [
+          ...((w.__LINKGO_PUBLISH_EXECUTION_RECONCILE_INPUTS__ as
+            | unknown[]
+            | undefined) ?? []),
+          input,
+        ];
+        if (input.confirmation !== "RECONCILE") {
+          throw new Error("Type RECONCILE to confirm");
+        }
+        const index = publishExecutionStore().findIndex(
+          (row) => row.id === input.executionId,
+        );
+        const row = index === -1 ? undefined : publishExecutionStore()[index];
+        if (row === undefined) {
+          throw new Error("Publishing execution was not found");
+        }
+        if (row.status !== "outcome_unknown" || row.fence !== input.fence) {
+          throw new Error(
+            "This execution changed since it was loaded; refresh and try again",
+          );
+        }
+        if (input.resolution === "posted") {
+          const reference = (input.externalUrl ?? "").trim();
+          if (reference === "") {
+            throw new Error(
+              "Paste the LinkedIn URL or URN of the published item",
+            );
+          }
+          if (
+            !reference.startsWith("https://www.linkedin.com/") &&
+            !reference.startsWith("https://linkedin.com/") &&
+            !reference.startsWith("urn:li:")
+          ) {
+            throw new Error(
+              "Use a https://www.linkedin.com/ URL or a urn:li: identifier",
+            );
+          }
+        } else if (input.resolution !== "not_posted") {
+          throw new Error("Unknown reconciliation resolution");
+        }
+        publishExecutionStore().splice(index, 1);
         return Promise.resolve({
-          platformPostId,
-          externalPostUrl: `https://www.linkedin.com/feed/update/${platformPostId}/`,
+          executionId: row.id,
+          status:
+            input.resolution === "posted"
+              ? "reconciled_posted"
+              : "reconciled_not_posted",
         });
       }
       return Promise.resolve(null);

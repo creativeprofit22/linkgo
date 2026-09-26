@@ -7,16 +7,14 @@ import {
   toNativeCommandError,
 } from "@/lib/tauri";
 import {
+  executionOutcomeSchema,
   linkedInPublishCommentInputSchema,
-  linkedInPublishCommentResultSchema,
   linkedInPublishPostInputSchema,
-  linkedInPublishPostResultSchema,
 } from "@/features/linkedin-actions/schemas";
 import type {
+  ExecutionOutcome,
   LinkedInPublishCommentInput,
-  LinkedInPublishCommentResult,
   LinkedInPublishPostInput,
-  LinkedInPublishPostResult,
 } from "@/features/linkedin-actions/types";
 import { getSafetySettings } from "@/features/safety/data";
 
@@ -58,25 +56,27 @@ async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
   return invokeNativeCommand(cmd, args as InvokeArgs | undefined);
 }
 
-function fakePublishPostResult(
+function fakePublishPostOutcome(
   input: LinkedInPublishPostInput,
-): LinkedInPublishPostResult {
-  const platformPostId = `urn:li:ugcPost:test-${input.approvalId}`;
+): ExecutionOutcome {
+  const platformId = `urn:li:ugcPost:test-${input.approvalId}`;
   return {
-    platformPostId,
-    externalPostUrl: `https://www.linkedin.com/feed/update/${platformPostId}/`,
+    status: "succeeded",
+    executionId: input.approvalId,
+    platformId,
+    externalUrl: `https://www.linkedin.com/feed/update/${platformId}/`,
   };
 }
 
-function fakePublishCommentResult(
+function fakePublishCommentOutcome(
   input: LinkedInPublishCommentInput,
-): LinkedInPublishCommentResult {
+): ExecutionOutcome {
   const platformCommentId = `test-comment-${input.commentThreadId}`;
-  const platformCommentUrn = `urn:li:comment:(${input.targetUrn},${platformCommentId})`;
   return {
-    platformCommentId,
-    platformCommentUrn,
-    externalCommentUrl: `https://www.linkedin.com/feed/update/${input.targetUrn}/`,
+    status: "succeeded",
+    executionId: input.commentThreadId,
+    platformId: `urn:li:comment:(${input.targetUrn},${platformCommentId})`,
+    externalUrl: `https://www.linkedin.com/feed/update/${input.targetUrn}/`,
   };
 }
 
@@ -93,7 +93,7 @@ async function assertCurrentLinkedInPublishSafety(): Promise<void> {
 
 export async function publishLinkedInPost(
   input: LinkedInPublishPostInput,
-): Promise<LinkedInPublishPostResult> {
+): Promise<ExecutionOutcome> {
   const parsed = linkedInPublishPostInputSchema.parse(input);
   await assertApprovalCanPublishViaLinkedIn({
     approvalId: parsed.approvalId,
@@ -105,14 +105,14 @@ export async function publishLinkedInPost(
   const result = await invokeCommand("linkgo_linkedin_publish_post", {
     input: parsed,
   });
-  if (result === null && IS_TEST) return fakePublishPostResult(parsed);
-  return linkedInPublishPostResultSchema.parse(result);
+  if (result === null && IS_TEST) return fakePublishPostOutcome(parsed);
+  return executionOutcomeSchema.parse(result);
 }
 
 export async function publishLinkedInComment(
   input: LinkedInPublishCommentInput,
   options: PublishLinkedInCommentOptions = {},
-): Promise<LinkedInPublishCommentResult> {
+): Promise<ExecutionOutcome> {
   const parsed = linkedInPublishCommentInputSchema.parse(input);
   if (options.skipPreflight !== true) {
     await assertCommentCanPublishViaLinkedIn(parsed);
@@ -121,8 +121,8 @@ export async function publishLinkedInComment(
   const result = await invokeCommand("linkgo_linkedin_publish_comment", {
     input: parsed,
   });
-  if (result === null && IS_TEST) return fakePublishCommentResult(parsed);
-  return linkedInPublishCommentResultSchema.parse(result);
+  if (result === null && IS_TEST) return fakePublishCommentOutcome(parsed);
+  return executionOutcomeSchema.parse(result);
 }
 
 if (IS_TEST && typeof window !== "undefined") {

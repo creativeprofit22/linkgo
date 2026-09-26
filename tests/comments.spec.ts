@@ -143,6 +143,45 @@ test("Approved comment posts through mocked LinkedIn API and records success", a
   await expect.poll(() => getCommentPublishInvokeCount(page)).toBe(1);
 });
 
+test("Open outcome_unknown publish execution locks comment API posting", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const now = new Date().toISOString();
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_PUBLISH_EXECUTIONS__ = [
+      {
+        id: 51,
+        kind: "comment",
+        subjectId: 1,
+        campaignId: 1,
+        campaignName: "Launch",
+        scheduleJobId: null,
+        caller: "manual",
+        status: "outcome_unknown",
+        fence: 1,
+        remoteOutcome: "ambiguous",
+        remoteStatusCode: 503,
+        errorMessage: "LinkedIn API request failed with HTTP 503",
+        reservedAt: now,
+        sentAt: now,
+        updatedAt: now,
+      },
+    ];
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createApprovedComment(page, "locked-by-execution");
+
+  await expect(
+    page.getByRole("button", { name: "Post via LinkedIn" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("Awaiting reconciliation in Safety"),
+  ).toBeVisible();
+  await expect.poll(() => getCommentPublishInvokeCount(page)).toBe(0);
+});
+
 test("LinkedIn API comment failure records failed attempt and Safety error", async ({
   page,
 }) => {

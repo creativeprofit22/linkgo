@@ -22,6 +22,10 @@ import type {
   UpdateCommentThreadInput,
   UpdateCommentVariantInput,
 } from "@/features/comments/types";
+import {
+  listOpenPublishExecutions,
+  type OpenPublishExecution,
+} from "@/features/publish-reconciliation";
 import { getSafetySettings } from "@/features/safety/data";
 import type { SafetySettings } from "@/features/safety/types";
 
@@ -36,6 +40,8 @@ interface UseCommentsState {
   error: string | null;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
+  /** Native publish executions still blocking a new publish. */
+  openPublishExecutions: OpenPublishExecution[];
   loadComments: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
   createThread: (input: CreateCommentThreadInput) => Promise<void>;
@@ -44,6 +50,8 @@ interface UseCommentsState {
   selectVariant: (input: SetCommentVariantStatusInput) => Promise<void>;
   setReviewStatus: (input: SetCommentThreadStatusInput) => Promise<void>;
   recordAttempt: (input: RecordCommentAttemptInput) => Promise<void>;
+  /** Reloads the selected campaign and safety state without a loading state. */
+  refreshComments: () => Promise<void>;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -77,6 +85,9 @@ export function useComments(): UseCommentsState {
   const [safetySettings, setSafetySettings] = useState<SafetySettings | null>(
     null,
   );
+  const [openPublishExecutions, setOpenPublishExecutions] = useState<
+    OpenPublishExecution[]
+  >([]);
 
   const loadCommentsForCampaign = useCallback(
     async (campaignId: number | null) => {
@@ -84,16 +95,20 @@ export function useComments(): UseCommentsState {
         setCommentThreads([]);
         setCommentThreadTotalCount(0);
         setEligibleCandidates([]);
+        setOpenPublishExecutions([]);
         return;
       }
 
-      const [loadedThreadPage, loadedCandidates] = await Promise.all([
-        listCommentThreadPage(campaignId),
-        listCommentEligibleCandidates(campaignId),
-      ]);
+      const [loadedThreadPage, loadedCandidates, loadedExecutions] =
+        await Promise.all([
+          listCommentThreadPage(campaignId),
+          listCommentEligibleCandidates(campaignId),
+          listOpenPublishExecutions(),
+        ]);
       setCommentThreads(loadedThreadPage.items);
       setCommentThreadTotalCount(loadedThreadPage.totalCount);
       setEligibleCandidates(loadedCandidates);
+      setOpenPublishExecutions(loadedExecutions);
     },
     [],
   );
@@ -232,6 +247,20 @@ export function useComments(): UseCommentsState {
     [loadCommentsForCampaign, selectedCampaignId],
   );
 
+  const refreshComments = useCallback(async () => {
+    try {
+      const [loadedSafetySettings] = await Promise.all([
+        getSafetySettings(),
+        loadCommentsForCampaign(selectedCampaignId),
+      ]);
+      setSafetySettings(loadedSafetySettings);
+    } catch (caught) {
+      toast.error("Comments were not refreshed", {
+        description: getErrorMessage(caught),
+      });
+    }
+  }, [loadCommentsForCampaign, selectedCampaignId]);
+
   return useMemo(
     () => ({
       campaigns,
@@ -243,6 +272,7 @@ export function useComments(): UseCommentsState {
       error,
       killSwitchEnabled: safetySettings?.global_kill_switch === 1,
       killSwitchReason: safetySettings?.kill_switch_reason ?? "",
+      openPublishExecutions,
       loadComments,
       selectCampaign,
       createThread,
@@ -251,6 +281,7 @@ export function useComments(): UseCommentsState {
       selectVariant,
       setReviewStatus,
       recordAttempt,
+      refreshComments,
     }),
     [
       campaigns,
@@ -261,6 +292,7 @@ export function useComments(): UseCommentsState {
       loading,
       error,
       safetySettings,
+      openPublishExecutions,
       loadComments,
       selectCampaign,
       createThread,
@@ -269,6 +301,7 @@ export function useComments(): UseCommentsState {
       selectVariant,
       setReviewStatus,
       recordAttempt,
+      refreshComments,
     ],
   );
 }

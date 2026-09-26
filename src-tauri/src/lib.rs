@@ -38,6 +38,7 @@ mod planner_draft_audits;
 mod planning_reads;
 mod playbooks;
 mod plugins;
+mod publishing;
 mod relevance_scoring;
 mod row_json;
 mod safety;
@@ -72,7 +73,19 @@ pub fn run() {
             let pool =
                 tauri::async_runtime::block_on(autopilot_planner::managed_pool(app.handle()))
                     .map_err(std::io::Error::other)?;
+            let recovery_pool = pool.clone();
             app.manage(pool);
+            // Recover executions left open by a crash, independent of the
+            // scheduler worker. Best effort: the reconciliation list and every
+            // manual publish run the same sweep again, so a failure here is
+            // retried there. The sweep never contacts LinkedIn.
+            tauri::async_runtime::spawn(async move {
+                let _ = publishing::recovery::sweep_with_saved_settings(
+                    &recovery_pool,
+                    publishing::recovery::now_epoch(),
+                )
+                .await;
+            });
             app.manage(autopilot_planner::AutopilotPlannerWorkerState::default());
             app.manage(source_imports::SourceImportActivity::default());
             Ok(())
@@ -97,6 +110,8 @@ pub fn run() {
             auth::commands::linkgo_auth_check,
             auth::commands::linkgo_linkedin_publish_post,
             auth::commands::linkgo_linkedin_publish_comment,
+            publishing::recovery::linkgo_publish_execution_list_open,
+            publishing::recovery::linkgo_publish_execution_reconcile,
             agent_runtime::linkgo_agent_provider_stream,
             agent_run_store::linkgo_agent_run_create,
             agent_run_store::linkgo_agent_run_start,

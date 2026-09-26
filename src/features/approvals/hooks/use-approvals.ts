@@ -21,6 +21,10 @@ import type {
 import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import { getSafetySettings } from "@/features/safety/data";
+import {
+  listOpenPublishExecutions,
+  type OpenPublishExecution,
+} from "@/features/publish-reconciliation";
 import type { SafetySettings } from "@/features/safety/types";
 
 interface UseApprovalsState {
@@ -32,6 +36,8 @@ interface UseApprovalsState {
   error: string | null;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
+  /** Native publish executions still blocking a new publish. */
+  openPublishExecutions: OpenPublishExecution[];
   loadApprovals: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
   createReview: (input: CreateApprovalInput) => Promise<void>;
@@ -39,6 +45,8 @@ interface UseApprovalsState {
   scheduleReview: (input: ScheduleApprovalInput) => Promise<void>;
   cancelScheduleJob: (input: CancelScheduleInput) => Promise<void>;
   recordPublishResult: (input: RecordPublishAttemptInput) => Promise<void>;
+  /** Reloads the selected campaign and safety state without a loading state. */
+  refreshApprovals: () => Promise<void>;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -69,21 +77,28 @@ export function useApprovals(): UseApprovalsState {
   const [safetySettings, setSafetySettings] = useState<SafetySettings | null>(
     null,
   );
+  const [openPublishExecutions, setOpenPublishExecutions] = useState<
+    OpenPublishExecution[]
+  >([]);
 
   const loadApprovalsForCampaign = useCallback(
     async (campaignId: number | null) => {
       if (campaignId === null) {
         setApprovals([]);
         setEligibleDrafts([]);
+        setOpenPublishExecutions([]);
         return;
       }
 
-      const [loadedApprovals, loadedEligibleDrafts] = await Promise.all([
-        listApprovals(campaignId),
-        listApprovalEligibleDrafts(campaignId),
-      ]);
+      const [loadedApprovals, loadedEligibleDrafts, loadedExecutions] =
+        await Promise.all([
+          listApprovals(campaignId),
+          listApprovalEligibleDrafts(campaignId),
+          listOpenPublishExecutions(),
+        ]);
       setApprovals(loadedApprovals);
       setEligibleDrafts(loadedEligibleDrafts);
+      setOpenPublishExecutions(loadedExecutions);
     },
     [],
   );
@@ -205,6 +220,20 @@ export function useApprovals(): UseApprovalsState {
     [loadApprovalsForCampaign, selectedCampaignId],
   );
 
+  const refreshApprovals = useCallback(async () => {
+    try {
+      const [loadedSafetySettings] = await Promise.all([
+        getSafetySettings(),
+        loadApprovalsForCampaign(selectedCampaignId),
+      ]);
+      setSafetySettings(loadedSafetySettings);
+    } catch (caught) {
+      toast.error("Approvals were not refreshed", {
+        description: getErrorMessage(caught),
+      });
+    }
+  }, [loadApprovalsForCampaign, selectedCampaignId]);
+
   return useMemo(
     () => ({
       approvals,
@@ -215,6 +244,7 @@ export function useApprovals(): UseApprovalsState {
       error,
       killSwitchEnabled: safetySettings?.global_kill_switch === 1,
       killSwitchReason: safetySettings?.kill_switch_reason ?? "",
+      openPublishExecutions,
       loadApprovals,
       selectCampaign,
       createReview,
@@ -222,6 +252,7 @@ export function useApprovals(): UseApprovalsState {
       scheduleReview,
       cancelScheduleJob,
       recordPublishResult,
+      refreshApprovals,
     }),
     [
       approvals,
@@ -231,6 +262,7 @@ export function useApprovals(): UseApprovalsState {
       loading,
       error,
       safetySettings,
+      openPublishExecutions,
       loadApprovals,
       selectCampaign,
       createReview,
@@ -238,6 +270,7 @@ export function useApprovals(): UseApprovalsState {
       scheduleReview,
       cancelScheduleJob,
       recordPublishResult,
+      refreshApprovals,
     ],
   );
 }

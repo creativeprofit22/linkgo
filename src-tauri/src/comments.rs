@@ -43,9 +43,20 @@ pub(crate) struct LimitDecision {
     pub(crate) allowed: bool,
 }
 
-enum Settlement {
+pub(crate) enum Settlement {
     Accepted(i64),
     Rejected(String),
+}
+
+/// How strictly a comment attempt is gated. `Operator` records what a person
+/// reports and enforces every gate. `RemoteConfirmed` settles a LinkedIn call
+/// the publishing service already made after passing those gates at
+/// reservation time; re-checking the kill switch or limit afterward would
+/// hide a comment that really exists.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommentRecordMode {
+    Operator,
+    RemoteConfirmed,
 }
 
 pub(crate) async fn comment_limit_decision(
@@ -112,7 +123,7 @@ pub(crate) async fn insert_rate_limit_event(
     Ok(())
 }
 
-async fn upsert_failure_error(
+pub(crate) async fn upsert_failure_error(
     connection: &mut SqliteConnection,
     campaign_id: i64,
     thread_id: i64,
@@ -183,9 +194,10 @@ async fn upsert_failure_error(
     Ok(())
 }
 
-async fn execute_record_comment_attempt(
+pub(crate) async fn execute_record_comment_attempt(
     connection: &mut SqliteConnection,
     input: &RecordCommentAttemptInput,
+    mode: CommentRecordMode,
 ) -> Result<Settlement, String> {
     if input.status != "succeeded" && input.status != "failed" {
         return Err("Comment attempt status must be succeeded or failed".to_string());
@@ -217,7 +229,7 @@ async fn execute_record_comment_attempt(
     let campaign_status: String = row
         .try_get("campaign_status")
         .map_err(comment_storage_error)?;
-    if campaign_status == "archived" {
+    if campaign_status == "archived" && mode == CommentRecordMode::Operator {
         return Err("Campaign is archived".to_string());
     }
     let thread = ThreadState {
@@ -227,11 +239,21 @@ async fn execute_record_comment_attempt(
             .try_get("daily_comment_limit")
             .map_err(comment_storage_error)?,
     };
-    if thread.status != "approved" {
-        return Err("Only approved comments can record posting attempts".to_string());
+    if mode == CommentRecordMode::Operator {
+        if thread.status != "approved" {
+            return Err("Only approved comments can record posting attempts".to_string());
+        }
+        crate::publishing::store::ensure_no_open_execution(
+            connection,
+            crate::publishing::types::ExecutionKind::Comment,
+            input.comment_thread_id,
+        )
+        .await?;
+    } else if thread.status == "posted" && input.status == "succeeded" {
+        return Err("Comment thread is already posted".to_string());
     }
 
-    if input.status == "succeeded" {
+    if input.status == "succeeded" && mode == CommentRecordMode::Operator {
         let selected_count = sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM comment_variants cv
              WHERE cv.comment_thread_id = ?1 AND cv.status = 'selected'
@@ -346,7 +368,7 @@ async fn execute_record_comment_attempt(
     Ok(Settlement::Accepted(attempt_id))
 }
 
-async fn record_comment_attempt(
+pub(crate) async fn record_comment_attempt(
     pool: &SqlitePool,
     input: RecordCommentAttemptInput,
 ) -> Result<i64, String> {
@@ -356,7 +378,8 @@ async fn record_comment_attempt(
         .await
         .map_err(comment_storage_error)?;
 
-    match execute_record_comment_attempt(&mut connection, &input).await {
+    match execute_record_comment_attempt(&mut connection, &input, CommentRecordMode::Operator).await
+    {
         Ok(settlement) => {
             if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
                 let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
@@ -410,6 +433,7 @@ mod tests {
              CREATE TABLE comment_variants (id INTEGER PRIMARY KEY, comment_thread_id INTEGER NOT NULL, status TEXT NOT NULL);
              CREATE TABLE comment_audits (id INTEGER PRIMARY KEY, comment_variant_id INTEGER NOT NULL, severity TEXT NOT NULL);
              CREATE TABLE comment_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, comment_thread_id INTEGER NOT NULL, platform TEXT NOT NULL, status TEXT NOT NULL, external_comment_url TEXT NOT NULL, platform_comment_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, error_message TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+             CREATE TABLE publish_executions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject_id INTEGER NOT NULL, status TEXT NOT NULL);
              CREATE UNIQUE INDEX unique_attempt_key ON comment_attempts(idempotency_key) WHERE idempotency_key <> '';
              CREATE TABLE safety_settings (id INTEGER PRIMARY KEY, global_kill_switch INTEGER NOT NULL DEFAULT 0, kill_switch_reason TEXT NOT NULL DEFAULT '');
              CREATE TABLE rate_limit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER NOT NULL, action TEXT NOT NULL, window_key TEXT NOT NULL, limit_value INTEGER NOT NULL, current_count INTEGER NOT NULL, decision TEXT NOT NULL, summary TEXT NOT NULL);

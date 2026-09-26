@@ -5,6 +5,7 @@ import { ApprovalCard } from "@/features/approvals/components/approval-card";
 import { CreateApprovalDialog } from "@/features/approvals/components/create-approval-dialog";
 import { useApprovals } from "@/features/approvals/hooks/use-approvals";
 import type { ApprovalWithDetails } from "@/features/approvals/types";
+import { findPublishLock } from "@/features/publish-reconciliation";
 
 export function ApprovalsView(): React.ReactNode {
   const {
@@ -16,6 +17,7 @@ export function ApprovalsView(): React.ReactNode {
     error,
     killSwitchEnabled,
     killSwitchReason,
+    openPublishExecutions,
     loadApprovals,
     selectCampaign,
     createReview,
@@ -23,6 +25,7 @@ export function ApprovalsView(): React.ReactNode {
     scheduleReview,
     cancelScheduleJob,
     recordPublishResult,
+    refreshApprovals,
   } = useApprovals();
 
   const summary = getApprovalSummary(approvals);
@@ -140,10 +143,16 @@ export function ApprovalsView(): React.ReactNode {
                   approval={approval}
                   killSwitchEnabled={killSwitchEnabled}
                   killSwitchReason={killSwitchReason}
+                  publishLock={findPublishLock(
+                    openPublishExecutions,
+                    "post",
+                    approval.id,
+                  )}
                   onSetStatus={setReviewStatus}
                   onSchedule={scheduleReview}
                   onCancelSchedule={cancelScheduleJob}
                   onRecordPublishAttempt={recordPublishResult}
+                  onPublished={refreshApprovals}
                 />
               ))}
             </div>

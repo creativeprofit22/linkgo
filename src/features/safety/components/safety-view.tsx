@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PublishReconciliationCard } from "@/features/publish-reconciliation";
 import { ErrorQueueCard } from "@/features/safety/components/error-queue-card";
 import { RateLimitEventList } from "@/features/safety/components/rate-limit-event-list";
 import { SafetyEventList } from "@/features/safety/components/safety-event-list";
@@ -165,6 +166,10 @@ export function SafetyView(): React.ReactNode {
               value={String(dashboard.summary.auditEvents)}
             />
           </div>
+
+          <PublishReconciliationCard
+            onReconciled={() => selectCampaign(selectedCampaignId)}
+          />
 
           {campaigns.length === 0 && <EmptyNoCampaigns />}
 

@@ -138,3 +138,7 @@ bun run build
 bun run test
 bun run test:rust
 ```
+
+## Publishing execution
+
+"Post via LinkedIn" calls `linkgo_linkedin_publish_comment`. That command reserves, posts and records the comment attempt natively through the shared execution service ([publishing-execution.md](publishing-execution.md)) and returns a typed `ExecutionOutcome`. The daily comment limit counts succeeded attempts plus open comment executions. `linkgo_comment_record_attempt` remains for comments posted outside Linkgo and is refused while the thread has an open execution. Ambiguous outcomes are shown as "Outcome unknown — check LinkedIn" and reconciled in Safety. The Comments view also loads open executions with each campaign refresh. While a thread has one, its card disables "Post via LinkedIn" and shows "Awaiting reconciliation in Safety" (`outcome_unknown`) or "Publishing in progress" (`reserved`/`in_flight`). The native reservation gate stays authoritative.

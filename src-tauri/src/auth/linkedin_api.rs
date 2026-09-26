@@ -163,7 +163,7 @@ pub fn build_member_comment_payload(
     }))
 }
 
-fn linked_in_post_url(platform_post_id: &str) -> String {
+pub(crate) fn linked_in_post_url(platform_post_id: &str) -> String {
     let trimmed = platform_post_id.trim();
     if trimmed.is_empty() {
         String::new()
@@ -444,30 +444,110 @@ pub fn get_linkedin_userinfo(access_token: &str) -> Result<LinkedInUserInfo, Str
     userinfo_response_to_userinfo(userinfo)
 }
 
+/// Typed failure of a LinkedIn create call. `Rejected` means LinkedIn
+/// definitely did not create the entity; `Ambiguous` means it may have.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LinkedInCreateError {
+    Rejected {
+        status_code: Option<u16>,
+        message: String,
+    },
+    Ambiguous {
+        status_code: Option<u16>,
+        message: String,
+    },
+}
+
+impl LinkedInCreateError {
+    fn rejected(message: impl Into<String>) -> Self {
+        Self::Rejected {
+            status_code: None,
+            message: message.into(),
+        }
+    }
+}
+
+/// Conservative status classification: any 5xx may have committed the create,
+/// so only 4xx (including 429) counts as a definite rejection.
+pub fn classify_create_status(status: StatusCode, body: &str) -> LinkedInCreateError {
+    let message = linked_in_api_error(status, body);
+    let status_code = Some(status.as_u16());
+    if status.is_client_error() {
+        LinkedInCreateError::Rejected {
+            status_code,
+            message,
+        }
+    } else {
+        LinkedInCreateError::Ambiguous {
+            status_code,
+            message,
+        }
+    }
+}
+
+/// Transport classification for errors from `send()`. Only failures that
+/// happen before the request leaves the machine are definite rejections.
+pub fn classify_send_error(
+    is_connect: bool,
+    is_builder: bool,
+    message: String,
+) -> LinkedInCreateError {
+    if is_connect || is_builder {
+        LinkedInCreateError::Rejected {
+            status_code: None,
+            message,
+        }
+    } else {
+        LinkedInCreateError::Ambiguous {
+            status_code: None,
+            message,
+        }
+    }
+}
+
+fn send_error(error: reqwest::Error) -> LinkedInCreateError {
+    let is_connect = error.is_connect();
+    let is_builder = error.is_builder();
+    classify_send_error(is_connect, is_builder, redact_error(error))
+}
+
+fn ambiguous_after_success(message: String) -> LinkedInCreateError {
+    LinkedInCreateError::Ambiguous {
+        status_code: None,
+        message: format!(
+            "LinkedIn accepted the request but the response could not be read: {message}"
+        ),
+    }
+}
+
 pub fn publish_linkedin_member_post(
     access_token: &str,
     account_id: &str,
     commentary: &str,
-) -> Result<LinkedInPublishResult, String> {
-    let payload = build_member_post_payload(account_id, commentary)?;
-    let response = linkedin_http_client()?
+) -> Result<LinkedInPublishResult, LinkedInCreateError> {
+    let payload =
+        build_member_post_payload(account_id, commentary).map_err(LinkedInCreateError::rejected)?;
+    let response = linkedin_http_client()
+        .map_err(LinkedInCreateError::rejected)?
         .post(LINKEDIN_UGC_POSTS_ENDPOINT)
         .bearer_auth(access_token)
         .header("X-Restli-Protocol-Version", "2.0.0")
         .header(CONTENT_TYPE, "application/json")
         .json(&payload)
         .send()
-        .map_err(redact_error)?;
+        .map_err(send_error)?;
 
     let status = response.status();
     if !status.is_success() {
         let error_text = response.text().unwrap_or_default();
-        return Err(linked_in_api_error(status, &error_text));
+        return Err(classify_create_status(status, &error_text));
     }
 
     let headers = response.headers().clone();
-    let body = response.text().map_err(redact_error)?;
-    extract_publish_result(&headers, &body)
+    let body = response
+        .text()
+        .map_err(|error| ambiguous_after_success(redact_error(error)))?;
+    extract_publish_result(&headers, &body).map_err(ambiguous_after_success)
 }
 
 pub fn get_linkedin_social_metadata(
@@ -504,14 +584,16 @@ pub fn publish_linkedin_member_comment(
     account_id: &str,
     target_urn: &str,
     commentary: &str,
-) -> Result<LinkedInPublishCommentResult, String> {
-    let payload = build_member_comment_payload(account_id, target_urn, commentary)?;
+) -> Result<LinkedInPublishCommentResult, LinkedInCreateError> {
+    let payload = build_member_comment_payload(account_id, target_urn, commentary)
+        .map_err(LinkedInCreateError::rejected)?;
     let endpoint = format!(
         "{}/{}/comments",
         LINKEDIN_SOCIAL_ACTIONS_ENDPOINT_BASE,
         encode_path_urn(target_urn)
     );
-    let response = linkedin_http_client()?
+    let response = linkedin_http_client()
+        .map_err(LinkedInCreateError::rejected)?
         .post(endpoint)
         .bearer_auth(access_token)
         .header("Linkedin-Version", linkedin_marketing_version())
@@ -519,17 +601,19 @@ pub fn publish_linkedin_member_comment(
         .header(CONTENT_TYPE, "application/json")
         .json(&payload)
         .send()
-        .map_err(redact_error)?;
+        .map_err(send_error)?;
 
     let status = response.status();
     if !status.is_success() {
         let error_text = response.text().unwrap_or_default();
-        return Err(linked_in_api_error(status, &error_text));
+        return Err(classify_create_status(status, &error_text));
     }
 
     let headers = response.headers().clone();
-    let body = response.text().map_err(redact_error)?;
-    extract_comment_publish_result(&headers, &body, target_urn)
+    let body = response
+        .text()
+        .map_err(|error| ambiguous_after_success(redact_error(error)))?;
+    extract_comment_publish_result(&headers, &body, target_urn).map_err(ambiguous_after_success)
 }
 
 #[cfg(test)]
@@ -538,12 +622,56 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        build_member_comment_payload, build_member_post_payload, extract_comment_publish_result,
-        extract_publish_result, extract_social_metadata_result, linked_in_account_label,
-        linked_in_api_error, linkedin_http_client, linkedin_marketing_version,
-        resolve_linkedin_target_urn, userinfo_response_to_userinfo, validate_linkedin_comment_text,
-        validate_linkedin_commentary,
+        build_member_comment_payload, build_member_post_payload, classify_create_status,
+        classify_send_error, extract_comment_publish_result, extract_publish_result,
+        extract_social_metadata_result, linked_in_account_label, linked_in_api_error,
+        linkedin_http_client, linkedin_marketing_version, resolve_linkedin_target_urn,
+        userinfo_response_to_userinfo, validate_linkedin_comment_text,
+        validate_linkedin_commentary, LinkedInCreateError,
     };
+
+    #[test]
+    fn create_status_classification_is_conservative() {
+        let cases = [
+            (400, false),
+            (401, false),
+            (403, false),
+            (404, false),
+            (409, false),
+            (422, false),
+            (429, false),
+            (500, true),
+            (502, true),
+            (503, true),
+            (504, true),
+        ];
+        for (code, ambiguous) in cases {
+            let status = reqwest::StatusCode::from_u16(code).unwrap();
+            let classified = classify_create_status(status, "{}");
+            assert_eq!(
+                matches!(classified, LinkedInCreateError::Ambiguous { .. }),
+                ambiguous,
+                "status {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn send_errors_before_the_request_leaves_are_rejections() {
+        assert!(matches!(
+            classify_send_error(true, false, "connect".into()),
+            LinkedInCreateError::Rejected { .. }
+        ));
+        assert!(matches!(
+            classify_send_error(false, true, "builder".into()),
+            LinkedInCreateError::Rejected { .. }
+        ));
+        // Timeouts and resets after send may have reached LinkedIn.
+        assert!(matches!(
+            classify_send_error(false, false, "timeout".into()),
+            LinkedInCreateError::Ambiguous { .. }
+        ));
+    }
 
     #[test]
     fn linkedin_http_client_builds_with_conservative_timeouts() {

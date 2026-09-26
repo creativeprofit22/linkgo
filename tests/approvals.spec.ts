@@ -368,7 +368,7 @@ test("records a failed LinkedIn OAuth publish attempt and error queue item", asy
   expect(counts.errorQueueItems).toBe(1);
 });
 
-test("records invalid empty LinkedIn OAuth publish result as a failed attempt", async ({
+test("unreadable LinkedIn publish result shows outcome unknown and needs reconciliation", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -391,12 +391,72 @@ test("records invalid empty LinkedIn OAuth publish result as a failed attempt", 
   await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
   await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
 
-  await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(getBadge(page, "Failed")).toBeVisible();
+  await expect(
+    dialog.getByRole("alert").filter({ hasText: "Outcome unknown" }),
+  ).toBeVisible();
   const counts = await getStateCounts(page);
-  expect(counts.publishAttempts).toBe(1);
-  expect(counts.errorQueueItems).toBe(1);
+  expect(counts.publishAttempts).toBe(0);
+  const recordInvokes = await page.evaluate(
+    () =>
+      (window as unknown as Record<string, unknown>)
+        .__LINKGO_APPROVAL_RECORD_PUBLISH_INVOKES__ ?? 0,
+  );
+  expect(recordInvokes).toBe(0);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Publish via LinkedIn" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("Awaiting reconciliation in Safety"),
+  ).toBeVisible();
 });
+
+for (const [status, label] of [
+  ["outcome_unknown", "Awaiting reconciliation in Safety"],
+  ["in_flight", "Publishing in progress"],
+] as const) {
+  test(`open ${status} publish execution locks the approval publish action`, async ({
+    page,
+  }) => {
+    await page.addInitScript((executionStatus) => {
+      const now = new Date().toISOString();
+      (
+        window as unknown as Record<string, unknown>
+      ).__LINKGO_PUBLISH_EXECUTIONS__ = [
+        {
+          id: 41,
+          kind: "post",
+          subjectId: 1,
+          campaignId: 1,
+          campaignName: "Launch",
+          scheduleJobId: null,
+          caller: "manual",
+          status: executionStatus,
+          fence: 1,
+          remoteOutcome: "",
+          remoteStatusCode: null,
+          errorMessage: "",
+          reservedAt: now,
+          sentAt: now,
+          updatedAt: now,
+        },
+      ];
+    }, status);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await createReadyDraft(page, cleanVariant());
+    await makeDraftApprovalEligible(page);
+    await openApprovals(page);
+    await createReview(page);
+    await page.getByRole("button", { name: "Approve" }).click();
+
+    await expect(
+      page.getByRole("button", { name: "Publish via LinkedIn" }),
+    ).toBeDisabled();
+    await expect(page.getByText(label)).toBeVisible();
+  });
+}
 
 test("global kill switch hides LinkedIn OAuth publish action", async ({
   page,

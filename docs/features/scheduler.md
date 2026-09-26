@@ -49,8 +49,9 @@ A job is eligible when:
 - `scheduled_for` is due
 - `next_attempt_at` is empty or due
 - no fresh lock is present
+- the approval has no open publishing execution (`reserved`, `in_flight` or `outcome_unknown`)
 
-The worker claims a job before calling LinkedIn, then releases the SQLite transaction before the network call.
+The worker claims a job, then hands it to the shared publishing execution service (`src-tauri/src/publishing`, see [publishing-execution.md](publishing-execution.md)). That service reserves a durable execution, calls LinkedIn outside any transaction, and settles every linked record in one fenced transaction. Each tick, and each worker start, first runs the recovery sweep for stale executions. The sweep does not depend on the worker: app startup, manual publishes and the reconciliation list also run it.
 
 ## Publish outcomes
 
@@ -76,6 +77,15 @@ Terminal failure:
 - Marks the schedule job `failed`.
 - Creates or updates an error queue item with `source_type = 'schedule_job'`.
 - Records safety and scheduler events.
+
+Ambiguous outcome (timeout after send, 5xx, unreadable success):
+
+- Records no attempt row; the execution becomes `outcome_unknown`.
+- Leaves the approval `scheduled` and the job unfinished, with its lock cleared.
+- Is **never retried automatically**. The job stays excluded until an operator reconciles it in Safety.
+- Creates a warning error queue item and a `job_blocked` scheduler event.
+
+Retries happen only after a definite failure (4xx including 429, connect failure, or a credential/scope failure before send).
 
 Kill switch block:
 

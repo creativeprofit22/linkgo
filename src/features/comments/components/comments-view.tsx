@@ -6,6 +6,10 @@ import { CommentThreadCard } from "@/features/comments/components/comment-thread
 import { CreateCommentThreadDialog } from "@/features/comments/components/create-comment-thread-dialog";
 import { useComments } from "@/features/comments/hooks/use-comments";
 import type { CommentThreadWithDetails } from "@/features/comments/types";
+import {
+  findPublishLock,
+  type OpenPublishExecution,
+} from "@/features/publish-reconciliation";
 
 export function CommentsView(): React.ReactNode {
   const {
@@ -18,6 +22,7 @@ export function CommentsView(): React.ReactNode {
     error,
     killSwitchEnabled,
     killSwitchReason,
+    openPublishExecutions,
     loadComments,
     selectCampaign,
     createThread,
@@ -26,6 +31,7 @@ export function CommentsView(): React.ReactNode {
     selectVariant,
     setReviewStatus,
     recordAttempt,
+    refreshComments,
   } = useComments();
 
   const summary = getCommentSummary(commentThreads, commentThreadTotalCount);
@@ -149,44 +155,52 @@ export function CommentsView(): React.ReactNode {
                 threads={groupedThreads.drafting}
                 killSwitchEnabled={killSwitchEnabled}
                 killSwitchReason={killSwitchReason}
+                openPublishExecutions={openPublishExecutions}
                 onUpdateThread={updateThread}
                 onUpdateVariant={updateVariant}
                 onSetVariantStatus={selectVariant}
                 onSetReviewStatus={setReviewStatus}
                 onRecordAttempt={recordAttempt}
+                onPublished={refreshComments}
               />
               <ThreadGroup
                 label="Needs review"
                 threads={groupedThreads.needsReview}
                 killSwitchEnabled={killSwitchEnabled}
                 killSwitchReason={killSwitchReason}
+                openPublishExecutions={openPublishExecutions}
                 onUpdateThread={updateThread}
                 onUpdateVariant={updateVariant}
                 onSetVariantStatus={selectVariant}
                 onSetReviewStatus={setReviewStatus}
                 onRecordAttempt={recordAttempt}
+                onPublished={refreshComments}
               />
               <ThreadGroup
                 label="Approved"
                 threads={groupedThreads.approved}
                 killSwitchEnabled={killSwitchEnabled}
                 killSwitchReason={killSwitchReason}
+                openPublishExecutions={openPublishExecutions}
                 onUpdateThread={updateThread}
                 onUpdateVariant={updateVariant}
                 onSetVariantStatus={selectVariant}
                 onSetReviewStatus={setReviewStatus}
                 onRecordAttempt={recordAttempt}
+                onPublished={refreshComments}
               />
               <ThreadGroup
                 label="History"
                 threads={groupedThreads.history}
                 killSwitchEnabled={killSwitchEnabled}
                 killSwitchReason={killSwitchReason}
+                openPublishExecutions={openPublishExecutions}
                 onUpdateThread={updateThread}
                 onUpdateVariant={updateVariant}
                 onSetVariantStatus={selectVariant}
                 onSetReviewStatus={setReviewStatus}
                 onRecordAttempt={recordAttempt}
+                onPublished={refreshComments}
               />
             </div>
           )}
@@ -258,17 +272,20 @@ function ThreadGroup({
   threads,
   killSwitchEnabled,
   killSwitchReason,
+  openPublishExecutions,
   onUpdateThread,
   onUpdateVariant,
   onSetVariantStatus,
   onSetReviewStatus,
   onRecordAttempt,
+  onPublished,
 }: {
   label: string;
   threads: CommentThreadWithDetails[];
+  openPublishExecutions: OpenPublishExecution[];
 } & Omit<
   React.ComponentProps<typeof CommentThreadCard>,
-  "thread"
+  "thread" | "publishLock"
 >): React.ReactNode {
   if (threads.length === 0) return null;
   return (
@@ -280,11 +297,17 @@ function ThreadGroup({
           thread={thread}
           killSwitchEnabled={killSwitchEnabled}
           killSwitchReason={killSwitchReason}
+          publishLock={findPublishLock(
+            openPublishExecutions,
+            "comment",
+            thread.id,
+          )}
           onUpdateThread={onUpdateThread}
           onUpdateVariant={onUpdateVariant}
           onSetVariantStatus={onSetVariantStatus}
           onSetReviewStatus={onSetReviewStatus}
           onRecordAttempt={onRecordAttempt}
+          onPublished={onPublished}
         />
       ))}
     </section>

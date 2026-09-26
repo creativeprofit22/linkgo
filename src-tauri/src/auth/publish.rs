@@ -1,15 +1,10 @@
-use serde::{Deserialize, Serialize};
-use sqlx::{Row, SqlitePool};
+use serde::Deserialize;
+use sqlx::{Row, SqliteConnection, SqlitePool};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-use super::storage::AuthStorage;
 use super::{
-    linkedin::refresh_linkedin_credential,
-    linkedin_api::{
-        get_linkedin_userinfo, linked_in_account_label, publish_linkedin_member_comment,
-        publish_linkedin_member_post, resolve_linkedin_target_urn,
-    },
+    linkedin_api::{get_linkedin_userinfo, linked_in_account_label, resolve_linkedin_target_urn},
     OAuthCredentials, StoredCredential,
 };
 
@@ -22,13 +17,6 @@ pub struct LinkedInPublishPostInput {
     pub idempotency_key: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LinkedInPublishPostResult {
-    pub platform_post_id: String,
-    pub external_post_url: String,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkedInPublishCommentInput {
@@ -38,21 +26,15 @@ pub struct LinkedInPublishCommentInput {
     pub idempotency_key: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LinkedInPublishCommentResult {
-    pub platform_comment_id: String,
-    pub platform_comment_urn: String,
-    pub external_comment_url: String,
-}
-
 pub(crate) struct PublishApprovalPreflight {
     pub commentary: String,
+    pub campaign_id: i64,
 }
 
 pub(crate) struct PublishCommentPreflight {
     pub commentary: String,
     pub target_urn: String,
+    pub campaign_id: i64,
 }
 
 pub(crate) fn has_linkedin_publish_scope(credentials: &OAuthCredentials) -> bool {
@@ -178,46 +160,33 @@ pub(crate) async fn sqlite_pool(app: &AppHandle) -> Result<SqlitePool, String> {
         .ok_or_else(|| "Linkgo database is not initialized".to_string())
 }
 
-pub(crate) async fn load_publish_preflight(
-    app: &AppHandle,
-    input: &LinkedInPublishPostInput,
-) -> Result<PublishApprovalPreflight, String> {
-    let pool = sqlite_pool(app).await?;
-    load_publish_preflight_from_pool(&pool, input).await
-}
-
 /// Native publish gate run by the command that actually posts, before any
 /// LinkedIn call. Every read shares one transaction so the readiness check and
 /// the commentary it approves come from the same snapshot.
+#[cfg(test)]
 pub(crate) async fn load_publish_preflight_from_pool(
     pool: &SqlitePool,
     input: &LinkedInPublishPostInput,
 ) -> Result<PublishApprovalPreflight, String> {
-    let mut transaction = pool
-        .begin()
+    let mut connection = pool
+        .acquire()
         .await
         .map_err(|_| "Could not read approval".to_string())?;
+    check_post_preflight(&mut connection, input).await
+}
 
-    let safety = sqlx::query(
-        "SELECT global_kill_switch, kill_switch_reason FROM safety_settings WHERE id = 1",
-    )
-    .fetch_optional(&mut *transaction)
-    .await
-    .map_err(|_| "Could not read safety settings".to_string())?;
-    if let Some(row) = safety {
-        let global_kill_switch: i64 = row.try_get("global_kill_switch").unwrap_or(0);
-        if global_kill_switch == 1 {
-            let reason: String = row.try_get("kill_switch_reason").unwrap_or_default();
-            return Err(if reason.trim().is_empty() {
-                "Global kill switch is enabled".to_string()
-            } else {
-                format!("Global kill switch is enabled: {reason}")
-            });
-        }
-    }
+/// Post publish gate on a caller-owned connection so the publishing
+/// reservation can run it inside its own `BEGIN IMMEDIATE` transaction.
+pub(crate) async fn check_post_preflight(
+    transaction: &mut SqliteConnection,
+    input: &LinkedInPublishPostInput,
+) -> Result<PublishApprovalPreflight, String> {
+    ensure_publish_input(input)?;
+    check_kill_switch(transaction).await?;
 
     let approval = sqlx::query(
         "SELECT
+            approvals.campaign_id AS campaign_id,
             approvals.status AS approval_status,
             campaigns.status AS campaign_status,
             draft_variants.hook AS hook,
@@ -263,7 +232,7 @@ pub(crate) async fn load_publish_preflight_from_pool(
     // The variant must still be ready at the revision the reviewer approved;
     // an edit after approval bumps content_revision and fails here.
     crate::approval_review::assert_publish_ready(
-        &mut transaction,
+        transaction,
         input.approval_id,
         "Could not read approval",
     )
@@ -330,23 +299,17 @@ pub(crate) async fn load_publish_preflight_from_pool(
         return Err("Publish commentary does not match the approved draft variant".to_string());
     }
 
-    transaction
-        .commit()
-        .await
-        .map_err(|_| "Could not read approval".to_string())?;
-    Ok(PublishApprovalPreflight { commentary })
+    Ok(PublishApprovalPreflight {
+        commentary,
+        campaign_id: approval.try_get("campaign_id").unwrap_or_default(),
+    })
 }
 
-pub(crate) async fn load_comment_preflight(
-    app: &AppHandle,
-    input: &LinkedInPublishCommentInput,
-) -> Result<PublishCommentPreflight, String> {
-    let pool = sqlite_pool(app).await?;
-
+pub(crate) async fn check_kill_switch(connection: &mut SqliteConnection) -> Result<(), String> {
     let safety = sqlx::query(
         "SELECT global_kill_switch, kill_switch_reason FROM safety_settings WHERE id = 1",
     )
-    .fetch_optional(&pool)
+    .fetch_optional(&mut *connection)
     .await
     .map_err(|_| "Could not read safety settings".to_string())?;
     if let Some(row) = safety {
@@ -360,6 +323,18 @@ pub(crate) async fn load_comment_preflight(
             });
         }
     }
+    Ok(())
+}
+
+/// Comment publish gate on a caller-owned connection. The daily limit counts
+/// succeeded attempts plus open (reserved, in-flight or outcome-unknown)
+/// comment executions, so in-flight comments cannot exceed the limit.
+pub(crate) async fn check_comment_preflight(
+    connection: &mut SqliteConnection,
+    input: &LinkedInPublishCommentInput,
+) -> Result<PublishCommentPreflight, String> {
+    ensure_comment_input(input)?;
+    check_kill_switch(connection).await?;
 
     let thread = sqlx::query(
         "SELECT
@@ -381,6 +356,11 @@ pub(crate) async fn load_comment_preflight(
                 WHERE counted_threads.campaign_id = comment_threads.campaign_id
                     AND date(comment_attempts.created_at) = date('now')
                     AND comment_attempts.status = 'succeeded'
+            ) + (
+                SELECT COUNT(*) FROM publish_executions
+                WHERE publish_executions.kind = 'comment'
+                    AND publish_executions.campaign_id = comment_threads.campaign_id
+                    AND publish_executions.status IN ('reserved', 'in_flight', 'outcome_unknown')
             ) AS daily_success_count
         FROM comment_threads
         INNER JOIN campaigns ON campaigns.id = comment_threads.campaign_id
@@ -389,7 +369,7 @@ pub(crate) async fn load_comment_preflight(
         WHERE comment_threads.id = ?",
     )
     .bind(input.comment_thread_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&mut *connection)
     .await
     .map_err(|_| "Could not read comment thread".to_string())?
     .ok_or_else(|| "Comment thread was not found".to_string())?;
@@ -420,7 +400,7 @@ pub(crate) async fn load_comment_preflight(
             AND comment_variants.status = 'selected'",
     )
     .bind(input.comment_thread_id)
-    .fetch_all(&pool)
+    .fetch_all(&mut *connection)
     .await
     .map_err(|_| "Could not read selected comment variant".to_string())?;
     if variants.len() != 1 {
@@ -470,6 +450,7 @@ pub(crate) async fn load_comment_preflight(
     Ok(PublishCommentPreflight {
         commentary,
         target_urn,
+        campaign_id: thread.try_get("campaign_id").unwrap_or_default(),
     })
 }
 
@@ -488,81 +469,6 @@ pub(crate) fn ensure_linkedin_account_identity(
     credentials.account_id = Some(userinfo.sub.clone());
     credentials.account_label = Some(linked_in_account_label(&userinfo));
     Ok(true)
-}
-
-pub fn publish_approved_linkedin_post(
-    app: &AppHandle,
-    input: LinkedInPublishPostInput,
-) -> Result<LinkedInPublishPostResult, String> {
-    ensure_publish_input(&input)?;
-    let preflight = tauri::async_runtime::block_on(load_publish_preflight(app, &input))?;
-    let storage = AuthStorage::new(app)?;
-    let mut credentials = linkedin_oauth_credentials(storage.load("linkedin")?)?;
-
-    if credentials_need_refresh(&credentials) {
-        let refreshed = refresh_linkedin_credential(credentials.clone())?;
-        credentials = merge_refreshed_linkedin_credential(credentials, refreshed)?;
-        storage.save(StoredCredential::OAuth(credentials.clone()))?;
-    }
-
-    if !has_linkedin_publish_scope(&credentials) {
-        return Err("LinkedIn connection is missing w_member_social scope".to_string());
-    }
-
-    if ensure_linkedin_account_identity(&mut credentials)? {
-        storage.save(StoredCredential::OAuth(credentials.clone()))?;
-    }
-    let account_id = credentials.account_id.clone().unwrap_or_default();
-
-    let result = publish_linkedin_member_post(
-        &credentials.access_token,
-        &account_id,
-        preflight.commentary.as_str(),
-    )?;
-    Ok(LinkedInPublishPostResult {
-        platform_post_id: result.platform_post_id,
-        external_post_url: result.external_post_url,
-    })
-}
-
-pub fn publish_approved_linkedin_comment(
-    app: &AppHandle,
-    input: LinkedInPublishCommentInput,
-) -> Result<LinkedInPublishCommentResult, String> {
-    ensure_comment_input(&input)?;
-    let preflight = tauri::async_runtime::block_on(load_comment_preflight(app, &input))?;
-    let storage = AuthStorage::new(app)?;
-    let mut credentials = linkedin_oauth_credentials(storage.load("linkedin")?)?;
-
-    if credentials_need_refresh(&credentials) {
-        let refreshed = refresh_linkedin_credential(credentials.clone())?;
-        credentials = merge_refreshed_linkedin_credential(credentials, refreshed)?;
-        storage.save(StoredCredential::OAuth(credentials.clone()))?;
-    }
-
-    if !has_linkedin_comment_scope(&credentials) {
-        return Err(
-            "LinkedIn Community Management access with w_member_social_feed scope is required; reconnect LinkedIn after access is approved"
-                .to_string(),
-        );
-    }
-
-    if ensure_linkedin_account_identity(&mut credentials)? {
-        storage.save(StoredCredential::OAuth(credentials.clone()))?;
-    }
-    let account_id = credentials.account_id.clone().unwrap_or_default();
-
-    let result = publish_linkedin_member_comment(
-        &credentials.access_token,
-        &account_id,
-        preflight.target_urn.as_str(),
-        preflight.commentary.as_str(),
-    )?;
-    Ok(LinkedInPublishCommentResult {
-        platform_comment_id: result.platform_comment_id,
-        platform_comment_urn: result.platform_comment_urn,
-        external_comment_url: result.external_comment_url,
-    })
 }
 
 #[cfg(test)]
