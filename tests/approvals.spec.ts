@@ -1059,6 +1059,40 @@ test("blocked variant is not listed as an approval candidate", async ({
   ).toBeVisible();
 });
 
+test("flags capped approval and eligible-draft lists with the uncapped total", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
+  // The mock reports these uncapped totals instead of seeding 500+ rows.
+  await page.evaluate(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__LINKGO_APPROVAL_ELIGIBLE_TOTAL__ = 205;
+    w.__LINKGO_APPROVAL_LIST_TOTAL__ = 503;
+  });
+  await openApprovals(page);
+
+  await page.getByRole("button", { name: "Create review" }).click();
+  const dialog = page.getByRole("dialog", { name: "Create review" });
+  await expect(dialog.getByTestId("list-truncation-notice")).toHaveText(
+    /Showing the first 1 of 205 ready drafts/u,
+  );
+  await page.getByLabel("Reviewer notes").fill("Human pass.");
+  await dialog.getByRole("button", { name: "Create review" }).click();
+  await expect(dialog).toBeHidden();
+
+  await expect(page.getByTestId("list-truncation-notice")).toHaveText(
+    /Showing the first 1 of 503 approvals/u,
+  );
+  await expect(
+    page.getByText("Needs review (shown)", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Published (shown)", { exact: true }),
+  ).toBeVisible();
+});
+
 test("request changes moves the linked draft back to needs revision", async ({
   page,
 }) => {
@@ -1124,6 +1158,245 @@ test("archived campaign approvals hide mutation controls with restore guidance",
     page.getByRole("button", { name: "Publish via LinkedIn" }),
   ).toBeHidden();
 });
+
+test.describe("approval campaign selection ownership", () => {
+  test("a slow campaign A load cannot overwrite campaign B after reselection", async ({
+    page,
+  }) => {
+    const { first, second } = await setupTwoCampaigns(page);
+    const selector = getCampaignSelector(page);
+
+    await selectApprovalCampaign(page, second);
+    await delayCampaign(page, first);
+    await selector.selectOption(String(first));
+    await expect.poll(() => getDelayedCount(page, first)).toBeGreaterThan(0);
+    await selectApprovalCampaign(page, second);
+    await releaseCampaign(page, first);
+    await settleCampaignLoads(page, first);
+
+    await expect(selector).toHaveValue(String(second));
+    await expect(page.getByText("No approvals yet")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+  });
+
+  test("a failed campaign load shows an alert without stale actions and Retry recovers", async ({
+    page,
+  }) => {
+    const { first, second } = await setupTwoCampaigns(page);
+
+    await selectApprovalCampaign(page, second);
+    await page.evaluate(() => {
+      (
+        window as unknown as { __LINKGO_FAIL_APPROVAL_LIST__?: boolean }
+      ).__LINKGO_FAIL_APPROVAL_LIST__ = true;
+    });
+    await getCampaignSelector(page).selectOption(String(first));
+
+    const alert = page.getByRole("alert").filter({
+      hasText: "Injected approval list failure",
+    });
+    await expect(alert).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Create review" }),
+    ).toBeDisabled();
+
+    await alert.getByRole("button", { name: "Retry" }).click();
+    await expect(alert).toBeHidden();
+    await expect(getCampaignSelector(page)).toHaveValue(String(first));
+    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+  });
+
+  test("a mutation refresh finishing after a selection change keeps the new campaign", async ({
+    page,
+  }) => {
+    const { first, second } = await setupTwoCampaigns(page);
+
+    await selectApprovalCampaign(page, first);
+    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+    await delayCampaign(page, first);
+    await page.getByRole("button", { name: "Approve" }).click();
+    await expect.poll(() => getDelayedCount(page, first)).toBeGreaterThan(0);
+
+    await selectApprovalCampaign(page, second);
+    await releaseCampaign(page, first);
+    await settleCampaignLoads(page, first);
+
+    await expect(getCampaignSelector(page)).toHaveValue(String(second));
+    await expect(page.getByText("No approvals yet")).toBeVisible();
+    await expect(getBadge(page, "Approved")).toHaveCount(0);
+
+    await selectApprovalCampaign(page, first);
+    await expect(getBadge(page, "Approved")).toBeVisible();
+  });
+
+  test("a committed mutation whose refresh fails shows an alert instead of stale cards", async ({
+    page,
+  }) => {
+    const { first } = await setupTwoCampaigns(page);
+
+    await selectApprovalCampaign(page, first);
+    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+    await page.evaluate(() => {
+      (
+        window as unknown as { __LINKGO_FAIL_APPROVAL_LIST__?: boolean }
+      ).__LINKGO_FAIL_APPROVAL_LIST__ = true;
+    });
+    await page.getByRole("button", { name: "Approve" }).click();
+
+    const alert = page.getByRole("alert").filter({
+      hasText: "Injected approval list failure",
+    });
+    await expect(alert).toBeVisible();
+    await expect(
+      page.getByText("Saved, but approvals could not be refreshed"),
+    ).toBeVisible();
+    await expect(page.getByText("Approval status was not changed")).toHaveCount(
+      0,
+    );
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+
+    await alert.getByRole("button", { name: "Retry" }).click();
+    await expect(alert).toBeHidden();
+    await expect(getCampaignSelector(page)).toHaveValue(String(first));
+    await expect(getBadge(page, "Approved")).toBeVisible();
+  });
+
+  test("each campaign selection issues exactly one approval list request", async ({
+    page,
+  }) => {
+    const { first, second } = await setupTwoCampaigns(page);
+
+    await selectApprovalCampaign(page, second);
+    await flushRenders(page);
+    await resetApprovalListCalls(page);
+    await selectApprovalCampaign(page, first);
+    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+    await flushRenders(page);
+
+    expect(await getApprovalListCalls(page)).toEqual([first]);
+  });
+});
+
+async function setupTwoCampaigns(
+  page: Page,
+): Promise<{ first: number; second: number }> {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createReadyDraft(page, cleanVariant());
+  await makeDraftApprovalEligible(page);
+  await openApprovals(page);
+  await createReview(page);
+  await openCampaigns(page);
+  await createCampaign(page, "Second campaign");
+  await openApprovals(page);
+  const ids = await getCampaignSelector(page).evaluate((element) => {
+    const select = element as HTMLSelectElement;
+    return Object.fromEntries(
+      Array.from(select.options, (option) => [
+        option.textContent ?? "",
+        Number(option.value),
+      ]),
+    );
+  });
+  const first = ids["Founder-led growth"];
+  const second = ids["Second campaign"];
+  if (first === undefined || second === undefined) {
+    throw new Error("Expected both campaigns in the approvals selector");
+  }
+  return { first, second };
+}
+
+function getCampaignSelector(page: Page): Locator {
+  return page.getByRole("combobox", { name: "Selected campaign" });
+}
+
+/** Selects a campaign and waits until its approval list has rendered. */
+async function selectApprovalCampaign(
+  page: Page,
+  campaignId: number,
+): Promise<void> {
+  const selector = getCampaignSelector(page);
+  if ((await selector.inputValue()) !== String(campaignId)) {
+    await selector.selectOption(String(campaignId));
+  }
+  await expect(selector).toHaveValue(String(campaignId));
+  await expect(page.getByText("Loading approvals…")).toHaveCount(0);
+}
+
+type CampaignGateWindow = {
+  __LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__: (campaignId: number) => void;
+  __LINKGO_SQL_RELEASE_CAMPAIGN_SELECTS__: (campaignId: number) => void;
+  __LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__: (campaignId: number) => number;
+  __LINKGO_APPROVAL_LIST_CALLS__?: unknown[];
+};
+
+async function delayCampaign(page: Page, campaignId: number): Promise<void> {
+  await page.evaluate((id) => {
+    (
+      window as unknown as CampaignGateWindow
+    ).__LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__(id);
+  }, campaignId);
+}
+
+async function releaseCampaign(page: Page, campaignId: number): Promise<void> {
+  await page.evaluate((id) => {
+    (
+      window as unknown as CampaignGateWindow
+    ).__LINKGO_SQL_RELEASE_CAMPAIGN_SELECTS__(id);
+  }, campaignId);
+}
+
+async function getDelayedCount(
+  page: Page,
+  campaignId: number,
+): Promise<number> {
+  return page.evaluate(
+    (id) =>
+      (
+        window as unknown as CampaignGateWindow
+      ).__LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__(id),
+    campaignId,
+  );
+}
+
+/** Waits for released gated loads to resolve and React to commit them. */
+async function settleCampaignLoads(
+  page: Page,
+  campaignId: number,
+): Promise<void> {
+  await expect.poll(() => getDelayedCount(page, campaignId)).toBe(0);
+  await flushRenders(page);
+}
+
+async function flushRenders(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              resolve();
+            });
+          });
+        }, 100);
+      }),
+  );
+}
+
+async function resetApprovalListCalls(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as unknown as CampaignGateWindow).__LINKGO_APPROVAL_LIST_CALLS__ =
+      [];
+  });
+}
+
+async function getApprovalListCalls(page: Page): Promise<unknown[]> {
+  return page.evaluate(
+    () =>
+      (window as unknown as CampaignGateWindow)
+        .__LINKGO_APPROVAL_LIST_CALLS__ ?? [],
+  );
+}
 
 interface VariantFormInput {
   hook: string;
@@ -1518,13 +1791,16 @@ async function archiveSelectedCampaign(page: Page): Promise<void> {
   await expect(getBadge(page, "Archived")).toBeVisible();
 }
 
-async function createCampaign(page: Page): Promise<void> {
+async function createCampaign(
+  page: Page,
+  name = "Founder-led growth",
+): Promise<void> {
   await page.getByRole("button", { name: "New campaign" }).first().click();
   await expect(
     page.getByRole("dialog", { name: "New campaign" }),
   ).toBeVisible();
 
-  await page.getByLabel("Name").fill("Founder-led growth");
+  await page.getByLabel("Name").fill(name);
   await page
     .getByLabel("Product")
     .fill("A local-first LinkedIn operations cockpit");

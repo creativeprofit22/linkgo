@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCircle2, Target } from "lucide-react";
+import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApprovalCard } from "@/features/approvals/components/approval-card";
@@ -10,10 +11,13 @@ import { findPublishLock } from "@/features/publish-reconciliation";
 export function ApprovalsView(): React.ReactNode {
   const {
     approvals,
+    approvalTotal,
     eligibleDrafts,
+    eligibleDraftTotal,
     campaigns,
     selectedCampaignId,
     loading,
+    campaignLoading,
     error,
     killSwitchEnabled,
     killSwitchReason,
@@ -29,6 +33,8 @@ export function ApprovalsView(): React.ReactNode {
   } = useApprovals();
 
   const summary = getApprovalSummary(approvals);
+  // Summary counts cover only the returned rows when the native list is capped.
+  const summarySuffix = approvalTotal > approvals.length ? " (shown)" : "";
   const selectedCampaign =
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
@@ -54,18 +60,22 @@ export function ApprovalsView(): React.ReactNode {
         </div>
         <CreateApprovalDialog
           eligibleDrafts={eligibleDrafts}
+          eligibleDraftTotal={eligibleDraftTotal}
           selectedCampaignId={selectedCampaignId}
           selectedCampaignArchived={selectedCampaignArchived}
-          disabled={campaigns.length === 0}
+          disabled={campaigns.length === 0 || campaignLoading}
           onCreate={createReview}
         />
       </div>
 
       {error && (
-        <Card className="border-destructive/50 bg-destructive/5">
+        <Card role="alert" className="border-destructive/50 bg-destructive/5">
           <CardContent className="flex items-center justify-between gap-4 p-4">
             <div className="flex items-center gap-3">
-              <AlertCircle className="text-destructive size-5" />
+              <AlertCircle
+                aria-hidden="true"
+                className="text-destructive size-5"
+              />
               <p className="text-sm">{error}</p>
             </div>
             <Button
@@ -98,6 +108,7 @@ export function ApprovalsView(): React.ReactNode {
               </p>
             </div>
             <select
+              aria-label="Selected campaign"
               value={selectedCampaignId ?? ""}
               onChange={(event) => {
                 const nextId = Number(event.target.value);
@@ -116,46 +127,71 @@ export function ApprovalsView(): React.ReactNode {
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              label="Needs review"
+              label={`Needs review${summarySuffix}`}
               value={String(summary.needsReview)}
             />
-            <SummaryCard label="Approved" value={String(summary.approved)} />
-            <SummaryCard label="Scheduled" value={String(summary.scheduled)} />
-            <SummaryCard label="Published" value={String(summary.published)} />
+            <SummaryCard
+              label={`Approved${summarySuffix}`}
+              value={String(summary.approved)}
+            />
+            <SummaryCard
+              label={`Scheduled${summarySuffix}`}
+              value={String(summary.scheduled)}
+            />
+            <SummaryCard
+              label={`Published${summarySuffix}`}
+              value={String(summary.published)}
+            />
           </div>
 
-          {eligibleDrafts.length === 0 && (
-            <Card className="bg-card/70 border-dashed">
-              <CardContent className="text-muted-foreground p-4 text-sm">
-                No eligible ready-for-review drafts are waiting. Select a clean
-                draft variant in Drafts first.
+          {campaignLoading ? (
+            <Card className="bg-card/70" aria-busy="true">
+              <CardContent className="text-muted-foreground p-8 text-center text-sm">
+                Loading approvals…
               </CardContent>
             </Card>
-          )}
+          ) : error ? null : (
+            <>
+              {eligibleDrafts.length === 0 && (
+                <Card className="bg-card/70 border-dashed">
+                  <CardContent className="text-muted-foreground p-4 text-sm">
+                    No eligible ready-for-review drafts are waiting. Select a
+                    clean draft variant in Drafts first.
+                  </CardContent>
+                </Card>
+              )}
 
-          {approvals.length === 0 ? (
-            <EmptyApprovals />
-          ) : (
-            <div className="space-y-4">
-              {approvals.map((approval) => (
-                <ApprovalCard
-                  key={approval.id}
-                  approval={approval}
-                  killSwitchEnabled={killSwitchEnabled}
-                  killSwitchReason={killSwitchReason}
-                  publishLock={findPublishLock(
-                    openPublishExecutions,
-                    "post",
-                    approval.id,
-                  )}
-                  onSetStatus={setReviewStatus}
-                  onSchedule={scheduleReview}
-                  onCancelSchedule={cancelScheduleJob}
-                  onRecordPublishAttempt={recordPublishResult}
-                  onPublished={refreshApprovals}
-                />
-              ))}
-            </div>
+              <ListTruncationNotice
+                shownCount={approvals.length}
+                totalCount={approvalTotal}
+                noun="approvals"
+              />
+
+              {approvals.length === 0 ? (
+                <EmptyApprovals />
+              ) : (
+                <div className="space-y-4">
+                  {approvals.map((approval) => (
+                    <ApprovalCard
+                      key={approval.id}
+                      approval={approval}
+                      killSwitchEnabled={killSwitchEnabled}
+                      killSwitchReason={killSwitchReason}
+                      publishLock={findPublishLock(
+                        openPublishExecutions,
+                        "post",
+                        approval.id,
+                      )}
+                      onSetStatus={setReviewStatus}
+                      onSchedule={scheduleReview}
+                      onCancelSchedule={cancelScheduleJob}
+                      onRecordPublishAttempt={recordPublishResult}
+                      onPublished={refreshApprovals}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </>
       )}

@@ -19,6 +19,8 @@ import type {
   Approval,
   ApprovalDraftSnapshot,
   ApprovalEligibleDraft,
+  ApprovalEligibleDraftPage,
+  ApprovalListPage,
   ApprovalVariantSnapshot,
   ApprovalWithDetails,
   AssertApprovalCanPublishViaLinkedInInput,
@@ -122,6 +124,16 @@ function getAuditSeverityByVariantId(
 export async function listApprovals(
   campaignId?: number,
 ): Promise<ApprovalWithDetails[]> {
+  return (await listApprovalPage(campaignId)).items;
+}
+
+/**
+ * Same as `listApprovals`, plus `totalCount`: the uncapped number of matching
+ * approvals, counted in the same native snapshot so the UI can flag truncation.
+ */
+export async function listApprovalPage(
+  campaignId?: number,
+): Promise<ApprovalListPage> {
   const parsedCampaignId = optionalCampaignIdSchema.parse(campaignId);
   const snapshot = approvalListSnapshotSchema.parse(
     await invokeCommand("linkgo_approval_list", {
@@ -130,7 +142,8 @@ export async function listApprovals(
     }),
   );
   const { rows } = snapshot;
-  if (rows.length === 0) return [];
+  const totalCount = Math.max(snapshot.totalCount, rows.length);
+  if (rows.length === 0) return { items: [], totalCount };
 
   const scheduleByApprovalId = new Map<number, ScheduleJob>();
   for (const row of snapshot.scheduleJobs) {
@@ -150,7 +163,7 @@ export async function listApprovals(
     snapshot.audits,
   );
 
-  return rows.map((row) => ({
+  const items = rows.map((row) => ({
     ...mapApproval(row),
     storedStatus: row.status,
     currentContentRevision: row.current_content_revision,
@@ -166,6 +179,7 @@ export async function listApprovals(
       severityByVariantId.get(row.draft_variant_id) ?? "pass",
     ),
   }));
+  return { items, totalCount };
 }
 
 /**
@@ -175,6 +189,16 @@ export async function listApprovals(
 export async function listApprovalEligibleDrafts(
   campaignId?: number,
 ): Promise<ApprovalEligibleDraft[]> {
+  return (await listApprovalEligibleDraftPage(campaignId)).items;
+}
+
+/**
+ * Same as `listApprovalEligibleDrafts`, plus `totalCount`: the uncapped number
+ * of eligible drafts, counted in the same native snapshot.
+ */
+export async function listApprovalEligibleDraftPage(
+  campaignId?: number,
+): Promise<ApprovalEligibleDraftPage> {
   const parsedCampaignId = optionalCampaignIdSchema.parse(campaignId);
   const snapshot = eligibleDraftsSnapshotSchema.parse(
     await invokeCommand("linkgo_approval_eligible_drafts", {
@@ -182,18 +206,20 @@ export async function listApprovalEligibleDrafts(
         parsedCampaignId === undefined ? {} : { campaignId: parsedCampaignId },
     }),
   );
-  if (snapshot.rows.length === 0) return [];
+  const totalCount = Math.max(snapshot.totalCount, snapshot.rows.length);
+  if (snapshot.rows.length === 0) return { items: [], totalCount };
   const severityByVariantId = getAuditSeverityByVariantId(
     snapshot.rows.map((row) => row.draft_variant_id),
     snapshot.audits,
   );
-  return snapshot.rows.map((row) => ({
+  const items = snapshot.rows.map((row) => ({
     ...mapDraftSnapshot(row),
     variant: mapVariantSnapshot(
       row,
       severityByVariantId.get(row.draft_variant_id) ?? "pass",
     ),
   }));
+  return { items, totalCount };
 }
 
 /**

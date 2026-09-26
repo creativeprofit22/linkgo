@@ -12077,11 +12077,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     };
     const approvalListCommand = (args: unknown): Promise<unknown> => {
       const input = nativeInput<{ campaignId?: number }>(args);
-      const rows = (
-        selectApprovalJoin(
-          input.campaignId === undefined ? [] : [input.campaignId],
-        ) as Array<Record<string, unknown>>
-      )
+      const matching = selectApprovalJoin(
+        input.campaignId === undefined ? [] : [input.campaignId],
+      ) as Array<Record<string, unknown>>;
+      const rows = matching
         .slice(0, 500)
         .map((row) => pickKeys(row, APPROVAL_KEYS));
       const approvalIds = new Set(rows.map((row) => Number(row.id)));
@@ -12119,15 +12118,19 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         audits: auditsForVariants(
           rows.map((row) => Number(row.draft_variant_id)),
         ),
+        // Tests can report a larger uncapped total without seeding 500+ rows.
+        totalCount:
+          typeof w.__LINKGO_APPROVAL_LIST_TOTAL__ === "number"
+            ? w.__LINKGO_APPROVAL_LIST_TOTAL__
+            : matching.length,
       });
     };
     const approvalEligibleDraftsCommand = (args: unknown): Promise<unknown> => {
       const input = nativeInput<{ campaignId?: number }>(args);
-      const rows = (
-        selectApprovalEligibleDrafts(
-          input.campaignId === undefined ? [] : [input.campaignId],
-        ) as Array<Record<string, unknown>>
-      )
+      const matching = selectApprovalEligibleDrafts(
+        input.campaignId === undefined ? [] : [input.campaignId],
+      ) as Array<Record<string, unknown>>;
+      const rows = matching
         .slice(0, 200)
         .map((row) => pickKeys(row, SNAPSHOT_KEYS));
       return Promise.resolve({
@@ -12135,6 +12138,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         audits: auditsForVariants(
           rows.map((row) => Number(row.draft_variant_id)),
         ),
+        totalCount:
+          typeof w.__LINKGO_APPROVAL_ELIGIBLE_TOTAL__ === "number"
+            ? w.__LINKGO_APPROVAL_ELIGIBLE_TOTAL__
+            : matching.length,
       });
     };
     /** Mirrors `content_calendar.rs` commands (validation already in Zod). */
@@ -20301,9 +20308,33 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           });
         }
       }
-      if (cmd === "linkgo_approval_list") return approvalListCommand(args);
-      if (cmd === "linkgo_approval_eligible_drafts")
-        return approvalEligibleDraftsCommand(args);
+      if (cmd === "linkgo_approval_list") {
+        const campaignId = nativeInput<{ campaignId?: number }>(
+          args,
+        ).campaignId;
+        const calls = Array.isArray(w.__LINKGO_APPROVAL_LIST_CALLS__)
+          ? (w.__LINKGO_APPROVAL_LIST_CALLS__ as unknown[])
+          : [];
+        calls.push(campaignId ?? null);
+        w.__LINKGO_APPROVAL_LIST_CALLS__ = calls;
+        if (w.__LINKGO_FAIL_APPROVAL_LIST__ === true) {
+          w.__LINKGO_FAIL_APPROVAL_LIST__ = undefined;
+          return withCampaignGate(campaignId, null).then(() => {
+            throw new Error("Injected approval list failure");
+          });
+        }
+        return approvalListCommand(args).then((result) =>
+          withCampaignGate(campaignId, result),
+        );
+      }
+      if (cmd === "linkgo_approval_eligible_drafts") {
+        const campaignId = nativeInput<{ campaignId?: number }>(
+          args,
+        ).campaignId;
+        return approvalEligibleDraftsCommand(args).then((result) =>
+          withCampaignGate(campaignId, result),
+        );
+      }
       if (cmd === "linkgo_approval_publish_preflight")
         return approvalPublishPreflightCommand(args);
       if (cmd === "linkgo_approval_schedule")

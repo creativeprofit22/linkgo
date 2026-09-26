@@ -52,7 +52,9 @@ Public exports:
 Data API:
 
 - `listApprovals(campaignId?)`
+- `listApprovalPage(campaignId?)` — same rows plus `totalCount`
 - `listApprovalEligibleDrafts(campaignId?)`
+- `listApprovalEligibleDraftPage(campaignId?)` — same rows plus `totalCount`
 - `createApproval(input)`
 - `setApprovalStatus(input)`
 - `scheduleApproval(input)`
@@ -61,8 +63,9 @@ Data API:
 
 Reads are native too (`src-tauri/src/approval_reads.rs`); the renderer has no direct SQL access to approval tables.
 
-- `linkgo_approval_list` returns up to 500 approvals with their schedule jobs, publish attempts, linked agent-run counts and draft audits.
-- `linkgo_approval_eligible_drafts` returns up to 200 drafts ready for review that have no approval yet.
+- `linkgo_approval_list` returns up to 500 approvals with their schedule jobs, publish attempts, linked agent-run counts and draft audits, plus `totalCount`: every matching approval before the cap.
+- `linkgo_approval_eligible_drafts` returns up to 200 drafts ready for review that have no approval yet, plus `totalCount`: every eligible draft before the cap.
+- Each `totalCount` is a `COUNT(*)` over the same filter, in the same read transaction as the rows. When it exceeds the rows returned, the Approvals tab shows the shared list truncation notice above the list, marks the summary cards "(shown)", and the Create review dialog shows the same notice for ready drafts.
 - `linkgo_approval_publish_preflight` is a read-only check the renderer runs before any LinkedIn call. It runs the same checks, with the same messages, as the renderer did before. It is advisory: the posting command `linkgo_linkedin_publish_post` re-checks everything natively in `load_publish_preflight_from_pool` (`src-tauri/src/auth/publish.rs`) before any LinkedIn call, so skipping or racing the preflight cannot post.
 
 Each read happens in one transaction, and response shapes are checked by strict schemas in `src/features/approvals/record-schemas.ts`. Tests: `src-tauri/src/approval_reads_tests.rs`.
@@ -141,6 +144,20 @@ The Approvals tab includes:
 - Buttons for approve, request changes, reject, schedule, cancel schedule, mark published, publish via LinkedIn, and record failure. Mark published, Schedule and Publish via LinkedIn require current readiness; Record failure does not.
 
 Confirmation prompts guard rejection, schedule cancellation, manual published recording, and OAuth-backed LinkedIn publishing. `Publish via LinkedIn` is hidden for archived campaigns, non-approved/non-scheduled approvals, kill-switch-enabled state, and approvals with an existing successful publish attempt.
+
+### Campaign selection ownership
+
+Approval data (reviews, eligible drafts, open publish executions) always belongs to the currently selected campaign:
+
+- Every load carries a request id. `useApprovals` applies a result or an error only while that request is the latest one **and** its campaign is still selected, so a slow campaign A response can never overwrite campaign B.
+- Selecting a campaign clears the previous campaign's cards immediately, shows an `aria-busy` "Loading approvals…" region, disables Create review, and issues exactly one approval-list request (the initial page load runs once and is not repeated on selection).
+- A failed selection load shows the error card (`role="alert"`) with Retry and no approval actions; Retry reloads campaigns and the current selection.
+- After approve/reject/schedule/cancel/publish-record mutations and publish refreshes, the hook reloads the campaign selected **at that moment**, not the one captured when the mutation started.
+- A reload failure after a committed mutation is not reported as a mutation failure. If the reload still owns the selection, the hook clears the cards and shows the error card with Retry, plus a "Saved, but approvals could not be refreshed" toast. Refresh failures use the same error card. Failures from superseded reloads are dropped.
+
+### Browser preview
+
+Opened in a plain browser (`bun run dev` without Tauri), no native commands exist. Every native call fails closed with `DesktopRequiredError` ("Not available in the browser preview…"), so the Approvals tab shows that guidance in its error card instead of a runtime `TypeError`, and no approval action is available. Native failures in the desktop app keep their original messages.
 
 An approved Agent Runtime checkpoint is resumed explicitly from Agent Runtime. The Approvals tab never starts model continuation, scheduling, or publishing as a side effect of approve/reject state changes.
 

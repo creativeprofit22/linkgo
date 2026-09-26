@@ -1,5 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +21,8 @@ import type {
 
 interface CreateApprovalDialogProps {
   eligibleDrafts: ApprovalEligibleDraft[];
+  /** Uncapped eligible-draft count; above the list length when capped. */
+  eligibleDraftTotal: number;
   selectedCampaignId: number | null;
   selectedCampaignArchived: boolean;
   disabled?: boolean;
@@ -49,6 +52,7 @@ function getInitialFormState(
 
 export function CreateApprovalDialog({
   eligibleDrafts,
+  eligibleDraftTotal,
   selectedCampaignId,
   selectedCampaignArchived,
   disabled = false,
@@ -126,6 +130,14 @@ export function CreateApprovalDialog({
                 record. This does not call LinkedIn.
               </DialogDescription>
             </DialogHeader>
+
+            {!selectedCampaignArchived && (
+              <ListTruncationNotice
+                shownCount={eligibleDrafts.length}
+                totalCount={eligibleDraftTotal}
+                noun="ready drafts"
+              />
+            )}
 
             <Field label="Ready draft" htmlFor="approval-draft">
               <select

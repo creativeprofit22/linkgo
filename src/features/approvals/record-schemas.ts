@@ -117,11 +117,15 @@ export const approvalListSnapshotSchema = z.strictObject({
     }),
   ),
   audits: z.array(draftAuditRowSchema),
+  /** Uncapped number of matching approvals; `rows` stops at the limit. */
+  totalCount: z.number().int().nonnegative(),
 });
 
 export const eligibleDraftsSnapshotSchema = z.strictObject({
   rows: z.array(draftSnapshotRowSchema).max(ELIGIBLE_DRAFT_LIMIT),
   audits: z.array(draftAuditRowSchema),
+  /** Uncapped number of eligible drafts; `rows` stops at the limit. */
+  totalCount: z.number().int().nonnegative(),
 });
 
 export type ApprovalListSnapshot = z.infer<typeof approvalListSnapshotSchema>;

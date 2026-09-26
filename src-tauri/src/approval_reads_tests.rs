@@ -120,6 +120,7 @@ async fn eligible_drafts_skip_archived_approved_and_blocked() {
     // Draft 3 is in an archived campaign; newest update first.
     let ids: Vec<i64> = all.rows.iter().map(|row| row.draft_id).collect();
     assert_eq!(ids, vec![2, 1]);
+    assert_eq!(all.total_count, 2);
     assert_eq!(all.rows[1].target_url, "https://e.com/1");
     assert!(all.audits.iter().all(|audit| audit.severity == "pass"));
 
@@ -134,6 +135,7 @@ async fn eligible_drafts_skip_archived_approved_and_blocked() {
         .unwrap();
     assert!(none.rows.is_empty());
     assert!(none.audits.is_empty());
+    assert_eq!(none.total_count, 0);
 }
 
 #[tokio::test]
@@ -156,6 +158,7 @@ async fn approval_list_includes_related_rows_and_filters_by_campaign() {
     let mut ids: Vec<i64> = all.rows.iter().map(|row| row.id).collect();
     ids.sort_unstable();
     assert_eq!(ids, vec![first, second]);
+    assert_eq!(all.total_count, 2);
     let row = all.rows.iter().find(|row| row.id == first).unwrap();
     assert_eq!(row.status, "approved");
     assert_eq!(row.readiness, 1);
@@ -174,9 +177,80 @@ async fn approval_list_includes_related_rows_and_filters_by_campaign() {
     .await
     .unwrap();
     assert_eq!(one.rows.len(), 1);
+    assert_eq!(one.total_count, 1);
     assert_eq!(one.rows[0].id, second);
     assert!(one.schedule_jobs.is_empty());
     assert!(one.publish_attempts.is_empty());
+}
+
+/// Seeds `count` extra ready drafts (ids from 100) in campaign 1, each with
+/// one selected variant and full readiness evidence, set-based for speed.
+async fn seed_ready_drafts(f: &Fixture, count: i64) {
+    let last = 99 + count;
+    seed(
+        &f.pool,
+        &format!(
+            "WITH RECURSIVE n(i) AS (SELECT 100 UNION ALL SELECT i+1 FROM n WHERE i < {last})
+             INSERT INTO target_posts (id,url,normalized_url,content,content_hash)
+               SELECT i,'https://e.com/'||i,'https://e.com/'||i,'Post','h'||i FROM n;
+             INSERT INTO candidate_posts (id,campaign_id,target_post_id,source_keyword)
+               SELECT id,1,id,'ai' FROM target_posts WHERE id >= 100;
+             INSERT INTO drafts (id,campaign_id,candidate_post_id,status,updated_at)
+               SELECT id,1,id,'ready_for_review','2026-08-01 00:00:00' FROM candidate_posts WHERE id >= 100;
+             INSERT INTO draft_variants (id,draft_id,variant_number,hook,body,status)
+               SELECT id,id,1,'We learned from 12 customer interviews','Our team tested a specific change.','selected'
+               FROM drafts WHERE id >= 100;
+             INSERT INTO draft_audits (draft_variant_id,rule_key,severity,message)
+               SELECT dv.id,j.value,'pass','ok' FROM draft_variants dv, json_each('{DETERMINISTIC_RULES}') j WHERE dv.id >= 100;
+             INSERT INTO draft_ai_audit_runs (draft_variant_id,content_revision,provider_key,status,completed_at)
+               SELECT id,content_revision,'dry_run','completed',datetime('now') FROM draft_variants WHERE id >= 100;
+             INSERT INTO draft_ai_audit_findings (audit_run_id,rule_key,severity,message)
+               SELECT r.id,j.value,'pass','ok' FROM draft_ai_audit_runs r, json_each('{AUDIT_RULES}') j WHERE r.draft_variant_id >= 100;
+             INSERT INTO draft_quality_runs (draft_variant_id,starting_content_revision,current_content_revision,provider_key,status,final_score,completed_at)
+               SELECT id,content_revision,content_revision,'dry_run','passed',80,datetime('now') FROM draft_variants WHERE id >= 100;"
+        ),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn capped_lists_report_the_uncapped_total_count() {
+    let f = fixture().await;
+    seed_ready_drafts(&f, APPROVAL_LIST_LIMIT + 1).await;
+    let campaign = || ApprovalListInput {
+        campaign_id: Some(1),
+    };
+
+    // 501 seeded + draft 1 are eligible; rows stop at the eligible cap.
+    let eligible = list_eligible_drafts(&f.pool, campaign()).await.unwrap();
+    assert_eq!(eligible.rows.len() as i64, ELIGIBLE_DRAFT_LIMIT);
+    assert_eq!(eligible.total_count, APPROVAL_LIST_LIMIT + 2);
+
+    for draft_id in 100..100 + APPROVAL_LIST_LIMIT + 1 {
+        create_approval(
+            &f.pool,
+            CreateApprovalInput {
+                draft_id,
+                reviewer_notes: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    approve_draft(&f, 2).await;
+
+    let approvals = list_approvals(&f.pool, campaign()).await.unwrap();
+    assert_eq!(approvals.rows.len() as i64, APPROVAL_LIST_LIMIT);
+    assert_eq!(approvals.total_count, APPROVAL_LIST_LIMIT + 1);
+    // The count follows the campaign filter, not the whole table.
+    let all = list_approvals(&f.pool, ApprovalListInput::default())
+        .await
+        .unwrap();
+    assert_eq!(all.total_count, APPROVAL_LIST_LIMIT + 2);
+
+    let eligible = list_eligible_drafts(&f.pool, campaign()).await.unwrap();
+    assert_eq!(eligible.rows.len(), 1);
+    assert_eq!(eligible.total_count, 1);
 }
 
 #[tokio::test]

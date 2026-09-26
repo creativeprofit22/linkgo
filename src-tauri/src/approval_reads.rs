@@ -155,6 +155,8 @@ pub struct ApprovalListSnapshot {
     pub publish_attempts: Vec<PublishAttemptRow>,
     pub linked_agent_run_counts: Vec<LinkedAgentRunCountRow>,
     pub audits: Vec<DraftAuditRow>,
+    /// Uncapped number of matching approvals; `rows` stops at the list limit.
+    pub total_count: i64,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -162,6 +164,8 @@ pub struct ApprovalListSnapshot {
 pub struct EligibleDraftsSnapshot {
     pub rows: Vec<DraftSnapshotRow>,
     pub audits: Vec<DraftAuditRow>,
+    /// Uncapped number of eligible drafts; `rows` stops at the list limit.
+    pub total_count: i64,
 }
 
 fn snapshot_row(row: &SqliteRow) -> DraftSnapshotRow {
@@ -246,18 +250,20 @@ pub(crate) async fn list_approvals(
 ) -> Result<ApprovalListSnapshot, String> {
     validate_campaign(input.campaign_id)?;
     let mut transaction = pool.begin().await.map_err(read_error)?;
-    let sql = format!(
-        "SELECT a.id, a.campaign_id, a.draft_id, a.draft_variant_id, a.status,
-                a.reviewed_content_revision, dv.content_revision AS current_content_revision,
-                {READY_SQL} AS readiness, a.reviewer_notes, a.approved_at, a.rejected_at,
-                a.created_at, a.updated_at, {SNAPSHOT_COLUMNS}
-         FROM approvals a
+    // Rows and total share one FROM/WHERE so the count matches the cap.
+    let from_where = "FROM approvals a
          INNER JOIN campaigns c ON c.id = a.campaign_id
          INNER JOIN drafts d ON d.id = a.draft_id
          INNER JOIN draft_variants dv ON dv.id = a.draft_variant_id
          INNER JOIN candidate_posts cp ON cp.id = d.candidate_post_id
          INNER JOIN target_posts tp ON tp.id = cp.target_post_id
-         WHERE (?1 IS NULL OR a.campaign_id = ?1)
+         WHERE (?1 IS NULL OR a.campaign_id = ?1)";
+    let sql = format!(
+        "SELECT a.id, a.campaign_id, a.draft_id, a.draft_variant_id, a.status,
+                a.reviewed_content_revision, dv.content_revision AS current_content_revision,
+                {READY_SQL} AS readiness, a.reviewer_notes, a.approved_at, a.rejected_at,
+                a.created_at, a.updated_at, {SNAPSHOT_COLUMNS}
+         {from_where}
          ORDER BY a.status IN ('published', 'cancelled', 'rejected'),
                   datetime(a.updated_at) DESC, a.id DESC
          LIMIT ?2"
@@ -281,6 +287,11 @@ pub(crate) async fn list_approvals(
             snapshot: snapshot_row(row),
         })
         .collect();
+    let total_count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) {from_where}"))
+        .bind(input.campaign_id)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(read_error)?;
 
     let approval_ids: Vec<i64> = rows.iter().map(|row| row.id).collect();
     let variant_ids: Vec<i64> = rows
@@ -360,6 +371,7 @@ pub(crate) async fn list_approvals(
         publish_attempts,
         linked_agent_run_counts,
         audits,
+        total_count,
     })
 }
 
@@ -369,10 +381,9 @@ pub(crate) async fn list_eligible_drafts(
 ) -> Result<EligibleDraftsSnapshot, String> {
     validate_campaign(input.campaign_id)?;
     let mut transaction = pool.begin().await.map_err(read_error)?;
-    let sql = format!(
-        "SELECT d.campaign_id, d.id AS draft_id, dv.id AS draft_variant_id,
-                d.created_at, d.updated_at, {SNAPSHOT_COLUMNS}
-         FROM drafts d
+    // Rows and total share one FROM/WHERE so the count matches the cap.
+    let from_where = format!(
+        "FROM drafts d
          INNER JOIN campaigns c ON c.id = d.campaign_id
          INNER JOIN candidate_posts cp ON cp.id = d.candidate_post_id
          INNER JOIN target_posts tp ON tp.id = cp.target_post_id
@@ -386,7 +397,12 @@ pub(crate) async fn list_eligible_drafts(
                 WHERE selected_dv.draft_id = d.id AND selected_dv.status = 'selected') = 1
            AND NOT EXISTS (SELECT 1 FROM draft_audits da
                            WHERE da.draft_variant_id = dv.id AND da.severity = 'block')
-           AND {READY_SQL}
+           AND {READY_SQL}"
+    );
+    let sql = format!(
+        "SELECT d.campaign_id, d.id AS draft_id, dv.id AS draft_variant_id,
+                d.created_at, d.updated_at, {SNAPSHOT_COLUMNS}
+         {from_where}
          ORDER BY datetime(d.updated_at) DESC, d.id DESC
          LIMIT ?2"
     );
@@ -399,10 +415,19 @@ pub(crate) async fn list_eligible_drafts(
         .iter()
         .map(snapshot_row)
         .collect();
+    let total_count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) {from_where}"))
+        .bind(input.campaign_id)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(read_error)?;
     let variant_ids: Vec<i64> = rows.iter().map(|row| row.draft_variant_id).collect();
     let audits = audits_for(&mut transaction, &variant_ids).await?;
     transaction.commit().await.map_err(read_error)?;
-    Ok(EligibleDraftsSnapshot { rows, audits })
+    Ok(EligibleDraftsSnapshot {
+        rows,
+        audits,
+        total_count,
+    })
 }
 
 /// Read-only publish preflight with the renderer's previous checks and

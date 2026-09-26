@@ -120,6 +120,18 @@ export type ApprovalEligibleDraft = ApprovalDraftSnapshot & {
   variant: ApprovalVariantSnapshot;
 };
 
+/** A capped approval list; `totalCount` counts every match before the cap. */
+export interface ApprovalListPage {
+  items: ApprovalWithDetails[];
+  totalCount: number;
+}
+
+/** A capped eligible-draft list; `totalCount` counts every match before the cap. */
+export interface ApprovalEligibleDraftPage {
+  items: ApprovalEligibleDraft[];
+  totalCount: number;
+}
+
 export interface CreateApprovalInput {
   draftId: number;
   reviewerNotes?: string;
