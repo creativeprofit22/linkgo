@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { autopilotPlannerDashboardSchema } from "@/features/autopilot-planner/record-schemas";
-import { IS_TAURI, IS_TEST } from "@/lib/env";
-import { invokeCommand, toNativeCommandError } from "@/lib/tauri";
+import { IS_TEST, isBrowserPreview } from "@/lib/env";
+import {
+  DesktopRequiredError,
+  invokeCommand,
+  toNativeCommandError,
+} from "@/lib/tauri";
 import {
   autopilotPlannerStatusPayloadSchema,
   autopilotPlannerTickResultSchema,
@@ -41,12 +45,8 @@ async function invokePlannerCommand(command: string): Promise<unknown> {
       throw toNativeCommandError(error);
     }
   }
+  if (isBrowserPreview()) throw new DesktopRequiredError(command);
   if (IS_TEST) return null;
-  if (!IS_TAURI) {
-    throw new Error(
-      "Autopilot planner controls require the Linkgo desktop app",
-    );
-  }
   return invokeCommand(command);
 }
 

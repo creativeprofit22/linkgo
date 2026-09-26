@@ -1,4 +1,33 @@
 import { invoke, type InvokeArgs } from "@tauri-apps/api/core";
+import { isBrowserPreview } from "@/lib/env";
+
+/** User-facing guidance shown when a desktop-only operation runs in a browser. */
+export const DESKTOP_REQUIRED_MESSAGE =
+  "Not available in the browser preview. Linkgo saves data only in the desktop app — run `bun run tauri:dev`.";
+
+/**
+ * Raised instead of calling a native command when the renderer runs in a plain
+ * browser. Distinguishes preview restrictions from real desktop failures.
+ */
+export class DesktopRequiredError extends Error {
+  override readonly name = "DesktopRequiredError";
+  /** Native command or plugin the browser preview blocked, when known. */
+  readonly command: string | undefined;
+
+  constructor(command?: string) {
+    super(DESKTOP_REQUIRED_MESSAGE);
+    this.command = command;
+  }
+}
+
+export function isDesktopRequiredError(
+  error: unknown,
+): error is DesktopRequiredError {
+  return (
+    error instanceof DesktopRequiredError ||
+    (error instanceof Error && error.name === "DesktopRequiredError")
+  );
+}
 
 /**
  * Tauri v2 rejects `invoke` with the raw `Err(String)` payload of a native
@@ -17,6 +46,7 @@ export async function invokeCommand<T = unknown>(
   command: string,
   args?: InvokeArgs,
 ): Promise<T> {
+  if (isBrowserPreview()) throw new DesktopRequiredError(command);
   try {
     return await invoke<T>(command, args);
   } catch (error: unknown) {

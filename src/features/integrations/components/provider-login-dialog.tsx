@@ -41,6 +41,10 @@ interface ProviderLoginDialogProps {
   }) => Promise<void>;
   onDisconnect: (input: { providerKey: AuthProviderKey }) => Promise<void>;
   onCheck: (input: { providerKey: AuthProviderKey }) => Promise<void>;
+  /** Blocks opening the dialog, e.g. in the browser preview. */
+  disabled?: boolean;
+  /** Element id explaining why the dialog is disabled. */
+  disabledReasonId?: string;
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -62,6 +66,8 @@ export function ProviderLoginDialog({
   onSubmitCode,
   onDisconnect,
   onCheck,
+  disabled = false,
+  disabledReasonId,
 }: ProviderLoginDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -160,7 +166,12 @@ export function ProviderLoginDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant={connected ? "outline" : "default"}>
+        <Button
+          type="button"
+          variant={connected ? "outline" : "default"}
+          disabled={disabled}
+          aria-describedby={disabled ? disabledReasonId : undefined}
+        >
           {connected ? (
             <ShieldCheck className="size-4" />
           ) : (

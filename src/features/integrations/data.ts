@@ -1,6 +1,7 @@
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import { IS_TEST, IS_TAURI } from "@/lib/env";
 import {
+  DesktopRequiredError,
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -76,6 +77,16 @@ async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
   return invokeNativeCommand(cmd, args as InvokeArgs | undefined);
 }
 
+/**
+ * Credential changes need the native keychain boundary. Without a Tauri
+ * runtime (browser preview) they fail closed instead of faking success.
+ */
+async function invokeMutation(cmd: string, args?: unknown): Promise<unknown> {
+  const result = await invokeCommand(cmd, args);
+  if (result === null) throw new DesktopRequiredError(cmd);
+  return result;
+}
+
 export async function getAuthStatus(): Promise<AuthStatus> {
   const result = await invokeCommand("linkgo_auth_status");
   if (result === null) return localStatus;
@@ -84,8 +95,9 @@ export async function getAuthStatus(): Promise<AuthStatus> {
 
 export async function saveApiKey(input: SaveApiKeyInput): Promise<AuthStatus> {
   const parsed = saveApiKeySchema.parse(input);
-  const result = await invokeCommand("linkgo_auth_api_key", { input: parsed });
-  if (result === null) return localStatus;
+  const result = await invokeMutation("linkgo_auth_api_key", {
+    input: parsed,
+  });
   return authStatusSchema.parse(result);
 }
 
@@ -93,7 +105,7 @@ export async function startOAuth(
   input: OAuthStartInput,
 ): Promise<OAuthStartResult> {
   const parsed = oauthStartSchema.parse(input);
-  const result = await invokeCommand("linkgo_auth_oauth_start", {
+  const result = await invokeMutation("linkgo_auth_oauth_start", {
     input: parsed,
   });
   return oauthStartResultSchema.parse(result);
@@ -103,10 +115,9 @@ export async function submitOAuthCode(
   input: OAuthCodeInput,
 ): Promise<AuthStatus> {
   const parsed = oauthCodeSchema.parse(input);
-  const result = await invokeCommand("linkgo_auth_oauth_code", {
+  const result = await invokeMutation("linkgo_auth_oauth_code", {
     input: parsed,
   });
-  if (result === null) return localStatus;
   return authStatusSchema.parse(result);
 }
 
@@ -114,15 +125,17 @@ export async function disconnectProvider(
   input: LogoutInput,
 ): Promise<AuthStatus> {
   const parsed = logoutSchema.parse(input);
-  const result = await invokeCommand("linkgo_auth_logout", { input: parsed });
-  if (result === null) return localStatus;
+  const result = await invokeMutation("linkgo_auth_logout", {
+    input: parsed,
+  });
   return authStatusSchema.parse(result);
 }
 
 export async function checkProvider(input: LogoutInput): Promise<AuthStatus> {
   const parsed = logoutSchema.parse(input);
-  const result = await invokeCommand("linkgo_auth_check", { input: parsed });
-  if (result === null) return localStatus;
+  const result = await invokeMutation("linkgo_auth_check", {
+    input: parsed,
+  });
   return authStatusSchema.parse(result);
 }
 
@@ -130,7 +143,7 @@ export async function getProviderSecret(
   input: ProviderSecretInput,
 ): Promise<ProviderSecret> {
   const parsed = providerSecretInputSchema.parse(input);
-  const result = await invokeCommand("linkgo_auth_provider_secret", {
+  const result = await invokeMutation("linkgo_auth_provider_secret", {
     input: parsed,
   });
   return providerSecretSchema.parse(result);

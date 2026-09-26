@@ -1,5 +1,6 @@
-import { IS_TEST, IS_TAURI } from "@/lib/env";
+import { IS_TEST, isBrowserPreview } from "@/lib/env";
 import {
+  DesktopRequiredError,
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -44,8 +45,8 @@ async function invokeCommand(cmd: string): Promise<unknown> {
       throw toNativeCommandError(error);
     }
   }
+  if (isBrowserPreview()) throw new DesktopRequiredError(cmd);
   if (IS_TEST) return null;
-  if (!IS_TAURI) throw new Error("Scheduler controls require the Tauri app");
   return invokeNativeCommand(cmd);
 }
 
@@ -110,4 +111,22 @@ export async function listSchedulerDashboard(
         parsedCampaignId === undefined ? {} : { campaignId: parsedCampaignId },
     }),
   );
+}
+
+if (IS_TEST && typeof window !== "undefined") {
+  (
+    window as unknown as {
+      __LINKGO_SCHEDULER_TEST_API__?: {
+        getSchedulerStatus: typeof getSchedulerStatus;
+        startScheduler: typeof startScheduler;
+        stopScheduler: typeof stopScheduler;
+        runSchedulerTick: typeof runSchedulerTick;
+      };
+    }
+  ).__LINKGO_SCHEDULER_TEST_API__ = {
+    getSchedulerStatus,
+    startScheduler,
+    stopScheduler,
+    runSchedulerTick,
+  };
 }

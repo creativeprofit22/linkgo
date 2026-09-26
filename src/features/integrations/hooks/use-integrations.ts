@@ -18,10 +18,14 @@ import type {
   OAuthStartResult,
   SaveApiKeyInput,
 } from "@/features/integrations/types";
+import { isBrowserPreview } from "@/lib/env";
+import { DESKTOP_REQUIRED_MESSAGE } from "@/lib/tauri";
 
 interface UseIntegrationsState extends AuthStatus {
   loading: boolean;
   error: string | null;
+  /** Set in the browser preview, where credential changes are unavailable. */
+  desktopRequiredMessage: string | null;
   progressEvents: AuthProgressEvent[];
   loadIntegrations: () => Promise<void>;
   saveKey: (input: SaveApiKeyInput) => Promise<void>;
@@ -46,6 +50,9 @@ export function useIntegrations(): UseIntegrationsState {
   const [progressEvents, setProgressEvents] = useState<AuthProgressEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [desktopRequiredMessage] = useState<string | null>(() =>
+    isBrowserPreview() ? DESKTOP_REQUIRED_MESSAGE : null,
+  );
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -143,6 +150,7 @@ export function useIntegrations(): UseIntegrationsState {
       ...status,
       loading,
       error,
+      desktopRequiredMessage,
       progressEvents,
       loadIntegrations,
       saveKey,
@@ -155,6 +163,7 @@ export function useIntegrations(): UseIntegrationsState {
       status,
       loading,
       error,
+      desktopRequiredMessage,
       progressEvents,
       loadIntegrations,
       saveKey,

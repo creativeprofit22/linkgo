@@ -19,8 +19,14 @@ function formatLastSynced(value: string | null): string | null {
 }
 
 export function SettingsPage(): React.ReactNode {
-  const { launchOnLogin, loading, saving, error, setLaunchOnLoginEnabled } =
-    useSettings();
+  const {
+    launchOnLogin,
+    loading,
+    saving,
+    error,
+    desktopRequiredMessage,
+    setLaunchOnLoginEnabled,
+  } = useSettings();
   const enabled = launchOnLogin?.enabled ?? false;
   const lastSynced = formatLastSynced(launchOnLogin?.lastSyncedAt ?? null);
   const lastError = launchOnLogin?.lastError || error;
@@ -65,12 +71,22 @@ export function SettingsPage(): React.ReactNode {
                   {lastError ? (
                     <p className="text-destructive">Last error: {lastError}</p>
                   ) : null}
+                  {desktopRequiredMessage ? (
+                    <p id="launch-on-login-desktop-required">
+                      {desktopRequiredMessage}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <Switch
                 id="launch-on-login"
                 checked={enabled}
-                disabled={loading || saving}
+                disabled={loading || saving || desktopRequiredMessage !== null}
+                aria-describedby={
+                  desktopRequiredMessage
+                    ? "launch-on-login-desktop-required"
+                    : undefined
+                }
                 onCheckedChange={(checked) => {
                   void setLaunchOnLoginEnabled(checked);
                 }}

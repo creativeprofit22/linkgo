@@ -5,12 +5,16 @@ import {
   setLaunchOnLogin,
 } from "@/features/settings/data";
 import type { LaunchOnLoginSettings } from "@/features/settings/types";
+import { isBrowserPreview } from "@/lib/env";
+import { DESKTOP_REQUIRED_MESSAGE } from "@/lib/tauri";
 
 interface UseSettingsState {
   launchOnLogin: LaunchOnLoginSettings | null;
   loading: boolean;
   saving: boolean;
   error: string | null;
+  /** Set in the browser preview, where OS settings cannot be changed. */
+  desktopRequiredMessage: string | null;
   loadSettings: () => Promise<void>;
   setLaunchOnLoginEnabled: (enabled: boolean) => Promise<void>;
 }
@@ -26,6 +30,9 @@ export function useSettings(): UseSettingsState {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savingRef = useRef(false);
+  const [desktopRequiredMessage] = useState<string | null>(() =>
+    isBrowserPreview() ? DESKTOP_REQUIRED_MESSAGE : null,
+  );
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -87,6 +94,7 @@ export function useSettings(): UseSettingsState {
       loading,
       saving,
       error,
+      desktopRequiredMessage,
       loadSettings,
       setLaunchOnLoginEnabled,
     }),
@@ -95,6 +103,7 @@ export function useSettings(): UseSettingsState {
       loading,
       saving,
       error,
+      desktopRequiredMessage,
       loadSettings,
       setLaunchOnLoginEnabled,
     ],

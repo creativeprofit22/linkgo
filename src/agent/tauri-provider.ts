@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { InvokeArgs } from "@tauri-apps/api/core";
-import { IS_TEST, IS_TAURI } from "@/lib/env";
+import { IS_TEST, isBrowserPreview } from "@/lib/env";
 import {
+  DesktopRequiredError,
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -63,9 +64,7 @@ async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
       throw toNativeCommandError(error);
     }
   }
-  if (!IS_TAURI) {
-    throw new Error("Provider-backed agent runs require the Tauri runtime");
-  }
+  if (isBrowserPreview()) throw new DesktopRequiredError(cmd);
   return invokeNativeCommand(cmd, args as InvokeArgs | undefined);
 }
 

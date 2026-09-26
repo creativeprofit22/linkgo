@@ -25,6 +25,7 @@ export function IntegrationsView(): React.ReactNode {
     progressEvents,
     loading,
     error,
+    desktopRequiredMessage,
     loadIntegrations,
     saveKey,
     beginOAuth,
@@ -80,6 +81,17 @@ export function IntegrationsView(): React.ReactNode {
         </Card>
       )}
 
+      {desktopRequiredMessage && (
+        <Card className="border-dashed">
+          <CardContent
+            id="integrations-desktop-required"
+            className="text-muted-foreground p-4 text-sm"
+          >
+            {desktopRequiredMessage}
+          </CardContent>
+        </Card>
+      )}
+
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
@@ -103,6 +115,7 @@ export function IntegrationsView(): React.ReactNode {
                 onSubmitCode={submitCode}
                 onDisconnect={disconnect}
                 onCheck={check}
+                desktopRequired={desktopRequiredMessage !== null}
               />
             ))}
           </div>
@@ -146,6 +159,7 @@ function ProviderCard({
   onSubmitCode,
   onDisconnect,
   onCheck,
+  desktopRequired,
 }: {
   provider: AuthProvider;
   account: ConnectedAccount | null;
@@ -160,6 +174,7 @@ function ProviderCard({
     typeof ProviderLoginDialog
   >["onDisconnect"];
   onCheck: React.ComponentProps<typeof ProviderLoginDialog>["onCheck"];
+  desktopRequired: boolean;
 }): React.ReactNode {
   const status = account?.status ?? "disconnected";
   const connected = status === "connected";
@@ -197,6 +212,8 @@ function ProviderCard({
             onSubmitCode={onSubmitCode}
             onDisconnect={onDisconnect}
             onCheck={onCheck}
+            disabled={desktopRequired}
+            disabledReasonId="integrations-desktop-required"
           />
         </div>
       </CardContent>

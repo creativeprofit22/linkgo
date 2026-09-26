@@ -1,8 +1,9 @@
 import { assertApprovalCanPublishViaLinkedIn } from "@/features/approvals/data";
 import { assertCommentCanPublishViaLinkedIn } from "@/features/comments/data";
 import type { InvokeArgs } from "@tauri-apps/api/core";
-import { IS_TEST, IS_TAURI } from "@/lib/env";
+import { IS_TEST, isBrowserPreview } from "@/lib/env";
 import {
+  DesktopRequiredError,
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -51,8 +52,8 @@ async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
       throw toNativeCommandError(error);
     }
   }
+  if (isBrowserPreview()) throw new DesktopRequiredError(cmd);
   if (IS_TEST) return null;
-  if (!IS_TAURI) throw new Error("LinkedIn publishing requires the Tauri app");
   return invokeNativeCommand(cmd, args as InvokeArgs | undefined);
 }
 

@@ -46,9 +46,19 @@ against a local browser preview with injected Tauri mocks.
 ## Development
 
 ```bash
-bun run dev
-bun run tauri:dev
+bun run dev        # browser preview only (nothing is saved)
+bun run tauri:dev  # the real desktop app with local persistence
 ```
+
+Linkgo stores data only through native Tauri commands, so use
+`bun run tauri:dev` for real work. `bun run dev` opens a **browser preview**:
+a banner reads "Browser preview — nothing is saved", credential and
+launch-on-login controls are disabled, and any feature that needs native data
+shows "Not available in the browser preview. Linkgo saves data only in the
+desktop app — run `bun run tauri:dev`." That message means the preview
+restriction, not a bug; errors in the desktop app keep their own native
+messages. Playwright specs inject Tauri mocks, which are only honoured in
+Playwright builds.
 
 ## Verification
 

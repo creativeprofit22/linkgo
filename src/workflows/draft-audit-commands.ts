@@ -9,8 +9,12 @@ import type {
   ReconcileStalePlannerDraftAuditsInput,
   ReconcileStalePlannerDraftAuditsResult,
 } from "@/features/drafts/types";
-import { IS_TAURI, IS_TEST } from "@/lib/env";
-import { invokeCommand, toNativeCommandError } from "@/lib/tauri";
+import { IS_TEST, isBrowserPreview } from "@/lib/env";
+import {
+  DesktopRequiredError,
+  invokeCommand,
+  toNativeCommandError,
+} from "@/lib/tauri";
 import type { PlannerDraftAuditProvenance } from "@/workflows/draft-audit";
 import type { PlannerDraftAuditClaim } from "@/workflows/types";
 import { z } from "zod";
@@ -87,9 +91,7 @@ async function invokeDraftAuditCommand<T>(
     }
     return resultSchema.parse(result);
   }
-  if (!IS_TAURI) {
-    throw new Error("Planner draft auditing requires the Linkgo desktop app");
-  }
+  if (isBrowserPreview()) throw new DesktopRequiredError(command);
   return resultSchema.parse(await invokeCommand(command, { input }));
 }
 

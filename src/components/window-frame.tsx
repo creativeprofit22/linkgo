@@ -1,3 +1,4 @@
+import { BrowserPreviewBanner } from "@/components/browser-preview-banner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { IS_TAURI } from "@/lib/env";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ export function WindowFrame({
         )}
       >
         {titleBar}
+        <BrowserPreviewBanner />
         <main className={cn("min-h-0 flex-1", contentClassName)}>
           {children}
         </main>

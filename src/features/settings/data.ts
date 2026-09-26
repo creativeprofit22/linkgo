@@ -1,5 +1,5 @@
-import { IS_TAURI, IS_TEST } from "@/lib/env";
-import { invokeCommand } from "@/lib/tauri";
+import { IS_TAURI, IS_TEST, isBrowserPreview } from "@/lib/env";
+import { DesktopRequiredError, invokeCommand } from "@/lib/tauri";
 import {
   appSettingsRowSchema,
   launchOnLoginSettingsSchema,
@@ -62,11 +62,8 @@ async function getAutostartApi(): Promise<AutostartApi> {
     return autostart;
   }
 
-  return {
-    isEnabled: async () => false,
-    enable: async () => {},
-    disable: async () => {},
-  };
+  // No Tauri runtime and no test adapter: fail closed, never fake success.
+  throw new DesktopRequiredError("plugin:autostart");
 }
 
 function toDisabledSettings(): LaunchOnLoginSettings {
@@ -112,8 +109,9 @@ async function storeLaunchOnLoginError(error: unknown): Promise<void> {
   });
 }
 
+/** In the browser preview this reports the honest default: disabled. */
 export async function getLaunchOnLoginSettings(): Promise<LaunchOnLoginSettings> {
-  if (!IS_TAURI && !IS_TEST) return toDisabledSettings();
+  if (isBrowserPreview()) return toDisabledSettings();
 
   const autostart = await getAutostartApi();
   const osEnabled = await autostart.isEnabled();
@@ -125,7 +123,7 @@ export async function setLaunchOnLogin(
   input: SetLaunchOnLoginInput,
 ): Promise<LaunchOnLoginSettings> {
   const parsed = setLaunchOnLoginSchema.parse(input);
-  if (!IS_TAURI && !IS_TEST) return toDisabledSettings();
+  if (isBrowserPreview()) throw new DesktopRequiredError("plugin:autostart");
 
   const autostart = await getAutostartApi();
   try {
