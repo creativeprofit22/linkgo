@@ -1,0 +1,2 @@
+# Keep LF on every platform so Prettier/rustfmt checks match on Windows CI.
+* text=auto eol=lf
