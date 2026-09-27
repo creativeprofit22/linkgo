@@ -23,11 +23,17 @@ export function SchedulerView(): React.ReactNode {
   } = useScheduler();
 
   const killSwitchEnabled = dashboard?.globalKillSwitchEnabled === true;
+  // The saved flag says the operator wanted the scheduler on, but the worker
+  // is not running: Linkgo restarted (quit, crash, forced kill) and never
+  // auto-starts it.
+  const interrupted = status?.enabled === true && !status.running && !ticking;
   const statusLabel = ticking
     ? "Ticking"
     : status?.running
       ? "Running"
-      : "Stopped";
+      : interrupted
+        ? "Stopped after restart"
+        : "Stopped";
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -105,6 +111,21 @@ export function SchedulerView(): React.ReactNode {
             >
               Retry
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {interrupted && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent role="status" className="flex items-start gap-3 p-4">
+            <AlertCircle className="mt-0.5 size-5 text-amber-600" />
+            <div>
+              <p className="font-medium">Scheduler stopped after restart</p>
+              <p className="text-muted-foreground text-sm">
+                The scheduler was on before Linkgo last closed. Check Safety for
+                any publish marked outcome unknown, then press Start scheduler.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}

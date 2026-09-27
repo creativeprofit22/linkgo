@@ -20892,6 +20892,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return Promise.resolve(runAutopilotPlannerTickMock());
       }
       if (cmd === "linkgo_scheduler_status") {
+        // Simulates a Linkgo restart after the operator had started the
+        // scheduler: the saved flag stays on, but the worker is not running.
+        if (w.__LINKGO_SCHEDULER_SIMULATE_RESTART__ === true) {
+          w.__LINKGO_SCHEDULER_SIMULATE_RESTART__ = false;
+          schedulerSettings.enabled = 1;
+          schedulerSettings.updated_at = getNow();
+          schedulerRunning = false;
+        }
         return Promise.resolve(schedulerStatusPayload());
       }
       if (cmd === "linkgo_scheduler_start") {

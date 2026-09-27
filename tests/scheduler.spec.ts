@@ -14,6 +14,36 @@ test("starts the scheduler from the Scheduler tab", async ({ page }) => {
   await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Start scheduler" }).click();
   await expect(page.getByText("Running", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stopped after restart")).toHaveCount(0);
+});
+
+test("flags a scheduler that was on before Linkgo restarted", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    (
+      window as unknown as Record<string, unknown>
+    ).__LINKGO_SCHEDULER_SIMULATE_RESTART__ = true;
+  });
+  await openScheduler(page);
+
+  await expect(
+    page.getByText("Stopped after restart", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Stopped", { exact: true })).toHaveCount(0);
+  const notice = page
+    .getByRole("status")
+    .filter({ hasText: "Scheduler stopped after restart" });
+  await expect(notice).toContainText(
+    "Check Safety for any publish marked outcome unknown",
+  );
+  const startButton = page.getByRole("button", { name: "Start scheduler" });
+  await expect(startButton).toBeEnabled();
+
+  await startButton.click();
+  await expect(page.getByText("Running", { exact: true })).toBeVisible();
+  await expect(notice).toHaveCount(0);
 });
 
 test("runs a due scheduled post and records a successful publish", async ({

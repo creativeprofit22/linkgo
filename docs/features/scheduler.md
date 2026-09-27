@@ -97,12 +97,33 @@ Kill switch block:
 
 The Scheduler tab shows:
 
-- Status: `Stopped`, `Running`, or `Ticking`.
+- Status: `Stopped`, `Stopped after restart`, `Running`, or `Ticking`.
 - Start scheduler, stop scheduler, run due jobs now, and refresh controls.
 - A kill-switch banner when global safety is enabled.
 - Due and pending schedule cards.
 - Recent scheduler events.
 - Scheduler-linked publish attempts.
+
+## Restart and crash behavior
+
+The saved `enabled` flag records the operator's last choice (it changes only when the operator presses Start or Stop), but Linkgo does **not** start the worker on launch. If the scheduler was on before a restart — tray Quit, crash or forced kill — status reads `enabled: true, running: false` until the operator presses Start again. A scheduler that was stopped before the restart reads `enabled: false, running: false`. Power loss is expected to behave the same as a forced kill but is untested.
+
+On startup Linkgo only runs the recovery sweep, which never contacts LinkedIn. The same sweep runs again whenever **Safety** lists open publishes. An execution is **stale** when it has had no update for 10 minutes (`STALE_EXECUTION_SECONDS`); the sweep only touches stale executions:
+
+- a stale `reserved` execution (never sent) is released as `abandoned`, and its job stays retryable;
+- a stale `in_flight` execution (may have reached LinkedIn) becomes `outcome_unknown` and is never retried automatically.
+
+An execution interrupted less than 10 minutes before Linkgo restarted is not stale yet, so it still shows as in progress rather than outcome unknown. Its lease still blocks a duplicate publish with the same idempotency key.
+
+The Scheduler tab makes this visible: when status is `enabled: true, running: false`, the status card reads **Stopped after restart** and a notice says the scheduler was on before Linkgo last closed and asks the operator to check Safety before pressing Start scheduler. Nothing starts automatically; the notice clears once the operator starts or stops the scheduler.
+
+Operator recovery after a restart:
+
+1. Open **Safety** and reconcile every publish marked outcome unknown: check LinkedIn, then choose Posted (with the URL) or Not posted and type the confirmation. If Linkgo restarted less than 10 minutes after the interruption, a publish may still show as in progress; wait and reopen Safety before pressing Start.
+2. Review due jobs on the Scheduler screen.
+3. Press Start.
+
+Verified on the packaged Windows build with a hard kill (`docs/verification/2026-09-27-desktop-release-candidate.md`).
 
 ## Explicit exclusions
 
