@@ -36,7 +36,7 @@ provider endpoints**. None of the findings below is an anonymous remote exploit.
 | Redirects "to assess"                                | CODE: transports used `reqwest::blocking::Client::new()` → `Policy::limited(10)`. reqwest 0.12 strips only `Authorization`/`Cookie`/`Proxy-Authorization`/`WWW-Authenticate` on cross-host redirects, so Anthropic's `x-api-key` survived; 307/308 replay the body.                                | **New finding, fixed** — redirects disabled.                                                   |
 | (new) Unbounded responses                            | CODE: `response.json()`/`.text()` read whole bodies (agent runtime, LinkedIn API); provider error messages returned uncapped.                                                                                                                                                                      | **Confirmed (memory/UI DoS by a hostile endpoint), fixed** — bounded reads + truncated errors. |
 | Plaintext credential fallback                        | CODE: file fallback only when `LINKGO_CREDENTIAL_FILE_FALLBACK` is set (`storage.rs`).                                                                                                                                                                                                             | **Downgraded** — opt-in developer escape hatch; keyring is the default. Kept and documented.   |
-| Lockfile advisories                                  | Lockfile-only matches are not proof of reachable runtime code.                                                                                                                                                                                                                                     | **Downgraded** — tracked by the dependency-risk phase.                                         |
+| Lockfile advisories                                  | Lockfile-only matches are not proof of reachable runtime code.                                                                                                                                                                                                                                     | **Downgraded** — resolved 2026-09-26 in `dependency-risk.md` (upgrades + dated exceptions).    |
 
 ## Controls after this phase
 
@@ -78,5 +78,6 @@ The review did not include a live proxy or NAT64 reproduction. A desktop ACL/CSP
   do not enforce ACL. Automated coverage is Rust-level (manifest/capability drift
   tests) plus a manual desktop probe — see the verification section of
   `capability-matrix.md`.
-- Not covered: full git-history secret scan, dependency advisories (separate phase),
+- Dependency advisories and a full git-history secret scan are now covered by the
+  CI `supply-chain` job (2026-09-26; see `dependency-risk.md`). Not covered:
   OS-level malware with same-user access to the keyring.
