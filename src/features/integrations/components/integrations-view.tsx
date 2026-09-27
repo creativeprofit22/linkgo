@@ -3,8 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProviderLoginDialog } from "@/features/integrations/components/provider-login-dialog";
+import { isAutoRenewingAiSignIn } from "@/features/integrations/account-renewal";
 import { useIntegrations } from "@/features/integrations/hooks/use-integrations";
 import type {
+  AuthProgressEvent,
   AuthProvider,
   ConnectedAccount,
   ConnectedAccountStatus,
@@ -30,6 +32,7 @@ export function IntegrationsView(): React.ReactNode {
     saveKey,
     beginOAuth,
     submitCode,
+    cancelSignIn,
     disconnect,
     check,
   } = useIntegrations();
@@ -113,8 +116,14 @@ export function IntegrationsView(): React.ReactNode {
                 onSaveKey={saveKey}
                 onStartOAuth={beginOAuth}
                 onSubmitCode={submitCode}
+                onCancelSignIn={cancelSignIn}
                 onDisconnect={disconnect}
                 onCheck={check}
+                progressEvent={
+                  progressEvents.find(
+                    (event) => event.providerKey === provider.key,
+                  ) ?? null
+                }
                 desktopRequired={desktopRequiredMessage !== null}
               />
             ))}
@@ -157,8 +166,10 @@ function ProviderCard({
   onSaveKey,
   onStartOAuth,
   onSubmitCode,
+  onCancelSignIn,
   onDisconnect,
   onCheck,
+  progressEvent,
   desktopRequired,
 }: {
   provider: AuthProvider;
@@ -170,14 +181,19 @@ function ProviderCard({
   onSubmitCode: React.ComponentProps<
     typeof ProviderLoginDialog
   >["onSubmitCode"];
+  onCancelSignIn: React.ComponentProps<
+    typeof ProviderLoginDialog
+  >["onCancelSignIn"];
   onDisconnect: React.ComponentProps<
     typeof ProviderLoginDialog
   >["onDisconnect"];
+  progressEvent: AuthProgressEvent | null;
   onCheck: React.ComponentProps<typeof ProviderLoginDialog>["onCheck"];
   desktopRequired: boolean;
 }): React.ReactNode {
   const status = account?.status ?? "disconnected";
-  const connected = status === "connected";
+  const renewing = account !== null && isAutoRenewingAiSignIn(account);
+  const connected = status === "connected" || renewing;
 
   return (
     <Card className="bg-card/70">
@@ -191,7 +207,7 @@ function ProviderCard({
           </div>
           <Badge variant={connected ? "secondary" : "outline"}>
             {connected && <ShieldCheck className="mr-1 size-3" />}
-            {statusLabels[status]}
+            {renewing ? "Renews on next run" : statusLabels[status]}
           </Badge>
         </div>
         <div className="text-muted-foreground text-xs">
@@ -200,6 +216,19 @@ function ProviderCard({
             ? ` · Scopes: ${provider.scopes.join(" ")}`
             : ""}
         </div>
+        {account?.auth_method === "oauth" &&
+          account.provider_key !== "linkedin" && (
+            <p className="text-muted-foreground text-xs">
+              Signed in with account
+              {account.account_label ? ` · ${account.account_label}` : ""}
+            </p>
+          )}
+        {renewing && (
+          <p className="text-muted-foreground text-xs">
+            Access token expired; it renews automatically when the next agent
+            run starts. No action needed.
+          </p>
+        )}
         {account?.last_error && (
           <p className="text-destructive text-sm">{account.last_error}</p>
         )}
@@ -210,8 +239,10 @@ function ProviderCard({
             onSaveKey={onSaveKey}
             onStartOAuth={onStartOAuth}
             onSubmitCode={onSubmitCode}
+            onCancelSignIn={onCancelSignIn}
             onDisconnect={onDisconnect}
             onCheck={onCheck}
+            progressEvent={progressEvent}
             disabled={desktopRequired}
             disabledReasonId="integrations-desktop-required"
           />

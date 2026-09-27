@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAgentModelDefaults } from "@/hooks/use-agent-model-defaults";
 import type { AgentPlaybookKey } from "@/agent/playbooks";
 import type { AgentProviderKey } from "@/agent/types";
 import type { CandidateWithTarget } from "@/features/candidate-queue/types";
@@ -117,6 +118,7 @@ export function GenerateDraftDialog({
 }: GenerateDraftDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const defaultModelFor = useAgentModelDefaults();
   const candidateOptions = useMemo(
     () =>
       selectedCampaignArchived
@@ -225,7 +227,7 @@ export function GenerateDraftDialog({
                   setForm((current) => ({
                     ...current,
                     providerKey,
-                    modelName: DEFAULT_AGENT_MODELS[providerKey],
+                    modelName: defaultModelFor(providerKey),
                   }));
                 }}
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"

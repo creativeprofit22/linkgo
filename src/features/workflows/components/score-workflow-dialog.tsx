@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import {
   AGENT_PROVIDER_KEYS,
   AGENT_PROVIDER_LABELS,
-  DEFAULT_AGENT_MODELS,
   type AgentProviderKey,
 } from "@/agent";
+import { defaultAgentModelFor } from "@/agent/provider-catalog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -66,7 +66,7 @@ export function ScoreWorkflowDialog({
   const [modelName, setModelName] = useState(
     connectedProviders[0] === undefined
       ? ""
-      : DEFAULT_AGENT_MODELS[connectedProviders[0]],
+      : defaultAgentModelFor(connectedProviders[0], connectedAccounts),
   );
   const [minimumScore, setMinimumScore] = useState(60);
   const [autoRejectBelowMinimum, setAutoRejectBelowMinimum] = useState(false);
@@ -81,9 +81,11 @@ export function ScoreWorkflowDialog({
     const nextProvider = connectedProviders[0] ?? null;
     setProviderKey(nextProvider);
     setModelName(
-      nextProvider === null ? "" : DEFAULT_AGENT_MODELS[nextProvider],
+      nextProvider === null
+        ? ""
+        : defaultAgentModelFor(nextProvider, connectedAccounts),
     );
-  }, [connectedProviders, providerKey]);
+  }, [connectedAccounts, connectedProviders, providerKey]);
 
   async function handleSubmit(
     event: React.SyntheticEvent<HTMLFormElement>,
@@ -177,7 +179,9 @@ export function ScoreWorkflowDialog({
                     const nextProvider = event.target
                       .value as ConnectedProviderKey;
                     setProviderKey(nextProvider);
-                    setModelName(DEFAULT_AGENT_MODELS[nextProvider]);
+                    setModelName(
+                      defaultAgentModelFor(nextProvider, connectedAccounts),
+                    );
                   }}
                   disabled={connectedProviders.length === 0 || pending}
                   aria-describedby={`score-provider-help-${run.id}`}

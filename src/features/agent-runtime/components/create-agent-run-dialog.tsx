@@ -17,12 +17,12 @@ import {
   AGENT_PROVIDER_KEYS,
   AGENT_PROVIDER_LABELS,
   AGENT_ROLES,
-  DEFAULT_AGENT_MODELS,
   getDefaultPlaybookForRole,
   type AgentPlaybookKey,
   type AgentProviderKey,
   type AgentRole,
 } from "@/agent";
+import { defaultAgentModelFor } from "@/agent/provider-catalog";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import { isAgentProviderReady } from "@/features/agent-runtime/provider-readiness";
 import type { CreateAgentRunInput } from "@/features/agent-runtime/types";
@@ -262,7 +262,9 @@ export function CreateAgentRunDialog({
               onChange={(event) => {
                 const nextProvider = event.target.value as AgentProviderKey;
                 setProviderKey(nextProvider);
-                setModelName(DEFAULT_AGENT_MODELS[nextProvider]);
+                setModelName(
+                  defaultAgentModelFor(nextProvider, connectedAccounts),
+                );
               }}
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >

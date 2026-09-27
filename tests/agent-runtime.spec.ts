@@ -827,6 +827,70 @@ test("starts an Anthropic provider-backed run through the native command boundar
   expect(JSON.stringify(commandArgs)).not.toContain("sk-ant-test-key");
 });
 
+test("starts an OpenAI run after the account sign-in access token expired", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await installSuccessfulContinuationProvider(page, "OpenAI renewed run.");
+  await signInOpenAiAccount(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await setOpenAiSignInState(page, "expired");
+
+  await openAgentRuntime(page);
+  await createProviderRun(page, "openai");
+  await page.getByRole("button", { name: "Start OpenAI" }).click();
+
+  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(page.getByText("OpenAI renewed run.").first()).toBeVisible();
+  await expect(page.getByText("Agent provider is not connected")).toHaveCount(
+    0,
+  );
+});
+
+test("keeps a revoked OpenAI account sign-in blocked as not connected", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await installSuccessfulContinuationProvider(page, "Must not run.");
+  await signInOpenAiAccount(page);
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await createCampaign(page);
+  await openAgentRuntime(page);
+  await createProviderRun(page, "openai");
+
+  await setOpenAiSignInState(page, "reauth_required");
+  const message = await page.evaluate(async () => {
+    const start = (
+      window as unknown as {
+        __LINKGO_AGENT_RUNTIME_TEST_API__?: {
+          startAgentRun: (input: { id: number }) => Promise<void>;
+        };
+      }
+    ).__LINKGO_AGENT_RUNTIME_TEST_API__?.startAgentRun;
+    if (!start) return "Agent runtime test API was not initialized";
+    try {
+      await start({ id: 1 });
+      return "";
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  });
+  expect(message).toBe("Agent provider is not connected");
+  expect((await getAgentRuns(page))[0]?.status).not.toBe("completed");
+
+  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openAgentRuntime(page);
+  await page.getByRole("button", { name: "Create run" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Create agent run" });
+  await dialog.getByLabel("Provider").selectOption("openai");
+  await expect(
+    dialog.getByText(
+      "Connect OpenAI in Integrations before creating this run.",
+    ),
+  ).toBeVisible();
+});
+
 test("selects the LinkedIn writer playbook for drafter runs", async ({
   page,
 }) => {
@@ -1788,6 +1852,46 @@ async function connectCustomProvider(page: Page): Promise<void> {
   await expect(page.getByText("Connected").first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+}
+
+async function signInOpenAiAccount(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  const openAiCard = page
+    .getByText("OpenAI", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+  await openAiCard.getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "OpenAI connection" });
+  await dialog.getByRole("button", { name: "Account sign-in" }).click();
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with OpenAI account" })
+    .click();
+  await page.evaluate(() =>
+    (
+      window as unknown as { __LINKGO_AUTH_LOOPBACK_DONE__: () => void }
+    ).__LINKGO_AUTH_LOOPBACK_DONE__(),
+  );
+  await expect(dialog.getByText("Signed in with OpenAI account")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+}
+
+async function setOpenAiSignInState(
+  page: Page,
+  state: "expired" | "reauth_required",
+): Promise<void> {
+  await page.evaluate((nextState) => {
+    const hooks = window as unknown as {
+      __LINKGO_AUTH_EXPIRE_SIGN_IN__: (key: string) => void;
+      __LINKGO_AUTH_REQUIRE_REAUTH__: (key: string, error: string) => void;
+    };
+    if (nextState === "expired") hooks.__LINKGO_AUTH_EXPIRE_SIGN_IN__("openai");
+    else
+      hooks.__LINKGO_AUTH_REQUIRE_REAUTH__(
+        "openai",
+        "Sign-in expired or was revoked; reconnect this provider",
+      );
+  }, state);
 }
 
 async function installMixedApprovalTurnProvider(

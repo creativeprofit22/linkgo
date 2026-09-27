@@ -1,4 +1,5 @@
 import {
+  CHATGPT_PLAN_MODELS,
   DEFAULT_AGENT_MODELS,
   PROVIDER_LABELS,
 } from "@/agent/provider-catalog";
@@ -10,7 +11,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
     label: PROVIDER_LABELS.anthropic,
     description:
       "Claude provider credentials for GG AI-backed agent execution.",
-    methods: ["api_key"],
+    methods: ["api_key", "oauth"],
     defaultMethod: "api_key",
     scopes: [],
     models: [DEFAULT_AGENT_MODELS.anthropic],
@@ -32,10 +33,10 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
     key: "openai",
     label: PROVIDER_LABELS.openai,
     description: "OpenAI credentials for GG AI-backed agent execution.",
-    methods: ["api_key"],
+    methods: ["api_key", "oauth"],
     defaultMethod: "api_key",
     scopes: [],
-    models: [DEFAULT_AGENT_MODELS.openai, "gpt-4.1"],
+    models: [DEFAULT_AGENT_MODELS.openai, "gpt-4.1", ...CHATGPT_PLAN_MODELS],
     secretLabel: "OpenAI API key",
     docsUrl: "https://platform.openai.com/docs",
   },

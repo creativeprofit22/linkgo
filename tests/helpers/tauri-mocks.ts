@@ -9911,7 +9911,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         key === "custom"
           ? "Linkgo-only OpenAI-compatible endpoint for custom GG AI execution."
           : `${label} credentials for GG AI-backed agent execution.`,
-      methods: ["api_key"],
+      methods:
+        key === "openai" || key === "anthropic"
+          ? ["api_key", "oauth"]
+          : ["api_key"],
       defaultMethod: "api_key",
       scopes: [],
       models: [model],
@@ -9977,6 +9980,100 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         throw new Error("Connected account unavailable");
       account.status = "reauth_required";
       account.last_error = lastError;
+    };
+
+    // Mirrors native safe_status once an account sign-in access token is
+    // within 60s of expiry (refresh token still valid).
+    w.__LINKGO_AUTH_EXPIRE_SIGN_IN__ = (providerKey: string): void => {
+      const account = connectedAccounts.find(
+        (candidate) => candidate.provider_key === providerKey,
+      );
+      if (account === undefined)
+        throw new Error("Connected account unavailable");
+      account.status = "expired";
+      account.expires_at = String(Math.floor(Date.now() / 1000) - 60);
+    };
+
+    // Auth progress listeners for `linkgo://auth-progress` (mirrors the
+    // native event emitted when the OpenAI loopback sign-in completes).
+    const authProgressListeners: ((event: { payload: unknown }) => void)[] = [];
+    w.__TAURI__ = {
+      event: {
+        listen: (
+          name: string,
+          handler: (event: { payload: unknown }) => void,
+        ): Promise<() => void> => {
+          if (name !== "linkgo://auth-progress")
+            return Promise.resolve(() => undefined);
+          authProgressListeners.push(handler);
+          return Promise.resolve(() => {
+            const index = authProgressListeners.indexOf(handler);
+            if (index >= 0) authProgressListeners.splice(index, 1);
+          });
+        },
+      },
+    };
+    const aiOAuthCalls: { cmd: string; input: Record<string, unknown> }[] = [];
+    w.__LINKGO_AI_OAUTH_CALLS__ = aiOAuthCalls;
+    function connectAiAccount(providerKey: string): void {
+      const provider = authProviders.find(
+        (candidate) => candidate.key === providerKey,
+      );
+      removeRows(
+        connectedAccounts,
+        (account) => account.provider_key === providerKey,
+      );
+      connectedAccounts.push({
+        id: connectedAccounts.length + 1,
+        provider_key: providerKey,
+        provider_label: provider?.label ?? providerKey,
+        auth_method: "oauth",
+        status: "connected",
+        scopes: "",
+        account_label: `${providerKey}-user@example.com`,
+        account_id: "acct-1",
+        expires_at: String(Math.floor(Date.now() / 1000) + 3600),
+        refresh_expires_at: null,
+        has_base_url_override: false,
+        last_checked_at: getNow(),
+        last_error: "",
+        created_at: getNow(),
+        updated_at: getNow(),
+      });
+      delete providerSecrets[providerKey];
+    }
+    // Seeds a connected AI account directly, via account sign-in ("oauth")
+    // or a saved API key, without driving the Settings UI.
+    w.__LINKGO_AUTH_SEED_AI_ACCOUNT__ = (
+      providerKey: string,
+      authMethod: "oauth" | "api_key",
+    ): void => {
+      connectAiAccount(providerKey);
+      if (authMethod === "oauth") return;
+      const account = connectedAccounts.find(
+        (candidate) => candidate.provider_key === providerKey,
+      );
+      if (account === undefined)
+        throw new Error("Connected account unavailable");
+      account.auth_method = "api_key";
+      account.account_label = `${String(account.provider_label)} account`;
+      account.account_id = "";
+      account.expires_at = null;
+      providerSecrets[providerKey] = { apiKey: "sk-seeded-test-key" };
+    };
+    // Simulates the native loopback listener finishing sign-in.
+    w.__LINKGO_AUTH_LOOPBACK_DONE__ = (providerKey = "openai"): void => {
+      connectAiAccount(providerKey);
+      for (const listener of [...authProgressListeners]) {
+        listener({
+          payload: {
+            providerKey,
+            status: "auth_done",
+            summary: "OpenAI account connected",
+            authUrl: null,
+          },
+        });
+      }
     };
 
     function nativeScoringInput<T>(args?: unknown): T {
@@ -20566,6 +20663,27 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return Promise.resolve(getAuthStatusMock());
       }
       if (cmd === "linkgo_auth_oauth_start") {
+        const input =
+          (args as { input?: Record<string, unknown> } | undefined)?.input ??
+          {};
+        const providerKey = String(input.providerKey ?? "linkedin");
+        if (providerKey === "openai" || providerKey === "anthropic") {
+          aiOAuthCalls.push({ cmd, input });
+          if (input.acknowledgeTermsRisk !== true) {
+            throw new Error(
+              "Tick the acknowledgement before signing in with an AI provider account",
+            );
+          }
+          return Promise.resolve({
+            providerKey,
+            authUrl:
+              providerKey === "openai"
+                ? "https://auth.openai.com/oauth/authorize?state=ai-state"
+                : "https://claude.ai/oauth/authorize?code=true&state=ai-state",
+            state: "ai-state",
+            needsCode: providerKey === "anthropic",
+          });
+        }
         return Promise.resolve({
           providerKey: "linkedin",
           authUrl:
@@ -20574,7 +20692,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           needsCode: true,
         });
       }
+      if (cmd === "linkgo_auth_oauth_cancel") {
+        const input =
+          (args as { input?: Record<string, unknown> } | undefined)?.input ??
+          {};
+        aiOAuthCalls.push({ cmd, input });
+        return Promise.resolve(getAuthStatusMock());
+      }
       if (cmd === "linkgo_auth_oauth_code") {
+        const input =
+          (args as { input?: Record<string, unknown> } | undefined)?.input ??
+          {};
+        const providerKey = String(input.providerKey ?? "linkedin");
+        if (providerKey === "openai" || providerKey === "anthropic") {
+          aiOAuthCalls.push({ cmd, input });
+          if (!String(input.code ?? "").includes("ai-state")) {
+            throw new Error("Sign-in state did not match; restart sign-in");
+          }
+          connectAiAccount(providerKey);
+          return Promise.resolve(getAuthStatusMock());
+        }
         connectedAccounts.push({
           id: connectedAccounts.length + 1,
           provider_key: "linkedin",
@@ -20829,8 +20966,27 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               | undefined
           )?.input ?? {};
         const providerKey = input.providerKey ?? "openai";
-        const secret = providerSecrets[providerKey];
-        if (secret === undefined) throw new Error("Provider is not connected");
+        const oauthAccount = connectedAccounts.find(
+          (account) =>
+            account.provider_key === providerKey &&
+            account.auth_method === "oauth" &&
+            providerKey !== "linkedin",
+        );
+        if (oauthAccount !== undefined) {
+          // Mirrors native execute_with_oauth: refresh an expired access
+          // token first; a revoked sign-in fails with the reconnect error.
+          if (oauthAccount.status === "reauth_required") {
+            throw new Error("Sign-in expired or was revoked; reconnect");
+          }
+          if (oauthAccount.status === "expired") {
+            oauthAccount.status = "connected";
+            oauthAccount.expires_at = String(
+              Math.floor(Date.now() / 1000) + 3600,
+            );
+          }
+        } else if (providerSecrets[providerKey] === undefined) {
+          throw new Error("Provider is not connected");
+        }
         const testApi = (
           w as unknown as {
             __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {

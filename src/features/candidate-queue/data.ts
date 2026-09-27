@@ -38,7 +38,7 @@ import {
   type ScoreRelevanceOutput,
 } from "@/agent/schemas";
 import type { AgentToolExecutionContext } from "@/agent/types";
-import { DEFAULT_AGENT_MODELS } from "@/agent/provider-catalog";
+import { resolveDefaultAgentModel } from "@/features/integrations/data";
 import { applyNativeRelevanceScores } from "@/workflows/relevance-scoring-commands";
 
 interface TargetPostRow {
@@ -228,7 +228,8 @@ export async function runCandidateDiscovery(
   const seedKeywords =
     parsed.seedKeywords.length > 0 ? parsed.seedKeywords : context.seedKeywords;
   const providerKey = parsed.providerKey;
-  const modelName = parsed.modelName || DEFAULT_AGENT_MODELS[providerKey];
+  const modelName =
+    parsed.modelName || (await resolveDefaultAgentModel(providerKey));
   const inputSummary = [
     "Run operator-triggered local discovery for the Candidate Queue.",
     `Seed keywords: ${seedKeywords.join(", ") || "campaign context"}.`,
@@ -258,7 +259,8 @@ export async function scoreCandidates(
       ? parsed.candidatePostIds
       : context.scoringCandidateIds;
   const providerKey = parsed.providerKey;
-  const modelName = parsed.modelName || DEFAULT_AGENT_MODELS[providerKey];
+  const modelName =
+    parsed.modelName || (await resolveDefaultAgentModel(providerKey));
   const inputSummary = [
     "Score operator-selected Candidate Queue posts.",
     `Candidate IDs: ${candidatePostIds.join(", ") || "none"}.`,

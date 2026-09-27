@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAgentModelDefaults } from "@/hooks/use-agent-model-defaults";
 import {
   AGENT_PROVIDER_KEYS,
   DEFAULT_AGENT_MODELS,
@@ -97,12 +98,13 @@ export function RunCandidateDiscoveryDialog({
   }, [campaign, open]);
 
   const providerOptions = useMemo(() => [...AGENT_PROVIDER_KEYS], []);
+  const defaultModelFor = useAgentModelDefaults();
 
   const updateProvider = (providerKey: AgentProviderKey): void => {
     setForm((current) => ({
       ...current,
       providerKey,
-      modelName: DEFAULT_AGENT_MODELS[providerKey],
+      modelName: defaultModelFor(providerKey),
     }));
   };
 

@@ -326,3 +326,295 @@ test("offers local consent when the native policy flags a Base URL the renderer 
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Provider connected")).toBeVisible();
 });
+
+function aiCard(
+  page: import("@playwright/test").Page,
+  label: "OpenAI" | "Anthropic",
+): import("@playwright/test").Locator {
+  return page
+    .getByText(label, { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
+}
+
+async function openAccountSignIn(
+  page: import("@playwright/test").Page,
+  label: "OpenAI" | "Anthropic",
+): Promise<import("@playwright/test").Locator> {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  await aiCard(page, label).getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: `${label} connection` });
+  await dialog.getByRole("button", { name: "Account sign-in" }).click();
+  return dialog;
+}
+
+async function aiOAuthCalls(
+  page: import("@playwright/test").Page,
+): Promise<{ cmd: string; input: Record<string, unknown> }[]> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __LINKGO_AI_OAUTH_CALLS__: {
+            cmd: string;
+            input: Record<string, unknown>;
+          }[];
+        }
+      ).__LINKGO_AI_OAUTH_CALLS__,
+  );
+}
+
+for (const label of ["OpenAI", "Anthropic"] as const) {
+  test(`${label} account sign-in stays locked until the risk is acknowledged`, async ({
+    page,
+  }) => {
+    const dialog = await openAccountSignIn(page, label);
+    const start = dialog.getByRole("button", {
+      name: `Sign in with ${label} account`,
+    });
+    await expect(dialog.getByText(/terms|third-party/i).first()).toBeVisible();
+    await expect(start).toBeDisabled();
+    expect(await aiOAuthCalls(page)).toEqual([]);
+
+    await dialog.getByLabel(/I understand the risk/).check();
+    await expect(start).toBeEnabled();
+  });
+}
+
+test("Anthropic paste flow connects and signs out without showing tokens", async ({
+  page,
+}) => {
+  const dialog = await openAccountSignIn(page, "Anthropic");
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with Anthropic account" })
+    .click();
+
+  await expect(
+    dialog.getByRole("link", { name: /Open Anthropic sign-in page/ }),
+  ).toBeVisible();
+  await expect(dialog.getByText("Waiting for the browser")).toBeHidden();
+  await dialog.getByLabel("Sign-in code").fill("pasted-code#ai-state");
+  await dialog.getByRole("button", { name: "Finish sign-in" }).click();
+
+  const calls = await aiOAuthCalls(page);
+  expect(calls[0]).toEqual({
+    cmd: "linkgo_auth_oauth_start",
+    input: { providerKey: "anthropic", acknowledgeTermsRisk: true },
+  });
+  expect(calls[1]?.input).toMatchObject({
+    providerKey: "anthropic",
+    code: "pasted-code#ai-state",
+    state: "ai-state",
+  });
+
+  await expect(
+    dialog.getByText("Signed in with Anthropic account"),
+  ).toBeVisible();
+  await expect(aiCard(page, "Anthropic").getByText("Connected")).toBeVisible();
+  await dialog.getByRole("button", { name: "Sign out" }).click();
+  await expect(
+    aiCard(page, "Anthropic").getByText("Disconnected"),
+  ).toBeVisible();
+});
+
+test("OpenAI loopback completion event marks the account connected", async ({
+  page,
+}) => {
+  const dialog = await openAccountSignIn(page, "OpenAI");
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with OpenAI account" })
+    .click();
+  await expect(
+    dialog.getByText("Waiting for the browser to finish sign-in…"),
+  ).toBeVisible();
+  await expect(
+    dialog.getByLabel("Or paste the callback address"),
+  ).toBeVisible();
+
+  await page.evaluate(() =>
+    (
+      window as unknown as { __LINKGO_AUTH_LOOPBACK_DONE__: () => void }
+    ).__LINKGO_AUTH_LOOPBACK_DONE__(),
+  );
+
+  await expect(aiCard(page, "OpenAI").getByText("Connected")).toBeVisible();
+  await expect(
+    dialog.getByText("Waiting for the browser to finish sign-in…"),
+  ).toBeHidden();
+  await expect(dialog.getByText("Signed in with OpenAI account")).toBeVisible();
+});
+
+test("cancelling OpenAI sign-in stops waiting and tells native code", async ({
+  page,
+}) => {
+  const dialog = await openAccountSignIn(page, "OpenAI");
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with OpenAI account" })
+    .click();
+  await dialog.getByRole("button", { name: "Cancel sign-in" }).click();
+
+  await expect(
+    dialog.getByText("Waiting for the browser to finish sign-in…"),
+  ).toBeHidden();
+  await expect(
+    dialog.getByRole("button", { name: "Sign in with OpenAI account" }),
+  ).toBeVisible();
+  const calls = await aiOAuthCalls(page);
+  expect(calls.at(-1)).toEqual({
+    cmd: "linkgo_auth_oauth_cancel",
+    input: { providerKey: "openai" },
+  });
+  await expect(aiCard(page, "OpenAI").getByText("Disconnected")).toBeVisible();
+});
+
+test("closing the dialog mid OpenAI sign-in cancels the native flow", async ({
+  page,
+}) => {
+  const dialog = await openAccountSignIn(page, "OpenAI");
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with OpenAI account" })
+    .click();
+  await expect(
+    dialog.getByText("Waiting for the browser to finish sign-in…"),
+  ).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await expect
+    .poll(async () => (await aiOAuthCalls(page)).at(-1))
+    .toEqual({
+      cmd: "linkgo_auth_oauth_cancel",
+      input: { providerKey: "openai" },
+    });
+});
+
+test("shows reconnect-needed state for a revoked AI sign-in", async ({
+  page,
+}) => {
+  const dialog = await openAccountSignIn(page, "OpenAI");
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with OpenAI account" })
+    .click();
+  await dialog
+    .getByLabel("Or paste the callback address")
+    .fill("http://localhost:1455/auth/callback?code=c&state=ai-state");
+  await dialog.getByRole("button", { name: "Finish sign-in" }).click();
+  await expect(aiCard(page, "OpenAI").getByText("Connected")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __LINKGO_AUTH_REQUIRE_REAUTH__: (key: string, error: string) => void;
+      }
+    ).__LINKGO_AUTH_REQUIRE_REAUTH__(
+      "openai",
+      "Sign-in expired or was revoked; reconnect this provider",
+    ),
+  );
+  await page.getByRole("button", { name: "Refresh" }).click();
+  const card = aiCard(page, "OpenAI");
+  await expect(card.getByText("Reauth required")).toBeVisible();
+  await expect(
+    card.getByText("Sign-in expired or was revoked; reconnect this provider"),
+  ).toBeVisible();
+  await card.getByRole("button", { name: "Connect" }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "OpenAI connection" })
+      .getByText(/Reconnect needed/),
+  ).toBeVisible();
+});
+
+test("expired AI sign-in access token shows automatic renewal, not reconnect", async ({
+  page,
+}) => {
+  const dialog = await openAccountSignIn(page, "OpenAI");
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with OpenAI account" })
+    .click();
+  await page.evaluate(() =>
+    (
+      window as unknown as { __LINKGO_AUTH_LOOPBACK_DONE__: () => void }
+    ).__LINKGO_AUTH_LOOPBACK_DONE__(),
+  );
+  await expect(aiCard(page, "OpenAI").getByText("Connected")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __LINKGO_AUTH_EXPIRE_SIGN_IN__: (key: string) => void;
+      }
+    ).__LINKGO_AUTH_EXPIRE_SIGN_IN__("openai"),
+  );
+  await page.getByRole("button", { name: "Refresh" }).click();
+  const card = aiCard(page, "OpenAI");
+  await expect(card.getByText("Renews on next run")).toBeVisible();
+  await expect(card.getByText(/renews automatically/)).toBeVisible();
+  await expect(card.getByText(/reconnect/i)).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Connect" })).toHaveCount(0);
+
+  await card.getByRole("button", { name: "Manage" }).click();
+  const manage = page.getByRole("dialog", { name: "OpenAI connection" });
+  await expect(
+    manage.getByText(/access renews automatically on the next agent run/),
+  ).toBeVisible();
+  await expect(manage.getByText(/Reconnect needed/)).toHaveCount(0);
+});
+
+test("confirms before sign-in replaces a saved API key and vice versa", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Integrations/ }).click();
+  await aiCard(page, "OpenAI").getByRole("button", { name: "Connect" }).click();
+  const dialog = page.getByRole("dialog", { name: "OpenAI connection" });
+
+  // API-key flow is unchanged and is the default method.
+  await dialog.getByLabel("OpenAI API key").fill("[REDACTED]");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(aiCard(page, "OpenAI").getByText("Connected")).toBeVisible();
+  await expect(page.getByText("[REDACTED]")).toBeHidden();
+
+  await dialog.getByRole("button", { name: "Account sign-in" }).click();
+  await dialog.getByLabel(/I understand the risk/).check();
+  await dialog
+    .getByRole("button", { name: "Sign in with OpenAI account" })
+    .click();
+  await expect(
+    dialog.getByText(/Signing in replaces the saved OpenAI API key/),
+  ).toBeVisible();
+  expect(await aiOAuthCalls(page)).toEqual([]);
+  await dialog
+    .getByRole("button", { name: "Replace API key and sign in" })
+    .click();
+  await expect(
+    dialog.getByText("Waiting for the browser to finish sign-in…"),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    (
+      window as unknown as { __LINKGO_AUTH_LOOPBACK_DONE__: () => void }
+    ).__LINKGO_AUTH_LOOPBACK_DONE__(),
+  );
+  await expect(dialog.getByText("Signed in with OpenAI account")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "API key", exact: true }).click();
+  await dialog.getByLabel("OpenAI API key").fill("[REDACTED]");
+  await dialog.getByRole("button", { name: "Save API key" }).click();
+  await expect(
+    dialog.getByText(/Saving a key signs you out of your OpenAI account/),
+  ).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Replace sign-in with API key" })
+    .click();
+  await expect(dialog.getByText("Signed in with OpenAI account")).toBeHidden();
+  await expect(aiCard(page, "OpenAI").getByText("Connected")).toBeVisible();
+});

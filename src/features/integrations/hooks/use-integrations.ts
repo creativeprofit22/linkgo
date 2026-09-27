@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  cancelOAuth,
   checkProvider,
   disconnectProvider,
   getAuthStatus,
@@ -31,6 +32,7 @@ interface UseIntegrationsState extends AuthStatus {
   saveKey: (input: SaveApiKeyInput) => Promise<void>;
   beginOAuth: (input: OAuthStartInput) => Promise<OAuthStartResult>;
   submitCode: (input: OAuthCodeInput) => Promise<void>;
+  cancelSignIn: (input: LogoutInput) => Promise<void>;
   disconnect: (input: LogoutInput) => Promise<void>;
   check: (input: LogoutInput) => Promise<void>;
 }
@@ -76,6 +78,17 @@ export function useIntegrations(): UseIntegrationsState {
     void subscribeToAuthProgress((event) => {
       if (!active) return;
       setProgressEvents((current) => [event, ...current].slice(0, 8));
+      // Loopback sign-in finishes natively; reload so the card reflects it.
+      if (event.status === "auth_done" || event.status === "auth_error") {
+        void (async () => {
+          try {
+            const next = await getAuthStatus();
+            if (active) setStatus(next);
+          } catch {
+            // The next manual refresh surfaces load errors.
+          }
+        })();
+      }
     }).then((unlisten) => {
       cleanup = unlisten;
     });
@@ -122,6 +135,17 @@ export function useIntegrations(): UseIntegrationsState {
     }
   }, []);
 
+  const cancelSignIn = useCallback(async (input: LogoutInput) => {
+    try {
+      setStatus(await cancelOAuth(input));
+    } catch (caught) {
+      toast.error("Sign-in was not cancelled", {
+        description: getErrorMessage(caught),
+      });
+      throw caught;
+    }
+  }, []);
+
   const disconnect = useCallback(async (input: LogoutInput) => {
     try {
       setStatus(await disconnectProvider(input));
@@ -156,6 +180,7 @@ export function useIntegrations(): UseIntegrationsState {
       saveKey,
       beginOAuth,
       submitCode,
+      cancelSignIn,
       disconnect,
       check,
     }),
@@ -169,6 +194,7 @@ export function useIntegrations(): UseIntegrationsState {
       saveKey,
       beginOAuth,
       submitCode,
+      cancelSignIn,
       disconnect,
       check,
     ],

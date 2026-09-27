@@ -75,10 +75,29 @@ export const saveApiKeySchema = z
     });
   });
 
-export const oauthStartSchema = z.object({
-  providerKey: authProviderKeySchema,
-  scopes: z.array(z.string().trim().min(1)).optional(),
-});
+export const oauthStartSchema = z
+  .object({
+    providerKey: authProviderKeySchema,
+    scopes: z.array(z.string().trim().min(1)).optional(),
+    acknowledgeTermsRisk: z.boolean().optional(),
+  })
+  .superRefine((input, context) => {
+    if (input.providerKey !== "openai" && input.providerKey !== "anthropic")
+      return;
+    if (input.scopes !== undefined && input.scopes.length > 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["scopes"],
+        message: "Scopes are fixed for OpenAI and Anthropic account sign-in",
+      });
+    }
+    if (input.acknowledgeTermsRisk === true) return;
+    context.addIssue({
+      code: "custom",
+      path: ["acknowledgeTermsRisk"],
+      message: "Acknowledge the account-sign-in risk before starting",
+    });
+  });
 
 export const oauthStartResultSchema = z.object({
   providerKey: authProviderKeySchema,
@@ -89,12 +108,16 @@ export const oauthStartResultSchema = z.object({
 
 export const oauthCodeSchema = z.object({
   providerKey: authProviderKeySchema,
-  code: z.string().trim().min(1).max(2000),
+  code: z.string().trim().min(1).max(4096),
   state: z.string().trim().min(8),
 });
 
 export const logoutSchema = z.object({
   providerKey: authProviderKeySchema,
+});
+
+export const oauthCancelSchema = z.object({
+  providerKey: z.enum(["openai", "anthropic"]),
 });
 
 export const authProgressEventSchema = z.object({
@@ -107,5 +130,6 @@ export const authProgressEventSchema = z.object({
     "auth_error",
   ]),
   summary: z.string().trim().min(1),
-  authUrl: z.string().trim().optional(),
+  // Native serializes a missing URL as null (Option<String>).
+  authUrl: z.string().trim().nullable().optional(),
 });

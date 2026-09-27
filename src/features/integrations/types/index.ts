@@ -83,7 +83,13 @@ export interface SaveApiKeyInput {
 
 export interface OAuthStartInput {
   providerKey: AuthProviderKey;
+  /** LinkedIn only; OpenAI/Anthropic scopes are fixed and non-empty values are rejected. */
   scopes?: string[] | undefined;
+  /**
+   * Required for OpenAI/Anthropic account sign-in: the operator accepted the
+   * provider-terms and account risk. Native code rejects the start otherwise.
+   */
+  acknowledgeTermsRisk?: boolean | undefined;
 }
 
 export interface OAuthStartResult {
@@ -99,6 +105,11 @@ export interface OAuthCodeInput {
   state: string;
 }
 
+/** Providers whose account sign-in reuses another product's client. */
+export const AI_ACCOUNT_SIGN_IN_PROVIDERS = ["openai", "anthropic"] as const;
+export type AiAccountSignInProvider =
+  (typeof AI_ACCOUNT_SIGN_IN_PROVIDERS)[number];
+
 export interface LogoutInput {
   providerKey: AuthProviderKey;
 }
@@ -112,5 +123,5 @@ export interface AuthProgressEvent {
     | "auth_done"
     | "auth_error";
   summary: string;
-  authUrl?: string | undefined;
+  authUrl?: string | null | undefined;
 }

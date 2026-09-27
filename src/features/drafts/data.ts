@@ -1,5 +1,5 @@
 import { invokeCommand } from "@/lib/tauri";
-import { DEFAULT_AGENT_MODELS } from "@/agent/providers";
+import { resolveDefaultAgentModel } from "@/features/integrations/data";
 import { z } from "zod";
 import {
   draftGenerationRequestListSchema,
@@ -975,7 +975,7 @@ export async function runDraftAiAudit(
 ): Promise<number> {
   const parsed = runDraftAiAuditSchema.parse(input);
   const modelName =
-    parsed.modelName || DEFAULT_AGENT_MODELS[parsed.providerKey];
+    parsed.modelName || (await resolveDefaultAgentModel(parsed.providerKey));
   const started = draftAiAuditStartResultSchema.parse(
     await invokeCommand("linkgo_draft_ai_audit_start", {
       input: {

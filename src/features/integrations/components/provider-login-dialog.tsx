@@ -19,8 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AiAccountSignIn } from "@/features/integrations/components/ai-account-sign-in";
+import { isAutoRenewingAiSignIn } from "@/features/integrations/account-renewal";
 import { needsLocalDestinationConsent } from "@/features/integrations/destination";
 import type {
+  AiAccountSignInProvider,
+  AuthMethod,
+  AuthProgressEvent,
   AuthProvider,
   AuthProviderKey,
   ConnectedAccount,
@@ -34,14 +39,18 @@ interface ProviderLoginDialogProps {
   onSaveKey: (input: SaveApiKeyInput) => Promise<void>;
   onStartOAuth: (input: {
     providerKey: AuthProviderKey;
+    acknowledgeTermsRisk?: boolean;
   }) => Promise<OAuthStartResult>;
   onSubmitCode: (input: {
     providerKey: AuthProviderKey;
     code: string;
     state: string;
   }) => Promise<void>;
+  onCancelSignIn: (input: { providerKey: AuthProviderKey }) => Promise<void>;
   onDisconnect: (input: { providerKey: AuthProviderKey }) => Promise<void>;
   onCheck: (input: { providerKey: AuthProviderKey }) => Promise<void>;
+  /** Latest native auth progress event for this provider. */
+  progressEvent?: AuthProgressEvent | null;
   /** Blocks opening the dialog, e.g. in the browser preview. */
   disabled?: boolean;
   /** Element id explaining why the dialog is disabled. */
@@ -59,6 +68,21 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+function aiAccountProvider(
+  key: AuthProviderKey,
+): AiAccountSignInProvider | null {
+  return key === "openai" || key === "anthropic" ? key : null;
+}
+
+function formatExpiry(expiresAt: string | null): string | null {
+  if (expiresAt === null || expiresAt === "") return null;
+  const seconds = Number(expiresAt);
+  const date = Number.isFinite(seconds)
+    ? new Date(seconds * 1000)
+    : new Date(expiresAt);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+}
+
 /** Matches the native LocalWithoutConsent destination error. */
 function isLocalConsentRequiredError(error: unknown): boolean {
   return (
@@ -72,12 +96,17 @@ export function ProviderLoginDialog({
   onSaveKey,
   onStartOAuth,
   onSubmitCode,
+  onCancelSignIn,
   onDisconnect,
   onCheck,
+  progressEvent = null,
   disabled = false,
   disabledReasonId,
 }: ProviderLoginDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
+  const aiProvider = aiAccountProvider(provider.key);
+  const [method, setMethod] = useState<AuthMethod>(provider.defaultMethod);
+  const [confirmReplaceSignIn, setConfirmReplaceSignIn] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [accountLabel, setAccountLabel] = useState("");
@@ -88,9 +117,21 @@ export function ProviderLoginDialog({
   const [copyAuthUrlError, setCopyAuthUrlError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const connected = account?.status === "connected";
-  const supportsApiKey = provider.methods.includes("api_key");
-  const supportsOAuth = provider.methods.includes("oauth");
+  const renewing = account !== null && isAutoRenewingAiSignIn(account);
+  const connected = account?.status === "connected" || renewing;
+  const signedIn = aiProvider !== null && account?.auth_method === "oauth";
+  const needsReconnect = account?.status === "reauth_required";
+  const expiry = signedIn ? formatExpiry(account?.expires_at ?? null) : null;
+  const offersBothMethods =
+    aiProvider !== null &&
+    provider.methods.includes("api_key") &&
+    provider.methods.includes("oauth");
+  const supportsApiKey =
+    provider.methods.includes("api_key") &&
+    (!offersBothMethods || method === "api_key");
+  const supportsOAuth =
+    provider.methods.includes("oauth") &&
+    (!offersBothMethods || method === "oauth");
   const requiresBaseUrl = provider.key === "custom";
   // Native policy is authoritative; when it rejects a destination the
   // renderer hint missed, show the consent checkbox anyway.
@@ -108,6 +149,11 @@ export function ProviderLoginDialog({
   );
 
   async function handleSaveKey(): Promise<void> {
+    // Saving a key replaces an account sign-in for the same provider.
+    if (signedIn && !confirmReplaceSignIn) {
+      setConfirmReplaceSignIn(true);
+      return;
+    }
     setBusy(true);
     try {
       await onSaveKey({
@@ -122,6 +168,7 @@ export function ProviderLoginDialog({
       setAccountLabel("");
       setAllowLocalDestination(false);
       setNativeRequiresConsent(false);
+      setConfirmReplaceSignIn(false);
     } catch (caught) {
       // The caller already reports the error; only react to the consent case.
       if (isLocalConsentRequiredError(caught)) setNativeRequiresConsent(true);
@@ -210,10 +257,54 @@ export function ProviderLoginDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {connected && (
+          {(connected || needsReconnect) && account !== null && (
             <div className="bg-muted/50 rounded-lg border p-3 text-sm">
               <p className="font-medium">{safeAccountLabel}</p>
-              <p className="text-muted-foreground mt-1">{maskedSecret}</p>
+              {signedIn && (
+                <p className="text-muted-foreground mt-1">
+                  Signed in with {provider.label} account
+                  {renewing
+                    ? " · access renews automatically on the next agent run"
+                    : expiry !== null
+                      ? ` · access renews before ${expiry}`
+                      : ""}
+                </p>
+              )}
+              {needsReconnect ? (
+                <p className="text-destructive mt-1" role="status">
+                  Reconnect needed: sign in again to keep using {provider.label}
+                  .
+                </p>
+              ) : (
+                <p className="text-muted-foreground mt-1">{maskedSecret}</p>
+              )}
+            </div>
+          )}
+
+          {offersBothMethods && (
+            <div
+              className="flex gap-2"
+              role="group"
+              aria-label="Connection method"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={method === "api_key" ? "default" : "outline"}
+                aria-pressed={method === "api_key"}
+                onClick={() => setMethod("api_key")}
+              >
+                API key
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={method === "oauth" ? "default" : "outline"}
+                aria-pressed={method === "oauth"}
+                onClick={() => setMethod("oauth")}
+              >
+                Account sign-in
+              </Button>
             </div>
           )}
 
@@ -294,17 +385,39 @@ export function ProviderLoginDialog({
                   onChange={(event) => setAccountLabel(event.target.value)}
                 />
               </div>
+              {confirmReplaceSignIn && (
+                <p className="text-sm" role="alert">
+                  Saving a key signs you out of your {provider.label} account.
+                  Press <strong>Replace sign-in with API key</strong> to
+                  continue.
+                </p>
+              )}
               <Button
                 type="button"
                 disabled={!canSaveApiKey}
                 onClick={() => void handleSaveKey()}
               >
-                Save API key
+                {confirmReplaceSignIn
+                  ? "Replace sign-in with API key"
+                  : "Save API key"}
               </Button>
             </div>
           )}
 
-          {supportsOAuth && (
+          {supportsOAuth && aiProvider !== null && (
+            <AiAccountSignIn
+              providerKey={aiProvider}
+              providerLabel={provider.label}
+              account={account}
+              progressEvent={progressEvent}
+              busy={busy}
+              onStart={onStartOAuth}
+              onSubmitCode={onSubmitCode}
+              onCancel={onCancelSignIn}
+            />
+          )}
+
+          {supportsOAuth && aiProvider === null && (
             <div className="space-y-3">
               <Button
                 type="button"
@@ -380,7 +493,8 @@ export function ProviderLoginDialog({
               disabled={busy}
               onClick={() => void handleDisconnect()}
             >
-              <LogOut className="size-4" /> Disconnect
+              <LogOut className="size-4" />{" "}
+              {signedIn ? "Sign out" : "Disconnect"}
             </Button>
           )}
         </DialogFooter>

@@ -5,11 +5,14 @@ import {
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
+import { defaultAgentModelFor } from "@/agent/provider-catalog";
+import type { AgentProviderKey } from "@/agent/types";
 import { AUTH_PROVIDERS } from "@/features/integrations/providers";
 import {
   authProgressEventSchema,
   authStatusSchema,
   logoutSchema,
+  oauthCancelSchema,
   oauthCodeSchema,
   oauthStartResultSchema,
   oauthStartSchema,
@@ -89,6 +92,24 @@ export async function getAuthStatus(): Promise<AuthStatus> {
   return authStatusSchema.parse(result);
 }
 
+/**
+ * Default model for a provider, honouring how the operator connected it.
+ * Only OpenAI's default depends on the auth method, so other providers skip
+ * the status read. An unreadable status keeps the API-key default; native
+ * execution still validates the model against the stored credential.
+ */
+export async function resolveDefaultAgentModel(
+  providerKey: AgentProviderKey,
+): Promise<string> {
+  if (providerKey !== "openai") return defaultAgentModelFor(providerKey, []);
+  try {
+    const status = await getAuthStatus();
+    return defaultAgentModelFor(providerKey, status.accounts);
+  } catch {
+    return defaultAgentModelFor(providerKey, []);
+  }
+}
+
 export async function saveApiKey(input: SaveApiKeyInput): Promise<AuthStatus> {
   const parsed = saveApiKeySchema.parse(input);
   const result = await invokeMutation("linkgo_auth_api_key", {
@@ -112,6 +133,15 @@ export async function submitOAuthCode(
 ): Promise<AuthStatus> {
   const parsed = oauthCodeSchema.parse(input);
   const result = await invokeMutation("linkgo_auth_oauth_code", {
+    input: parsed,
+  });
+  return authStatusSchema.parse(result);
+}
+
+/** Stops a waiting OpenAI/Anthropic sign-in; saved credentials are untouched. */
+export async function cancelOAuth(input: LogoutInput): Promise<AuthStatus> {
+  const parsed = oauthCancelSchema.parse(input);
+  const result = await invokeMutation("linkgo_auth_oauth_cancel", {
     input: parsed,
   });
   return authStatusSchema.parse(result);
@@ -162,6 +192,7 @@ if (IS_TEST && typeof window !== "undefined") {
         saveApiKey: typeof saveApiKey;
         startOAuth: typeof startOAuth;
         submitOAuthCode: typeof submitOAuthCode;
+        cancelOAuth: typeof cancelOAuth;
         disconnectProvider: typeof disconnectProvider;
       };
     }
@@ -170,6 +201,7 @@ if (IS_TEST && typeof window !== "undefined") {
     saveApiKey,
     startOAuth,
     submitOAuthCode,
+    cancelOAuth,
     disconnectProvider,
   };
 }

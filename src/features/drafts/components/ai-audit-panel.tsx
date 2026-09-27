@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAgentModelDefaults } from "@/hooks/use-agent-model-defaults";
 import { cn } from "@/lib/utils";
 import type {
   DraftAiAuditFinding,
@@ -109,6 +110,7 @@ export function AiAuditPanel({
   const [providerKey, setProviderKey] = useState<AgentProviderKey>("dry_run");
   const [modelName, setModelName] = useState(DEFAULT_AGENT_MODELS.dry_run);
   const [submitting, setSubmitting] = useState(false);
+  const defaultModelFor = useAgentModelDefaults();
   const [attemptError, setAttemptError] = useState<string | null>(null);
   const runLock = useRef(false);
   const durableRunActive =
@@ -189,7 +191,7 @@ export function AiAuditPanel({
             onChange={(event) => {
               const nextProvider = event.target.value as AgentProviderKey;
               setProviderKey(nextProvider);
-              setModelName(DEFAULT_AGENT_MODELS[nextProvider]);
+              setModelName(defaultModelFor(nextProvider));
             }}
             className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >

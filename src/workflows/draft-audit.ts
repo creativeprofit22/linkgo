@@ -1,10 +1,8 @@
-import {
-  DEFAULT_AGENT_MODELS,
-  type AgentProviderKey,
-} from "@/agent/provider-catalog";
+import type { AgentProviderKey } from "@/agent/provider-catalog";
 import { agentProviderKeySchema } from "@/agent/schemas";
 import { startAgentRun } from "@/features/agent-runtime/data";
 import { boundDraftAiAuditError } from "@/features/drafts/data";
+import { resolveDefaultAgentModel } from "@/features/integrations/data";
 import { invokeCommand } from "@/lib/tauri";
 import { plannerDraftAuditScopeRowsSchema } from "@/workflows/record-schemas";
 import {
@@ -72,7 +70,7 @@ export async function loadPlannerDraftAuditProvenance(
 
   const providerKey = agentProviderKeySchema.parse(scope.provider_key);
   const savedModel = scope.model_name.trim();
-  const modelName = savedModel || DEFAULT_AGENT_MODELS[providerKey];
+  const modelName = savedModel || (await resolveDefaultAgentModel(providerKey));
   if (modelName.length === 0 || modelName.length > 120) {
     throw new Error("Planner draft audit model is invalid");
   }

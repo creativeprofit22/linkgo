@@ -303,6 +303,42 @@ test("persists a failed generation request and dismisses it", async ({
   await expect(page.getByText("Generated request #1")).toBeHidden();
 });
 
+for (const { authMethod, expectedModel } of [
+  { authMethod: "oauth", expectedModel: "gpt-6-sol" },
+  { authMethod: "api_key", expectedModel: "gpt-4.1-mini" },
+] as const) {
+  test(`defaults the OpenAI model to ${expectedModel} for a ${authMethod} account`, async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(
+      (method) =>
+        (
+          window as unknown as {
+            __LINKGO_AUTH_SEED_AI_ACCOUNT__: (
+              providerKey: string,
+              authMethod: string,
+            ) => void;
+          }
+        ).__LINKGO_AUTH_SEED_AI_ACCOUNT__("openai", method),
+      authMethod,
+    );
+    await createCampaign(page);
+    await openQueue(page);
+    await addCandidate(page);
+    await openDrafts(page);
+
+    await page.getByRole("button", { name: "Generate variants" }).click();
+    const dialog = page.getByRole("dialog", {
+      name: "Generate draft variants",
+    });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Provider").selectOption({ label: "OpenAI" });
+
+    await expect(dialog.getByLabel("Model")).toHaveValue(expectedModel);
+  });
+}
+
 test("creating a draft removes the drafted candidate from draft flows", async ({
   page,
 }) => {

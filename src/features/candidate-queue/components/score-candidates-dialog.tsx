@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAgentModelDefaults } from "@/hooks/use-agent-model-defaults";
 import {
   AGENT_PROVIDER_KEYS,
   DEFAULT_AGENT_MODELS,
@@ -55,6 +56,7 @@ export function ScoreCandidatesDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<ScoreFormState>(() => getInitialFormState());
+  const defaultModelFor = useAgentModelDefaults();
   const scorableCandidates = candidates.filter(
     (candidate) =>
       candidate.status === "new" && candidate.relevance_score === null,
@@ -64,7 +66,7 @@ export function ScoreCandidatesDialog({
     setForm((current) => ({
       ...current,
       providerKey,
-      modelName: DEFAULT_AGENT_MODELS[providerKey],
+      modelName: defaultModelFor(providerKey),
     }));
   };
 
