@@ -23,6 +23,8 @@
     "test:architecture": "node --test scripts/check-architecture.test.mjs",
     "test:csp": "node --test scripts/check-csp.test.mjs",
     "check:architecture": "bun run test:architecture && bun run test:csp && node scripts/check-architecture.mjs",
+    "test:deps": "node --test scripts/check-dependency-audit.test.mjs",
+    "check:deps": "bun run test:deps && node scripts/check-dependency-audit.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",

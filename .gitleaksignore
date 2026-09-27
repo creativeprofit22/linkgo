@@ -1,0 +1,11 @@
+# Reviewed gitleaks false positives. Exact fingerprints only; never add path or rule-wide entries.
+# Reviewed 2026-09-26 by creativeprofit22 (gitleaks 8.30.1, full history, --redact).
+# The linkedin-client-id/secret rules match any 14/16-char alphanumeric token after a
+# "linkedin"-named identifier. Each hit below is a JavaScript identifier, not a credential:
+# a boolean derived from approval state (canRecordPublish / canRecordAttempt) or a test-mock
+# invocation counter (publishInvokes / commentInvokes).
+df9baa9a0f4d1c22631c1127904db062a31ec308:src/features/approvals/components/approval-card.tsx:linkedin-client-secret:72
+b0f3b9bd7c95ae659076ea443c0742f2fe693f10:src/features/comments/components/comment-thread-card.tsx:linkedin-client-secret:75
+a67e3eb4bcce6418823d190439db2b2481f609c8:tests/helpers/tauri-mocks.ts:linkedin-client-id:3758
+b0f3b9bd7c95ae659076ea443c0742f2fe693f10:tests/helpers/tauri-mocks.ts:linkedin-client-id:4250
+c20913197d45534bc6c09990ae1d54a5917dbced:tests/helpers/tauri-mocks.ts:linkedin-client-id:20781

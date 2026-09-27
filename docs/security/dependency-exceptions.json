@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "exceptions": [
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2026-0235",
+      "package": "rkyv",
+      "version": "0.7.46",
+      "kind": "vulnerability",
+      "severity": "unrated",
+      "reachability": "not-compiled",
+      "rationale": "Lockfile-only entry via rust_decimal/sqlx-mysql. cargo tree -i rkyv prints nothing for x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, aarch64-apple-darwin, or --target all --all-features; linkgo enables only sqlx sqlite + runtime-tokio. Fix needs rkyv 0.8.17, which requires an upstream sqlx/rust_decimal change.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2023-0071",
+      "package": "rsa",
+      "version": "0.9.10",
+      "kind": "vulnerability",
+      "severity": "medium",
+      "reachability": "not-compiled",
+      "rationale": "Lockfile-only entry via sqlx-mysql (optional MySQL backend, not enabled). cargo tree -i rsa prints nothing for all three desktop targets or --all-features; linkgo performs no RSA operations. No patched rsa release exists.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2024-0429",
+      "package": "glib",
+      "version": "0.18.5",
+      "kind": "unsound",
+      "severity": "unrated",
+      "reachability": "linux-only-not-called",
+      "rationale": "Linux-only transitive dependency of tauri/wry/tray-icon through gtk 0.18. Unsoundness is in glib::VariantStrIter, which linkgo never calls. Fix needs glib 0.20, which requires a Tauri gtk-rs major upgrade upstream.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2024-0370",
+      "package": "proc-macro-error",
+      "version": "1.0.4",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "build-time-only",
+      "rationale": "Proc-macro helper used only at compile time via the gtk3-macros/glib-macros chain on Linux. Unmaintained, no known vulnerability, no maintained replacement available without an upstream change.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2025-0081",
+      "package": "unic-char-property",
+      "version": "0.9.0",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "shipped-no-known-vulnerability",
+      "rationale": "Pulled in by urlpattern through tauri-utils. Unmaintained, no known vulnerability; removal depends on upstream urlpattern/tauri.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2025-0075",
+      "package": "unic-char-range",
+      "version": "0.9.0",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "shipped-no-known-vulnerability",
+      "rationale": "Pulled in by urlpattern through tauri-utils. Unmaintained, no known vulnerability; removal depends on upstream urlpattern/tauri.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2025-0080",
+      "package": "unic-common",
+      "version": "0.9.0",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "shipped-no-known-vulnerability",
+      "rationale": "Pulled in by urlpattern through tauri-utils. Unmaintained, no known vulnerability; removal depends on upstream urlpattern/tauri.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2025-0100",
+      "package": "unic-ucd-ident",
+      "version": "0.9.0",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "shipped-no-known-vulnerability",
+      "rationale": "Pulled in by urlpattern through tauri-utils. Unmaintained, no known vulnerability; removal depends on upstream urlpattern/tauri.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2025-0098",
+      "package": "unic-ucd-version",
+      "version": "0.9.0",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "shipped-no-known-vulnerability",
+      "rationale": "Pulled in by urlpattern through tauri-utils. Unmaintained, no known vulnerability; removal depends on upstream urlpattern/tauri.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-09-26",
+      "expires": "2026-12-24"
+    }
+  ]
+}

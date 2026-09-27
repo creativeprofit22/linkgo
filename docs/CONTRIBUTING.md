@@ -38,6 +38,13 @@ Rust formatting, frontend lint, strict Clippy, build, Playwright and Rust tests.
 CI already calls the same aggregate command. A failed early stage means later
 stages did not run; report separately executed stages accurately.
 
+When `package.json`, `bun.lock`, `src-tauri/Cargo.toml` or `src-tauri/Cargo.lock`
+change, also run `bun run check:deps` (needs network and `cargo-audit`). A finding
+without a fix needs an exact, dated entry in
+`docs/security/dependency-exceptions.json` with an owner and an expiry of at most
+90 days; remove entries that no longer match. Pin new CI actions to a verified
+commit SHA. See `docs/security/dependency-risk.md`.
+
 Browser mocks do not certify native IPC, keyring, desktop lifecycle or live
 OAuth/AI/LinkedIn behavior. Record revision, dirty-tree qualification, command,
 versions, exit status and skips in a new verification report, not by rewriting
