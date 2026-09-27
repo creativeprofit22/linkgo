@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Linkgo RC Test",
+  "mainBinaryName": "linkgo-rctest",
+  "identifier": "com.linkgo.app.rctest"
+}

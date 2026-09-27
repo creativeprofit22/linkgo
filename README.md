@@ -60,6 +60,19 @@ restriction, not a bug; errors in the desktop app keep their own native
 messages. Playwright specs inject Tauri mocks, which are only honoured in
 Playwright builds.
 
+### Release-candidate test build (test-only)
+
+`bun run tauri:build:rctest` builds installers under a separate identity
+(`Linkgo RC Test`, identifier `com.linkgo.app.rctest`, binary
+`linkgo-rctest.exe`). It installs side by side with the real app and uses its
+own data folder (`%APPDATA%\com.linkgo.app.rctest`), single-instance lock,
+launch-on-login entry and keyring namespace (`linkgo:com.linkgo.app.rctest`),
+so desktop verification never touches your real Linkgo data or credentials.
+It is for verification only — never distribute it. Any isolated build must
+override `identifier`, `productName` and `mainBinaryName` together: the
+launch-on-login entry is named after `productName`, not the identifier, and the
+desktop harness tells builds apart by binary name.
+
 ## Verification
 
 ```bash
@@ -98,6 +111,35 @@ record individual exits, browser inventory reconciliation, and environment detai
 Passing this gate does not verify packaged installation/startup, real desktop IPC
 or keyring, live OAuth/AI/LinkedIn, native scheduler crash recovery, or other
 platforms. Browser-only development is a preview, not native persistence.
+
+### Desktop release-candidate verification
+
+The [2026-09-27 desktop release-candidate report](docs/verification/2026-09-27-desktop-release-candidate.md)
+verified the packaged NSIS build on **Windows 10 Pro 22H2 x64 (WebView2)**
+only, using the isolated RC test identity and disposable databases: install,
+fresh and upgraded startup, real IPC/ACL/SQLite, OS keyring, tray/quit,
+single instance, launch-on-login, the campaign-to-schedule workflow, scheduler
+behavior without a LinkedIn credential, hard-kill recovery, operator
+reconciliation and a backup/restore drill. `bun run test:desktop` reruns the
+real-app checks against a running RC build (it is not part of `bun run check`);
+it requires `LINKGO_DESKTOP_SCENARIO` and a prepared RC profile — see
+[Rerunning the desktop harness](docs/verification/2026-09-27-desktop-release-candidate.md#rerunning-the-desktop-harness).
+
+This is a **local release candidate, not verified live-service availability**.
+Not verified: live AI providers, LinkedIn OAuth and publishing, the MSI
+installer, Windows 11, Windows on ARM, macOS and Linux.
+
+### Lifecycle and data you should know about
+
+- Closing the window hides Linkgo to the tray; work continues only while the
+  process runs. **Quit** from the tray stops everything — nothing runs after a
+  full quit, and nothing publishes without a human approval.
+- The scheduler does **not** restart itself when Linkgo starts, even if it was
+  on before quitting or a crash. Check **Safety** for publishes marked outcome
+  unknown (an interrupted publish can take up to 10 minutes to be marked, so
+  reopen Safety if it still shows in progress), then start the scheduler again.
+- Uninstalling keeps your data folder. Back up and restore with the
+  [backup and restore procedure](docs/operations/backup-restore.md).
 
 ## Project structure
 

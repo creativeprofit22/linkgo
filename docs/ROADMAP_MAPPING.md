@@ -396,6 +396,22 @@ Delivered in this slice:
 
 Explicit exclusions: no scheduler execution after process quits, no hidden startup args, no daemon, and no automatic job execution on login.
 
+### Desktop release-candidate verification (Roadmap release prerequisite)
+
+Roadmap coverage:
+
+- Release prerequisite "Complete verification": real native boundaries on a named target OS in addition to mocked browser flows.
+
+Delivered:
+
+- Identifier-scoped keyring service (`src-tauri/src/auth/storage.rs`) and an isolated RC test identity (`src-tauri/tauri.rc-test.conf.json`, `bun run tauri:build:rctest`).
+- Ignored fixture writers for pre-upgrade and crash-recovery databases (`src-tauri/src/release_fixtures.rs`).
+- Real-app CDP harness (`tests-desktop/`, `bun run test:desktop`) outside the default gate.
+- Operator backup/restore procedure (`docs/operations/backup-restore.md`).
+- Evidence: `docs/verification/2026-09-27-desktop-release-candidate.md`.
+
+Explicit exclusions: Windows 10 x64 NSIS only; live AI, LinkedIn OAuth/publishing, MSI install, Windows 11/ARM, macOS and Linux are unverified. No in-app backup feature.
+
 ## Future slices
 
 Future slices will add external integrations and automation only behind explicit approval gates. Remaining comment work is limited to richer LinkedIn surfaces after product access is available; organization-page analytics and after-quit schedulers remain future work.

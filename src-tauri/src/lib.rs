@@ -40,6 +40,8 @@ mod planning_reads;
 mod playbooks;
 mod plugins;
 mod publishing;
+#[cfg(test)]
+mod release_fixtures;
 mod relevance_scoring;
 mod row_json;
 mod safety;

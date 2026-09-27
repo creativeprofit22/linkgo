@@ -21,7 +21,7 @@ pub mod integrations;
 pub mod latest_draft_quality;
 pub mod metric_refresh;
 pub mod metrics;
-mod native_persistence_upgrade;
+pub(crate) mod native_persistence_upgrade;
 pub mod planner_draft_audits;
 pub mod planner_draft_generation;
 pub mod playbooks;

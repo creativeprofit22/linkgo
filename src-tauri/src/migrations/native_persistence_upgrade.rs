@@ -7,7 +7,7 @@
 //! documented reset of pending approvals for re-review.
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use crate::migrations::{get_migrations, migrate_database};
     use sqlx::{
         migrate::{Migration as SqlxMigration, MigrationType, Migrator},
@@ -140,11 +140,14 @@ mod tests {
         rows
     }
 
-    #[tokio::test]
-    async fn populated_pre_phase_database_upgrades_without_data_loss() {
-        let directory = tempfile::tempdir().unwrap();
+    /// Creates a populated database at the pre-phase migration version and
+    /// returns its options plus an open connection. Also used by the
+    /// release-candidate fixture writer.
+    pub(crate) async fn populated_pre_phase_database(
+        path: &std::path::Path,
+    ) -> (SqliteConnectOptions, SqliteConnection) {
         let options = SqliteConnectOptions::new()
-            .filename(directory.path().join("pre-phase.db"))
+            .filename(path)
             .create_if_missing(true)
             .foreign_keys(true);
         let mut c = SqliteConnection::connect_with(&options).await.unwrap();
@@ -174,6 +177,14 @@ mod tests {
             .await
             .unwrap();
         c.execute(SEED).await.unwrap();
+        (options, c)
+    }
+
+    #[tokio::test]
+    async fn populated_pre_phase_database_upgrades_without_data_loss() {
+        let directory = tempfile::tempdir().unwrap();
+        let (options, mut c) =
+            populated_pre_phase_database(&directory.path().join("pre-phase.db")).await;
 
         let mut columns = Vec::new();
         for table in OWNED_TABLES {
