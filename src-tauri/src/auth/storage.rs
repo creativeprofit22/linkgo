@@ -11,6 +11,9 @@ use tauri::{AppHandle, Manager};
 use super::{providers::auth_providers, redact_error, SafeCredentialStatus, StoredCredential};
 
 const KEYRING_SERVICE_NAME: &str = "linkgo";
+/// Production bundle identifier. Only this identity uses the historical,
+/// unscoped keyring service so existing credentials keep working.
+const PRODUCTION_IDENTIFIER: &str = "com.linkgo.app";
 const CREDENTIAL_FILE_NAME: &str = "linkgo-credentials.json";
 const FILE_FALLBACK_ENV: &str = "LINKGO_CREDENTIAL_FILE_FALLBACK";
 
@@ -72,12 +75,23 @@ fn save_file(path: &Path, file: &CredentialFile) -> Result<(), String> {
     Ok(())
 }
 
-fn provider_entry(provider_key: &str) -> Result<Entry, String> {
-    Entry::new(KEYRING_SERVICE_NAME, provider_key).map_err(redact_error)
+/// Keyring service for an app identifier. Non-production identities (dev,
+/// release-candidate test builds) get their own namespace so they can never
+/// read, overwrite or delete production credentials.
+fn keyring_service_name(identifier: &str) -> String {
+    if identifier == PRODUCTION_IDENTIFIER {
+        KEYRING_SERVICE_NAME.to_string()
+    } else {
+        format!("{KEYRING_SERVICE_NAME}:{identifier}")
+    }
 }
 
-fn read_keyring(provider_key: &str) -> Result<Option<StoredCredential>, String> {
-    match provider_entry(provider_key)?.get_password() {
+fn provider_entry(service: &str, provider_key: &str) -> Result<Entry, String> {
+    Entry::new(service, provider_key).map_err(redact_error)
+}
+
+fn read_keyring(service: &str, provider_key: &str) -> Result<Option<StoredCredential>, String> {
+    match provider_entry(service, provider_key)?.get_password() {
         Ok(secret) => serde_json::from_str(&secret)
             .map(Some)
             .map_err(redact_error),
@@ -86,15 +100,15 @@ fn read_keyring(provider_key: &str) -> Result<Option<StoredCredential>, String> 
     }
 }
 
-fn write_keyring(credential: &StoredCredential) -> Result<(), String> {
+fn write_keyring(service: &str, credential: &StoredCredential) -> Result<(), String> {
     let secret = serde_json::to_string(credential).map_err(redact_error)?;
-    provider_entry(credential.provider_key())?
+    provider_entry(service, credential.provider_key())?
         .set_password(&secret)
         .map_err(redact_error)
 }
 
-fn delete_keyring(provider_key: &str) -> Result<bool, String> {
-    match provider_entry(provider_key)?.delete_credential() {
+fn delete_keyring(service: &str, provider_key: &str) -> Result<bool, String> {
+    match provider_entry(service, provider_key)?.delete_credential() {
         Ok(()) => Ok(true),
         Err(KeyringError::NoEntry) => Ok(false),
         Err(error) => Err(redact_error(error)),
@@ -117,12 +131,14 @@ fn normalize_legacy_google_credential(mut credential: StoredCredential) -> Store
 #[derive(Debug, Clone)]
 pub struct AuthStorage {
     fallback_path: PathBuf,
+    service: String,
 }
 
 impl AuthStorage {
     pub fn new(app: &AppHandle) -> Result<Self, String> {
         Ok(Self {
             fallback_path: credentials_path(app)?,
+            service: keyring_service_name(&app.config().identifier),
         })
     }
 
@@ -151,7 +167,7 @@ impl AuthStorage {
     }
 
     pub fn load(&self, provider_key: &str) -> Result<Option<StoredCredential>, String> {
-        match read_keyring(provider_key) {
+        match read_keyring(&self.service, provider_key) {
             Ok(Some(credential)) => {
                 return Ok(Some(normalize_legacy_google_credential(credential)))
             }
@@ -161,7 +177,7 @@ impl AuthStorage {
         };
 
         if provider_key == "gemini" {
-            match read_keyring("google") {
+            match read_keyring(&self.service, "google") {
                 Ok(Some(credential)) => {
                     return Ok(Some(normalize_legacy_google_credential(credential)))
                 }
@@ -188,7 +204,7 @@ impl AuthStorage {
     }
 
     pub fn save(&self, credential: StoredCredential) -> Result<(), String> {
-        match write_keyring(&credential) {
+        match write_keyring(&self.service, &credential) {
             Ok(()) => Ok(()),
             Err(_error) if file_fallback_enabled() => {
                 let mut file = load_file(&self.fallback_path)?;
@@ -201,13 +217,13 @@ impl AuthStorage {
     }
 
     pub fn clear(&self, provider_key: &str) -> Result<bool, String> {
-        let keyring_removed = match delete_keyring(provider_key) {
+        let keyring_removed = match delete_keyring(&self.service, provider_key) {
             Ok(removed) => removed,
             Err(_error) if file_fallback_enabled() => false,
             Err(error) => return Err(error),
         };
         let legacy_keyring_removed = if provider_key == "gemini" {
-            delete_keyring("google").unwrap_or(false)
+            delete_keyring(&self.service, "google").unwrap_or(false)
         } else {
             false
         };
@@ -227,7 +243,8 @@ impl AuthStorage {
 #[cfg(test)]
 mod tests {
     use super::{
-        file_fallback_enabled, CREDENTIAL_FILE_NAME, FILE_FALLBACK_ENV, KEYRING_SERVICE_NAME,
+        file_fallback_enabled, keyring_service_name, CREDENTIAL_FILE_NAME, FILE_FALLBACK_ENV,
+        KEYRING_SERVICE_NAME,
     };
 
     #[test]
@@ -243,5 +260,26 @@ mod tests {
     fn keyring_service_is_stable_and_file_name_is_legacy_fallback_only() {
         assert_eq!(KEYRING_SERVICE_NAME, "linkgo");
         assert_eq!(CREDENTIAL_FILE_NAME, "linkgo-credentials.json");
+    }
+
+    #[test]
+    fn production_identifier_keeps_legacy_keyring_service() {
+        assert_eq!(keyring_service_name("com.linkgo.app"), "linkgo");
+    }
+
+    #[test]
+    fn non_production_identifiers_use_scoped_keyring_service() {
+        assert_eq!(
+            keyring_service_name("com.linkgo.app.rctest"),
+            "linkgo:com.linkgo.app.rctest"
+        );
+        assert_eq!(
+            keyring_service_name("com.example.other"),
+            "linkgo:com.example.other"
+        );
+        assert_ne!(
+            keyring_service_name("com.linkgo.app.rctest"),
+            KEYRING_SERVICE_NAME
+        );
     }
 }

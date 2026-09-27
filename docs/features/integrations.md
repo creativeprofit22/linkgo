@@ -22,7 +22,7 @@ GG AI providers exposed in Linkgo:
 - The React UI only receives provider status, labels, scopes, expiry metadata, and redacted errors during normal browsing.
 - API keys, access tokens, refresh tokens, and LinkedIn client secrets stay out of SQLite and rendered UI.
 - Provider API keys and Base URLs never cross IPC: there is no renderer command that returns them (the former `linkgo_auth_provider_secret` was removed and a Rust test keeps it unregistered). Provider requests run natively.
-- The OS keyring is the default store. The plaintext file fallback exists only when `LINKGO_CREDENTIAL_FILE_FALLBACK` is set for development.
+- The OS keyring is the default store. The keyring service is `linkgo` for the production identifier `com.linkgo.app` and `linkgo:<identifier>` for any other bundle identifier (for example the `com.linkgo.app.rctest` release-candidate test build), so dev/test builds with a different identifier cannot read, overwrite or delete production credentials. Existing production entries are unchanged. The plaintext file fallback exists only when `LINKGO_CREDENTIAL_FILE_FALLBACK` is set for development.
 - SQLite integration tables intentionally store no secret columns.
 - Auth progress is emitted as native events so the UI can stay responsive during OAuth.
 

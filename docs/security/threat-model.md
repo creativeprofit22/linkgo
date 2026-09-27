@@ -7,7 +7,9 @@ source), **RUNTIME** (observed by running a test/tool), **DEDUCED** (inferred).
 
 ## Assets
 
-- AI provider API keys and optional Base URLs (OS keyring via `src-tauri/src/auth/storage.rs`).
+- AI provider API keys and optional Base URLs (OS keyring via `src-tauri/src/auth/storage.rs`;
+  service `linkgo` for `com.linkgo.app`, `linkgo:<identifier>` for any other
+  bundle identifier so test builds are isolated from production secrets).
 - LinkedIn OAuth access/refresh tokens (same store).
 - The local SQLite database (campaigns, drafts, approvals, publish executions).
 - The ability to publish/comment on LinkedIn (always human-approval-gated).
