@@ -11,17 +11,23 @@ source), **RUNTIME** (observed by running a test/tool), **DEDUCED** (inferred).
   service `linkgo` for `com.linkgo.app`, `linkgo:<identifier>` for any other
   bundle identifier so test builds are isolated from production secrets).
 - LinkedIn OAuth access/refresh tokens (same store).
+- OpenAI (ChatGPT plan) and Anthropic (Claude plan) sign-in access/refresh tokens
+  (same store, split across `<provider>#n` entries when large). They grant use of
+  the operator's personal subscription; see `docs/features/ai-account-sign-in.md`.
+- The one-shot OpenAI sign-in loopback listener on `127.0.0.1:1455`.
 - The local SQLite database (campaigns, drafts, approvals, publish executions).
 - The ability to publish/comment on LinkedIn (always human-approval-gated).
 
 ## Trust boundaries
 
-| Boundary             | Untrusted side                                                                                   | Trusted side                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| Webview → native IPC | Renderer JS in `main` / `settings` windows (compromise via a future XSS or malicious dependency) | `#[tauri::command]` handlers, ACL via `src-tauri/capabilities/*.json`                             |
-| Native → AI provider | Provider HTTP responses, redirects, the user-configured Base URL                                 | Destination policy `src-tauri/src/net/destination.rs`, transport `src-tauri/src/net/transport.rs` |
-| Native → LinkedIn    | LinkedIn HTTP responses                                                                          | `src-tauri/src/auth/linkedin_api.rs`, fixed HTTPS endpoints                                       |
-| Model output → tools | Provider tool calls                                                                              | Native tool allowlist in `agent_runtime.rs`, human approval before any external action            |
+| Boundary                           | Untrusted side                                                                                   | Trusted side                                                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Webview → native IPC               | Renderer JS in `main` / `settings` windows (compromise via a future XSS or malicious dependency) | `#[tauri::command]` handlers, ACL via `src-tauri/capabilities/*.json`                                                                  |
+| Native → AI provider               | Provider HTTP responses, redirects, the user-configured Base URL                                 | Destination policy `src-tauri/src/net/destination.rs`, transport `src-tauri/src/net/transport.rs`                                      |
+| Native → LinkedIn                  | LinkedIn HTTP responses                                                                          | `src-tauri/src/auth/linkedin_api.rs`, fixed HTTPS endpoints                                                                            |
+| Model output → tools               | Provider tool calls                                                                              | Native tool allowlist in `agent_runtime.rs`, human approval before any external action                                                 |
+| Local processes → sign-in listener | Any local process or browser tab that can reach `127.0.0.1:1455` while OpenAI sign-in waits      | `src-tauri/src/auth/loopback.rs`: loopback bind only, 8 KiB head cap, path check, `state` check before exchange, 5-min timeout, cancel |
+| Native → OAuth token endpoints     | Token responses from OpenAI/Anthropic                                                            | Fixed HTTPS URLs, `PUBLIC_HTTPS` no-redirect client, 256 KiB cap, only a sanitized OAuth error code kept                               |
 
 The attacker model is **renderer compromise** and **hostile/MITM'd or misconfigured
 provider endpoints**. None of the findings below is an anonymous remote exploit.
@@ -59,6 +65,16 @@ provider endpoints**. None of the findings below is an anonymous remote exploit.
   (see `capability-matrix.md`). The renderer can no longer create webviews.
 - CSP: `connect-src` limited to `'self'` and the IPC origins; `object-src 'none'`,
   `frame-ancestors 'none'`, `form-action 'none'`, `base-uri 'self'`.
+- AI account sign-in (2026-09-27): PKCE S256 + random state; a pasted value's state
+  is checked before the pending session is consumed or any request is sent; the
+  start command refuses OpenAI/Anthropic without `acknowledgeTermsRisk: true`.
+  Tokens never cross IPC (`OAuthStartResult` carries only URL/state/needsCode);
+  `OAuthCredentials`, `ApiKeyCredentials` and `TokenResponse` have redacting `Debug`.
+  Refresh is serialized per provider (`OAuthRefreshLocks`) and re-reads the store
+  under the lock, so concurrent runs cannot spend a rotating refresh token twice
+  (8-thread test: exactly one token call). A 4xx refresh clears the tokens and sets
+  `needs_reauth`; network/5xx errors keep them. A 401 during a run triggers one
+  forced refresh and one retry.
 
 ## Defensive review (2026-09-26)
 
@@ -73,6 +89,13 @@ The review did not include a live proxy or NAT64 reproduction. A desktop ACL/CSP
 ## Known exceptions and limits
 
 - `style-src 'unsafe-inline'` is kept for Tailwind/Radix inline styles.
+- AI account sign-in reuses the Codex CLI and Claude Code public client IDs. Any
+  local process could also start a sign-in with those public IDs; the protection is
+  PKCE plus state, not client secrecy. Anthropic prohibits this use for
+  third-party apps; the operator accepts that risk explicitly.
+- While OpenAI sign-in waits, another local process could win the race to bind
+  port 1455 first (for example Codex CLI). Linkgo then falls back to pasting; a
+  hostile listener would receive a code it cannot redeem without the PKCE verifier.
 - Consented local endpoints are trusted by design (no rebinding guard for them).
 - Stored Base URLs that fail the new policy stop working until re-saved (with
   consent where applicable); the error message says so.

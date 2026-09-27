@@ -140,6 +140,14 @@ installer, Windows 11, Windows on ARM, macOS and Linux.
   reopen Safety if it still shows in progress), then start the scheduler again.
 - Uninstalling keeps your data folder. Back up and restore with the
   [backup and restore procedure](docs/operations/backup-restore.md).
+- OpenAI and Anthropic can be connected with an API key (default) or with
+  **account sign-in** (your ChatGPT or Claude plan). Account sign-in reuses the
+  Codex CLI / Claude Code sign-in: Anthropic's terms prohibit this for other
+  apps and OpenAI does not approve it, so it can be refused or put your account
+  at risk. Linkgo requires you to tick an acknowledgement first. Tokens stay in
+  the OS keyring and renew automatically; if the provider revokes them the card
+  shows **Reauth required** and you sign in again. See
+  [AI account sign-in](docs/features/ai-account-sign-in.md).
 
 ## Project structure
 
