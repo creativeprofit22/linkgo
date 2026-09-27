@@ -52,7 +52,7 @@ pub fn auth_providers() -> Vec<AuthProvider> {
             key: "anthropic",
             label: "Anthropic",
             description: "Claude provider credentials for GG AI-backed agent execution.",
-            methods: vec![AuthMethod::ApiKey],
+            methods: vec![AuthMethod::ApiKey, AuthMethod::OAuth],
             default_method: AuthMethod::ApiKey,
             scopes: vec![],
             models: vec!["claude-sonnet-4-6"],
@@ -74,10 +74,16 @@ pub fn auth_providers() -> Vec<AuthProvider> {
             key: "openai",
             label: "OpenAI",
             description: "OpenAI credentials for GG AI-backed agent execution.",
-            methods: vec![AuthMethod::ApiKey],
+            methods: vec![AuthMethod::ApiKey, AuthMethod::OAuth],
             default_method: AuthMethod::ApiKey,
             scopes: vec![],
-            models: vec!["gpt-4.1-mini", "gpt-4.1"],
+            models: vec![
+                "gpt-4.1-mini",
+                "gpt-4.1",
+                "gpt-6-sol",
+                "gpt-6-luna",
+                "gpt-6-astra",
+            ],
             secret_label: "OpenAI API key",
             docs_url: "https://platform.openai.com/docs",
         },
@@ -205,6 +211,12 @@ pub fn is_known_provider(provider_key: &str) -> bool {
         .any(|provider| provider.key == provider_key)
 }
 
+pub fn provider_supports_oauth(provider_key: &str) -> bool {
+    auth_providers().into_iter().any(|provider| {
+        provider.key == provider_key && provider.methods.contains(&AuthMethod::OAuth)
+    })
+}
+
 pub fn provider_supports_api_key(provider_key: &str) -> bool {
     auth_providers().into_iter().any(|provider| {
         provider.key == provider_key && provider.methods.contains(&AuthMethod::ApiKey)
@@ -245,6 +257,12 @@ mod tests {
         for provider in auth_providers() {
             if provider.key == "linkedin" {
                 assert_eq!(provider.methods, vec![AuthMethod::OAuth]);
+            } else if matches!(provider.key, "openai" | "anthropic") {
+                assert_eq!(
+                    provider.methods,
+                    vec![AuthMethod::ApiKey, AuthMethod::OAuth]
+                );
+                assert_eq!(provider.default_method, AuthMethod::ApiKey);
             } else {
                 assert_eq!(provider.methods, vec![AuthMethod::ApiKey]);
             }

@@ -1031,6 +1031,7 @@ mod tests {
             account_label: None,
             scopes: scopes.into_iter().map(ToString::to_string).collect(),
             provider_key: "linkedin".to_string(),
+            needs_reauth: false,
         }
     }
 

@@ -27,6 +27,7 @@ permissions = [
   "allow-linkgo-auth-api-key",
   "allow-linkgo-auth-check",
   "allow-linkgo-auth-logout",
+  "allow-linkgo-auth-oauth-cancel",
   "allow-linkgo-auth-oauth-code",
   "allow-linkgo-auth-oauth-start",
   "allow-linkgo-auth-status",

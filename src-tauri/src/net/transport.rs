@@ -24,6 +24,9 @@ use super::destination::{is_non_public_ip, LocalConsent, ProviderDestination};
 
 pub const PROVIDER_MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 pub const LINKEDIN_MAX_RESPONSE_BYTES: u64 = 1024 * 1024;
+/// OAuth token endpoint responses (access/refresh/id tokens) are small; cap
+/// them far below the general provider limit.
+pub const OAUTH_TOKEN_MAX_RESPONSE_BYTES: u64 = 256 * 1024;
 pub const MAX_ERROR_MESSAGE_CHARS: usize = 500;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -39,10 +42,16 @@ pub struct TransportPolicy {
 
 impl TransportPolicy {
     /// Public destinations: HTTPS only, private DNS answers dropped.
-    #[cfg(test)]
     pub const PUBLIC_HTTPS: TransportPolicy = TransportPolicy {
         allow_private_addresses: false,
         https_only: true,
+    };
+
+    /// Test-only: plain HTTP to a loopback fake server.
+    #[cfg(test)]
+    pub const LOCAL_TEST: TransportPolicy = TransportPolicy {
+        allow_private_addresses: true,
+        https_only: false,
     };
 
     /// Consent only relaxes the DNS guard for destinations that are themselves

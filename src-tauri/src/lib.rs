@@ -92,6 +92,8 @@ pub fn run() {
             });
             app.manage(autopilot_planner::AutopilotPlannerWorkerState::default());
             app.manage(source_imports::SourceImportActivity::default());
+            app.manage(auth::refresh::OAuthRefreshLocks::default());
+            app.manage(auth::ai_signin::AiSignInSessions::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -109,6 +111,7 @@ pub fn run() {
             auth::commands::linkgo_auth_status,
             auth::commands::linkgo_auth_api_key,
             auth::commands::linkgo_auth_oauth_start,
+            auth::commands::linkgo_auth_oauth_cancel,
             auth::commands::linkgo_auth_oauth_code,
             auth::commands::linkgo_auth_logout,
             auth::commands::linkgo_auth_check,

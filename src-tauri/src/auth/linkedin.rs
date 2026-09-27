@@ -87,6 +87,7 @@ fn token_response_to_credential(response: LinkedInTokenResponse) -> StoredCreden
             .map(ToString::to_string)
             .collect(),
         provider_key: "linkedin".to_string(),
+        needs_reauth: false,
     })
 }
 

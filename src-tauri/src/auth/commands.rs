@@ -4,13 +4,17 @@ use tauri::{AppHandle, Emitter};
 use super::publish::{self, sqlite_pool, LinkedInPublishCommentInput, LinkedInPublishPostInput};
 use super::storage::AuthStorage;
 use super::{
+    ai_oauth::AiOAuthProvider,
+    ai_signin,
     linkedin::{exchange_linkedin_code, refresh_linkedin_credential, start_linkedin_oauth},
     oauth::{persist_pending_oauth_session, verify_and_take_oauth_session},
     providers::{
-        auth_providers, is_known_provider, provider_label, provider_supports_api_key, AuthProvider,
+        auth_providers, is_known_provider, provider_label, provider_supports_api_key,
+        provider_supports_oauth, AuthProvider,
     },
-    redact_error, ApiKeyCredentials, AuthMethod, ConnectionStatus, SafeCredentialStatus,
-    StoredCredential,
+    redact_error,
+    refresh::{ensure_fresh_ai_credential, OAuthRefreshLocks, RefreshEndpoints, RefreshMode},
+    ApiKeyCredentials, AuthMethod, ConnectionStatus, SafeCredentialStatus, StoredCredential,
 };
 use crate::net::destination::{validate_provider_destination, LocalConsent, ProviderDestination};
 use crate::publishing::{
@@ -84,7 +88,12 @@ pub struct SaveApiKeyInput {
 #[serde(rename_all = "camelCase")]
 pub struct OAuthStartInput {
     pub provider_key: String,
+    /// LinkedIn only; OpenAI/Anthropic scopes are fixed and non-empty values are rejected.
     pub scopes: Option<Vec<String>>,
+    /// Required (`true`) for OpenAI/Anthropic account sign-in: the operator
+    /// acknowledged the provider-terms and account risk.
+    #[serde(default)]
+    pub acknowledge_terms_risk: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -229,14 +238,47 @@ pub fn linkgo_auth_api_key(
     linkgo_auth_status(app).map_err(redact_error)
 }
 
+/// OpenAI/Anthropic sign-in reuses Codex/Claude Code public client IDs, so
+/// scopes are fixed constants and must not be caller-controlled.
+fn ensure_ai_scopes_unset(scopes: &Option<Vec<String>>) -> Result<(), String> {
+    match scopes {
+        Some(values) if !values.is_empty() => {
+            Err("Scopes are fixed for OpenAI and Anthropic account sign-in".to_string())
+        }
+        _ => Ok(()),
+    }
+}
+
 #[tauri::command]
 pub fn linkgo_auth_oauth_start(
     app: AppHandle,
     input: OAuthStartInput,
 ) -> Result<OAuthStartResult, String> {
     ensure_known_provider(&input.provider_key)?;
+    if let Some(provider) = AiOAuthProvider::from_key(&input.provider_key) {
+        if !provider_supports_oauth(provider.key()) {
+            return Err("Provider does not support account sign-in".to_string());
+        }
+        ensure_ai_scopes_unset(&input.scopes)?;
+        let start = ai_signin::start(&app, provider, input.acknowledge_terms_risk)?;
+        emit_auth_progress(
+            &app,
+            AuthProgressEvent {
+                provider_key: input.provider_key.clone(),
+                status: "auth_url".to_string(),
+                summary: format!("{} sign-in URL created", provider.label()),
+                auth_url: Some(start.auth_url.clone()),
+            },
+        );
+        return Ok(OAuthStartResult {
+            provider_key: input.provider_key,
+            auth_url: start.auth_url,
+            state: start.state,
+            needs_code: start.needs_code,
+        });
+    }
     if input.provider_key != "linkedin" {
-        return Err("OAuth is currently available for LinkedIn".to_string());
+        return Err("OAuth is currently available for LinkedIn, OpenAI and Anthropic".to_string());
     }
     let start = start_linkedin_oauth(input.scopes.unwrap_or_default())?;
     persist_pending_oauth_session(
@@ -268,6 +310,10 @@ pub fn linkgo_auth_oauth_code(
     input: OAuthCodeInput,
 ) -> Result<AuthStatusPayload, String> {
     ensure_known_provider(&input.provider_key)?;
+    if let Some(provider) = AiOAuthProvider::from_key(&input.provider_key) {
+        ai_signin::submit_pasted(&app, provider, &input.code, &input.state)?;
+        return linkgo_auth_status(app).map_err(redact_error);
+    }
     if input.provider_key != "linkedin" {
         return Err("OAuth code exchange is currently available for LinkedIn".to_string());
     }
@@ -290,12 +336,30 @@ pub fn linkgo_auth_oauth_code(
     linkgo_auth_status(app).map_err(redact_error)
 }
 
+/// Stops a waiting OpenAI/Anthropic sign-in (loopback listener and pending
+/// PKCE session). No credential is changed.
+#[tauri::command]
+pub fn linkgo_auth_oauth_cancel(
+    app: AppHandle,
+    input: ProviderInput,
+) -> Result<AuthStatusPayload, String> {
+    ensure_known_provider(&input.provider_key)?;
+    let provider = AiOAuthProvider::from_key(&input.provider_key)
+        .ok_or_else(|| "Sign-in cancel is available for OpenAI and Anthropic".to_string())?;
+    ai_signin::cancel(&app, provider)?;
+    linkgo_auth_status(app).map_err(redact_error)
+}
+
 #[tauri::command]
 pub fn linkgo_auth_logout(
     app: AppHandle,
     input: ProviderInput,
 ) -> Result<AuthStatusPayload, String> {
     ensure_known_provider(&input.provider_key)?;
+    if let Some(provider) = AiOAuthProvider::from_key(&input.provider_key) {
+        // Silent: logout emits its own "disconnected" event below.
+        let _ = ai_signin::stop_pending(&app, provider);
+    }
     let storage = AuthStorage::new(&app)?;
     let _ = storage.clear(&input.provider_key)?;
     emit_auth_progress(
@@ -313,10 +377,39 @@ pub fn linkgo_auth_logout(
 #[tauri::command]
 pub fn linkgo_auth_check(
     app: AppHandle,
+    locks: tauri::State<'_, OAuthRefreshLocks>,
     input: ProviderInput,
 ) -> Result<AuthStatusPayload, String> {
     ensure_known_provider(&input.provider_key)?;
     let storage = AuthStorage::new(&app)?;
+    if let Some(provider) = AiOAuthProvider::from_key(&input.provider_key) {
+        if let Some(StoredCredential::OAuth(credentials)) = storage.load(provider.key())? {
+            if !credentials.needs_reauth {
+                let result = RefreshEndpoints::production(provider).and_then(|endpoints| {
+                    ensure_fresh_ai_credential(
+                        &storage,
+                        &locks,
+                        provider,
+                        &endpoints,
+                        super::unix_timestamp(),
+                        RefreshMode::IfExpiring,
+                    )
+                });
+                if let Err(error) = result {
+                    emit_auth_progress(
+                        &app,
+                        AuthProgressEvent {
+                            provider_key: input.provider_key.clone(),
+                            status: "auth_error".to_string(),
+                            summary: redact_error(error),
+                            auth_url: None,
+                        },
+                    );
+                }
+            }
+        }
+        return linkgo_auth_status(app).map_err(redact_error);
+    }
     if let Some(StoredCredential::OAuth(mut credentials)) = storage.load(&input.provider_key)? {
         if credentials.provider_key == "linkedin" {
             let mut should_save = false;
@@ -402,7 +495,7 @@ pub async fn linkgo_linkedin_publish_comment(
 
 #[cfg(test)]
 mod tests {
-    use super::{validated_destination, SaveApiKeyInput};
+    use super::{ensure_ai_scopes_unset, validated_destination, SaveApiKeyInput};
     use crate::auth::publish::{
         credentials_need_refresh, has_linkedin_publish_scope, linkedin_oauth_credentials,
         merge_refreshed_linkedin_credential,
@@ -419,6 +512,7 @@ mod tests {
             account_label: Some("LinkedIn member".to_string()),
             scopes: vec!["w_member_social".to_string()],
             provider_key: "linkedin".to_string(),
+            needs_reauth: false,
         }
     }
 
@@ -533,6 +627,16 @@ mod tests {
     }
 
     #[test]
+    fn ai_sign_in_rejects_caller_supplied_scopes() {
+        assert!(ensure_ai_scopes_unset(&None).is_ok());
+        assert!(ensure_ai_scopes_unset(&Some(Vec::new())).is_ok());
+        assert_eq!(
+            ensure_ai_scopes_unset(&Some(vec!["openid".to_string()])),
+            Err("Scopes are fixed for OpenAI and Anthropic account sign-in".to_string())
+        );
+    }
+
+    #[test]
     fn empty_scopes_are_treated_as_unknown_not_blocking() {
         let mut credentials = linkedin_credentials(None);
         credentials.scopes = Vec::new();
@@ -552,6 +656,7 @@ mod tests {
             account_label: None,
             scopes: Vec::new(),
             provider_key: "linkedin".to_string(),
+            needs_reauth: false,
         });
 
         let merged = merge_refreshed_linkedin_credential(previous, refreshed).unwrap();

@@ -1,9 +1,15 @@
+pub mod ai_oauth;
+pub mod ai_signin;
+pub mod anthropic_oauth;
 pub mod commands;
 pub mod linkedin;
 pub mod linkedin_api;
+pub mod loopback;
 pub mod oauth;
+pub mod openai_oauth;
 pub mod providers;
 pub mod publish;
+pub mod refresh;
 pub mod storage;
 
 use crate::net::destination::{validate_provider_destination, LocalConsent};
@@ -31,7 +37,7 @@ pub enum ConnectionStatus {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuthCredentials {
     pub access_token: String,
@@ -42,9 +48,32 @@ pub struct OAuthCredentials {
     pub account_label: Option<String>,
     pub scopes: Vec<String>,
     pub provider_key: String,
+    /// Set when the provider rejected a refresh: tokens were cleared and the
+    /// operator must sign in again. Absent in entries saved by older builds.
+    #[serde(default)]
+    pub needs_reauth: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Debug output never includes token values, so a stray `{:?}` or panic
+/// message cannot leak them.
+impl std::fmt::Debug for OAuthCredentials {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("OAuthCredentials")
+            .field("access_token", &"[redacted]")
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "[redacted]"),
+            )
+            .field("expires_at", &self.expires_at)
+            .field("account_label", &self.account_label)
+            .field("provider_key", &self.provider_key)
+            .field("needs_reauth", &self.needs_reauth)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiKeyCredentials {
     pub api_key: String,
@@ -56,6 +85,17 @@ pub struct ApiKeyCredentials {
     /// builds, which therefore default to no consent.
     #[serde(default)]
     pub allow_local_destination: bool,
+}
+
+impl std::fmt::Debug for ApiKeyCredentials {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ApiKeyCredentials")
+            .field("api_key", &"[redacted]")
+            .field("base_url", &self.base_url)
+            .field("provider_key", &self.provider_key)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,11 +132,18 @@ impl StoredCredential {
         let now = unix_timestamp();
         match self {
             StoredCredential::OAuth(credentials) => {
-                let status = match credentials.expires_at {
-                    Some(expires_at) if expires_at <= now + REFRESH_SKEW_SECONDS => {
-                        ConnectionStatus::Expired
+                let (status, last_error) = if credentials.needs_reauth {
+                    (
+                        ConnectionStatus::ReauthRequired,
+                        "Sign-in expired or was revoked; reconnect this provider".to_string(),
+                    )
+                } else {
+                    match credentials.expires_at {
+                        Some(expires_at) if expires_at <= now + REFRESH_SKEW_SECONDS => {
+                            (ConnectionStatus::Expired, String::new())
+                        }
+                        _ => (ConnectionStatus::Connected, String::new()),
                     }
-                    _ => ConnectionStatus::Connected,
                 };
                 SafeCredentialStatus {
                     provider_key: credentials.provider_key.clone(),
@@ -108,7 +155,7 @@ impl StoredCredential {
                     expires_at: credentials.expires_at,
                     refresh_expires_at: credentials.refresh_expires_at,
                     has_base_url_override: false,
-                    last_error: String::new(),
+                    last_error,
                 }
             }
             StoredCredential::ApiKey(credentials) => {
@@ -183,8 +230,67 @@ pub fn redact_error(error: impl ToString) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        redact_error, redact_secret, ApiKeyCredentials, ConnectionStatus, StoredCredential,
+        redact_error, redact_secret, ApiKeyCredentials, ConnectionStatus, OAuthCredentials,
+        StoredCredential,
     };
+
+    #[test]
+    fn oauth_needing_reauth_reports_reconnect_state_without_secrets() {
+        let credential = StoredCredential::OAuth(OAuthCredentials {
+            access_token: String::new(),
+            refresh_token: None,
+            expires_at: Some(super::unix_timestamp() + 3600),
+            refresh_expires_at: None,
+            account_id: Some("acct".to_string()),
+            account_label: Some("me@example.com".to_string()),
+            scopes: Vec::new(),
+            provider_key: "openai".to_string(),
+            needs_reauth: true,
+        });
+        let status = credential.safe_status();
+        assert_eq!(status.status, ConnectionStatus::ReauthRequired);
+        assert!(status.last_error.contains("reconnect"));
+        assert_eq!(status.account_label, "me@example.com");
+    }
+
+    #[test]
+    fn ai_oauth_tokens_never_appear_in_debug_or_safe_status() {
+        let credential = StoredCredential::OAuth(OAuthCredentials {
+            access_token: "access-SECRET-1".to_string(),
+            refresh_token: Some("refresh-SECRET-2".to_string()),
+            expires_at: Some(super::unix_timestamp() + 3600),
+            refresh_expires_at: None,
+            account_id: Some("acct".to_string()),
+            account_label: Some("me@example.com".to_string()),
+            scopes: vec!["user:inference".to_string()],
+            provider_key: "anthropic".to_string(),
+            needs_reauth: false,
+        });
+        let debug = format!("{credential:?}");
+        let status = serde_json::to_string(&credential.safe_status()).expect("status json");
+        for output in [debug, status] {
+            assert!(!output.contains("SECRET"), "{output}");
+        }
+        let api_key = StoredCredential::ApiKey(ApiKeyCredentials {
+            api_key: "sk-SECRET-3".to_string(),
+            base_url: None,
+            account_label: None,
+            provider_key: "openai".to_string(),
+            allow_local_destination: false,
+        });
+        assert!(!format!("{api_key:?}").contains("SECRET"));
+    }
+
+    #[test]
+    fn legacy_oauth_entry_without_needs_reauth_deserializes() {
+        let json = r#"{"kind":"o_auth","accessToken":"a","refreshToken":null,"expiresAt":null,"refreshExpiresAt":null,"accountId":null,"accountLabel":null,"scopes":[],"providerKey":"linkedin"}"#;
+        let StoredCredential::OAuth(credentials) =
+            serde_json::from_str::<StoredCredential>(json).expect("legacy oauth")
+        else {
+            panic!("expected oauth");
+        };
+        assert!(!credentials.needs_reauth);
+    }
 
     fn api_key_status(
         base_url: Option<&str>,

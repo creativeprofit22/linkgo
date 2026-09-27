@@ -144,6 +144,17 @@ pub fn verify_and_take_oauth_session(
     Ok(session.pkce_verifier)
 }
 
+/// Drops every pending sign-in for a provider (used when sign-in is
+/// cancelled), so a late callback or paste cannot complete it.
+pub fn discard_pending_oauth_sessions(app: &AppHandle, provider_key: &str) -> Result<(), String> {
+    let path = oauth_sessions_path(app)?;
+    let now = unix_timestamp();
+    let mut file = load_sessions(&path)?;
+    file.sessions
+        .retain(|session| session.expires_at > now && session.provider_key != provider_key);
+    save_sessions(&path, &file)
+}
+
 pub fn build_authorization_url(
     authorization_endpoint: &str,
     client_id: &str,

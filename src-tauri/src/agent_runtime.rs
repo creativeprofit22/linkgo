@@ -7,7 +7,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
-use crate::auth::{storage::AuthStorage, StoredCredential};
+#[path = "agent_codex.rs"]
+mod agent_codex;
+
+use crate::auth::{
+    ai_oauth::AiOAuthProvider,
+    anthropic_oauth::CLAUDE_CLI_USER_AGENT,
+    refresh::{
+        ensure_fresh_ai_credential, reconnect_message, CredentialStore, OAuthRefreshLocks,
+        RefreshEndpoints, RefreshMode,
+    },
+    storage::AuthStorage,
+    unix_timestamp, OAuthCredentials, StoredCredential,
+};
 use crate::net::destination::{validate_provider_destination, LocalConsent};
 use crate::net::transport::{
     provider_http_client, read_bounded_json, truncate_error_message, TransportPolicy,
@@ -990,17 +1002,190 @@ fn execute_gemini_code_assist(
     })
 }
 
+/// Identity block Anthropic requires at the start of the system prompt for
+/// Claude-plan sign-in tokens.
+const CLAUDE_CODE_IDENTITY: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+const ANTHROPIC_OAUTH_BETAS: &str = "claude-code-20250219,oauth-2025-04-20";
+
+/// Anthropic payload for sign-in tokens: the Claude Code identity block goes
+/// first, followed by Linkgo's own system prompt.
+fn anthropic_oauth_payload(input: &AgentProviderStreamInput) -> Value {
+    let mut payload = anthropic_payload(input);
+    let mut system = vec![json!({ "type": "text", "text": CLAUDE_CODE_IDENTITY })];
+    if let Some(text) = payload.get("system").and_then(Value::as_str) {
+        system.push(json!({ "type": "text", "text": text }));
+    }
+    payload["system"] = Value::Array(system);
+    payload
+}
+
+fn anthropic_oauth_headers() -> [(&'static str, &'static str); 4] {
+    [
+        ("anthropic-version", "2023-06-01"),
+        ("anthropic-beta", ANTHROPIC_OAUTH_BETAS),
+        ("User-Agent", CLAUDE_CLI_USER_AGENT),
+        ("x-app", "cli"),
+    ]
+}
+
+/// Outcome of a signed-in provider call; 401 is kept distinct so the caller
+/// can force one refresh and retry once.
+enum OAuthCallError {
+    Unauthorized,
+    Failed(String),
+}
+
+fn send_oauth_request(
+    request: reqwest::blocking::RequestBuilder,
+    body_is_sse: bool,
+) -> Result<Value, OAuthCallError> {
+    let response = request
+        .send()
+        .map_err(|_| OAuthCallError::Failed("Provider request failed".to_string()))?;
+    let status = response.status();
+    if status.as_u16() == 401 {
+        return Err(OAuthCallError::Unauthorized);
+    }
+    if status.is_redirection() {
+        return Err(OAuthCallError::Failed(format!(
+            "Provider request was redirected (HTTP {}); redirects are not followed",
+            status.as_u16()
+        )));
+    }
+    let bytes = crate::net::transport::read_bounded_bytes(response, PROVIDER_MAX_RESPONSE_BYTES)
+        .map_err(|_| OAuthCallError::Failed("Provider response was too large".to_string()))?;
+    if !status.is_success() {
+        let parsed = serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null);
+        let message = parse_provider_error(&parsed);
+        return Err(OAuthCallError::Failed(format!(
+            "{message} (HTTP {})",
+            status.as_u16()
+        )));
+    }
+    if body_is_sse {
+        let text = String::from_utf8_lossy(&bytes);
+        return agent_codex::completed_response_from_sse(&text).map_err(OAuthCallError::Failed);
+    }
+    serde_json::from_slice::<Value>(&bytes)
+        .map_err(|_| OAuthCallError::Failed("Provider response was not valid JSON".to_string()))
+}
+
+fn call_with_oauth(
+    provider: AiOAuthProvider,
+    input: &AgentProviderStreamInput,
+    credentials: &OAuthCredentials,
+) -> Result<Value, OAuthCallError> {
+    let client =
+        provider_http_client(TransportPolicy::PUBLIC_HTTPS).map_err(OAuthCallError::Failed)?;
+    match provider {
+        AiOAuthProvider::Anthropic => {
+            let endpoint = resolve_endpoint(None, default_base_url("anthropic"), false)
+                .map_err(OAuthCallError::Failed)?;
+            let mut request = client
+                .post(anthropic_messages_url(&endpoint.base_url))
+                .bearer_auth(&credentials.access_token)
+                .json(&anthropic_oauth_payload(input));
+            for (name, value) in anthropic_oauth_headers() {
+                request = request.header(name, value);
+            }
+            send_oauth_request(request, false)
+        }
+        AiOAuthProvider::OpenAi => {
+            agent_codex::ensure_codex_model(&input.model_name).map_err(OAuthCallError::Failed)?;
+            let account_id = credentials.account_id.as_deref().ok_or_else(|| {
+                OAuthCallError::Failed(reconnect_message(AiOAuthProvider::OpenAi))
+            })?;
+            let endpoint = resolve_endpoint(None, Some(agent_codex::CODEX_BASE_URL), false)
+                .map_err(OAuthCallError::Failed)?;
+            let mut request = client
+                .post(agent_codex::codex_responses_url(&endpoint.base_url))
+                .bearer_auth(&credentials.access_token)
+                .json(&agent_codex::codex_payload(input));
+            for (name, value) in agent_codex::codex_headers(&input.model_name, account_id) {
+                request = request.header(name, value);
+            }
+            send_oauth_request(request, true)
+        }
+    }
+}
+
+fn oauth_response_chunks(
+    provider: AiOAuthProvider,
+    input: &AgentProviderStreamInput,
+    response: &Value,
+) -> Result<AgentProviderStreamResult, String> {
+    let (tools, _) = native_agent_provider_options(input);
+    let chunks = match provider {
+        AiOAuthProvider::Anthropic => anthropic_response_chunks(response, &tools)?,
+        AiOAuthProvider::OpenAi => agent_codex::codex_response_chunks(response, &tools)?,
+    };
+    Ok(AgentProviderStreamResult { chunks })
+}
+
+/// Signed-in (OAuth) execution: refresh if expiring, call, and on a 401 force
+/// one refresh and retry once. A rejected refresh leaves the credential in
+/// the reconnect state.
+fn execute_with_oauth(
+    storage: &dyn CredentialStore,
+    locks: &OAuthRefreshLocks,
+    provider: AiOAuthProvider,
+    input: &AgentProviderStreamInput,
+    stored: &OAuthCredentials,
+) -> Result<AgentProviderStreamResult, String> {
+    if stored.needs_reauth {
+        return Err(reconnect_message(provider));
+    }
+    let endpoints = RefreshEndpoints::production(provider)?;
+    let credentials = ensure_fresh_ai_credential(
+        storage,
+        locks,
+        provider,
+        &endpoints,
+        unix_timestamp(),
+        RefreshMode::IfExpiring,
+    )?;
+    match call_with_oauth(provider, input, &credentials) {
+        Ok(response) => oauth_response_chunks(provider, input, &response),
+        Err(OAuthCallError::Failed(message)) => Err(message),
+        Err(OAuthCallError::Unauthorized) => {
+            let refreshed = ensure_fresh_ai_credential(
+                storage,
+                locks,
+                provider,
+                &endpoints,
+                unix_timestamp(),
+                RefreshMode::AfterRejected(&credentials.access_token),
+            )?;
+            match call_with_oauth(provider, input, &refreshed) {
+                Ok(response) => oauth_response_chunks(provider, input, &response),
+                Err(OAuthCallError::Failed(message)) => Err(message),
+                Err(OAuthCallError::Unauthorized) => Err(format!(
+                    "{} rejected the signed-in credential (HTTP 401). Reconnect in Integrations",
+                    provider.label()
+                )),
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub fn linkgo_agent_provider_stream(
     app: AppHandle,
+    locks: tauri::State<'_, OAuthRefreshLocks>,
     input: AgentProviderStreamInput,
 ) -> Result<AgentProviderStreamResult, String> {
     let storage = AuthStorage::new(&app)?;
     let credential = storage
         .load(&input.provider_key)?
         .ok_or_else(|| "Provider is not connected".to_string())?;
-    let StoredCredential::ApiKey(credentials) = credential else {
-        return Err("Provider-backed agent execution requires API-key credentials".to_string());
+    let credentials = match credential {
+        StoredCredential::ApiKey(credentials) => credentials,
+        StoredCredential::OAuth(oauth) => {
+            let provider = AiOAuthProvider::from_key(&input.provider_key).ok_or_else(|| {
+                "Provider-backed agent execution requires API-key credentials".to_string()
+            })?;
+            return execute_with_oauth(&storage, &locks, provider, &input, &oauth);
+        }
     };
     let transport = provider_transport(&input.provider_key)
         .ok_or_else(|| format!("Unsupported agent provider: {}", input.provider_key))?;
@@ -1455,6 +1640,47 @@ mod tests {
     }
 
     #[test]
+    fn signed_in_credential_needing_reconnect_fails_before_any_request() {
+        struct EmptyStore;
+        impl CredentialStore for EmptyStore {
+            fn load(&self, _: &str) -> Result<Option<StoredCredential>, String> {
+                Ok(None)
+            }
+            fn save(&self, _: StoredCredential) -> Result<(), String> {
+                Err("must not save".to_string())
+            }
+        }
+        let input: AgentProviderStreamInput = serde_json::from_value(json!({
+            "providerKey": "openai",
+            "modelName": "gpt-6-sol",
+            "request": { "messages": [] },
+            "tools": [],
+            "toolChoice": "none",
+        }))
+        .expect("input");
+        let stored = OAuthCredentials {
+            access_token: String::new(),
+            refresh_token: None,
+            expires_at: None,
+            refresh_expires_at: None,
+            account_id: None,
+            account_label: None,
+            scopes: Vec::new(),
+            provider_key: "openai".to_string(),
+            needs_reauth: true,
+        };
+        let error = execute_with_oauth(
+            &EmptyStore,
+            &OAuthRefreshLocks::default(),
+            AiOAuthProvider::OpenAi,
+            &input,
+            &stored,
+        )
+        .unwrap_err();
+        assert_eq!(error, "OpenAI sign-in expired — reconnect in Integrations");
+    }
+
+    #[test]
     fn serializes_anthropic_compatible_payload_and_response_chunks() {
         let input = AgentProviderStreamInput {
             provider_key: "anthropic".to_string(),
@@ -1480,6 +1706,22 @@ mod tests {
             }],
             tool_choice: json!("auto"),
         };
+
+        let oauth_payload = anthropic_oauth_payload(&input);
+        assert_eq!(
+            oauth_payload["system"][0]["text"],
+            json!(CLAUDE_CODE_IDENTITY)
+        );
+        assert_eq!(
+            oauth_payload["system"][1]["text"],
+            json!("System guardrails")
+        );
+        let headers = anthropic_oauth_headers();
+        assert!(headers.contains(&("anthropic-beta", "claude-code-20250219,oauth-2025-04-20")));
+        assert!(headers.contains(&("x-app", "cli")));
+        assert!(headers
+            .iter()
+            .any(|(name, value)| *name == "User-Agent" && value.starts_with("claude-cli/")));
 
         let payload = anthropic_payload(&input);
         assert_eq!(payload["system"], "System guardrails");

@@ -493,6 +493,7 @@ mod tests {
             account_label: Some("LinkedIn member".to_string()),
             scopes: vec!["w_member_social".to_string()],
             provider_key: "linkedin".to_string(),
+            needs_reauth: false,
         }
     }
 
@@ -562,6 +563,7 @@ mod tests {
             account_label: None,
             scopes: Vec::new(),
             provider_key: "linkedin".to_string(),
+            needs_reauth: false,
         });
 
         let merged = merge_refreshed_linkedin_credential(previous, refreshed).unwrap();
