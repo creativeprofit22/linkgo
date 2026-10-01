@@ -277,8 +277,8 @@ export function HomePage(): React.ReactNode {
       contentClassName="flex overflow-hidden"
     >
       <div className="flex h-full w-full flex-col overflow-hidden sm:flex-row">
-        <aside className="border-border/70 bg-background/55 flex w-full shrink-0 flex-col border-b p-2 backdrop-blur sm:w-72 sm:border-r sm:border-b-0 sm:p-4">
-          <div className="mb-2 space-y-2 sm:mb-6">
+        <aside className="border-border/70 bg-background/55 flex w-full shrink-0 flex-col border-b p-2 backdrop-blur sm:min-h-0 sm:w-72 sm:border-r sm:border-b-0 sm:p-4">
+          <div className="mb-2 shrink-0 space-y-2 sm:mb-6">
             <div className="flex items-center gap-2">
               <Activity className="text-linkgo-blue size-5" />
               <h1 className="text-lg font-semibold">Linkgo</h1>
@@ -289,7 +289,7 @@ export function HomePage(): React.ReactNode {
           </div>
 
           <nav
-            className="flex gap-2 overflow-x-auto pb-1 sm:block sm:space-y-2 sm:overflow-visible sm:pb-0"
+            className="flex gap-2 overflow-x-auto pb-1 sm:-mr-2 sm:block sm:min-h-0 sm:flex-1 sm:space-y-2 sm:overflow-x-hidden sm:overflow-y-auto sm:pr-2 sm:pb-0"
             aria-label="Linkgo sections"
           >
             {tabs.map((tab) => {

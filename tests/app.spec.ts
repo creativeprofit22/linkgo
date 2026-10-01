@@ -19,6 +19,30 @@ test("app root renders campaigns by default", async ({ page }) => {
   await expect(page.getByText("No campaigns yet")).toBeVisible();
 });
 
+test("sidebar sections scroll vertically when the window is short", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  const nav = page.getByRole("navigation", { name: "Linkgo sections" });
+  const metrics = await nav.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+    overflowY: getComputedStyle(element).overflowY,
+  }));
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  expect(metrics.overflowY).toBe("auto");
+
+  await nav.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const safety = nav.getByRole("button", { name: /^Safety/ });
+  await expect(safety).toBeInViewport();
+  await safety.click();
+  await expect(safety).toHaveAttribute("aria-current", "page");
+});
+
 test("renderer shell does not load GG AI provider code", async ({ page }) => {
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(
