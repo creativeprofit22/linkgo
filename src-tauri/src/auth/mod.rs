@@ -2,6 +2,7 @@ pub mod ai_oauth;
 pub mod ai_signin;
 pub mod anthropic_oauth;
 pub mod commands;
+pub mod external_browser;
 pub mod linkedin;
 pub mod linkedin_api;
 pub mod loopback;

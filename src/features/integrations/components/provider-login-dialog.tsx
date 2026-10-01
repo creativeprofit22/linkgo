@@ -1,11 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  Copy,
-  ExternalLink,
-  KeyRound,
-  LogOut,
-  ShieldCheck,
-} from "lucide-react";
+import { Copy, KeyRound, LogOut, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -429,14 +423,11 @@ export function ProviderLoginDialog({
               {oauthStart !== null && (
                 <div className="space-y-3 rounded-lg border p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <a
-                      href={oauthStart.authUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-linkgo-blue inline-flex items-center gap-2 text-sm font-medium"
-                    >
-                      Open authorization URL <ExternalLink className="size-3" />
-                    </a>
+                    <p className="text-sm" role="status">
+                      {oauthStart.browserOpened
+                        ? "Opened the authorization page in your browser."
+                        : "Couldn't open your browser. Copy the authorization URL instead."}
+                    </p>
                     <Button
                       type="button"
                       size="sm"

@@ -97,6 +97,8 @@ export interface OAuthStartResult {
   authUrl: string;
   state: string;
   needsCode: boolean;
+  /** Whether Linkgo opened the sign-in page in the default browser. */
+  browserOpened: boolean;
 }
 
 export interface OAuthCodeInput {

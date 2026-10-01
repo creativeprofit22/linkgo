@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ExternalLink, Loader2, TriangleAlert } from "lucide-react";
+import { Copy, Loader2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,6 +60,9 @@ export function AiAccountSignIn({
   const [pasted, setPasted] = useState("");
   const [working, setWorking] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
 
   const replacesApiKey = account !== null && account.auth_method === "api_key";
   const waitingForBrowser = start !== null && !start.needsCode;
@@ -104,6 +107,7 @@ export function AiAccountSignIn({
     setWorking(true);
     setFlowError(null);
     try {
+      setCopyState("idle");
       setStart(
         await onStart({ providerKey, acknowledgeTermsRisk: acknowledged }),
       );
@@ -128,6 +132,18 @@ export function AiAccountSignIn({
       // The hook already reports the error; keep the field for a retry.
     } finally {
       setWorking(false);
+    }
+  }
+
+  // The embedded WebView cannot open external links itself; native code opens
+  // the browser on Start, and this copy is the fallback.
+  async function handleCopyLink(): Promise<void> {
+    if (start === null) return;
+    try {
+      await navigator.clipboard.writeText(start.authUrl);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
     }
   }
 
@@ -194,15 +210,27 @@ export function AiAccountSignIn({
 
       {start !== null && (
         <div className="space-y-3">
-          <a
-            href={start.authUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-linkgo-blue inline-flex items-center gap-2 text-sm font-medium"
-          >
-            Open {providerLabel} sign-in page{" "}
-            <ExternalLink className="size-3" aria-hidden="true" />
-          </a>
+          <p className="text-sm" role="status">
+            {start.browserOpened
+              ? `Opened the ${providerLabel} sign-in page in your browser. If you don't see it, copy the link and paste it into your browser.`
+              : `Couldn't open your browser. Copy the link and paste it into your browser to sign in.`}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void handleCopyLink()}
+            >
+              <Copy className="size-3" aria-hidden="true" />
+              {copyState === "copied" ? "Copied" : "Copy sign-in link"}
+            </Button>
+            {copyState === "failed" && (
+              <p className="text-destructive text-sm" role="alert">
+                Could not copy automatically.
+              </p>
+            )}
+          </div>
           {waitingForBrowser && (
             <p
               className="text-muted-foreground flex items-center gap-2 text-sm"

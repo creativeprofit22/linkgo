@@ -74,6 +74,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(plugins::system_tray::init())
         .setup(|app| {
+            window_commands::create_main_window(app.handle())?;
             let pool =
                 tauri::async_runtime::block_on(autopilot_planner::managed_pool(app.handle()))
                     .map_err(std::io::Error::other)?;

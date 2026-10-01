@@ -20682,6 +20682,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                 : "https://claude.ai/oauth/authorize?code=true&state=ai-state",
             state: "ai-state",
             needsCode: providerKey === "anthropic",
+            browserOpened: true,
           });
         }
         return Promise.resolve({
@@ -20690,6 +20691,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             "https://www.linkedin.com/oauth/v2/authorization?response_type=code&state=test-oauth-state&code_challenge=test-pkce-challenge&code_challenge_method=S256",
           state: "test-oauth-state",
           needsCode: true,
+          browserOpened: false,
         });
       }
       if (cmd === "linkgo_auth_oauth_cancel") {

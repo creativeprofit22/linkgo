@@ -150,7 +150,9 @@ test("starts LinkedIn OAuth manual code flow and disconnects", async ({
   await linkedinCard.getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: "LinkedIn connection" });
   await dialog.getByRole("button", { name: "Continue with OAuth" }).click();
-  await expect(dialog.getByText("Open authorization URL")).toBeVisible();
+  await expect(dialog.getByRole("status")).toHaveText(
+    "Couldn't open your browser. Copy the authorization URL instead.",
+  );
   await expect(
     dialog.getByRole("button", { name: "Copy authorization URL" }),
   ).toBeVisible();
@@ -390,8 +392,16 @@ test("Anthropic paste flow connects and signs out without showing tokens", async
     .getByRole("button", { name: "Sign in with Anthropic account" })
     .click();
 
+  // The WebView cannot follow external links, so native code opens the
+  // browser and the UI only reports it, with no dead link left behind.
   await expect(
-    dialog.getByRole("link", { name: /Open Anthropic sign-in page/ }),
+    dialog.getByText("Opened the Anthropic sign-in page in your browser.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(dialog.locator('a[target="_blank"]')).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: "Copy sign-in link" }),
   ).toBeVisible();
   await expect(dialog.getByText("Waiting for the browser")).toBeHidden();
   await dialog.getByLabel("Sign-in code").fill("pasted-code#ai-state");

@@ -53,7 +53,7 @@ Transport (`src-tauri/src/net/transport.rs`): environment proxies are ignored, r
 Consented local endpoints are trusted by design. See `docs/security/threat-model.md`.
 
 - LinkedIn uses 3-legged OAuth with state validation and manual authorization-code entry after native config is present.
-- The OAuth dialog exposes the generated authorization URL and a copy button for manual browser handoff.
+- Starting OAuth opens the authorization page in the default browser from native code (allowlisted authorize endpoints only); the dialog says whether that worked and keeps a copy button for manual browser handoff.
 - LinkedIn token refresh runs through the native boundary when refresh credentials are available.
 - LinkedIn OIDC userinfo backfills connected member id and display label without exposing tokens to React.
 - Approved or scheduled posts can be explicitly published through a native LinkedIn API command after an operator confirmation.

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
+use super::external_browser;
 use super::publish::{self, sqlite_pool, LinkedInPublishCommentInput, LinkedInPublishPostInput};
 use super::storage::AuthStorage;
 use super::{
@@ -103,6 +104,9 @@ pub struct OAuthStartResult {
     pub auth_url: String,
     pub state: String,
     pub needs_code: bool,
+    /// Whether native code launched the default browser at `auth_url`. The
+    /// WebView cannot open external links, so the UI falls back to copying.
+    pub browser_opened: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -270,11 +274,13 @@ pub fn linkgo_auth_oauth_start(
                 auth_url: Some(start.auth_url.clone()),
             },
         );
+        let browser_opened = external_browser::open_authorize_url(&start.auth_url).is_ok();
         return Ok(OAuthStartResult {
             provider_key: input.provider_key,
             auth_url: start.auth_url,
             state: start.state,
             needs_code: start.needs_code,
+            browser_opened,
         });
     }
     if input.provider_key != "linkedin" {
@@ -296,11 +302,13 @@ pub fn linkgo_auth_oauth_start(
             auth_url: Some(start.auth_url.clone()),
         },
     );
+    let browser_opened = external_browser::open_authorize_url(&start.auth_url).is_ok();
     Ok(OAuthStartResult {
         provider_key: input.provider_key,
         auth_url: start.auth_url,
         state: start.state,
         needs_code: start.needs_code,
+        browser_opened,
     })
 }
 

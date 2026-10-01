@@ -17,6 +17,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Linkgo",
         "width": 1180,
         "height": 780,

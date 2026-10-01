@@ -104,6 +104,7 @@ export const oauthStartResultSchema = z.object({
   authUrl: z.string().trim(),
   state: z.string().trim().min(8),
   needsCode: z.boolean(),
+  browserOpened: z.boolean(),
 });
 
 export const oauthCodeSchema = z.object({
