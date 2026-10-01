@@ -12,7 +12,7 @@ mod agent_codex;
 
 use crate::auth::{
     ai_oauth::AiOAuthProvider,
-    anthropic_oauth::CLAUDE_CLI_USER_AGENT,
+    claude_code_version::{claude_cli_user_agent, note_required_claude_code_version},
     refresh::{
         ensure_fresh_ai_credential, reconnect_message, CredentialStore, OAuthRefreshLocks,
         RefreshEndpoints, RefreshMode,
@@ -1019,11 +1019,11 @@ fn anthropic_oauth_payload(input: &AgentProviderStreamInput) -> Value {
     payload
 }
 
-fn anthropic_oauth_headers() -> [(&'static str, &'static str); 4] {
+fn anthropic_oauth_headers(user_agent: &str) -> [(&'static str, &str); 4] {
     [
         ("anthropic-version", "2023-06-01"),
         ("anthropic-beta", ANTHROPIC_OAUTH_BETAS),
-        ("User-Agent", CLAUDE_CLI_USER_AGENT),
+        ("User-Agent", user_agent),
         ("x-app", "cli"),
     ]
 }
@@ -1074,6 +1074,7 @@ fn call_with_oauth(
     provider: AiOAuthProvider,
     input: &AgentProviderStreamInput,
     credentials: &OAuthCredentials,
+    claude_cli_user_agent: &str,
 ) -> Result<Value, OAuthCallError> {
     let client =
         provider_http_client(TransportPolicy::PUBLIC_HTTPS).map_err(OAuthCallError::Failed)?;
@@ -1085,7 +1086,7 @@ fn call_with_oauth(
                 .post(anthropic_messages_url(&endpoint.base_url))
                 .bearer_auth(&credentials.access_token)
                 .json(&anthropic_oauth_payload(input));
-            for (name, value) in anthropic_oauth_headers() {
+            for (name, value) in anthropic_oauth_headers(claude_cli_user_agent) {
                 request = request.header(name, value);
             }
             send_oauth_request(request, false)
@@ -1124,18 +1125,52 @@ fn oauth_response_chunks(
 
 /// Signed-in (OAuth) execution: refresh if expiring, call, and on a 401 force
 /// one refresh and retry once. A rejected refresh leaves the credential in
-/// the reconnect state.
+/// the reconnect state. For Anthropic, a "version X or newer is required"
+/// failure that raises the cached Claude Code version (`note_required`) is
+/// retried once with the rebuilt User-Agent, like gg's agent session.
 fn execute_with_oauth(
     storage: &dyn CredentialStore,
     locks: &OAuthRefreshLocks,
     provider: AiOAuthProvider,
     input: &AgentProviderStreamInput,
     stored: &OAuthCredentials,
+    claude_cli_user_agent: impl Fn() -> String,
+    note_required: impl FnOnce(&str) -> bool,
+) -> Result<AgentProviderStreamResult, String> {
+    execute_with_oauth_using(
+        storage,
+        locks,
+        provider,
+        input,
+        stored,
+        claude_cli_user_agent,
+        note_required,
+        |credentials, user_agent| call_with_oauth(provider, input, credentials, user_agent),
+    )
+}
+
+/// `execute_with_oauth` with the provider call injected so tests can point
+/// it at a local server.
+#[allow(clippy::too_many_arguments)]
+fn execute_with_oauth_using(
+    storage: &dyn CredentialStore,
+    locks: &OAuthRefreshLocks,
+    provider: AiOAuthProvider,
+    input: &AgentProviderStreamInput,
+    stored: &OAuthCredentials,
+    claude_cli_user_agent: impl Fn() -> String,
+    note_required: impl FnOnce(&str) -> bool,
+    call: impl Fn(&OAuthCredentials, &str) -> Result<Value, OAuthCallError>,
 ) -> Result<AgentProviderStreamResult, String> {
     if stored.needs_reauth {
         return Err(reconnect_message(provider));
     }
-    let endpoints = RefreshEndpoints::production(provider)?;
+    // Resolved lazily (it may hit npm) and only for Anthropic.
+    let mut user_agent = match provider {
+        AiOAuthProvider::Anthropic => claude_cli_user_agent(),
+        AiOAuthProvider::OpenAi => String::new(),
+    };
+    let mut endpoints = RefreshEndpoints::production(provider, user_agent.clone())?;
     let credentials = ensure_fresh_ai_credential(
         storage,
         locks,
@@ -1144,7 +1179,17 @@ fn execute_with_oauth(
         unix_timestamp(),
         RefreshMode::IfExpiring,
     )?;
-    match call_with_oauth(provider, input, &credentials) {
+    let first = match call(&credentials, &user_agent) {
+        Err(OAuthCallError::Failed(message))
+            if provider == AiOAuthProvider::Anthropic && note_required(&message) =>
+        {
+            user_agent = claude_cli_user_agent();
+            endpoints = RefreshEndpoints::production(provider, user_agent.clone())?;
+            call(&credentials, &user_agent)
+        }
+        other => other,
+    };
+    match first {
         Ok(response) => oauth_response_chunks(provider, input, &response),
         Err(OAuthCallError::Failed(message)) => Err(message),
         Err(OAuthCallError::Unauthorized) => {
@@ -1156,7 +1201,7 @@ fn execute_with_oauth(
                 unix_timestamp(),
                 RefreshMode::AfterRejected(&credentials.access_token),
             )?;
-            match call_with_oauth(provider, input, &refreshed) {
+            match call(&refreshed, &user_agent) {
                 Ok(response) => oauth_response_chunks(provider, input, &response),
                 Err(OAuthCallError::Failed(message)) => Err(message),
                 Err(OAuthCallError::Unauthorized) => Err(format!(
@@ -1184,7 +1229,15 @@ pub fn linkgo_agent_provider_stream(
             let provider = AiOAuthProvider::from_key(&input.provider_key).ok_or_else(|| {
                 "Provider-backed agent execution requires API-key credentials".to_string()
             })?;
-            return execute_with_oauth(&storage, &locks, provider, &input, &oauth);
+            return execute_with_oauth(
+                &storage,
+                &locks,
+                provider,
+                &input,
+                &oauth,
+                || claude_cli_user_agent(&app),
+                |message| note_required_claude_code_version(&app, message),
+            );
         }
     };
     let transport = provider_transport(&input.provider_key)
@@ -1675,9 +1728,154 @@ mod tests {
             AiOAuthProvider::OpenAi,
             &input,
             &stored,
+            || panic!("a reconnect-required credential must not resolve the Claude CLI version"),
+            |_| panic!("a reconnect-required credential must not note a required version"),
         )
         .unwrap_err();
         assert_eq!(error, "OpenAI sign-in expired — reconnect in Integrations");
+    }
+
+    struct AnthropicStore(OAuthCredentials);
+    impl CredentialStore for AnthropicStore {
+        fn load(&self, _: &str) -> Result<Option<StoredCredential>, String> {
+            Ok(Some(StoredCredential::OAuth(self.0.clone())))
+        }
+        fn save(&self, _: StoredCredential) -> Result<(), String> {
+            Err("must not save".to_string())
+        }
+    }
+
+    fn anthropic_oauth_fixture() -> (AgentProviderStreamInput, OAuthCredentials) {
+        let input: AgentProviderStreamInput = serde_json::from_value(json!({
+            "providerKey": "anthropic",
+            "modelName": "claude-opus-5",
+            "request": { "messages": [{ "role": "user", "content": "Hi" }] },
+            "tools": [],
+            "toolChoice": "none",
+        }))
+        .expect("input");
+        let stored = OAuthCredentials {
+            access_token: "access".to_string(),
+            refresh_token: Some("refresh".to_string()),
+            expires_at: None,
+            refresh_expires_at: None,
+            account_id: None,
+            account_label: None,
+            scopes: Vec::new(),
+            provider_key: "anthropic".to_string(),
+            needs_reauth: false,
+        };
+        (input, stored)
+    }
+
+    /// Runs signed-in execution against a scripted local server, handing out
+    /// `user_agents` in order on each User-Agent (re)build.
+    fn run_anthropic_oauth(
+        server: &crate::auth::ai_oauth::test_support::FakeServer,
+        user_agents: &[&str],
+        note_required: impl FnOnce(&str) -> bool,
+    ) -> (Result<AgentProviderStreamResult, String>, usize) {
+        use crate::auth::ai_oauth::test_support::local_client;
+        let (input, stored) = anthropic_oauth_fixture();
+        let builds = std::cell::Cell::new(0usize);
+        let result = execute_with_oauth_using(
+            &AnthropicStore(stored.clone()),
+            &OAuthRefreshLocks::default(),
+            AiOAuthProvider::Anthropic,
+            &input,
+            &stored,
+            || {
+                let index = builds.get();
+                builds.set(index + 1);
+                user_agents[index.min(user_agents.len() - 1)].to_string()
+            },
+            note_required,
+            |credentials, user_agent| {
+                let mut request = local_client()
+                    .post(&server.url)
+                    .bearer_auth(&credentials.access_token)
+                    .json(&anthropic_oauth_payload(&input));
+                for (name, value) in anthropic_oauth_headers(user_agent) {
+                    request = request.header(name, value);
+                }
+                send_oauth_request(request, false)
+            },
+        );
+        (result, builds.get())
+    }
+
+    const ANTHROPIC_OK: &str =
+        r#"{"content":[{"type":"text","text":"Hello"}],"stop_reason":"end_turn"}"#;
+
+    #[test]
+    fn anthropic_oauth_retries_once_after_required_version_error() {
+        use crate::auth::ai_oauth::test_support::spawn_fake_server;
+        let required = json!({
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Claude Code 2.1.278 does not support this model; version 2.1.280 or newer is required."
+            }
+        });
+        let server = spawn_fake_server(
+            vec![(400, required.to_string()), (200, ANTHROPIC_OK.to_string())],
+            std::time::Duration::ZERO,
+        );
+        let noted = std::cell::RefCell::new(None::<String>);
+        let (result, builds) = run_anthropic_oauth(
+            &server,
+            &[
+                "claude-cli/2.1.278 (external, cli)",
+                "claude-cli/2.1.280 (external, cli)",
+            ],
+            |message| {
+                *noted.borrow_mut() = Some(message.to_string());
+                true
+            },
+        );
+
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!((server.hit_count(), builds), (2, 2));
+        assert!(noted
+            .borrow()
+            .as_deref()
+            .is_some_and(|message| message.contains("version 2.1.280 or newer is required")));
+        assert!(server
+            .request(0)
+            .contains("claude-cli/2.1.278 (external, cli)"));
+        assert!(server
+            .request(1)
+            .contains("claude-cli/2.1.280 (external, cli)"));
+    }
+
+    #[test]
+    fn anthropic_oauth_does_not_retry_other_failures_or_unraised_versions() {
+        use crate::auth::ai_oauth::test_support::spawn_fake_server;
+        // Unrelated failure: `note_required` declines, so no retry.
+        let overloaded = json!({ "error": { "message": "Overloaded" } });
+        let server = spawn_fake_server(
+            vec![
+                (529, overloaded.to_string()),
+                (200, ANTHROPIC_OK.to_string()),
+            ],
+            std::time::Duration::ZERO,
+        );
+        let (result, builds) =
+            run_anthropic_oauth(&server, &["claude-cli/2.1.280 (external, cli)"], |_| false);
+        assert_eq!(result.unwrap_err(), "Overloaded (HTTP 529)");
+        assert_eq!((server.hit_count(), builds), (1, 1));
+
+        // Retry happens at most once even if the retried call fails the same way.
+        let required = json!({ "error": { "message": "version 2.1.290 or newer is required" } });
+        let server =
+            spawn_fake_server(vec![(400, required.to_string())], std::time::Duration::ZERO);
+        let (result, builds) =
+            run_anthropic_oauth(&server, &["claude-cli/2.1.280 (external, cli)"], |_| true);
+        assert_eq!(
+            result.unwrap_err(),
+            "version 2.1.290 or newer is required (HTTP 400)"
+        );
+        assert_eq!((server.hit_count(), builds), (2, 2));
     }
 
     #[test]
@@ -1716,12 +1914,10 @@ mod tests {
             oauth_payload["system"][1]["text"],
             json!("System guardrails")
         );
-        let headers = anthropic_oauth_headers();
+        let headers = anthropic_oauth_headers("claude-cli/2.1.283 (external, cli)");
         assert!(headers.contains(&("anthropic-beta", "claude-code-20250219,oauth-2025-04-20")));
         assert!(headers.contains(&("x-app", "cli")));
-        assert!(headers
-            .iter()
-            .any(|(name, value)| *name == "User-Agent" && value.starts_with("claude-cli/")));
+        assert!(headers.contains(&("User-Agent", "claude-cli/2.1.283 (external, cli)")));
 
         let payload = anthropic_payload(&input);
         assert_eq!(payload["system"], "System guardrails");

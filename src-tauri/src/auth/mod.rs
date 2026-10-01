@@ -1,6 +1,7 @@
 pub mod ai_oauth;
 pub mod ai_signin;
 pub mod anthropic_oauth;
+pub mod claude_code_version;
 pub mod commands;
 pub mod external_browser;
 pub mod linkedin;

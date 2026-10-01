@@ -2299,6 +2299,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "getrandom 0.2.17",
  "keyring",
  "oauth2",
  "regex",

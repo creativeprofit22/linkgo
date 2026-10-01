@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
+use super::claude_code_version;
 use super::external_browser;
 use super::publish::{self, sqlite_pool, LinkedInPublishCommentInput, LinkedInPublishPostInput};
 use super::storage::AuthStorage;
@@ -393,16 +394,21 @@ pub fn linkgo_auth_check(
     if let Some(provider) = AiOAuthProvider::from_key(&input.provider_key) {
         if let Some(StoredCredential::OAuth(credentials)) = storage.load(provider.key())? {
             if !credentials.needs_reauth {
-                let result = RefreshEndpoints::production(provider).and_then(|endpoints| {
-                    ensure_fresh_ai_credential(
-                        &storage,
-                        &locks,
-                        provider,
-                        &endpoints,
-                        super::unix_timestamp(),
-                        RefreshMode::IfExpiring,
-                    )
-                });
+                let user_agent = match provider {
+                    AiOAuthProvider::Anthropic => claude_code_version::claude_cli_user_agent(&app),
+                    AiOAuthProvider::OpenAi => String::new(),
+                };
+                let result =
+                    RefreshEndpoints::production(provider, user_agent).and_then(|endpoints| {
+                        ensure_fresh_ai_credential(
+                            &storage,
+                            &locks,
+                            provider,
+                            &endpoints,
+                            super::unix_timestamp(),
+                            RefreshMode::IfExpiring,
+                        )
+                    });
                 if let Err(error) = result {
                     emit_auth_progress(
                         &app,

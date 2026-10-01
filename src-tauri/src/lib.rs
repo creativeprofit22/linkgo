@@ -95,6 +95,7 @@ pub fn run() {
             app.manage(source_imports::SourceImportActivity::default());
             app.manage(auth::refresh::OAuthRefreshLocks::default());
             app.manage(auth::ai_signin::AiSignInSessions::default());
+            app.manage(auth::claude_code_version::ClaudeCodeVersionCache::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

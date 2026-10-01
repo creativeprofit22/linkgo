@@ -55,10 +55,16 @@ impl CredentialStore for AuthStorage {
 pub struct RefreshEndpoints {
     pub client: Client,
     pub token_urls: Vec<String>,
+    /// Sent on Anthropic refreshes (see `claude_code_version`); unused for
+    /// OpenAI.
+    pub claude_cli_user_agent: String,
 }
 
 impl RefreshEndpoints {
-    pub fn production(provider: AiOAuthProvider) -> Result<Self, String> {
+    pub fn production(
+        provider: AiOAuthProvider,
+        claude_cli_user_agent: String,
+    ) -> Result<Self, String> {
         let urls: &[&str] = match provider {
             AiOAuthProvider::OpenAi => openai_oauth::TOKEN_URLS,
             AiOAuthProvider::Anthropic => anthropic_oauth::TOKEN_URLS,
@@ -66,6 +72,7 @@ impl RefreshEndpoints {
         Ok(Self {
             client: provider_http_client(TransportPolicy::PUBLIC_HTTPS)?,
             token_urls: urls.iter().map(|url| url.to_string()).collect(),
+            claude_cli_user_agent,
         })
     }
 }
@@ -136,9 +143,12 @@ pub fn ensure_fresh_ai_credential(
     let urls: Vec<&str> = endpoints.token_urls.iter().map(String::as_str).collect();
     let result = match provider {
         AiOAuthProvider::OpenAi => openai_oauth::refresh(&endpoints.client, &urls, &refresh_token),
-        AiOAuthProvider::Anthropic => {
-            anthropic_oauth::refresh(&endpoints.client, &urls, &refresh_token)
-        }
+        AiOAuthProvider::Anthropic => anthropic_oauth::refresh(
+            &endpoints.client,
+            &urls,
+            &refresh_token,
+            &endpoints.claude_cli_user_agent,
+        ),
     };
     match result {
         Ok(response) => {
@@ -227,6 +237,7 @@ mod tests {
         RefreshEndpoints {
             client: local_client(),
             token_urls: vec![url.to_string()],
+            claude_cli_user_agent: "claude-cli/2.1.283 (external, cli)".to_string(),
         }
     }
 

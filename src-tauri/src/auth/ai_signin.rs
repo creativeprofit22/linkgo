@@ -18,7 +18,10 @@ use super::oauth::{
     verify_and_take_oauth_session,
 };
 use super::storage::AuthStorage;
-use super::{anthropic_oauth, openai_oauth, redact_error, unix_timestamp, StoredCredential};
+use super::{
+    anthropic_oauth, claude_code_version, openai_oauth, redact_error, unix_timestamp,
+    StoredCredential,
+};
 use crate::net::transport::{provider_http_client, TransportPolicy};
 
 pub const TERMS_ACK_REQUIRED: &str =
@@ -110,7 +113,10 @@ pub fn start(
     acknowledged: Option<bool>,
 ) -> Result<AiSignInStart, String> {
     require_terms_acknowledgement(acknowledged)?;
-    let security = create_oauth_security_material();
+    let mut security = create_oauth_security_material();
+    if provider == AiOAuthProvider::Anthropic {
+        security.state = anthropic_oauth::create_state();
+    }
     persist_pending_oauth_session(
         app,
         provider.key(),
@@ -179,6 +185,7 @@ fn spawn_loopback_worker(
 }
 
 fn exchange(
+    app: &AppHandle,
     provider: AiOAuthProvider,
     code: &str,
     state: &str,
@@ -195,6 +202,7 @@ fn exchange(
             code,
             state,
             pkce_verifier,
+            &claude_code_version::claude_cli_user_agent(app),
         ),
     };
     result.map_err(|error| redact_error(error.message()))
@@ -209,7 +217,7 @@ fn complete(
     state: &str,
 ) -> Result<(), String> {
     let pkce_verifier = verify_and_take_oauth_session(app, provider.key(), state)?;
-    let response = exchange(provider, code, state, &pkce_verifier)?;
+    let response = exchange(app, provider, code, state, &pkce_verifier)?;
     let credentials = token_response_to_credentials(provider, response, None, unix_timestamp())?;
     AuthStorage::new(app)?.save(StoredCredential::OAuth(credentials))?;
     emit(
