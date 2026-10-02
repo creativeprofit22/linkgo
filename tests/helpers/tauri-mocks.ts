@@ -19394,6 +19394,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         created_at: attempt.created_at,
         campaign_id: attempt.campaign_id,
         campaign_name: attempt.campaign_name,
+        variant_hook:
+          draftVariants.find(
+            (row) =>
+              row.id ===
+              approvals.find((approval) => approval.id === attempt.approval_id)
+                ?.draft_variant_id,
+          )?.hook ?? "",
       }));
       return Promise.resolve({
         settings: { ...schedulerSettings },

@@ -69,6 +69,8 @@ export type DueScheduleCardItem = ScheduleJob & {
 export type SchedulerPublishAttempt = PublishAttempt & {
   campaign_id: number | null;
   campaign_name: string | null;
+  /** The approved post's opening line; empty when the variant is gone. */
+  variant_hook: string;
 };
 
 export interface SchedulerDashboardSummary {

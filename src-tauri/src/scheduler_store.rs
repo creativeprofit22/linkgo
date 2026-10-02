@@ -95,6 +95,8 @@ pub struct SchedulerPublishAttemptRow {
     pub created_at: String,
     pub campaign_id: Option<i64>,
     pub campaign_name: Option<String>,
+    /// The approved variant's opening line; empty when the variant is gone.
+    pub variant_hook: String,
 }
 
 /// Mirrors the renderer `SchedulerDashboard` shape.
@@ -219,6 +221,7 @@ fn attempt(row: &SqliteRow) -> SchedulerPublishAttemptRow {
         created_at: row.get("created_at"),
         campaign_id: row.get("campaign_id"),
         campaign_name: row.get("campaign_name"),
+        variant_hook: row.get("variant_hook"),
     }
 }
 
@@ -313,10 +316,12 @@ pub(crate) async fn get_scheduler_dashboard(
                 connection,
                 "SELECT pa.id, pa.approval_id, pa.schedule_job_id, pa.platform, pa.status,
                         pa.external_post_url, pa.platform_post_id, pa.error_message,
-                        pa.created_at, a.campaign_id, c.name AS campaign_name
+                        pa.created_at, a.campaign_id, c.name AS campaign_name,
+                        COALESCE(dv.hook, '') AS variant_hook
                  FROM publish_attempts pa
                  LEFT JOIN approvals a ON a.id = pa.approval_id
                  LEFT JOIN campaigns c ON c.id = a.campaign_id
+                 LEFT JOIN draft_variants dv ON dv.id = a.draft_variant_id
                  WHERE pa.schedule_job_id IS NOT NULL AND (?1 IS NULL OR a.campaign_id = ?1)
                  ORDER BY datetime(pa.created_at) DESC, pa.id DESC
                  LIMIT ?2",

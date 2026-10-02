@@ -108,6 +108,7 @@ export const schedulerPublishAttemptSchema = z
     created_at: z.string(),
     campaign_id: idSchema.nullable(),
     campaign_name: z.string().nullable(),
+    variant_hook: z.string(),
   })
   .strict();
 

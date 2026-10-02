@@ -83,6 +83,12 @@ async fn dashboard_counts_and_lists_across_all_campaigns() {
         .recent_attempts
         .iter()
         .all(|a| a.schedule_job_id.is_some()));
+    let hooks: Vec<&str> = dashboard
+        .recent_attempts
+        .iter()
+        .map(|a| a.variant_hook.as_str())
+        .collect();
+    assert_eq!(hooks, vec!["Hook three", "Hook one"]);
     assert!(dashboard.global_kill_switch_enabled);
     assert_eq!(dashboard.kill_switch_reason, "paused");
     assert_eq!(dashboard.settings.id, 1);
@@ -116,6 +122,28 @@ async fn dashboard_filters_to_one_campaign() {
         dashboard.recent_events[0].campaign_name.as_deref(),
         Some("Other")
     );
+    assert_eq!(dashboard.recent_attempts[0].variant_hook, "Hook three");
+}
+
+#[tokio::test]
+async fn attempt_hook_is_empty_when_the_variant_is_gone() {
+    let f = fixture().await;
+    seed(
+        &f.pool,
+        "PRAGMA foreign_keys = OFF;
+         DELETE FROM draft_variants WHERE id = 3;",
+    )
+    .await;
+    let dashboard = get_scheduler_dashboard(
+        &f.pool,
+        SchedulerDashboardInput {
+            campaign_id: Some(2),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(dashboard.recent_attempts.len(), 1);
+    assert_eq!(dashboard.recent_attempts[0].variant_hook, "");
 }
 
 #[tokio::test]
