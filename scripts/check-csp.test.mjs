@@ -21,9 +21,9 @@ function parseCsp(csp) {
 }
 
 const DEV_ONLY_CONNECT = new Set([
-  "ws://localhost:1420",
-  "ws://localhost:1421",
-  "http://localhost:1420",
+  "ws://localhost:17420",
+  "ws://localhost:17421",
+  "http://localhost:17420",
 ]);
 
 for (const key of ["csp", "devCsp"]) {
