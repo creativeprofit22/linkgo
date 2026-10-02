@@ -19810,6 +19810,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return writeSourceImportBatchCommand(args);
       if (cmd === "linkgo_source_import_recover_interrupted")
         return recoverSourceImportsCommand(args);
+      if (cmd.startsWith("linkgo_brightdata_"))
+        return brightDataCommand(cmd, args);
       if (cmd === "linkgo_candidate_delete")
         return deleteCandidateCommand(args);
       if (cmd === "linkgo_candidate_promote_discovery_item")
@@ -21374,6 +21376,269 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         });
       }
       return Promise.resolve(null);
+    };
+
+    /**
+     * Bright Data connector mock mirroring `src-tauri/src/brightdata`: the
+     * enable flag defaults off and every run command re-checks the gates.
+     * Tests tune it through `window.__LINKGO_BRIGHTDATA__`.
+     */
+    type BrightDataMockRun = {
+      id: number;
+      campaignId: number;
+      mode: "post_url" | "keyword" | "watchlist";
+      status:
+        | "starting"
+        | "running"
+        | "ready"
+        | "imported"
+        | "failed"
+        | "cancelled";
+      snapshotId: string | null;
+      requestedCount: number;
+      rowCount: number;
+      sourceImportBatchId: number | null;
+      errorMessage: string;
+      createdAt: string;
+      updatedAt: string;
+      resumable: boolean;
+    };
+    type BrightDataMockEntry = {
+      id: number;
+      campaignId: number;
+      kind: "profile" | "company";
+      url: string;
+      label: string;
+      enabled: boolean;
+      createdAt: string;
+      updatedAt: string;
+    };
+    type BrightDataMockState = {
+      enabled: boolean;
+      killSwitchActive: boolean;
+      apiKeyConfigured: boolean;
+      cliFound: boolean;
+      reviewStatus: "pending_sign_off" | "signed_off";
+      /** Watchlist runs stop at `running` (resumable) instead of importing. */
+      watchlistLeavesRunning: boolean;
+      runs: BrightDataMockRun[];
+      watchlist: BrightDataMockEntry[];
+      nextId: number;
+      calls: string[];
+    };
+    const brightData: BrightDataMockState = {
+      enabled: false,
+      killSwitchActive: false,
+      apiKeyConfigured: true,
+      cliFound: true,
+      reviewStatus: "signed_off",
+      watchlistLeavesRunning: false,
+      runs: [],
+      watchlist: [],
+      nextId: 1,
+      calls: [],
+    };
+    w.__LINKGO_BRIGHTDATA__ = brightData;
+    const brightDataTime = (): string =>
+      new Date().toISOString().slice(0, 19).replace("T", " ");
+    const brightDataCommand = (
+      cmd: string,
+      args: unknown,
+    ): Promise<unknown> => {
+      brightData.calls.push(cmd);
+      const input = ((args as { input?: Record<string, unknown> } | undefined)
+        ?.input ?? {}) as Record<string, unknown>;
+      const campaignId = Number(input.campaignId);
+      const runsFor = (id: number): BrightDataMockRun[] =>
+        brightData.runs
+          .filter((run) => run.campaignId === id)
+          .sort((a, b) => b.id - a.id);
+      const runsToday = (id: number): number =>
+        runsFor(id).filter((run) =>
+          run.createdAt.startsWith(brightDataTime().slice(0, 10)),
+        ).length;
+      const gate = (id: number, resume: boolean): void => {
+        if (!brightData.enabled)
+          throw new Error(
+            "The Bright Data connector is turned off. Turn it on after the connector review is signed off.",
+          );
+        if (brightData.killSwitchActive)
+          throw new Error(
+            "The global kill switch is on, so Bright Data runs are blocked",
+          );
+        if (!brightData.apiKeyConfigured)
+          throw new Error(
+            "Add a Bright Data API key in Connected accounts first",
+          );
+        if (!resume && runsToday(id) >= 5)
+          throw new Error(
+            "This campaign already used its 5 Bright Data runs today",
+          );
+      };
+      const findRun = (): BrightDataMockRun => {
+        const run = brightData.runs.find((item) => item.id === input.runId);
+        if (!run) throw new Error("Bright Data run not found");
+        return run;
+      };
+      switch (cmd) {
+        case "linkgo_brightdata_status":
+          return Promise.resolve({
+            enabled: brightData.enabled,
+            killSwitchActive: brightData.killSwitchActive,
+            apiKeyConfigured: brightData.apiKeyConfigured,
+            cliFound: brightData.cliFound,
+            pinnedCliVersion: "0.3.7",
+            reviewStatus: brightData.reviewStatus,
+            runsToday: runsToday(campaignId),
+            caps: {
+              maxPostsPerRun: 20,
+              maxWatchlistEntriesPerRun: 10,
+              maxRunsPerCampaignPerDay: 5,
+              defaultWindowDays: 7,
+              maxWindowDays: 30,
+            },
+          });
+        case "linkgo_brightdata_set_enabled":
+          brightData.enabled = input.enabled === true;
+          return Promise.resolve(brightData.enabled);
+        case "linkgo_brightdata_watchlist_list":
+          return Promise.resolve(
+            brightData.watchlist.filter((e) => e.campaignId === campaignId),
+          );
+        case "linkgo_brightdata_watchlist_add": {
+          const kind = input.kind === "company" ? "company" : "profile";
+          const url = String(input.url ?? "").trim();
+          const prefix = kind === "profile" ? "/in/" : "/company/";
+          if (
+            !/^https:\/\/([a-z]+\.)?linkedin\.com\//.test(url) ||
+            !url.includes(prefix)
+          )
+            throw new Error(
+              kind === "profile"
+                ? "Use a LinkedIn profile URL like https://www.linkedin.com/in/name"
+                : "Use a LinkedIn company URL like https://www.linkedin.com/company/name",
+            );
+          if (
+            brightData.watchlist.some(
+              (e) => e.campaignId === campaignId && e.url === url,
+            )
+          )
+            throw new Error("That URL is already on this campaign's watchlist");
+          const entry: BrightDataMockEntry = {
+            id: brightData.nextId++,
+            campaignId,
+            kind,
+            url,
+            label: String(input.label ?? "").trim(),
+            enabled: true,
+            createdAt: brightDataTime(),
+            updatedAt: brightDataTime(),
+          };
+          brightData.watchlist.push(entry);
+          return Promise.resolve(entry);
+        }
+        case "linkgo_brightdata_watchlist_update": {
+          const entry = brightData.watchlist.find((e) => e.id === input.id);
+          if (!entry) throw new Error("Watchlist entry not found");
+          entry.enabled = input.enabled === true;
+          entry.label = String(input.label ?? "");
+          return Promise.resolve(entry);
+        }
+        case "linkgo_brightdata_watchlist_remove":
+          brightData.watchlist = brightData.watchlist.filter(
+            (e) => e.id !== input.id,
+          );
+          return Promise.resolve(null);
+        case "linkgo_brightdata_recover_interrupted": {
+          // CLI runs left active by a previous session cannot resume.
+          let recovered = 0;
+          for (const run of runsFor(campaignId)) {
+            if (
+              run.status === "starting" ||
+              (run.mode !== "watchlist" && run.status === "running")
+            ) {
+              run.status = "failed";
+              run.errorMessage = "Interrupted when the app closed";
+              run.resumable = false;
+              recovered += 1;
+            }
+          }
+          return Promise.resolve({ recovered });
+        }
+        case "linkgo_brightdata_list_runs":
+          return Promise.resolve(runsFor(campaignId).slice(0, 20));
+        case "linkgo_brightdata_start_run": {
+          gate(campaignId, false);
+          const request = input.request as {
+            mode: BrightDataMockRun["mode"];
+            postUrls?: string[];
+            kind?: string;
+          };
+          const watchCount = brightData.watchlist.filter(
+            (e) =>
+              e.campaignId === campaignId &&
+              e.enabled &&
+              e.kind === request.kind,
+          ).length;
+          if (request.mode === "watchlist" && watchCount === 0)
+            throw new Error("No enabled watchlist entries of that kind");
+          const leaveRunning =
+            request.mode === "watchlist" && brightData.watchlistLeavesRunning;
+          const requested =
+            request.mode === "post_url"
+              ? (request.postUrls?.length ?? 0)
+              : request.mode === "watchlist"
+                ? watchCount
+                : 0;
+          const run: BrightDataMockRun = {
+            id: brightData.nextId++,
+            campaignId,
+            mode: request.mode,
+            status: leaveRunning ? "running" : "imported",
+            snapshotId: request.mode === "watchlist" ? "sd_mock" : null,
+            requestedCount: requested,
+            rowCount: leaveRunning ? 0 : Math.max(requested, 1),
+            sourceImportBatchId: null,
+            errorMessage: leaveRunning
+              ? "Bright Data is still collecting posts. Use Resume to check again."
+              : "",
+            createdAt: brightDataTime(),
+            updatedAt: brightDataTime(),
+            resumable: leaveRunning,
+          };
+          brightData.runs.push(run);
+          return Promise.resolve(run);
+        }
+        case "linkgo_brightdata_resume_run": {
+          const run = findRun();
+          gate(run.campaignId, true);
+          if (!run.resumable)
+            throw new Error(
+              "Only watchlist runs that are collecting can be resumed",
+            );
+          Object.assign(run, {
+            status: "imported",
+            rowCount: 2,
+            errorMessage: "",
+            resumable: false,
+            updatedAt: brightDataTime(),
+          });
+          return Promise.resolve(run);
+        }
+        case "linkgo_brightdata_cancel_run": {
+          const run = findRun();
+          if (["starting", "running", "ready"].includes(run.status)) {
+            Object.assign(run, {
+              status: "cancelled",
+              errorMessage: "Cancelled",
+              resumable: false,
+            });
+          }
+          return Promise.resolve(run);
+        }
+        default:
+          throw new Error(`Unmocked Bright Data command ${cmd}`);
+      }
     };
 
     /**

@@ -1,6 +1,6 @@
 # Roadmap Mapping
 
-This document maps `roadmap.md` to implementation slices. Roadmaps 1, 9, 18, and 19 are implemented; Roadmap 8 is Partial (8A); the remaining items are partial. Roadmap 3 remains partial and blocked after completed slices 3A, 3B, 3C, and 3D; one compliant production source connector is the sole remaining gate.
+This document maps `roadmap.md` to implementation slices. Roadmaps 1, 9, 18, and 19 are implemented; Roadmap 8 is Partial (8A); the remaining items are partial. Roadmap 3 remains partial after completed slices 3A, 3B, 3C, and 3D; the Bright Data production connector (3E) is implemented, reviewed and live-verified (post URL and watchlist modes).
 
 ## Delivered slices and partial foundations
 
@@ -120,10 +120,22 @@ Delivered in this slice:
 - Atomic creation of a Linkgo scoring backlog item, queued score-first workflow, seven canonical steps, workflow events, plan linkage, and planner event.
 - Durable skipped plans for batches whose accepted candidates were later deleted.
 - Autopilot dashboard with controls, filtering, counts, source-to-work cards, event history, failure recovery, and explicit local-only scope.
-- Backlog and Workflow origin projections without changing executor or external-action behavior.
+- Tasks and Automations tab origin projections without changing executor or external-action behavior.
 - Real-SQLite Rust tests and Playwright coverage for bounds, exclusions, idempotency, races, rollback, kill switch, stale responses, accessibility, and narrow reflow.
 
 Roadmap 3D calls no model, LinkedIn API, remote connector, scraper, browser automation, scheduler publish command, or comment command. Roadmap 3 remains partial and blocked only until one production connector passes API-access, terms, permissions, and permitted-use review.
+
+### Roadmap 3E Bright Data source connector (implemented, live-verified)
+
+Delivered:
+
+- Review document `docs/security/brightdata-connector-review.md` (status: signed off by the owner on 2026-10-01).
+- Migration 38: `source_type` admits `brightdata`; default-off `app_settings.brightdata_connector_enabled`; `source_watchlist_entries`; `brightdata_runs` with a one-active-run-per-campaign partial unique index.
+- Native connector `src-tauri/src/brightdata/`: pinned-CLI transport for post URLs, fixed-host datasets v3 client for watchlist discovery, pure record mapping, gates (enable flag, kill switch, campaign, keyring key, caps, one active run), interrupted-run recovery, and import through the existing Source Imports writer.
+- `brightdata` API-key provider (no Base URL override); renderer contracts, hook, and Bright Data source panel in the Ideas tab.
+- Rust tests with a fake process runner, local mock HTTP server and real SQLite; Playwright schema and mocked-IPC UI coverage. Fixtures are provisional.
+
+Review signed off and live smoke recorded in `docs/verification/2026-10-01-brightdata-live-smoke.md`: post URL and company watchlist pass; keyword mode was removed on 2026-10-01 after Bright Data retired its Discover API (HTTP 410). Open: verify a person-profile watchlist. Manual-only; no scheduler hook, unattended run, posting, commenting, LinkedIn sign-in, or browser automation.
 
 ### Roadmap 5A planner-linked relevance scoring
 

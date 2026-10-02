@@ -1,0 +1,9 @@
+{
+  "_provisional": true,
+  "_source": "simstudioai/sim@d7ef91a apps/sim/tools/brightdata/download_snapshot.ts#L52 (409 = snapshot not ready); body shape unverified",
+  "status": 409,
+  "body": {
+    "status": "building",
+    "message": "Snapshot is not ready yet, try again in 30s"
+  }
+}

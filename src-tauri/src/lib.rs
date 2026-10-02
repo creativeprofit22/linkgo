@@ -9,6 +9,7 @@ mod approval_transaction;
 mod approvals;
 mod auth;
 mod autopilot_planner;
+mod brightdata;
 mod campaign_backlog;
 mod campaigns;
 mod candidate_policy;
@@ -93,6 +94,7 @@ pub fn run() {
             });
             app.manage(autopilot_planner::AutopilotPlannerWorkerState::default());
             app.manage(source_imports::SourceImportActivity::default());
+            app.manage(brightdata::BrightDataActivity::default());
             app.manage(auth::refresh::OAuthRefreshLocks::default());
             app.manage(auth::ai_signin::AiSignInSessions::default());
             app.manage(auth::claude_code_version::ClaudeCodeVersionCache::default());
@@ -172,6 +174,17 @@ pub fn run() {
             candidate_queue::linkgo_candidate_promote_discovery_item,
             source_imports::linkgo_source_import_write_batch,
             source_imports::linkgo_source_import_recover_interrupted,
+            brightdata::commands::linkgo_brightdata_status,
+            brightdata::commands::linkgo_brightdata_set_enabled,
+            brightdata::commands::linkgo_brightdata_watchlist_list,
+            brightdata::commands::linkgo_brightdata_watchlist_add,
+            brightdata::commands::linkgo_brightdata_watchlist_update,
+            brightdata::commands::linkgo_brightdata_watchlist_remove,
+            brightdata::commands::linkgo_brightdata_recover_interrupted,
+            brightdata::commands::linkgo_brightdata_list_runs,
+            brightdata::commands::linkgo_brightdata_start_run,
+            brightdata::commands::linkgo_brightdata_resume_run,
+            brightdata::commands::linkgo_brightdata_cancel_run,
             source_import_reads::linkgo_source_import_dashboard,
             workflows::linkgo_workflow_create_run,
             workflows::linkgo_workflow_start_run,

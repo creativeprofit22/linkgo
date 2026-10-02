@@ -17,7 +17,7 @@ pub const GG_AI_PROVIDER_KEYS: [&str; 10] = [
 ];
 
 #[cfg(test)]
-pub const AUTH_PROVIDER_KEYS: [&str; 12] = [
+pub const AUTH_PROVIDER_KEYS: [&str; 13] = [
     "anthropic",
     "xiaomi",
     "openai",
@@ -30,6 +30,7 @@ pub const AUTH_PROVIDER_KEYS: [&str; 12] = [
     "minimax",
     "custom",
     "linkedin",
+    "brightdata",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +195,18 @@ pub fn auth_providers() -> Vec<AuthProvider> {
             docs_url:
                 "https://learn.microsoft.com/linkedin/shared/authentication/authorization-code-flow",
         },
+        AuthProvider {
+            key: "brightdata",
+            label: "Bright Data",
+            description:
+                "Read-only LinkedIn post source connector. Disabled until its review is signed off.",
+            methods: vec![AuthMethod::ApiKey],
+            default_method: AuthMethod::ApiKey,
+            scopes: vec![],
+            models: vec![],
+            secret_label: "Bright Data API key",
+            docs_url: "https://docs.brightdata.com/api-reference/authentication",
+        },
     ]
 }
 
@@ -267,6 +280,17 @@ mod tests {
                 assert_eq!(provider.methods, vec![AuthMethod::ApiKey]);
             }
         }
+    }
+
+    #[test]
+    fn brightdata_is_an_api_key_source_provider_without_models() {
+        let provider = auth_providers()
+            .into_iter()
+            .find(|provider| provider.key == "brightdata")
+            .expect("brightdata provider should be present");
+        assert_eq!(provider.methods, vec![AuthMethod::ApiKey]);
+        assert!(provider.models.is_empty());
+        assert!(provider.scopes.is_empty());
     }
 
     #[test]

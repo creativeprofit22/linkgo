@@ -1,16 +1,32 @@
 import { z } from "zod";
 
-export const SOURCE_CONNECTOR_KEYS = ["local_json"] as const;
+export const SOURCE_CONNECTOR_KEYS = ["local_json", "brightdata"] as const;
 
 export const sourceConnectorKeySchema = z.enum(SOURCE_CONNECTOR_KEYS);
 
 export type SourceConnectorKey = z.infer<typeof sourceConnectorKeySchema>;
 export type SourceConnectorMode = "local" | "remote";
 
+/**
+ * Connectors the renderer may write batches for. Bright Data batches are
+ * written only by the native connector after its own gates (enable flag,
+ * kill switch, caps), so they are readable here but never writable.
+ */
+export const RENDERER_WRITABLE_CONNECTOR_KEYS = ["local_json"] as const;
+
+export const rendererWritableConnectorKeySchema = z.enum(
+  RENDERER_WRITABLE_CONNECTOR_KEYS,
+);
+
 export interface SourceConnectorDefinition {
   key: SourceConnectorKey;
   label: string;
   mode: SourceConnectorMode;
+  /**
+   * Static availability. Bright Data is `false` here; its live availability
+   * comes from the native status (enable flag, key, CLI, kill switch) via
+   * `isBrightDataAvailable`.
+   */
   available: boolean;
   mayFetchExternally: boolean;
 }
@@ -25,11 +41,18 @@ export const SOURCE_CONNECTORS: Readonly<
     available: true,
     mayFetchExternally: false,
   },
+  brightdata: {
+    key: "brightdata",
+    label: "Bright Data (LinkedIn posts, read-only)",
+    mode: "remote",
+    available: false,
+    mayFetchExternally: true,
+  },
 };
 
 export const normalizedSourceConnectorBatchInputSchema = z.strictObject({
   campaignId: z.number().int().positive(),
-  connectorKey: sourceConnectorKeySchema,
+  connectorKey: rendererWritableConnectorKeySchema,
   rows: z.array(z.unknown()).min(1, "Include at least one source post"),
 });
 

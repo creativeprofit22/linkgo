@@ -262,6 +262,13 @@ export function CandidateQueueView(): React.ReactNode {
             loading={sourceImports.loading}
             error={sourceImports.error}
             onRetry={sourceImports.loadImports}
+            brightData={{
+              campaignId: selectedCampaignId,
+              archived: selectedCampaignArchived,
+              onImported: async () => {
+                await Promise.all([loadQueue(), sourceImports.loadImports()]);
+              },
+            }}
           />
 
           {candidates.length === 0 ? (

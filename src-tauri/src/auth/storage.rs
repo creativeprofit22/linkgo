@@ -264,6 +264,15 @@ impl AuthStorage {
         })
     }
 
+    /// Reads one keyring service without an app handle (live smoke tests).
+    #[cfg(test)]
+    pub(crate) fn for_keyring_service(service: &str) -> Self {
+        Self {
+            fallback_path: PathBuf::new(),
+            service: service.to_string(),
+        }
+    }
+
     pub fn list_statuses(&self) -> Result<Vec<SafeCredentialStatus>, String> {
         let mut statuses = Vec::new();
         for provider in auth_providers() {

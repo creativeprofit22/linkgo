@@ -1,0 +1,9 @@
+{
+  "_provisional": true,
+  "_source": "Bright Data docs async requests step 2: GET /datasets/v3/progress/{id}; status in starting|running|ready|failed|canceled",
+  "body": {
+    "snapshot_id": "sd_synthetic0000000001",
+    "dataset_id": "gd_lyy3tktm25m4avu764",
+    "status": "running"
+  }
+}

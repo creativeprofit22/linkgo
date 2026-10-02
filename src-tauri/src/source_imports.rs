@@ -26,6 +26,13 @@ use crate::db_transaction::{settle, Settlement};
 use crate::js_text::{utf16_len, utf16_prefix};
 
 const MAX_ROWS: usize = 50;
+/// Connectors whose batches this writer stores. Matches the
+/// `source_import_batches.source_type` CHECK.
+const NATIVE_CONNECTOR_KEYS: &[&str] = &["local_json", "brightdata"];
+/// Connectors the renderer may write directly. Bright Data batches are only
+/// written by the native connector after its own gates (enable flag, kill
+/// switch, caps), so the renderer cannot forge them.
+const RENDERER_CONNECTOR_KEYS: &[&str] = &["local_json"];
 const MAX_INPUT_JSON_UTF16: usize = 20_000;
 const MAX_REASON_UTF16: usize = 2_000;
 const DUPLICATE_REASON: &str = "Duplicate URL or post text for this campaign.";
@@ -160,7 +167,7 @@ fn validate(input: &WriteSourceImportBatchInput) -> Result<(), String> {
     if input.campaign_id <= 0 {
         return Err("Campaign is required".to_string());
     }
-    if input.connector_key != "local_json" {
+    if !NATIVE_CONNECTOR_KEYS.contains(&input.connector_key.as_str()) {
         return Err("Unsupported source connector".to_string());
     }
     if input.rows.is_empty() {
@@ -616,6 +623,9 @@ pub async fn linkgo_source_import_write_batch(
     activity: State<'_, SourceImportActivity>,
     input: WriteSourceImportBatchInput,
 ) -> Result<SourceImportBatchResult, String> {
+    if !RENDERER_CONNECTOR_KEYS.contains(&input.connector_key.as_str()) {
+        return Err("Unsupported source connector".to_string());
+    }
     let now_ms = chrono::Utc::now().timestamp_millis();
     write_batch(pool.inner(), activity.inner(), input, now_ms).await
 }

@@ -192,6 +192,48 @@ async fn all_accepted_batch_is_completed() {
 }
 
 #[tokio::test]
+async fn brightdata_batch_is_stored_with_its_source_type_and_policy() {
+    let f = fixture().await;
+    let mut input = batch(
+        1,
+        vec![
+            row(1, Some(value(POST_1, "one"))),
+            row(2, Some(value(POST_2, "crypto tips"))),
+        ],
+    );
+    input.connector_key = "brightdata".to_string();
+    let result = write_batch(&f.pool, &SourceImportActivity::default(), input, NOW_MS)
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            result.accepted_count,
+            result.rejected_count,
+            result.status.as_str()
+        ),
+        (1, 1, "completed_with_errors")
+    );
+    assert_eq!(
+        text(
+            &f.pool,
+            &format!(
+                "SELECT source_type FROM source_import_batches WHERE id={}",
+                result.batch_id
+            )
+        )
+        .await,
+        "brightdata"
+    );
+}
+
+#[test]
+fn renderer_cannot_write_brightdata_batches() {
+    assert!(RENDERER_CONNECTOR_KEYS.contains(&"local_json"));
+    assert!(!RENDERER_CONNECTOR_KEYS.contains(&"brightdata"));
+    assert!(NATIVE_CONNECTOR_KEYS.contains(&"brightdata"));
+}
+
+#[tokio::test]
 async fn rejected_inputs_write_nothing() {
     let f = fixture().await;
     let activity = SourceImportActivity::default();

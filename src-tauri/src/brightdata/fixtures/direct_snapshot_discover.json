@@ -1,0 +1,34 @@
+{
+  "_provisional": true,
+  "_source": "Bright Data docs 'Discover LinkedIn posts by profile URL / company URL' sample response (same record shape as collect-by-URL). Personal data is synthetic.",
+  "body": [
+    {
+      "url": "https://www.linkedin.com/posts/synthetic-watch-person_roadmap-activity-7300000000000000010-MnOp",
+      "id": "7300000000000000010",
+      "user_id": "synthetic-watch-person",
+      "use_url": "https://www.linkedin.com/in/synthetic-watch-person",
+      "post_text": "Three things I changed in our planning process this quarter.",
+      "date_posted": "2026-09-29T07:00:00.000Z",
+      "num_likes": 15,
+      "num_comments": 2,
+      "post_type": "post",
+      "account_type": "Person",
+      "videos": null,
+      "repost": null
+    },
+    {
+      "url": "https://www.linkedin.com/posts/synthetic-watch-company_hiring-activity-7300000000000000011-QrSt",
+      "id": "7300000000000000011",
+      "use_url": "https://www.linkedin.com/company/synthetic-watch-company",
+      "post_text": "",
+      "date_posted": "2026-09-29T08:00:00.000Z",
+      "post_type": "post",
+      "account_type": "Organization"
+    },
+    {
+      "input": { "url": "https://www.linkedin.com/company/synthetic-gone" },
+      "error": "Page does not exist",
+      "error_code": "dead_page"
+    }
+  ]
+}

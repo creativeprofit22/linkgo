@@ -21,14 +21,18 @@ export const AUTH_PROVIDER_KEYS = [
   ...GG_AI_PROVIDER_KEYS,
   "custom",
   "linkedin",
+  "brightdata",
 ] as const;
 
 export type GgAiProviderKey = (typeof GG_AI_PROVIDER_KEYS)[number];
 export type AgentProviderKey = (typeof AGENT_PROVIDER_KEYS)[number];
 export type AuthProviderKey = (typeof AUTH_PROVIDER_KEYS)[number];
 
-export const PROVIDER_LABELS: Record<AgentProviderKey | "linkedin", string> = {
-  dry_run: "Dry run",
+export const PROVIDER_LABELS: Record<
+  AgentProviderKey | AuthProviderKey,
+  string
+> = {
+  dry_run: "Practice mode (no AI used)",
   anthropic: "Anthropic",
   xiaomi: "Xiaomi (MiMo)",
   openai: "OpenAI",
@@ -39,8 +43,9 @@ export const PROVIDER_LABELS: Record<AgentProviderKey | "linkedin", string> = {
   openrouter: "OpenRouter",
   sakana: "Sakana",
   minimax: "MiniMax",
-  custom: "Custom API",
+  custom: "Other AI service",
   linkedin: "LinkedIn",
+  brightdata: "Bright Data",
 };
 
 /**

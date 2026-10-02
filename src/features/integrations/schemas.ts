@@ -65,8 +65,18 @@ export const saveApiKeySchema = z
     allowLocalDestination: z.boolean().optional(),
   })
   .superRefine((input, context) => {
+    const hasBaseUrl =
+      input.baseUrl !== undefined && input.baseUrl.trim() !== "";
+    if (input.providerKey === "brightdata" && hasBaseUrl) {
+      context.addIssue({
+        code: "custom",
+        path: ["baseUrl"],
+        message: "Bright Data does not accept a Base URL override",
+      });
+      return;
+    }
     if (input.providerKey !== "custom") return;
-    if (input.baseUrl !== undefined && input.baseUrl.trim() !== "") return;
+    if (hasBaseUrl) return;
 
     context.addIssue({
       code: "custom",

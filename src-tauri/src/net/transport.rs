@@ -114,6 +114,16 @@ pub fn provider_http_client(policy: TransportPolicy) -> Result<Client, String> {
         .map_err(|error| format!("Provider HTTP client could not be created: {error}"))
 }
 
+/// Client for one source-connector request (shorter total timeout).
+pub fn source_http_client(
+    policy: TransportPolicy,
+    total_timeout: Duration,
+) -> Result<Client, String> {
+    hardened_builder(policy, total_timeout)
+        .build()
+        .map_err(|error| format!("Source HTTP client could not be created: {error}"))
+}
+
 fn too_large(max_bytes: u64) -> String {
     format!("Response exceeded the {max_bytes}-byte limit")
 }

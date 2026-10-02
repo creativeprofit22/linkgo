@@ -1,0 +1,48 @@
+{
+  "_source": "Live capture 2026-10-01 (CLI 0.3.7 / datasets v3, gd_lyy3tktm25m4avu764) of public posts by the Bright Data company page. Sanitized: only fields the mapping reads are kept; post_text truncated to 600 chars; comments, tagged people, images and follower data removed.",
+  "body": [
+    {
+      "url": "https://www.linkedin.com/posts/bright-data_humanx-ai-aiagents-activity-7506297310050713603-QcAy",
+      "id": "7506297310050713603",
+      "user_id": "bright-data",
+      "user_name": "Bright Data",
+      "use_url": "https://il.linkedin.com/company/bright-data?trk=public_post_feed-actor-name",
+      "post_text": "Most AI problems aren't really AI problems. - Agents fail because their web data is stale, incomplete, or blocked. - Third party search APIs are someone else's index. Fine for demos. Breaks at scale. - 14 of the top 20 AI labs don't scrape the web themselves. There's a reason. Join the Bright Data team at HumanX Amsterdam, Sept 22–24 and find out why 50,000+ companies trust us to solve exactly this. -> Sep 23, 1PM | Masterclass: Build your own AI search engine. Own your context instead of renting it. -> Sep 24, 3:35PM | Panel: Context is King. How to build AI systems, not just features. Stop b",
+      "date_posted": "2026-09-17T10:25:38.976Z",
+      "post_type": "post",
+      "account_type": "Organization",
+      "hashtags": ["#HumanX", "#AI", "#AIAgents", "#WebData"],
+      "num_likes": 47,
+      "num_comments": 1,
+      "title": "#humanx #ai #aiagents #webdata | Bright Data"
+    },
+    {
+      "url": "https://www.linkedin.com/posts/bright-data_bright-ventures-x-pally-partnership-activity-7492899695464378369-s74Q",
+      "id": "7492899695464378369",
+      "user_id": "bright-data",
+      "user_name": "Bright Data",
+      "use_url": "https://il.linkedin.com/company/bright-data?trk=public_post_feed-actor-name",
+      "post_text": "Huge congrats to Pally (YC S25) , we couldn't be prouder to have Bright Ventures as part of their impressive journey! They just raised $5.2M to build the default AI assistant over text. Swipe through to see why this is such a big deal 👉 Haz Hubble || Dana Mazia || Aviv Tal || cyber•Fund || Y Combinator || Founders, Inc. || Inkberry Ventures || Pioneer Fund || Pace Ventures || 468 Capital || Umami Capital || Multimodal Ventures || Clover Fund",
+      "date_posted": "2026-08-11T11:08:18.695Z",
+      "post_type": "post",
+      "account_type": "Organization",
+      "num_likes": 59,
+      "num_comments": 4,
+      "title": "Bright Ventures x Pally - Partnership | Bright Data"
+    },
+    {
+      "url": "https://www.linkedin.com/posts/bright-data_bright-data-x-calven-ai-activity-7508842671566815232-KJCW",
+      "id": "7508842671566815232",
+      "user_id": "bright-data",
+      "user_name": "Bright Data",
+      "use_url": "https://il.linkedin.com/company/bright-data?trk=public_post_feed-actor-name",
+      "post_text": "Bright Data x Calven ! Most AI agents are confidently wrong. Calven agents run real product marketing, the kind sales teams put in front of customers. So they built them to never guess. Swipe to see how they ended hallucination for good! David Kolinek || Lukáš Kolek || Keshet Naiman || Nofar Nistani || The Bright Initiative by Bright Data",
+      "date_posted": "2026-09-24T11:00:00.451Z",
+      "post_type": "post",
+      "account_type": "Organization",
+      "num_likes": 30,
+      "num_comments": 1,
+      "title": "Bright Data's AI Marketing Solution Eliminates Hallucination | Bright Data posted on the topic | LinkedIn"
+    }
+  ]
+}

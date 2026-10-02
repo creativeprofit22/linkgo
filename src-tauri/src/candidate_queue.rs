@@ -158,6 +158,13 @@ pub(crate) fn validate_candidate(input: &CreateCandidateInput) -> Result<Candida
     })
 }
 
+pub(crate) const CAMPAIGN_ARCHIVED_ERROR: &str = "Campaign is archived";
+
+/// Whether a campaign status blocks new work (shared with the Bright Data gates).
+pub(crate) fn campaign_status_is_archived(status: &str) -> bool {
+    status == "archived"
+}
+
 /// Rejects a missing or archived campaign.
 pub(crate) async fn assert_campaign_can_mutate(
     connection: &mut SqliteConnection,
@@ -170,7 +177,9 @@ pub(crate) async fn assert_campaign_can_mutate(
         .map_err(storage_error)?;
     match status.as_deref() {
         None => Err("Campaign was not found".to_string()),
-        Some("archived") => Err("Campaign is archived".to_string()),
+        Some(status) if campaign_status_is_archived(status) => {
+            Err(CAMPAIGN_ARCHIVED_ERROR.to_string())
+        }
         Some(_) => Ok(()),
     }
 }

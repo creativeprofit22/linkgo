@@ -1,0 +1,6 @@
+{
+  "_provisional": true,
+  "_source": "brightdata/brightdata-mcp@d33cfa5 server.js#L1271 (400 is terminal); body shape unverified",
+  "status": 400,
+  "body": { "error": "Snapshot does not exist" }
+}

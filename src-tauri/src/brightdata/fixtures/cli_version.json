@@ -1,0 +1,5 @@
+{
+  "_provisional": true,
+  "_source": "brightdata/cli@b00cd57 src/index.ts: program.version(packageJson.version) prints the bare version on stdout; npm 0.3.7",
+  "body": "0.3.7\n"
+}

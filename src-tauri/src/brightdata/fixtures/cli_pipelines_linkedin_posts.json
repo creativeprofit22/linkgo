@@ -1,0 +1,45 @@
+{
+  "_provisional": true,
+  "_source": "brightdata/cli@b00cd57 src/commands/dataset.ts: `pipelines linkedin_posts <url> --json` prints strip_nulls(snapshot) as JSON; record fields from Bright Data docs 'Scrape LinkedIn posts by URL' sample response. Personal data is synthetic.",
+  "body": [
+    {
+      "url": "https://www.linkedin.com/posts/synthetic-author-one_ai-agents-activity-7300000000000000001-AbCd",
+      "id": "7300000000000000001",
+      "user_id": "synthetic-author-one",
+      "use_url": "https://www.linkedin.com/in/synthetic-author-one?trk=public_post_feed-actor-image",
+      "title": "Synthetic title one",
+      "headline": "Synthetic headline one",
+      "post_text": "Shipping an agent is easy. Shipping one that stays useful after week two is the hard part. #AI #Agents",
+      "date_posted": "2026-09-28T09:15:00.000Z",
+      "hashtags": ["#AI", "#Agents"],
+      "num_likes": 42,
+      "num_comments": 7,
+      "user_followers": 1200,
+      "post_type": "post",
+      "account_type": "Person",
+      "tagged_companies": [],
+      "tagged_people": []
+    },
+    {
+      "url": "https://de.linkedin.com/posts/synthetic-company_platform-update-activity-7300000000000000002-EfGh",
+      "id": "7300000000000000002",
+      "user_id": "syn***com***y",
+      "use_url": "https://de.linkedin.com/company/synthetic-company?trk=public_post_feed-actor-image",
+      "post_text": "Our platform update is live. Thanks to everyone who sent feedback.",
+      "date_posted": "2026-09-27T16:40:12.724Z",
+      "hashtags": [],
+      "num_likes": 3,
+      "num_comments": 0,
+      "post_type": "post",
+      "account_type": "Organization"
+    },
+    {
+      "url": "https://www.linkedin.com/posts/synthetic-missing_activity-7300000000000000003-IjKl",
+      "error": "Page does not exist",
+      "error_code": "dead_page",
+      "input": {
+        "url": "https://www.linkedin.com/posts/synthetic-missing_activity-7300000000000000003-IjKl"
+      }
+    }
+  ]
+}

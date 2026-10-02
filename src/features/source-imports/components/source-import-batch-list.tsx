@@ -4,6 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CandidatePolicyRuleKey } from "@/features/candidate-policy";
+import {
+  BrightDataSource,
+  type BrightDataSourceProps,
+} from "@/features/source-imports/components/brightdata-panel";
 import { toPlainMessage } from "@/lib/plain-message";
 import type {
   SourceImportBatchDetail,
@@ -16,6 +20,8 @@ interface SourceImportBatchListProps {
   loading: boolean;
   error: string | null;
   onRetry: () => Promise<void>;
+  /** Shows the Bright Data connector above the history when provided. */
+  brightData?: BrightDataSourceProps;
 }
 
 const BATCH_STATUS_LABELS: Record<SourceImportBatchStatus, string> = {
@@ -126,7 +132,27 @@ export function SourceImportBatchList({
   loading,
   error,
   onRetry,
+  brightData,
 }: SourceImportBatchListProps): React.ReactNode {
+  return (
+    <>
+      {brightData ? <BrightDataSource {...brightData} /> : null}
+      <SourceImportHistory
+        batches={batches}
+        loading={loading}
+        error={error}
+        onRetry={onRetry}
+      />
+    </>
+  );
+}
+
+function SourceImportHistory({
+  batches,
+  loading,
+  error,
+  onRetry,
+}: Omit<SourceImportBatchListProps, "brightData">): React.ReactNode {
   return (
     <section className="space-y-3" aria-busy={loading}>
       <div className="flex flex-wrap items-center justify-between gap-2">

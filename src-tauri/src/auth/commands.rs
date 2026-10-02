@@ -176,6 +176,10 @@ fn validated_destination(input: &SaveApiKeyInput) -> Result<Option<ProviderDesti
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty());
+    if input.provider_key == "brightdata" && base_url.is_some() {
+        // The Bright Data client talks to one fixed host only.
+        return Err("Bright Data does not accept a Base URL override".to_string());
+    }
     let Some(base_url) = base_url else {
         if input.provider_key == "custom" {
             return Err("Custom provider requires a Base URL override".to_string());
@@ -596,6 +600,16 @@ mod tests {
                 "{base_url} must be allowed with consent"
             );
         }
+    }
+
+    #[test]
+    fn brightdata_api_key_rejects_base_url_override() {
+        assert!(ensure_api_key_input(&api_key_input("brightdata", None)).is_ok());
+        assert_eq!(
+            ensure_api_key_input(&api_key_input("brightdata", Some("https://evil.example")))
+                .unwrap_err(),
+            "Bright Data does not accept a Base URL override"
+        );
     }
 
     #[test]

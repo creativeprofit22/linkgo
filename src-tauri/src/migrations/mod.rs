@@ -4,6 +4,7 @@ pub mod app_settings;
 pub mod approval_readiness;
 pub mod approvals;
 pub mod autopilot_planner;
+pub mod brightdata_connector;
 pub mod campaign_backlog;
 pub mod campaigns;
 pub mod candidate_discovery;
@@ -76,6 +77,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(approval_readiness::migrations());
     migrations.extend(latest_draft_quality::migrations());
     migrations.extend(publish_executions::migrations());
+    migrations.extend(brightdata_connector::migrations());
     migrations
 }
 

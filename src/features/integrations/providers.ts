@@ -152,6 +152,18 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
     docsUrl:
       "https://learn.microsoft.com/linkedin/shared/authentication/authorization-code-flow",
   },
+  {
+    key: "brightdata",
+    label: PROVIDER_LABELS.brightdata,
+    description:
+      "Finds public LinkedIn posts for ideas (read-only). Turned off until it has been reviewed.",
+    methods: ["api_key"],
+    defaultMethod: "api_key",
+    scopes: [],
+    models: [],
+    secretLabel: "Bright Data API key",
+    docsUrl: "https://docs.brightdata.com/api-reference/authentication",
+  },
 ];
 
 export function getAuthProvider(key: string): AuthProvider | null {

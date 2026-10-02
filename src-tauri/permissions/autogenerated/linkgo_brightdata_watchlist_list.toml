@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-brightdata-watchlist-list"
+description = "Enables the linkgo_brightdata_watchlist_list command without any pre-configured scope."
+commands.allow = ["linkgo_brightdata_watchlist_list"]
+
+[[permission]]
+identifier = "deny-linkgo-brightdata-watchlist-list"
+description = "Denies the linkgo_brightdata_watchlist_list command without any pre-configured scope."
+commands.deny = ["linkgo_brightdata_watchlist_list"]

@@ -39,9 +39,9 @@ The local Autopilot Planner lives in `src-tauri/src/autopilot_planner.rs`. Nativ
 
 ## Source connector boundary
 
-`src/features/source-imports/connectors.ts` is the closed connector registry and normalized batch contract. The only registered connector is `local_json`: local, operator-supplied, available, and forbidden from fetching externally.
+`src/features/source-imports/connectors.ts` is the closed connector registry and normalized batch contract. Registered connectors: `local_json` (local, operator-supplied, forbidden from fetching externally) and `brightdata` (remote, read-only, renderer cannot write its batches).
 
-Local JSON parsing feeds one internal policy-enforced source-batch writer carrying the connector key. The planner consumes terminal `source_import_batches` by `source_type`; it never calls connector-specific parsing or fetch code. A future production connector must pass API-access, terms, permissions, and permitted-use review, then ingest through this boundary after a migration expands the database `source_type` constraint.
+Local JSON parsing feeds one internal policy-enforced source-batch writer carrying the connector key. The planner consumes terminal `source_import_batches` by `source_type`; it never calls connector-specific parsing or fetch code. A production connector must pass API-access, terms, permissions, and permitted-use review before it is enabled, and ingests through this boundary. The Bright Data connector (`src-tauri/src/brightdata/`, migration 38) does so with the `brightdata` key: CLI transport (pinned 0.3.7, arg arrays, scrubbed env, size caps, hard timeout) for post URLs, and one fixed-host HTTPS exception (`api.brightdata.com` datasets v3) for watchlist discovery. Keyword search was removed after Bright Data retired its Discover API. It ships disabled (`app_settings.brightdata_connector_enabled = 0`); the review (`docs/security/brightdata-connector-review.md`) was signed off on 2026-10-01; see `docs/features/source-imports.md`.
 
 ## Autopilot planner boundary
 

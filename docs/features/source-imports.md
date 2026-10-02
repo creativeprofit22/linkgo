@@ -2,13 +2,13 @@
 
 ## Status
 
-Roadmaps 3A, 3B, and the Roadmap 3D planner boundary are implemented. Source Imports is the bounded, policy-enforced connector intake boundary. Roadmap 3 remains partial and blocked only on one compliant production source connector.
+Roadmaps 3A, 3B, and the Roadmap 3D planner boundary are implemented. Source Imports is the bounded, policy-enforced connector intake boundary. Roadmap 3: the Bright Data production connector is implemented, reviewed, and live-verified for post URL and watchlist modes. Keyword mode was removed on 2026-10-01 after Bright Data retired its Discover API (HTTP 410).
 
 ## Purpose
 
 Source import lets an operator paste approved post metadata into Linkgo without pretending that Linkgo can search or fetch arbitrary LinkedIn posts. Rows must pass the selected campaign's source, age, banned-topic, and prior-contact policy before entering the shared candidate normalization and dedupe path. Every supplied row receives a durable, reviewable outcome.
 
-Import is local only. It does not scrape LinkedIn, use browser automation, call a model provider, run discovery, draft content, create approvals, comment, schedule, or publish. A completed batch can later be consumed by the opt-in local planner, which creates only linked backlog/workflow records.
+Import is local only. It does not scrape LinkedIn, use browser automation, call a model provider, run discovery, draft content, create approvals, comment, schedule, or publish. A completed batch can later be consumed by the opt-in local planner, which creates only linked backlog/workflow records (shown as **Tasks** and **Automations**).
 
 ## JSON format
 
@@ -115,19 +115,44 @@ The existing Radix Dialog primitive manages modal focus, Escape, and trigger foc
 The source boundary and local planner do not add:
 
 - LinkedIn post search, arbitrary feed retrieval, scraping, or browser automation.
-- A production remote source connector.
+- An enabled-by-default or unattended remote source connector. The Bright Data connector below is off by default and manual-only.
 - Provider calls, workflow executor runs, draft generation, approvals, comments, schedules, or publishing.
 - Credentials, OAuth data, CSV parsing, or file-system import.
 - After-quit planner work.
 
-`src/features/source-imports/connectors.ts` registers only `local_json`, labels it local/operator-supplied, and marks external fetching as forbidden. The planner consumes terminal batches by connector key rather than connector-specific code. Remote connectors require separately verified API permissions, terms, product access, and a migration expanding the database constraint. Publishing and commenting remain human approval-gated regardless of candidate source.
+`src/features/source-imports/connectors.ts` registers `local_json` (local, operator-supplied, never fetches) and `brightdata` (remote, read-only). The renderer may only write `local_json` batches; `brightdata` batches are written natively after the connector's gates. The planner consumes terminal batches by connector key rather than connector-specific code. Publishing and commenting remain human approval-gated regardless of candidate source.
+
+## Bright Data connector
+
+Status: implemented; review signed off 2026-10-01; ships disabled until the owner turns it on. Live smoke (`docs/verification/2026-10-01-brightdata-live-smoke.md`): post URL and watchlist (company) modes pass. Keyword search was removed on 2026-10-01 after Bright Data retired its Discover API (HTTP 410); native code rejects keyword requests and the CLI allowlist no longer includes `discover`. Old keyword runs still show in history.
+
+Read-only ingestion of public LinkedIn posts into this boundary. It never posts, comments, signs in to LinkedIn, drives a browser, or runs on a schedule.
+
+| Mode      | Transport                                                                                      | What it does                                                                                                                                                                                            |
+| --------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Post URLs | `brightdata pipelines linkedin_posts <url> --json`                                             | Collects up to 20 pasted post URLs.                                                                                                                                                                     |
+| Watchlist | Direct HTTPS to `https://api.brightdata.com/datasets/v3` (trigger, progress, snapshot, cancel) | Recent posts from up to 10 enabled profiles or companies of one kind. Both kinds send the look-back window as ISO `start_date` (UTC midnight, today minus N days) and `end_date` (current UTC instant). |
+
+Gates, checked natively on every start/resume in this order, failing closed: `app_settings.brightdata_connector_enabled = 1` (default 0, only the toggle changes it), global kill switch (on screen: Safety → `Emergency pause`) off, campaign exists, campaign not archived (same rule as the candidate writer, so no paid records are fetched for a campaign that would refuse them), Bright Data API key in the OS keyring, ≤5 runs per campaign per UTC day (new runs only), one active run per campaign (partial unique index). Cancelling a run is never gated. Mapped rows go through the same writer with `connector_key = "brightdata"`, so the intake policy, dedupe and the 50-row limit apply unchanged.
+
+Interrupted runs: listing runs first calls `linkgo_brightdata_recover_interrupted`. Runs not driven by this process are failed if they are CLI runs, watchlist runs without a snapshot id, or watchlist runs idle for more than 24 hours. Other watchlist runs stay resumable by snapshot id; a resume that gets HTTP 400/404 fails the run. A stuck run can never block a campaign permanently.
+
+Storage (migration 38): `source_import_batches.source_type` admits `brightdata` (table rebuilt, ids and child links preserved), `app_settings.brightdata_connector_enabled`, `source_watchlist_entries`, and `brightdata_runs` (input, snapshot id, status, counts, bounded error; never raw records or the key).
+
+Setup:
+
+1. Install Node.js 20 or newer and the pinned CLI: `npm i -g @brightdata/cli@0.3.7`. Linkgo refuses any other version. To use a specific binary, set `LINKGO_BRIGHTDATA_CLI` to its absolute path.
+2. Add the API key under Connected accounts → Bright Data. It is stored in the OS keyring and passed to the CLI only as `BRIGHTDATA_API_KEY` in a cleared child environment. Do not run `brightdata login`; it writes the key to a plaintext file.
+3. After the review is signed off, turn on `Fetch posts with Bright Data` in the Ideas tab's `Bright Data source` panel.
+
+UI: the Ideas tab shows a `Bright Data source` panel with the enable switch, a fetch form (mode, caps, daily usage), the watchlist editor, and `Recent fetches` with Continue and Cancel. Data API: `src/features/source-imports/brightdata-data.ts`; hook: `useBrightDataRuns`.
 
 ## Verification
 
 Run:
 
 ```bash
-bunx playwright test tests/candidate-policy.spec.ts tests/source-imports.spec.ts tests/candidate-queue.spec.ts
+bunx playwright test tests/candidate-policy.spec.ts tests/source-imports.spec.ts tests/candidate-queue.spec.ts tests/brightdata-schemas.spec.ts tests/brightdata-connector.spec.ts
 bun run test:rust
 bun run format:check
 bun run lint

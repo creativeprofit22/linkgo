@@ -1,0 +1,6 @@
+{
+  "_source": "Live capture 2026-10-01 (CLI 0.3.7 / datasets v3, gd_lyy3tktm25m4avu764) of public posts by the Bright Data company page. Sanitized: only fields the mapping reads are kept; post_text truncated to 600 chars; comments, tagged people, images and follower data removed.",
+  "body": {
+    "snapshot_id": "sd_mup1s6a41cdj81nogn"
+  }
+}

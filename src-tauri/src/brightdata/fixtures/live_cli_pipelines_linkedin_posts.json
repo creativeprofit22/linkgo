@@ -1,0 +1,19 @@
+{
+  "_source": "Live capture 2026-10-01 (CLI 0.3.7 / datasets v3, gd_lyy3tktm25m4avu764) of public posts by the Bright Data company page. Sanitized: only fields the mapping reads are kept; post_text truncated to 600 chars; comments, tagged people, images and follower data removed.",
+  "body": [
+    {
+      "url": "https://www.linkedin.com/posts/bright-data_bright-data-x-calven-ai-activity-7508842671566815232-KJCW",
+      "id": "7508842671566815232",
+      "user_id": "bright-data",
+      "user_name": "Bright Data",
+      "use_url": "https://il.linkedin.com/company/bright-data?trk=public_post_feed-actor-name",
+      "post_text": "Bright Data x Calven ! Most AI agents are confidently wrong. Calven agents run real product marketing, the kind sales teams put in front of customers. So they built them to never guess. Swipe to see how they ended hallucination for good! David Kolinek || Lukáš Kolek || Keshet Naiman || Nofar Nistani || The Bright Initiative by Bright Data",
+      "date_posted": "2026-09-24T11:00:00.451Z",
+      "post_type": "post",
+      "account_type": "Organization",
+      "num_likes": 30,
+      "num_comments": 1,
+      "title": "Bright Data's AI Marketing Solution Eliminates Hallucination | Bright Data posted on the topic | LinkedIn"
+    }
+  ]
+}
