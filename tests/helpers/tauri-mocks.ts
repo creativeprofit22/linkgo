@@ -2040,6 +2040,18 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
     }
 
+    // Mirrors native `VARIANT_APPROVAL_READY_SQL`: readiness at the current
+    // revision and no block audit at any revision.
+    function isVariantApprovalReady(variant: DraftVariant): boolean {
+      return (
+        isApprovalReady(variant) &&
+        !draftAudits.some(
+          (audit) =>
+            audit.draft_variant_id === variant.id && audit.severity === "block",
+        )
+      );
+    }
+
     function revokeEditedApproval(variant: DraftVariant): void {
       for (const approval of approvals) {
         if (
@@ -2070,17 +2082,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (
         selectedVariants.length !== 1 ||
         !variant ||
-        !isApprovalReady(variant)
+        !isVariantApprovalReady(variant)
       )
         return null;
-      if (
-        draftAudits.some(
-          (audit) =>
-            audit.draft_variant_id === variant.id && audit.severity === "block",
-        )
-      ) {
-        return null;
-      }
       const candidate = candidatePosts.find(
         (row) => row.id === draft.candidate_post_id,
       );
@@ -19923,7 +19927,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           return withCampaignGate(input.campaignId, {
             drafts: draftRows,
             totalCount: draftMatches.length,
-            variants,
+            variants: variants.map((variant) => ({
+              ...variant,
+              approval_ready: isVariantApprovalReady(variant) ? 1 : 0,
+            })),
             // Native selects these columns only (no `content_revision`).
             audits: selectDraftAudits(variantIds)
               .sort((left, right) => left.id - right.id)

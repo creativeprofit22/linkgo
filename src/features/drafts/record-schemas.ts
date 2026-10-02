@@ -83,6 +83,9 @@ export const draftListSnapshotSchema = z.strictObject({
       status: z.enum(["draft", "selected", "rejected"]),
       created_at: z.string(),
       updated_at: z.string(),
+      // Native variant-level approval gate (SQLite boolean): readiness at the
+      // current revision and no block audit at any revision.
+      approval_ready: z.union([z.literal(0), z.literal(1)]),
     }),
   ),
   audits: z.array(

@@ -127,6 +127,7 @@ interface DraftVariantRow {
   status: DraftVariantStatus;
   created_at: string;
   updated_at: string;
+  approval_ready: 0 | 1;
 }
 
 interface DraftAuditRow {
@@ -417,6 +418,7 @@ export function mapDraftVariant(
 ): DraftVariantWithAudits {
   return {
     ...mapDraftVariantBase(row),
+    approvalReady: row.approval_ready === 1,
     audits,
     auditSeverity: getAuditSeverity(audits),
     aiAudit,

@@ -14,12 +14,33 @@ const READ_ERROR: &str = "Could not load approvals";
 pub(crate) const APPROVAL_LIST_LIMIT: i64 = 500;
 pub(crate) const ELIGIBLE_DRAFT_LIMIT: i64 = 200;
 
-/// Readiness at the variant's current revision (same rule as the renderer SQL).
-const READY_SQL: &str = "EXISTS (
+/// Readiness of variant `dv` at its current revision, as one SQL literal so
+/// both constants below are built from the same text.
+macro_rules! ready_sql {
+    () => {
+        "EXISTS (
     SELECT 1 FROM approval_ready_variants ready
     WHERE ready.draft_variant_id = dv.id
       AND ready.content_revision = dv.content_revision
-  )";
+  )"
+    };
+}
+
+/// Readiness at the variant's current revision (same rule as the renderer SQL).
+const READY_SQL: &str = ready_sql!();
+
+/// Variant-level approval gate for `dv`: readiness at the current revision and
+/// no `block` audit at any revision. Shared by the eligible-drafts list and
+/// the draft list's `approval_ready` flag so the two cannot drift; draft,
+/// campaign and existing-approval checks stay with each caller.
+pub(crate) const VARIANT_APPROVAL_READY_SQL: &str = concat!(
+    "(",
+    ready_sql!(),
+    " AND NOT EXISTS (
+    SELECT 1 FROM draft_audits da
+    WHERE da.draft_variant_id = dv.id AND da.severity = 'block'
+  ))"
+);
 
 /// Draft, campaign, target and variant columns shared by both lists.
 const SNAPSHOT_COLUMNS: &str = "d.candidate_post_id AS draft_candidate_post_id,
@@ -395,9 +416,7 @@ pub(crate) async fn list_eligible_drafts(
            AND (?1 IS NULL OR d.campaign_id = ?1)
            AND (SELECT COUNT(*) FROM draft_variants selected_dv
                 WHERE selected_dv.draft_id = d.id AND selected_dv.status = 'selected') = 1
-           AND NOT EXISTS (SELECT 1 FROM draft_audits da
-                           WHERE da.draft_variant_id = dv.id AND da.severity = 'block')
-           AND {READY_SQL}"
+           AND {VARIANT_APPROVAL_READY_SQL}"
     );
     let sql = format!(
         "SELECT d.campaign_id, d.id AS draft_id, dv.id AS draft_variant_id,

@@ -361,6 +361,12 @@ export interface ReconcileStalePlannerDraftAuditsResult {
 }
 
 export type DraftVariantWithAudits = DraftVariant & {
+  /**
+   * Native approval gate for this version: checks passed on its current
+   * revision and no blocking finding on any revision. Draft, campaign and
+   * existing-approval rules are separate; native code stays authoritative.
+   */
+  approvalReady: boolean;
   audits: DraftAuditFinding[];
   auditSeverity: DraftAuditSeverity;
   aiAudit: DraftVariantAiAudit;

@@ -3,7 +3,9 @@
 //! - `linkgo_draft_list`: drafts with variants, audits, current-revision AI
 //!   audit runs and findings, and current quality runs with attempts and
 //!   category scores, read from one transaction snapshot, plus `totalCount`
-//!   (drafts matching the filter before the cap). Optional filters: campaign
+//!   (drafts matching the filter before the cap). Each variant carries
+//!   `approval_ready` (0/1): the shared variant-level approval gate from
+//!   `approval_reads::VARIANT_APPROVAL_READY_SQL`. Optional filters: campaign
 //!   and one idea (`candidatePostId`).
 //! - `linkgo_draft_generation_request_list` and
 //!   `linkgo_draft_workflow_options`: bounded lists.
@@ -17,6 +19,7 @@ use serde_json::Value;
 use sqlx::{SqliteConnection, SqlitePool};
 use tauri::State;
 
+use crate::approval_reads::VARIANT_APPROVAL_READY_SQL;
 use crate::db_transaction::{settle, Settlement};
 use crate::js_text::{js_trim, utf16_len};
 use crate::row_json::rows_to_json;
@@ -204,15 +207,16 @@ pub(crate) async fn list_drafts(
     .fetch_one(&mut *tx)
     .await
     .map_err(read_error)?;
-    let variants = by_ids(
-        &mut tx,
-        "SELECT id, draft_id, variant_number, hook, body, cta, hashtags,
-                content_revision, status, created_at, updated_at
-         FROM draft_variants WHERE draft_id IN ({ids})
-         ORDER BY variant_number ASC, id ASC",
-        &ids_of(&drafts, "id"),
-    )
-    .await?;
+    // `approval_ready` (0/1) is the native variant-level approval gate, so
+    // the renderer can explain a blocked Send for approval before navigating.
+    let variants_sql = format!(
+        "SELECT dv.id, dv.draft_id, dv.variant_number, dv.hook, dv.body, dv.cta,
+                dv.hashtags, dv.content_revision, dv.status, dv.created_at,
+                dv.updated_at, {VARIANT_APPROVAL_READY_SQL} AS approval_ready
+         FROM draft_variants dv WHERE dv.draft_id IN ({{ids}})
+         ORDER BY dv.variant_number ASC, dv.id ASC"
+    );
+    let variants = by_ids(&mut tx, &variants_sql, &ids_of(&drafts, "id")).await?;
     let variant_ids = ids_of(&variants, "id");
     let audits = by_ids(
         &mut tx,

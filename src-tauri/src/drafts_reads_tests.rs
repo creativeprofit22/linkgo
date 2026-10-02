@@ -127,6 +127,78 @@ async fn draft_list_returns_current_related_rows() {
     assert_eq!(snapshot.quality_scores[0]["score"], 80);
 }
 
+/// Variant 1's `approval_ready` flag from a fresh campaign-1 draft list.
+async fn variant_one_ready(f: &Fixture) -> Value {
+    let snapshot = list_drafts(
+        &f.pool,
+        DraftListInput {
+            campaign_id: Some(1),
+            candidate_post_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    snapshot
+        .variants
+        .iter()
+        .find(|variant| variant["id"] == 1)
+        .unwrap()["approval_ready"]
+        .clone()
+}
+
+#[tokio::test]
+async fn draft_list_flags_variant_approval_readiness_like_the_approval_gate() {
+    let f = fixture().await;
+    // Unselected variant and variant 1 without readiness evidence: not ready.
+    let snapshot = list_drafts(&f.pool, DraftListInput::default())
+        .await
+        .unwrap();
+    assert!(snapshot
+        .variants
+        .iter()
+        .all(|variant| variant["approval_ready"] == 0));
+
+    // Complete variant 1's evidence at revision 2: the readiness row appears.
+    seed(
+        &f.pool,
+        r#"INSERT INTO draft_audits (draft_variant_id,rule_key,severity,message)
+             SELECT 1,value,'pass','ok' FROM json_each('["required_text","total_length","external_link","hashtag_limit"]');
+           INSERT INTO draft_ai_audit_findings (audit_run_id,rule_key,severity,message)
+             SELECT 2,value,'pass','ok' FROM json_each('["specificity","generic_language","authenticity","clarity","safety"]');
+           UPDATE draft_quality_runs SET status = 'passed', final_score = 80, completed_at = datetime('now') WHERE id = 1;"#,
+    )
+    .await;
+    assert_eq!(variant_one_ready(&f).await, 1);
+
+    // A block finding on an older revision still blocks, like `evaluate_create`.
+    seed(
+        &f.pool,
+        "INSERT INTO draft_audits (draft_variant_id,content_revision,rule_key,severity,message)
+           VALUES (1,1,'total_length','block','too long');",
+    )
+    .await;
+    let ready_rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM approval_ready_variants WHERE draft_variant_id = 1 AND content_revision = 2",
+    )
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        ready_rows, 1,
+        "readiness row stays; only the block audit gates"
+    );
+    assert_eq!(variant_one_ready(&f).await, 0);
+
+    // An edit (new revision) without fresh checks has no readiness row.
+    seed(
+        &f.pool,
+        "DELETE FROM draft_audits WHERE severity = 'block';
+                   UPDATE draft_variants SET content_revision = 3 WHERE id = 1;",
+    )
+    .await;
+    assert_eq!(variant_one_ready(&f).await, 0);
+}
+
 #[tokio::test]
 async fn draft_list_is_capped_and_reports_the_uncapped_total() {
     let f = migrated().await;
