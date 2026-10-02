@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Clock3,
   FileText,
+  Info,
   ListChecks,
   MessageCircle,
   NotebookTabs,
@@ -16,12 +17,38 @@ import {
   Target,
   Workflow,
 } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { MainTitleBar } from "@/components/main-title-bar";
 import { WindowFrame } from "@/components/window-frame";
 import { Badge } from "@/components/ui/badge";
 import { Toaster } from "@/components/ui/sonner";
+import { agentRuntimeRoute } from "@/features/agent-runtime/schemas";
+import { approvalsRoute } from "@/features/approvals/schemas";
+import { autopilotPlannerRoute } from "@/features/autopilot-planner/schemas";
+import { campaignBacklogRoute } from "@/features/campaign-backlog/schemas";
+import { campaignsRoute } from "@/features/campaigns/schemas";
+import { candidateQueueRoute } from "@/features/candidate-queue/schemas";
+import { commentsRoute } from "@/features/comments/schemas";
+import { contentCalendarRoute } from "@/features/content-calendar/schemas";
+import { draftsRoute } from "@/features/drafts/schemas";
+import { integrationsRoute } from "@/features/integrations/schemas";
+import { metricsRoute } from "@/features/metrics/schemas";
+import { playbooksRoute } from "@/features/playbooks/schemas";
+import { safetyRoute } from "@/features/safety/schemas";
+import { schedulerRoute } from "@/features/scheduler/schemas";
+import { workflowsRoute } from "@/features/workflows/schemas";
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
+import {
+  parseRouteHash,
+  splitRouteHash,
+  type RouteDefinition,
+} from "@/lib/navigation/route-contract";
+import {
+  navigateTo,
+  readLastScreen,
+  useHashLocation,
+  writeLastScreen,
+} from "@/lib/navigation/use-hash-navigation";
 import { cn } from "@/lib/utils";
 
 const AgentRuntimeView = lazy(() =>
@@ -110,25 +137,34 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
   void import("@/features/integrations/data");
 }
 
-type HomeTab =
-  | "campaigns"
-  | "autopilot"
-  | "backlog"
-  | "queue"
-  | "drafts"
-  | "approvals"
-  | "calendar"
-  | "scheduler"
-  | "comments"
-  | "metrics"
-  | "workflows"
-  | "agents"
-  | "playbooks"
-  | "integrations"
-  | "safety";
+/** Every main-window screen, in menu order. Each feature owns its route. */
+const homeRoutes = [
+  campaignsRoute,
+  autopilotPlannerRoute,
+  campaignBacklogRoute,
+  candidateQueueRoute,
+  draftsRoute,
+  approvalsRoute,
+  contentCalendarRoute,
+  schedulerRoute,
+  commentsRoute,
+  metricsRoute,
+  workflowsRoute,
+  agentRuntimeRoute,
+  playbooksRoute,
+  integrationsRoute,
+  safetyRoute,
+] as const;
+
+type HomeTab = (typeof homeRoutes)[number]["id"];
+/** Any main-window screen, with its params widened for list handling. */
+type HomeRoute = RouteDefinition<HomeTab>;
+
+const homeRouteIds: readonly HomeTab[] = homeRoutes.map((route) => route.id);
+const defaultHomeRoute = campaignsRoute;
 
 type RoadmapTab = {
-  id: HomeTab;
+  route: HomeRoute;
   label: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -138,7 +174,7 @@ type RoadmapTab = {
 
 const tabs: RoadmapTab[] = [
   {
-    id: "campaigns",
+    route: campaignsRoute,
     label: "Campaigns",
     description: "Group your posts by goal and audience.",
     icon: Target,
@@ -146,7 +182,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/campaigns.md",
   },
   {
-    id: "autopilot",
+    route: autopilotPlannerRoute,
     label: "Autopilot",
     description: "Let Linkgo suggest what to work on next.",
     icon: Route,
@@ -154,7 +190,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/autopilot-planner.md",
   },
   {
-    id: "backlog",
+    route: campaignBacklogRoute,
     label: "Tasks",
     description: "What’s due, who owns it, and repeating tasks.",
     icon: ClipboardList,
@@ -162,7 +198,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/campaign-backlog.md",
   },
   {
-    id: "queue",
+    route: candidateQueueRoute,
     label: "Ideas",
     description: "Posts and topics worth writing about or replying to.",
     icon: ListChecks,
@@ -170,7 +206,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/candidate-queue.md",
   },
   {
-    id: "drafts",
+    route: draftsRoute,
     label: "Drafts",
     description: "Write and compare post versions, with quality checks.",
     icon: FileText,
@@ -178,7 +214,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/drafts.md",
   },
   {
-    id: "approvals",
+    route: approvalsRoute,
     label: "Approvals",
     description: "Review posts before anything goes live.",
     icon: CheckCircle2,
@@ -186,7 +222,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/approvals.md",
   },
   {
-    id: "calendar",
+    route: contentCalendarRoute,
     label: "Calendar",
     description: "Plan when each post goes out.",
     icon: CalendarDays,
@@ -194,7 +230,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/content-calendar.md",
   },
   {
-    id: "scheduler",
+    route: schedulerRoute,
     label: "Auto-posting",
     description: "Approved posts go out on time while Linkgo is open.",
     icon: Clock3,
@@ -202,7 +238,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/scheduler.md",
   },
   {
-    id: "comments",
+    route: commentsRoute,
     label: "Comments",
     description: "Draft replies and approve them before they post.",
     icon: MessageCircle,
@@ -210,7 +246,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/comments.md",
   },
   {
-    id: "metrics",
+    route: metricsRoute,
     label: "Analytics",
     description: "See how posts perform and what you’ve learned.",
     icon: BarChart3,
@@ -218,7 +254,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/metrics.md",
   },
   {
-    id: "workflows",
+    route: workflowsRoute,
     label: "Automations",
     description: "Follow the steps of automated tasks.",
     icon: Workflow,
@@ -226,7 +262,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/workflows.md",
   },
   {
-    id: "agents",
+    route: agentRuntimeRoute,
     label: "AI assistant",
     description: "See what the AI assistant did, and try it safely.",
     icon: Bot,
@@ -234,7 +270,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/agent-runtime.md",
   },
   {
-    id: "playbooks",
+    route: playbooksRoute,
     label: "Brand voice",
     description: "Writing guides that shape how the AI writes for you.",
     icon: NotebookTabs,
@@ -242,7 +278,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/playbooks.md",
   },
   {
-    id: "integrations",
+    route: integrationsRoute,
     label: "Connected accounts",
     description: "Connect LinkedIn and your AI account.",
     icon: KeyRound,
@@ -250,7 +286,7 @@ const tabs: RoadmapTab[] = [
     docHref: "docs/features/integrations.md",
   },
   {
-    id: "safety",
+    route: safetyRoute,
     label: "Safety",
     description:
       "Emergency stop, daily limits, and anything that needs fixing.",
@@ -261,14 +297,47 @@ const tabs: RoadmapTab[] = [
 ];
 
 function getActiveRoadmapTab(activeTab: HomeTab): RoadmapTab {
-  const tab = tabs.find((candidate) => candidate.id === activeTab);
+  const tab = tabs.find((candidate) => candidate.route.id === activeTab);
   if (tab) return tab;
   throw new Error(`Unknown Linkgo tab: ${activeTab}`);
 }
 
+type HomeLocation =
+  | { kind: "empty"; routeId: HomeTab }
+  | { kind: "ok" | "invalid-params" | "unknown-screen"; routeId: HomeTab };
+
+/** Which screen the current link shows; an empty link restores the last one. */
+function resolveHomeLocation(hash: string): HomeLocation {
+  if (splitRouteHash(hash).id === "") {
+    return {
+      kind: "empty",
+      routeId: readLastScreen(homeRouteIds) ?? defaultHomeRoute.id,
+    };
+  }
+  const parsed = parseRouteHash(hash, homeRoutes, defaultHomeRoute.id);
+  return { kind: parsed.kind, routeId: parsed.routeId };
+}
+
+function getHomeRoute(id: HomeTab): HomeRoute {
+  return homeRoutes.find((route) => route.id === id) ?? defaultHomeRoute;
+}
+
 export function HomePage(): React.ReactNode {
-  const [activeTab, setActiveTab] = useState<HomeTab>("campaigns");
+  const hash = useHashLocation();
+  const homeLocation = resolveHomeLocation(hash);
+  const activeTab = homeLocation.routeId;
   useAppShortcuts();
+
+  useEffect(() => {
+    if (homeLocation.kind === "empty") {
+      // Give the restored screen an address without adding a history entry.
+      navigateTo(getHomeRoute(homeLocation.routeId), undefined, {
+        replace: true,
+      });
+    } else if (homeLocation.kind !== "unknown-screen") {
+      writeLastScreen(homeLocation.routeId);
+    }
+  }, [homeLocation.kind, homeLocation.routeId]);
 
   const activeRoadmapTab = getActiveRoadmapTab(activeTab);
 
@@ -296,13 +365,13 @@ export function HomePage(): React.ReactNode {
           >
             {tabs.map((tab) => {
               const Icon = tab.icon;
-              const selected = activeTab === tab.id;
+              const selected = activeTab === tab.route.id;
               return (
                 <button
-                  key={tab.id}
+                  key={tab.route.id}
                   type="button"
                   aria-current={selected ? "page" : undefined}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => navigateTo(tab.route)}
                   className={cn(
                     "flex w-auto shrink-0 items-center gap-2 rounded-xl border p-2 text-left transition-colors sm:w-full sm:items-start sm:gap-3 sm:p-3",
                     selected
@@ -328,34 +397,47 @@ export function HomePage(): React.ReactNode {
         </aside>
 
         <section className="min-w-0 flex-1 overflow-auto p-3 sm:p-6">
+          {homeLocation.kind === "unknown-screen" && (
+            <p
+              role="status"
+              data-testid="navigation-unknown-screen"
+              className="bg-muted/50 text-muted-foreground mx-auto mb-4 flex max-w-6xl items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+            >
+              <Info aria-hidden="true" className="size-4 shrink-0" />
+              <span>
+                That link didn&rsquo;t match a screen, so we opened{" "}
+                {activeRoadmapTab.label}.
+              </span>
+            </p>
+          )}
           <Suspense fallback={featureViewFallback}>
-            {activeRoadmapTab.id === "campaigns" ? (
+            {activeRoadmapTab.route.id === "campaigns" ? (
               <CampaignsView />
-            ) : activeRoadmapTab.id === "autopilot" ? (
+            ) : activeRoadmapTab.route.id === "autopilot" ? (
               <AutopilotPlannerView />
-            ) : activeRoadmapTab.id === "backlog" ? (
+            ) : activeRoadmapTab.route.id === "backlog" ? (
               <CampaignBacklogView />
-            ) : activeRoadmapTab.id === "queue" ? (
+            ) : activeRoadmapTab.route.id === "queue" ? (
               <CandidateQueueView />
-            ) : activeRoadmapTab.id === "drafts" ? (
+            ) : activeRoadmapTab.route.id === "drafts" ? (
               <DraftsView />
-            ) : activeRoadmapTab.id === "approvals" ? (
+            ) : activeRoadmapTab.route.id === "approvals" ? (
               <ApprovalsView />
-            ) : activeRoadmapTab.id === "calendar" ? (
+            ) : activeRoadmapTab.route.id === "calendar" ? (
               <ContentCalendarView />
-            ) : activeRoadmapTab.id === "scheduler" ? (
+            ) : activeRoadmapTab.route.id === "scheduler" ? (
               <SchedulerView />
-            ) : activeRoadmapTab.id === "comments" ? (
+            ) : activeRoadmapTab.route.id === "comments" ? (
               <CommentsView />
-            ) : activeRoadmapTab.id === "metrics" ? (
+            ) : activeRoadmapTab.route.id === "metrics" ? (
               <MetricsView />
-            ) : activeRoadmapTab.id === "workflows" ? (
+            ) : activeRoadmapTab.route.id === "workflows" ? (
               <WorkflowsView />
-            ) : activeRoadmapTab.id === "agents" ? (
+            ) : activeRoadmapTab.route.id === "agents" ? (
               <AgentRuntimeView />
-            ) : activeRoadmapTab.id === "playbooks" ? (
+            ) : activeRoadmapTab.route.id === "playbooks" ? (
               <PlaybooksView />
-            ) : activeRoadmapTab.id === "integrations" ? (
+            ) : activeRoadmapTab.route.id === "integrations" ? (
               <IntegrationsView />
             ) : (
               <SafetyView />

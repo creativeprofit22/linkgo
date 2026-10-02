@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const candidateStatusSchema = z.enum([
@@ -268,3 +269,6 @@ export const candidateAgentRunContextSchema = z
     scoringCandidateIds: z.array(rowIdSchema).max(50),
   })
   .strict();
+
+/** Address of the Ideas screen (`#/queue`). See docs/features/navigation.md. */
+export const candidateQueueRoute = defineRoute("queue", emptyRouteSearch());

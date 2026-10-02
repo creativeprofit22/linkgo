@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const schedulerSettingsPayloadSchema = z.object({
@@ -132,3 +133,6 @@ export const schedulerDashboardSchema = z
     killSwitchReason: z.string(),
   })
   .strict();
+
+/** Address of the Auto-posting screen (`#/scheduler`). See docs/features/navigation.md. */
+export const schedulerRoute = defineRoute("scheduler", emptyRouteSearch());

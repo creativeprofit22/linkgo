@@ -83,6 +83,8 @@ Types live in `src/features/drafts/types/index.ts`.
 
 Schemas live in `src/features/drafts/schemas.ts` and use Zod 4.
 
+`draftsRoute` (also in `schemas.ts`, params type `DraftsRouteParams`) gives Drafts its address: `#/drafts?campaignId=C&candidateId=X`. `useDrafts({ initialCampaignId, candidateId })` selects the linked campaign when it exists and, for an idea link, loads that idea's drafts natively into `ideaDraftPage` so the 500-draft campaign cap can't hide them. See [navigation](navigation.md).
+
 Data functions live in `src/features/drafts/data.ts`:
 
 - `auditDraftVariant(input)`
@@ -165,7 +167,8 @@ The UI shows passing findings for hard blockers so operators can see why a varia
 `DraftsView` renders:
 
 - Header explaining generation is operator-triggered and save-gated.
-- Campaign selector.
+- Campaign selector (changing it replaces the screen link's `campaignId`).
+- Link notices: "Showing drafts for one idea." with `Show all drafts` for an idea link, and "We couldn't find what that link pointed to, so here are all drafts." for a missing campaign/idea or bad params.
 - `Write with AI` action (dialog "Write versions with AI").
 - `Create draft` action.
 - Loading, error (with `Try again`), no-campaign, and empty-draft states.

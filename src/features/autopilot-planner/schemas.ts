@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const autopilotPlannerSettingsPayloadSchema = z.object({
@@ -21,3 +22,9 @@ export const autopilotPlannerTickResultSchema = z.object({
   failed: z.number().int().min(0),
   blocked: z.number().int().min(0),
 });
+
+/** Address of the Autopilot screen (`#/autopilot`). See docs/features/navigation.md. */
+export const autopilotPlannerRoute = defineRoute(
+  "autopilot",
+  emptyRouteSearch(),
+);

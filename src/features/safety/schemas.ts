@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 const positiveIdSchema = z.number().int().positive();
@@ -141,3 +142,6 @@ export const errorQueueItemStatusResultSchema = z
     status: errorQueueStatusSchema,
   })
   .strict();
+
+/** Address of the Safety screen (`#/safety`). See docs/features/navigation.md. */
+export const safetyRoute = defineRoute("safety", emptyRouteSearch());

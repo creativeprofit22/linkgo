@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 import { isIanaTimeZone } from "@/features/campaign-backlog/time-zone";
@@ -117,3 +118,6 @@ export const setCampaignBacklogItemStatusSchema = z.object({
   id: campaignBacklogIdSchema,
   status: campaignBacklogStatusSchema,
 });
+
+/** Address of the Tasks screen (`#/backlog`). See docs/features/navigation.md. */
+export const campaignBacklogRoute = defineRoute("backlog", emptyRouteSearch());

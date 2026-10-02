@@ -1,4 +1,4 @@
-import { ExternalLink, Trash2 } from "lucide-react";
+import { ExternalLink, FileText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,6 +13,8 @@ import type {
   CandidateStatus,
   CandidateWithTarget,
 } from "@/features/candidate-queue/types";
+import { draftsRoute } from "@/features/drafts/schemas";
+import { navigateTo } from "@/lib/navigation/use-hash-navigation";
 
 interface CandidateCardProps {
   candidate: CandidateWithTarget;
@@ -148,6 +150,20 @@ export function CandidateCard({
           onClick={() => void onSetStatus(candidate.id, "new")}
         >
           Reset to new
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            navigateTo(draftsRoute, {
+              campaignId: candidate.campaign_id,
+              candidateId: candidate.id,
+            })
+          }
+        >
+          <FileText aria-hidden="true" className="size-4" />
+          Open drafts
         </Button>
         <Button
           type="button"

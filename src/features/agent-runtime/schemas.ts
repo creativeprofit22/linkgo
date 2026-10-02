@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 import { playbookKeySchema } from "@/features/playbooks/schemas";
 import {
@@ -136,3 +137,6 @@ export const agentRunMutationResultSchema = z
 export const persistAgentResultOutputSchema = z
   .object({ checkpointPhase: agentApprovalCheckpointPhaseSchema.nullable() })
   .strict();
+
+/** Address of the AI assistant screen (`#/agents`). See docs/features/navigation.md. */
+export const agentRuntimeRoute = defineRoute("agents", emptyRouteSearch());

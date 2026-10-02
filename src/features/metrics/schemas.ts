@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 const metricCountSchema = z.number().int().min(0).max(1_000_000_000);
@@ -164,3 +165,6 @@ export const setCampaignMemoryStatusSchema = z.object({
 export const metricsMutationResultSchema = z
   .object({ id: positiveIdSchema })
   .strict();
+
+/** Address of the Analytics screen (`#/metrics`). See docs/features/navigation.md. */
+export const metricsRoute = defineRoute("metrics", emptyRouteSearch());

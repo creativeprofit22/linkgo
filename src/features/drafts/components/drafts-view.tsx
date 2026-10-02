@@ -1,4 +1,4 @@
-import { AlertCircle, FileText, Target } from "lucide-react";
+import { AlertCircle, FileText, Info, Target } from "lucide-react";
 import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,12 +7,22 @@ import { DraftGenerationRequestCard } from "@/features/drafts/components/draft-g
 import { DraftCard } from "@/features/drafts/components/draft-card";
 import { GenerateDraftDialog } from "@/features/drafts/components/generate-draft-dialog";
 import { useDrafts } from "@/features/drafts/hooks/use-drafts";
+import { draftsRoute } from "@/features/drafts/schemas";
 import type {
   DraftGenerationRequest,
+  DraftIdeaPage,
+  DraftsRouteParams,
   DraftWithDetails,
 } from "@/features/drafts/types";
+import type { CampaignWithKeywords } from "@/features/campaigns/types";
+import type { CandidateWithTarget } from "@/features/candidate-queue/types";
+import {
+  navigateTo,
+  useRouteParams,
+} from "@/lib/navigation/use-hash-navigation";
 
 export function DraftsView(): React.ReactNode {
+  const { params: linkParams, linkIssue } = useRouteParams(draftsRoute);
   const {
     drafts,
     draftTotalCount,
@@ -21,6 +31,8 @@ export function DraftsView(): React.ReactNode {
     candidates,
     eligibleWorkflowOptions,
     selectedCampaignId,
+    loadedCampaignId,
+    ideaDraftPage,
     loading,
     error,
     loadDrafts,
@@ -36,8 +48,28 @@ export function DraftsView(): React.ReactNode {
     qualityPendingVariantIds,
     runQualityLoop,
     resumeQualityLoop,
-  } = useDrafts();
+  } = useDrafts({
+    initialCampaignId: linkParams?.campaignId,
+    candidateId: linkParams?.candidateId,
+  });
 
+  const link = resolveDraftsLink({
+    linkParams,
+    linkIssue,
+    loading,
+    campaigns,
+    candidates,
+    ideaDraftPage,
+    selectedCampaignId,
+    loadedCampaignId,
+  });
+  // An idea link shows that idea's natively filtered drafts, not a slice of
+  // the capped campaign list.
+  const visiblePage =
+    link.kind === "idea" && ideaDraftPage !== null
+      ? ideaDraftPage
+      : { items: drafts, totalCount: draftTotalCount };
+  const visibleDrafts = visiblePage.items;
   const summary = getDraftSummary(drafts, draftTotalCount);
   // Status/variant counts come from the capped rows; label them if truncated.
   const shownSuffix = summary.truncated ? " (shown)" : "";
@@ -103,6 +135,20 @@ export function DraftsView(): React.ReactNode {
         </Card>
       )}
 
+      {link.kind === "not-found" && (
+        <p
+          role="status"
+          data-testid="drafts-link-not-found"
+          className="bg-muted/50 text-muted-foreground flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+        >
+          <Info aria-hidden="true" className="size-4 shrink-0" />
+          <span>
+            We couldn&rsquo;t find what that link pointed to, so here are all
+            drafts.
+          </span>
+        </p>
+      )}
+
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
@@ -124,7 +170,15 @@ export function DraftsView(): React.ReactNode {
               value={selectedCampaignId ?? ""}
               onChange={(event) => {
                 const nextId = Number(event.target.value);
-                selectCampaign(Number.isFinite(nextId) ? nextId : null);
+                const campaignId =
+                  Number.isInteger(nextId) && nextId > 0 ? nextId : null;
+                selectCampaign(campaignId);
+                // Keep the address in step with the picker; drops any idea filter.
+                navigateTo(
+                  draftsRoute,
+                  campaignId === null ? {} : { campaignId },
+                  { replace: true },
+                );
               }}
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 min-w-60 rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
@@ -157,9 +211,32 @@ export function DraftsView(): React.ReactNode {
             />
           </div>
 
+          {link.kind === "idea" && (
+            <div
+              role="status"
+              data-testid="drafts-idea-filter"
+              className="bg-linkgo-blue/5 border-linkgo-blue/30 flex flex-col justify-between gap-3 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+            >
+              <span className="flex items-center gap-2">
+                <Info aria-hidden="true" className="size-4 shrink-0" />
+                Showing drafts for one idea.
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  navigateTo(draftsRoute, { campaignId: link.campaignId })
+                }
+              >
+                Show all drafts
+              </Button>
+            </div>
+          )}
+
           <ListTruncationNotice
-            shownCount={drafts.length}
-            totalCount={draftTotalCount}
+            shownCount={visibleDrafts.length}
+            totalCount={visiblePage.totalCount}
             noun="drafts"
           />
 
@@ -178,11 +255,15 @@ export function DraftsView(): React.ReactNode {
             </div>
           )}
 
-          {drafts.length === 0 ? (
-            <EmptyDrafts />
+          {visibleDrafts.length === 0 ? (
+            link.kind === "idea" ? (
+              <EmptyIdeaDrafts />
+            ) : (
+              <EmptyDrafts />
+            )
           ) : (
             <div className="space-y-4">
-              {drafts.map((draft) => (
+              {visibleDrafts.map((draft) => (
                 <DraftCard
                   key={draft.id}
                   draft={draft}
@@ -205,6 +286,60 @@ export function DraftsView(): React.ReactNode {
       )}
     </div>
   );
+}
+
+type DraftsLinkState =
+  | { kind: "none" }
+  | { kind: "pending" }
+  | { kind: "idea"; campaignId: number; candidateId: number }
+  | { kind: "not-found" };
+
+/**
+ * Decides what a Drafts link means once data is loaded: filter to one idea,
+ * or tell the operator the link pointed at something that isn't there.
+ */
+function resolveDraftsLink(input: {
+  linkParams: DraftsRouteParams | null;
+  linkIssue: boolean;
+  loading: boolean;
+  campaigns: CampaignWithKeywords[];
+  candidates: CandidateWithTarget[];
+  ideaDraftPage: DraftIdeaPage | null;
+  selectedCampaignId: number | null;
+  loadedCampaignId: number | null;
+}): DraftsLinkState {
+  if (input.linkIssue) return { kind: "not-found" };
+  const { linkParams } = input;
+  if (!linkParams || linkParams.campaignId === undefined) {
+    return { kind: "none" };
+  }
+  if (input.loading) return { kind: "pending" };
+  const { campaignId, candidateId } = linkParams;
+  if (!input.campaigns.some((campaign) => campaign.id === campaignId)) {
+    return { kind: "not-found" };
+  }
+  if (candidateId === undefined) return { kind: "none" };
+  // Wait until this campaign's ideas and this idea's drafts are loaded
+  // before judging the link.
+  const { ideaDraftPage } = input;
+  if (
+    input.selectedCampaignId !== campaignId ||
+    input.loadedCampaignId !== campaignId ||
+    ideaDraftPage?.campaignId !== campaignId ||
+    ideaDraftPage.candidateId !== candidateId
+  ) {
+    return { kind: "pending" };
+  }
+  // The ideas list is capped, so an idea with drafts in this campaign counts
+  // as found even when it is outside that list.
+  const ideaExists =
+    input.candidates.some(
+      (candidate) =>
+        candidate.id === candidateId && candidate.campaign_id === campaignId,
+    ) || ideaDraftPage.totalCount > 0;
+  return ideaExists
+    ? { kind: "idea", campaignId, candidateId }
+    : { kind: "not-found" };
 }
 
 function isActiveGenerationRequest(request: DraftGenerationRequest): boolean {
@@ -270,6 +405,16 @@ function EmptyNoCampaigns(): React.ReactNode {
             ideas inside a campaign.
           </p>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyIdeaDrafts(): React.ReactNode {
+  return (
+    <Card className="bg-card/70 border-dashed">
+      <CardContent className="text-muted-foreground p-8 text-center text-sm">
+        No drafts for this idea yet. Write one, or show all drafts.
       </CardContent>
     </Card>
   );

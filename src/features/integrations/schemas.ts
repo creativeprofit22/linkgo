@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 import {
   AUTH_METHODS,
@@ -144,3 +145,9 @@ export const authProgressEventSchema = z.object({
   // Native serializes a missing URL as null (Option<String>).
   authUrl: z.string().trim().nullable().optional(),
 });
+
+/** Address of the Connected accounts screen (`#/integrations`). See docs/features/navigation.md. */
+export const integrationsRoute = defineRoute(
+  "integrations",
+  emptyRouteSearch(),
+);

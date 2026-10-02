@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const contentCalendarPurposeSchema = z.enum([
@@ -65,3 +66,6 @@ export const archiveContentCalendarSlotSchema = z.object({
 export const scheduleContentCalendarSlotSchema = z.object({
   id: idSchema,
 });
+
+/** Address of the Calendar screen (`#/calendar`). See docs/features/navigation.md. */
+export const contentCalendarRoute = defineRoute("calendar", emptyRouteSearch());

@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 const positiveIdSchema = z.number().int().positive();
@@ -111,3 +112,6 @@ export const commentPublishPreflightSchema = z
 export const commentMutationResultSchema = z
   .object({ id: z.number().int().positive() })
   .strict();
+
+/** Address of the Comments screen (`#/comments`). See docs/features/navigation.md. */
+export const commentsRoute = defineRoute("comments", emptyRouteSearch());

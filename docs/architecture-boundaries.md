@@ -57,6 +57,15 @@ SQL remains exact `workflow-persistence` debt even where ownership of
 orchestration is correct; this also covers the known feature-local quality loop.
 Type-only database parameters do not bypass that ownership rule.
 
+Screen route entries follow the same rules. `src/lib/navigation/route-contract.ts`
+is Zod-only infrastructure, so a feature's `schemas.ts` may value-import it to
+declare `<feature>Route` while staying a contract file; param types live in
+`types/index.ts`. Routes are not exported from `index.ts`: that file re-exports
+the lazily loaded view, and the shell must read routes without loading views.
+Another feature links to a screen by importing the owner's route from its public
+`schemas.ts`; `src/lib/navigation` never imports features. See
+[navigation](features/navigation.md).
+
 ## Native responsibility map (current files, not required file counts)
 
 Command adapters deserialize/dispatch. Domain validation enforces identity, current

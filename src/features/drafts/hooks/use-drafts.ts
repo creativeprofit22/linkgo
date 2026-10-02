@@ -27,6 +27,7 @@ import {
 import type {
   CreateDraftInput,
   DraftGenerationRequest,
+  DraftIdeaPage,
   EligibleDraftWorkflowOption,
   DraftWithDetails,
   GenerateDraftVariantsInput,
@@ -48,6 +49,10 @@ interface UseDraftsState {
   candidates: CandidateWithTarget[];
   eligibleWorkflowOptions: EligibleDraftWorkflowOption[];
   selectedCampaignId: number | null;
+  /** Campaign whose drafts and ideas are currently loaded, if any. */
+  loadedCampaignId: number | null;
+  /** The linked idea's drafts (`candidateId` option), or null without one. */
+  ideaDraftPage: DraftIdeaPage | null;
   loading: boolean;
   error: string | null;
   loadDrafts: () => Promise<void>;
@@ -80,7 +85,30 @@ function getDefaultCampaignId(
   );
 }
 
-export function useDrafts(): UseDraftsState {
+export interface UseDraftsOptions {
+  /**
+   * Campaign to open first (from a Drafts link). Used when it exists;
+   * otherwise the first active campaign is selected as before.
+   */
+  initialCampaignId?: number | undefined;
+  /**
+   * Idea to show (from a Drafts idea link). Its drafts load natively into
+   * `ideaDraftPage`, so the campaign list cap can't hide them.
+   */
+  candidateId?: number | undefined;
+}
+
+async function loadIdeaDraftPage(
+  campaignId: number,
+  candidateId: number | undefined,
+): Promise<DraftIdeaPage | null> {
+  if (candidateId === undefined) return null;
+  const page = await listDraftPage(campaignId, { candidateId });
+  return { ...page, campaignId, candidateId };
+}
+
+export function useDrafts(options: UseDraftsOptions = {}): UseDraftsState {
+  const { initialCampaignId, candidateId } = options;
   const [drafts, setDrafts] = useState<DraftWithDetails[]>([]);
   const [draftTotalCount, setDraftTotalCount] = useState(0);
   const [generationRequests, setGenerationRequests] = useState<
@@ -101,16 +129,28 @@ export function useDrafts(): UseDraftsState {
   >(new Set());
   const latestDraftsLoadRequest = useRef(0);
   const latestCampaignLoadRequest = useRef(0);
+  const [loadedCampaignId, setLoadedCampaignId] = useState<number | null>(null);
+  const [ideaDraftPage, setIdeaDraftPage] = useState<DraftIdeaPage | null>(
+    null,
+  );
+  const latestIdeaLoadRequest = useRef(0);
+  // Read inside loadDrafts without making a link change reload everything.
+  const requestedCampaignIdRef = useRef(initialCampaignId);
+  const requestedCandidateIdRef = useRef(candidateId);
+  const campaignsRef = useRef<CampaignWithKeywords[]>([]);
 
   const loadDraftsForCampaign = useCallback(
     async (campaignId: number | null) => {
       const requestId = ++latestCampaignLoadRequest.current;
+      const ideaRequestId = ++latestIdeaLoadRequest.current;
       if (campaignId === null) {
         setCandidates([]);
         setDrafts([]);
         setDraftTotalCount(0);
+        setIdeaDraftPage(null);
         setGenerationRequests([]);
         setEligibleWorkflowOptions([]);
+        setLoadedCampaignId(null);
         return;
       }
 
@@ -118,11 +158,13 @@ export function useDrafts(): UseDraftsState {
         const [
           loadedCandidates,
           loadedDraftPage,
+          loadedIdeaDraftPage,
           loadedGenerationRequests,
           loadedEligibleWorkflowOptions,
         ] = await Promise.all([
           listCandidates(campaignId),
           listDraftPage(campaignId),
+          loadIdeaDraftPage(campaignId, requestedCandidateIdRef.current),
           listDraftGenerationRequests(campaignId),
           listEligibleDraftWorkflowOptions(campaignId),
         ]);
@@ -131,8 +173,13 @@ export function useDrafts(): UseDraftsState {
         setCandidates(loadedCandidates);
         setDrafts(loadedDraftPage.items);
         setDraftTotalCount(loadedDraftPage.totalCount);
+        // A newer idea-only load (link change) wins over this one.
+        if (ideaRequestId === latestIdeaLoadRequest.current) {
+          setIdeaDraftPage(loadedIdeaDraftPage);
+        }
         setGenerationRequests(loadedGenerationRequests);
         setEligibleWorkflowOptions(loadedEligibleWorkflowOptions);
+        setLoadedCampaignId(campaignId);
       } catch (caught) {
         if (requestId === latestCampaignLoadRequest.current) throw caught;
       }
@@ -150,12 +197,19 @@ export function useDrafts(): UseDraftsState {
       if (requestId !== latestDraftsLoadRequest.current) return;
 
       setCampaigns(loadedCampaigns);
+      campaignsRef.current = loadedCampaigns;
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === selectedCampaignId,
       );
+      const requestedCampaignId = requestedCampaignIdRef.current;
+      const requestedCampaignExists = loadedCampaigns.some(
+        (campaign) => campaign.id === requestedCampaignId,
+      );
       const nextCampaignId = campaignStillExists
         ? selectedCampaignId
-        : getDefaultCampaignId(loadedCampaigns);
+        : requestedCampaignExists && requestedCampaignId !== undefined
+          ? requestedCampaignId
+          : getDefaultCampaignId(loadedCampaigns);
       setSelectedCampaignId(nextCampaignId);
 
       // A changed selection is loaded once by the selected-id effect below.
@@ -185,6 +239,58 @@ export function useDrafts(): UseDraftsState {
     latestCampaignLoadRequest.current += 1;
     setSelectedCampaignId(id);
   }, []);
+
+  // A new link while Drafts stays open selects its campaign when it exists.
+  useEffect(() => {
+    if (requestedCampaignIdRef.current === initialCampaignId) return;
+    requestedCampaignIdRef.current = initialCampaignId;
+    if (
+      initialCampaignId === undefined ||
+      initialCampaignId === selectedCampaignId
+    ) {
+      return;
+    }
+    if (!campaignsRef.current.some((c) => c.id === initialCampaignId)) return;
+    selectCampaign(initialCampaignId);
+  }, [initialCampaignId, selectedCampaignId, selectCampaign]);
+
+  // A new idea link for the loaded campaign loads just that idea's drafts.
+  // A link that also changes campaign is covered by the campaign reload.
+  useEffect(() => {
+    requestedCandidateIdRef.current = candidateId;
+    if (
+      candidateId === undefined ||
+      loadedCampaignId === null ||
+      loadedCampaignId !== selectedCampaignId ||
+      loadedCampaignId !== initialCampaignId
+    ) {
+      return;
+    }
+    if (
+      ideaDraftPage?.campaignId === loadedCampaignId &&
+      ideaDraftPage.candidateId === candidateId
+    ) {
+      return;
+    }
+    const requestId = ++latestIdeaLoadRequest.current;
+    const loadIdea = async (): Promise<void> => {
+      try {
+        const page = await loadIdeaDraftPage(loadedCampaignId, candidateId);
+        if (requestId === latestIdeaLoadRequest.current) setIdeaDraftPage(page);
+      } catch (caught) {
+        if (requestId === latestIdeaLoadRequest.current) {
+          setError(getErrorMessage(caught));
+        }
+      }
+    };
+    void loadIdea();
+  }, [
+    candidateId,
+    initialCampaignId,
+    loadedCampaignId,
+    selectedCampaignId,
+    ideaDraftPage,
+  ]);
 
   const addDraft = useCallback(
     async (input: CreateDraftInput) => {
@@ -373,6 +479,8 @@ export function useDrafts(): UseDraftsState {
       candidates,
       eligibleWorkflowOptions,
       selectedCampaignId,
+      loadedCampaignId,
+      ideaDraftPage,
       loading,
       error,
       loadDrafts,
@@ -398,6 +506,8 @@ export function useDrafts(): UseDraftsState {
       candidates,
       eligibleWorkflowOptions,
       selectedCampaignId,
+      loadedCampaignId,
+      ideaDraftPage,
       loading,
       error,
       loadDrafts,

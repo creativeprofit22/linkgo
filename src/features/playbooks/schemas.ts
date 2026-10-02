@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 import { AGENT_PLAYBOOK_KEYS } from "@/agent/playbooks";
 
@@ -19,3 +20,6 @@ export const updatePlaybookOverrideSchema = z.object({
   enabled: z.boolean(),
   customInstructions: z.string().trim().max(2000).default(""),
 });
+
+/** Address of the Brand voice screen (`#/playbooks`). See docs/features/navigation.md. */
+export const playbooksRoute = defineRoute("playbooks", emptyRouteSearch());

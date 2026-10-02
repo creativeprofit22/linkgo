@@ -11,6 +11,15 @@ export const DRAFT_CONTENT_INTENTS = [
 
 export type DraftContentIntent = (typeof DRAFT_CONTENT_INTENTS)[number];
 
+/**
+ * Validated params of a Drafts link. An idea filter (`candidateId`) needs its
+ * campaign, so the union rules out `candidateId` alone. A type alias (not an
+ * interface) so it stays assignable to the generic route params record.
+ */
+export type DraftsRouteParams =
+  | { campaignId?: number | undefined; candidateId?: undefined }
+  | { campaignId: number; candidateId: number };
+
 export type DraftStatus =
   | "drafting"
   | "needs_revision"
@@ -368,6 +377,12 @@ export type DraftWithDetails = Draft & {
 export interface DraftListPage {
   items: DraftWithDetails[];
   totalCount: number;
+}
+
+/** One idea's drafts, filtered natively so the campaign cap can't hide them. */
+export interface DraftIdeaPage extends DraftListPage {
+  campaignId: number;
+  candidateId: number;
 }
 
 export interface DraftVariantInput {

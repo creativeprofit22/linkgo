@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const campaignStatusSchema = z.enum([
@@ -122,3 +123,6 @@ export const campaignWithKeywordsSchema = z
   .strict();
 
 export const campaignListSchema = z.array(campaignWithKeywordsSchema);
+
+/** Address of the Campaigns screen (`#/campaigns`). See docs/features/navigation.md. */
+export const campaignsRoute = defineRoute("campaigns", emptyRouteSearch());

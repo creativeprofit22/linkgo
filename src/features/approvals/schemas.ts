@@ -1,3 +1,4 @@
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const approvalStatusSchema = z.enum([
@@ -144,3 +145,6 @@ export const recordPublishAttemptSchema = z
       });
     }
   });
+
+/** Address of the Approvals screen (`#/approvals`). See docs/features/navigation.md. */
+export const approvalsRoute = defineRoute("approvals", emptyRouteSearch());

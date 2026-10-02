@@ -112,6 +112,7 @@ Tests: `src-tauri/src/candidate_queue_store_tests.rs`.
 - `Reject`
 - `Mark drafted`
 - `Reset to new`
+- `Open drafts` — opens Drafts filtered to this idea (`#/drafts?campaignId=C&candidateId=X`; see [navigation](navigation.md))
 - `Delete`
 
 ## Verification

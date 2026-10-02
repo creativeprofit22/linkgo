@@ -5,7 +5,7 @@ Linkgo is a Tauri v2 desktop app with a React frontend and local SQLite database
 ## Layers
 
 - `src-tauri/` owns OS integration, app lifecycle, plugin registration, commands, system tray behavior, and SQL migrations.
-- `src/lib/` owns frontend infrastructure such as environment detection, database access, window helpers, and utility functions.
+- `src/lib/` owns frontend infrastructure such as environment detection, database access, window helpers, in-app navigation (`src/lib/navigation`), and utility functions.
 - `src/components/` owns reusable desktop shell and UI primitives.
 - `src/features/<feature>/` owns product slices: types, schemas, data, hooks, components, and exports.
 - `src/workflows/` owns durable orchestration contracts, workflow state-machine data access, and resumable run history.
@@ -20,6 +20,10 @@ The Draft variant UI starts a bounded quality loop only after a completed canoni
 Provider calls are serial and outside transactions. Strict schemas and echoed campaign/variant/run/attempt/revision identity are validated before settlement. A score below 70 permits at most two evidence-grounded rewrites; each is AI-audited before re-scoring. Failure, stale content, blocking audit, exhaustion, or missing rewrite ends durably without approval or external action. Runs with no activity on the run, its active agent or its active audit for 15 minutes become explicitly resumable.
 
 Recovery has a single owner, `draft_quality.rs`. Fail, reconcile and resume settle the run, its attempts, linked scorer/auditor agents (via `agent_run_store::fail_active_agent`) and linked rewrite audits (via `draft_ai_audits::fail_active_audit_run`) in the same transaction. The draft AI-audit reconciler defers quality-owned audits. Late failures, starts and settlements from a prior attempt are rejected natively. New approvals require a passed current-revision quality run with score at least 70.
+
+## In-app navigation
+
+The main window addresses screens with typed hash links (`#/drafts?campaignId=3`); `location.pathname` still selects the window, so Settings is separate. `src/lib/navigation` owns the route contract, link parsing and `navigateTo`, and imports no features. Each feature declares its route in its public `schemas.ts` and param types in `types/index.ts`; `src/pages/home.tsx` composes them into the menu. Links are untrusted input: invalid ones fall back with a plain message. See [navigation](features/navigation.md) and [decision 0001](decisions/0001-in-app-navigation.md).
 
 ## Tauri boundary
 
