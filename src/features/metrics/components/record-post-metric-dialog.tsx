@@ -70,9 +70,9 @@ function parseRequiredInteger(value: string): number | null {
 }
 
 function getValidationMessage(form: RecordMetricFormState): string {
-  if (form.approvalId === "") return "Published post is required";
+  if (form.approvalId === "") return "Choose a post.";
   if (!Number.isFinite(Date.parse(form.measuredAt))) {
-    return "Measured time must be a valid date";
+    return "Pick the date and time you checked these numbers.";
   }
   const fields = [
     form.impressions,
@@ -83,12 +83,12 @@ function getValidationMessage(form: RecordMetricFormState): string {
     form.linkClicks,
   ];
   if (fields.some((field) => parseRequiredInteger(field) === null)) {
-    return "Metric counts must be whole numbers from 0 through 1,000,000,000";
+    return "Enter whole numbers from 0 to 1,000,000,000.";
   }
   if (form.ctr.trim() !== "") {
     const ctr = Number(form.ctr);
     if (!Number.isFinite(ctr) || ctr < 0 || ctr > 100) {
-      return "CTR must be 0 through 100";
+      return "Click-through rate must be from 0 to 100.";
     }
   }
   return "";
@@ -127,10 +127,10 @@ export function RecordPostMetricDialog({
 
   const validationMessage = getValidationMessage(form);
   const disabledReason = selectedCampaignArchived
-    ? "Archived campaign"
+    ? "Campaign archived"
     : eligibleApprovals.length === 0
-      ? "No published posts"
-      : "Record metrics";
+      ? "No posts yet"
+      : "Add results";
 
   function updateForm<K extends keyof RecordMetricFormState>(
     key: K,
@@ -173,20 +173,20 @@ export function RecordPostMetricDialog({
       <DialogTrigger asChild>
         <Button type="button" disabled={disabled || selectedCampaignArchived}>
           <BarChart3 className="size-4" />{" "}
-          {disabled ? disabledReason : "Record metrics"}
+          {disabled ? disabledReason : "Add results"}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Record metrics</DialogTitle>
+            <DialogTitle>Add results</DialogTitle>
             <DialogDescription>
-              Add a manual LinkedIn metric snapshot. Linkgo stores it locally
-              and does not collect metrics automatically.
+              Copy the numbers from LinkedIn for this post. Linkgo saves them on
+              this computer.
             </DialogDescription>
           </DialogHeader>
 
-          <Field label="Published post" htmlFor="metric-approval" required>
+          <Field label="Post" htmlFor="metric-approval" required>
             <select
               id="metric-approval"
               value={form.approvalId}
@@ -196,14 +196,14 @@ export function RecordPostMetricDialog({
             >
               {eligibleApprovals.map((approval) => (
                 <option key={approval.approval.id} value={approval.approval.id}>
-                  {approval.source.author_name || "Unknown author"} · Variant{" "}
+                  {approval.source.author_name || "Unknown author"} · Version{" "}
                   {approval.variant.variant_number}
                 </option>
               ))}
             </select>
           </Field>
 
-          <Field label="Measured at" htmlFor="metric-measured-at" required>
+          <Field label="Checked on" htmlFor="metric-measured-at" required>
             <Input
               id="metric-measured-at"
               type="datetime-local"
@@ -252,7 +252,7 @@ export function RecordPostMetricDialog({
             />
           </div>
 
-          <Field label="CTR percent optional" htmlFor="metric-ctr">
+          <Field label="Click-through rate % (optional)" htmlFor="metric-ctr">
             <Input
               id="metric-ctr"
               type="number"
@@ -290,7 +290,7 @@ export function RecordPostMetricDialog({
               type="submit"
               disabled={submitting || validationMessage !== ""}
             >
-              {submitting ? "Recording…" : "Record metrics"}
+              {submitting ? "Saving…" : "Save results"}
             </Button>
           </DialogFooter>
         </form>

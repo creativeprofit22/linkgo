@@ -48,9 +48,9 @@ function getInitialFormState(
 
 function getValidationMessage(form: MemoryFormState): string {
   const confidence = Number(form.confidence);
-  if (form.summary.trim() === "") return "Summary is required";
+  if (form.summary.trim() === "") return "Write a short summary of the lesson.";
   if (!Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
-    return "Confidence must be 0 through 100";
+    return "Enter a whole number from 0 to 100.";
   }
   return "";
 }
@@ -58,7 +58,7 @@ function getValidationMessage(form: MemoryFormState): string {
 export function CreateMemoryDialog({
   campaignId,
   postMetricId,
-  triggerLabel = "Save memory",
+  triggerLabel = "Save lesson",
   initialSummary = "",
   initialEvidence = "",
   onCreate,
@@ -103,14 +103,14 @@ export function CreateMemoryDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Save campaign memory</DialogTitle>
+            <DialogTitle>Save a lesson</DialogTitle>
             <DialogDescription>
-              Store a human-approved learning note locally. This does not run AI
-              analysis.
+              Write down what you learned from this post. It&rsquo;s saved on
+              this computer. No AI is used.
             </DialogDescription>
           </DialogHeader>
 
-          <Field label="Signal" htmlFor="memory-signal">
+          <Field label="Type of lesson" htmlFor="memory-signal">
             <select
               id="memory-signal"
               value={form.signal}
@@ -122,10 +122,10 @@ export function CreateMemoryDialog({
               }
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
-              <option value="winner">winner</option>
-              <option value="underperformer">underperformer</option>
-              <option value="insight">insight</option>
-              <option value="avoid">avoid</option>
+              <option value="winner">Winner</option>
+              <option value="underperformer">Didn&rsquo;t land</option>
+              <option value="insight">Lesson</option>
+              <option value="avoid">Avoid</option>
             </select>
           </Field>
 
@@ -146,7 +146,7 @@ export function CreateMemoryDialog({
             />
           </Field>
 
-          <Field label="Evidence" htmlFor="memory-evidence">
+          <Field label="What you saw" htmlFor="memory-evidence">
             <Textarea
               id="memory-evidence"
               value={form.evidence}
@@ -161,7 +161,11 @@ export function CreateMemoryDialog({
             />
           </Field>
 
-          <Field label="Confidence" htmlFor="memory-confidence" required>
+          <Field
+            label="How sure are you? (%)"
+            htmlFor="memory-confidence"
+            required
+          >
             <Input
               id="memory-confidence"
               type="number"
@@ -197,7 +201,7 @@ export function CreateMemoryDialog({
               type="submit"
               disabled={submitting || validationMessage !== ""}
             >
-              {submitting ? "Saving…" : "Save memory"}
+              {submitting ? "Saving…" : "Save lesson"}
             </Button>
           </DialogFooter>
         </form>

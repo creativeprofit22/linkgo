@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAgentModelDefaults } from "@/hooks/use-agent-model-defaults";
+import { toPlainMessage } from "@/lib/plain-message";
 import { cn } from "@/lib/utils";
 import type {
   DraftAiAuditFinding,
@@ -28,18 +29,18 @@ import type {
 } from "@/features/drafts/types";
 
 const ruleLabels: Record<DraftAiAuditRuleKey, string> = {
-  hook: "Hook",
-  specificity: "Specificity",
-  generic_language: "Generic language",
-  authenticity: "Authenticity",
-  clarity: "Clarity",
-  safety: "Safety",
+  hook: "Opening line",
+  specificity: "Specific details",
+  generic_language: "Generic wording",
+  authenticity: "Sounds like you",
+  clarity: "Easy to follow",
+  safety: "Safe to post",
 };
 
 const severityLabels: Record<DraftAuditSeverity, string> = {
-  pass: "Pass",
-  warning: "Warning",
-  block: "Block",
+  pass: "Looks good",
+  warning: "Worth a look",
+  block: "Must fix",
 };
 
 const severityIconClassName: Record<DraftAuditSeverity, string> = {
@@ -61,37 +62,38 @@ function getPresentation(
   switch (status) {
     case null:
       return {
-        label: "Not run",
-        description: "No AI audit has been run for this revision.",
+        label: "Not checked",
+        description: "The AI hasn't reviewed this version yet.",
         Icon: ShieldQuestion,
         iconClassName: "text-muted-foreground",
       };
     case "pending":
     case "running":
       return {
-        label: "Running",
-        description: "The AI audit is in progress for this revision.",
+        label: "In progress",
+        description: "The AI is reviewing this version.",
         Icon: Clock3,
         iconClassName: "text-linkgo-blue",
       };
     case "completed":
       return {
-        label: "Completed",
-        description: "The AI audit completed for this revision.",
+        label: "Done",
+        description: "The AI finished reviewing this version.",
         Icon: CheckCircle2,
         iconClassName: "text-linkgo-green",
       };
     case "failed":
       return {
-        label: "Failed",
-        description: "The AI audit could not be completed for this revision.",
+        label: "Didn't finish",
+        description:
+          "The AI couldn't finish reviewing this version. Try again.",
         Icon: CircleAlert,
         iconClassName: "text-destructive",
       };
     case "cancelled":
       return {
         label: "Cancelled",
-        description: "The AI audit was cancelled for this revision.",
+        description: "The AI review of this version was cancelled.",
         Icon: CircleAlert,
         iconClassName: "text-muted-foreground",
       };
@@ -136,7 +138,7 @@ export function AiAuditPanel({
           ? error.message
           : typeof error === "string" && error.trim() !== ""
             ? error
-            : "The AI audit could not be started.",
+            : "We couldn't start the AI review. Try again.",
       );
     } finally {
       runLock.current = false;
@@ -158,8 +160,8 @@ export function AiAuditPanel({
           />
           <div className="min-w-0 space-y-1">
             <h3 id={titleId} className="text-sm font-semibold">
-              AI audit
-              <span className="sr-only"> for variant {variantId}</span>
+              AI review
+              <span className="sr-only"> for version {variantId}</span>
             </h3>
             <p
               id={descriptionId}
@@ -183,7 +185,7 @@ export function AiAuditPanel({
 
       <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
         <div className="space-y-2">
-          <Label htmlFor={providerId}>Provider</Label>
+          <Label htmlFor={providerId}>AI service</Label>
           <select
             id={providerId}
             value={providerKey}
@@ -203,7 +205,7 @@ export function AiAuditPanel({
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor={modelId}>Model</Label>
+          <Label htmlFor={modelId}>AI model</Label>
           <Input
             id={modelId}
             value={modelName}
@@ -221,10 +223,10 @@ export function AiAuditPanel({
         >
           {runActive ? (
             <>
-              <LoaderCircle className="size-4 animate-spin" /> Running AI audit…
+              <LoaderCircle className="size-4 animate-spin" /> Reviewing…
             </>
           ) : (
-            "Run AI audit"
+            "Review with AI"
           )}
         </Button>
       </div>
@@ -234,7 +236,7 @@ export function AiAuditPanel({
           role="alert"
           className="text-destructive mt-3 text-sm font-medium break-words"
         >
-          {attemptError}
+          {toPlainMessage(attemptError)}
         </p>
       )}
 
@@ -242,15 +244,15 @@ export function AiAuditPanel({
         <div className="mt-4 space-y-4 border-t pt-4">
           <dl className="grid gap-3 text-sm sm:grid-cols-3">
             <AuditMetadata
-              label="Provider"
+              label="AI service"
               value={PROVIDER_LABELS[audit.run.provider_key]}
             />
             <AuditMetadata
-              label="Model"
-              value={audit.run.model_name || "Not recorded"}
+              label="AI model"
+              value={audit.run.model_name || "Not saved"}
             />
             <AuditMetadata
-              label="Revision"
+              label="Edit number"
               value={String(audit.run.content_revision)}
             />
           </dl>
@@ -259,7 +261,7 @@ export function AiAuditPanel({
             <>
               <AuditMessage
                 label="Summary"
-                value={audit.run.summary || "No summary was provided."}
+                value={audit.run.summary || "No summary given."}
               />
               <AiAuditFindingList findings={audit.findings} />
             </>
@@ -267,12 +269,13 @@ export function AiAuditPanel({
 
           {(audit.status === "failed" || audit.status === "cancelled") && (
             <AuditMessage
-              label={audit.status === "failed" ? "Error" : "Details"}
+              label={audit.status === "failed" ? "What went wrong" : "Details"}
               value={
-                audit.run.error_message ||
-                (audit.status === "failed"
-                  ? "No error details were recorded."
-                  : "No cancellation details were recorded.")
+                audit.run.error_message
+                  ? toPlainMessage(audit.run.error_message)
+                  : audit.status === "failed"
+                    ? "We don't know what went wrong. Try again."
+                    : "No details about the cancellation."
               }
               isError={audit.status === "failed"}
             />
@@ -334,9 +337,12 @@ function AiAuditFindingList({
   return (
     <div className="space-y-2">
       <h4 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-        Findings ({findings.length}/6)
+        Suggestions ({findings.length}/6)
       </h4>
-      <ul aria-label="AI audit findings" className="grid gap-2 sm:grid-cols-2">
+      <ul
+        aria-label="AI review suggestions"
+        className="grid gap-2 sm:grid-cols-2"
+      >
         {findings.map((finding) => (
           <li
             key={finding.rule_key}

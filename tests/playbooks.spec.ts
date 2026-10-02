@@ -28,12 +28,12 @@ test("edits custom instructions and persists override row", async ({
 
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
   await writerCard
-    .getByLabel("Custom runtime instructions")
+    .getByLabel("Your own instructions")
     .fill("Prefer punchy operator lessons with one concrete metric.");
-  await writerCard.getByRole("button", { name: "Save playbook" }).click();
-  await expect(
-    writerCard.getByLabel("Custom runtime instructions"),
-  ).toHaveValue("Prefer punchy operator lessons with one concrete metric.");
+  await writerCard.getByRole("button", { name: "Save guide" }).click();
+  await expect(writerCard.getByLabel("Your own instructions")).toHaveValue(
+    "Prefer punchy operator lessons with one concrete metric.",
+  );
 
   const overrides = await getPlaybookOverrides(page);
   expect(overrides).toContainEqual(
@@ -51,10 +51,12 @@ test("disables a runtime playbook and marks it disabled", async ({ page }) => {
   await openPlaybooks(page);
 
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
-  await writerCard.getByRole("switch", { name: "Runtime enabled" }).click();
-  await writerCard.getByRole("button", { name: "Save playbook" }).click();
+  await writerCard
+    .getByRole("switch", { name: "Use with the AI assistant" })
+    .click();
+  await writerCard.getByRole("button", { name: "Save guide" }).click();
 
-  await expect(writerCard.getByText("Disabled", { exact: true })).toBeVisible();
+  await expect(writerCard.getByText("Off", { exact: true })).toBeVisible();
   const overrides = await getPlaybookOverrides(page);
   expect(overrides).toContainEqual(
     expect.objectContaining({
@@ -72,10 +74,10 @@ test("shows commenter as operator guidance only without autonomous posting", asy
 
   const commenterCard = getPlaybookCard(page, "LinkedIn Commenter");
   await expect(
-    commenterCard.getByText("Guidance only", { exact: true }),
+    commenterCard.getByText("Tips only", { exact: true }),
   ).toBeVisible();
-  await expect(commenterCard.getByText("Operator guidance only")).toBeVisible();
-  await expect(commenterCard.getByText("No tool contract")).toBeVisible();
+  await expect(commenterCard.getByText("Tips for you only")).toBeVisible();
+  await expect(commenterCard.getByText("No assistant actions")).toBeVisible();
   await expect(
     commenterCard.getByRole("button", { name: /post|comment|publish/i }),
   ).toHaveCount(0);
@@ -106,9 +108,9 @@ test("native override command rejects invalid playbook overrides", async ({
 });
 
 async function openPlaybooks(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Playbooks/ }).click();
+  await page.getByRole("button", { name: /^Brand voice/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Playbooks", exact: true }),
+    page.getByRole("heading", { name: "Brand voice", exact: true }),
   ).toBeVisible();
 }
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Content Calendar is a local-first planning surface for approved LinkedIn post ideas.
+Content Calendar (the **Calendar** tab) is a local-first planning surface for approved LinkedIn post ideas.
 
 It turns an approved approval into one calendar slot with required planning metadata before scheduler execution.
 
@@ -53,22 +53,22 @@ Tests: `src-tauri/src/content_calendar_tests.rs`. They cover bad input writing n
 UI lifecycle labels are derived this way:
 
 1. `Archived` when the slot status is `archived`.
-2. `Published` when the approval status is `published` or a successful publish attempt exists.
+2. `Posted` when the approval status is `published` or a successful publish attempt exists.
 3. `Scheduled` when the approval status is `scheduled` or an active schedule job exists.
 4. `Planned` otherwise.
 
 ## UI behavior
 
-The Calendar tab sits between Approvals and Scheduler.
+The Calendar tab sits between Approvals and Auto-posting (the scheduler).
 
 Operators can:
 
 - Filter by all campaigns or one campaign.
-- See planned, scheduled, published, and archived summary counts.
+- See Planned, Scheduled, Posted, and Archived summary counts.
 - Create a slot from an eligible approval.
 - Edit planning metadata.
 - Archive a slot.
-- Schedule a planned slot through the existing approval scheduler.
+- Schedule a planned slot (`Schedule post`) through the existing approval scheduler.
 
 The create dialog prefills `angle` from the draft and `cta` from the selected variant.
 

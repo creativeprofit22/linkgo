@@ -8,7 +8,7 @@ const optionalUrlOrEmptySchema = z
   .max(2000)
   .default("")
   .refine((value) => value === "" || z.url().safeParse(value).success, {
-    message: "Use a valid URL or leave it blank",
+    message: "That link doesn't look right. Fix it or leave it blank.",
   });
 
 export const commentThreadStatusSchema = z.enum([
@@ -81,7 +81,7 @@ export const recordCommentAttemptSchema = z
       context.addIssue({
         code: "custom",
         path: ["externalCommentUrl"],
-        message: "Add a comment URL or platform comment ID for posted comments",
+        message: "Add the comment link or its LinkedIn reference.",
       });
     }
 
@@ -89,7 +89,7 @@ export const recordCommentAttemptSchema = z
       context.addIssue({
         code: "custom",
         path: ["errorMessage"],
-        message: "Add an error message for failed comment attempts",
+        message: "Say what went wrong.",
       });
     }
   });

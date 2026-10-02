@@ -101,7 +101,7 @@ export function DraftVariantCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">
-              Variant {variant.variant_number}
+              Version {variant.variant_number}
             </CardTitle>
             <DraftVariantStatusBadge status={variant.status} />
             <DraftAuditSeverityBadge severity={variant.auditSeverity} />
@@ -113,7 +113,7 @@ export function DraftVariantCard({
             onClick={() => setEditing(true)}
           >
             <Pencil className="size-4" />
-            Edit variant
+            Edit version
           </Button>
         </div>
       </CardHeader>
@@ -126,14 +126,14 @@ export function DraftVariantCard({
           >
             <VariantTextarea
               id={`variant-${variant.id}-hook`}
-              label="Hook"
+              label="Opening line"
               maxLength={500}
               value={editor.hook}
               onChange={(value) => updateEditor("hook", value)}
             />
             <VariantTextarea
               id={`variant-${variant.id}-body`}
-              label="Body"
+              label="Main text"
               maxLength={3000}
               minHeightClassName="min-h-32"
               value={editor.body}
@@ -141,7 +141,7 @@ export function DraftVariantCard({
             />
             <VariantTextarea
               id={`variant-${variant.id}-cta`}
-              label="CTA"
+              label="Call to action"
               maxLength={500}
               value={editor.cta}
               onChange={(value) => updateEditor("cta", value)}
@@ -158,15 +158,15 @@ export function DraftVariantCard({
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save and re-audit"}
+                {saving ? "Saving…" : "Save and check again"}
               </Button>
             </div>
           </form>
         ) : (
           <div className="space-y-4">
-            <VariantTextBlock label="Hook" value={variant.hook} />
-            <VariantTextBlock label="Body" value={variant.body} />
-            <VariantTextBlock label="CTA" value={variant.cta} />
+            <VariantTextBlock label="Opening line" value={variant.hook} />
+            <VariantTextBlock label="Main text" value={variant.body} />
+            <VariantTextBlock label="Call to action" value={variant.cta} />
             <VariantTextBlock label="Hashtags" value={variant.hashtags} />
           </div>
         )}
@@ -181,11 +181,11 @@ export function DraftVariantCard({
               id={`variant-${variant.id}-deterministic-checks-title`}
               className="text-sm font-semibold"
             >
-              Deterministic checks
-              <span className="sr-only"> for variant {variant.id}</span>
+              Automatic checks
+              <span className="sr-only"> for version {variant.id}</span>
             </h3>
             <p className="text-muted-foreground text-sm">
-              Rule-based checks run locally whenever the draft changes.
+              Quick checks that run every time you change the draft.
             </p>
           </div>
           <AuditFindingList findings={variant.audits} />
@@ -211,7 +211,7 @@ export function DraftVariantCard({
           disabled={variant.status === "selected"}
           onClick={() => setStatus("selected")}
         >
-          Select for review
+          Choose this version
         </Button>
         <Button
           type="button"
@@ -220,7 +220,7 @@ export function DraftVariantCard({
           disabled={variant.status === "rejected"}
           onClick={() => setStatus("rejected")}
         >
-          Reject variant
+          Reject version
         </Button>
         <Button
           type="button"
@@ -229,7 +229,7 @@ export function DraftVariantCard({
           disabled={variant.status === "draft"}
           onClick={() => setStatus("draft")}
         >
-          Reset variant
+          Undo choice
         </Button>
       </CardFooter>
     </Card>

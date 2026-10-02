@@ -26,6 +26,7 @@ import type {
   WorkflowRunWithDetails,
   WorkflowScoringInput,
 } from "@/workflows/types";
+import { toPlainMessage } from "@/lib/plain-message";
 
 interface ScoreWorkflowDialogProps {
   run: WorkflowRunWithDetails;
@@ -39,7 +40,9 @@ interface ScoreWorkflowDialogProps {
 type ConnectedProviderKey = Exclude<AgentProviderKey, "dry_run">;
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Scoring could not start";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "We couldn't start scoring. Try again.";
 }
 
 export function ScoreWorkflowDialog({
@@ -136,15 +139,15 @@ export function ScoreWorkflowDialog({
       <DialogTrigger asChild>
         <Button type="button" size="sm" disabled={disabled || pending}>
           <Gauge aria-hidden="true" className="size-4" />
-          {pending ? "Scoring batch…" : "Score batch"}
+          {pending ? "Scoring ideas…" : "Score ideas"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Score attached candidate batch</DialogTitle>
+          <DialogTitle>Score these ideas</DialogTitle>
           <DialogDescription>
-            Confirm the exact local scope and connected model before sending
-            approved campaign context.
+            Check which ideas will be scored and which AI service will do it
+            before we send your campaign details.
           </DialogDescription>
         </DialogHeader>
 
@@ -154,12 +157,13 @@ export function ScoreWorkflowDialog({
         >
           {scope === null ? (
             <div className="rounded-lg border p-3 text-sm" role="status">
-              No candidate scope is attached. This score step cannot run.
+              No ideas are attached to this automation, so this step can't be
+              scored.
             </div>
           ) : (
             <dl className="grid grid-cols-2 gap-3 rounded-lg border p-3 text-sm sm:grid-cols-4">
-              <ScopeFact label="Current" value={scope.current} />
-              <ScopeFact label="Unscored" value={scope.unscored} />
+              <ScopeFact label="Ideas" value={scope.current} />
+              <ScopeFact label="Not scored yet" value={scope.unscored} />
               <ScopeFact label="Already scored" value={scope.alreadyScored} />
               <ScopeFact label="Removed" value={scope.removed} />
             </dl>
@@ -168,9 +172,7 @@ export function ScoreWorkflowDialog({
           {needsProvider ? (
             <>
               <div className="space-y-2">
-                <Label htmlFor={`score-provider-${run.id}`}>
-                  Model provider
-                </Label>
+                <Label htmlFor={`score-provider-${run.id}`}>AI service</Label>
                 <select
                   id={`score-provider-${run.id}`}
                   autoFocus
@@ -188,7 +190,7 @@ export function ScoreWorkflowDialog({
                   className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full min-w-0 rounded-md border py-1 ps-3 pe-10 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2 forced-colors:border"
                 >
                   {connectedProviders.length === 0 ? (
-                    <option value="">No connected model provider</option>
+                    <option value="">No AI service connected</option>
                   ) : null}
                   {connectedProviders.map((provider) => (
                     <option key={provider} value={provider}>
@@ -201,13 +203,13 @@ export function ScoreWorkflowDialog({
                   className="text-muted-foreground text-xs"
                 >
                   {connectedProviders.length === 0
-                    ? "Open Integrations and connect a model provider before scoring."
-                    : "Dry run is excluded from planner scoring."}
+                    ? "Open Connected accounts and connect an AI service before scoring."
+                    : "Practice mode (no AI used) can't score ideas."}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor={`score-model-${run.id}`}>Model</Label>
+                <Label htmlFor={`score-model-${run.id}`}>AI model</Label>
                 <Input
                   id={`score-model-${run.id}`}
                   value={modelName}
@@ -218,7 +220,9 @@ export function ScoreWorkflowDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor={`score-minimum-${run.id}`}>Minimum score</Label>
+                <Label htmlFor={`score-minimum-${run.id}`}>
+                  Minimum match score
+                </Label>
                 <Input
                   id={`score-minimum-${run.id}`}
                   type="number"
@@ -233,7 +237,7 @@ export function ScoreWorkflowDialog({
                   }}
                 />
                 <p className="text-muted-foreground text-xs">
-                  Scores range from 0 to 100. The default threshold is 60.
+                  Scores go from 0 to 100. The usual minimum is 60.
                 </p>
               </div>
 
@@ -250,11 +254,11 @@ export function ScoreWorkflowDialog({
                 />
                 <div className="space-y-1">
                   <Label htmlFor={`score-auto-reject-${run.id}`}>
-                    Reject new candidates below minimum
+                    Reject new ideas below the minimum
                   </Label>
                   <p className="text-muted-foreground text-xs">
-                    Off by default. Only still-new candidates in this exact
-                    batch can be rejected.
+                    Off unless you turn it on. Only new ideas in this list can
+                    be rejected.
                   </p>
                 </div>
               </div>
@@ -265,17 +269,17 @@ export function ScoreWorkflowDialog({
                     providerKey ?? connectedProviders[0] ?? "dry_run"
                   ]
                 }{" "}
-                receives the displayed candidate scope and approved campaign
-                product, audience, voice, tone, and saved keywords. Credentials
-                stay in the native provider boundary.
+                will see these ideas plus your campaign's product, audience,
+                voice, tone, and saved keywords. Your sign-in details stay
+                private on this computer.
               </p>
             </>
           ) : (
             <p className="text-muted-foreground text-sm" role="status">
-              No model call is needed. Continuing will{" "}
+              No AI is needed. If you continue, we'll{" "}
               {scope?.current === 0
-                ? "block the score step because all attached candidates were removed"
-                : "advance the workflow because no unscored new candidates remain"}
+                ? "stop at this step because all the ideas were removed"
+                : "move to the next step because every new idea is already scored"}
               .
             </p>
           )}
@@ -289,8 +293,7 @@ export function ScoreWorkflowDialog({
                 aria-hidden="true"
                 className="mt-0.5 size-4 shrink-0"
               />
-              Global kill switch is enabled. Disable it in Safety before
-              scoring.
+              Emergency pause is on. Turn it off in Safety before scoring.
             </div>
           ) : null}
           {submitError ? (
@@ -310,10 +313,10 @@ export function ScoreWorkflowDialog({
             </Button>
             <Button type="submit" disabled={submitDisabled}>
               {pending
-                ? "Scoring batch…"
+                ? "Scoring ideas…"
                 : needsProvider
                   ? "Confirm and score"
-                  : "Continue without model"}
+                  : "Continue without AI"}
             </Button>
           </DialogFooter>
         </form>

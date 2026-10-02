@@ -3,7 +3,7 @@ import { isBrowserPreview } from "@/lib/env";
 
 /** User-facing guidance shown when a desktop-only operation runs in a browser. */
 export const DESKTOP_REQUIRED_MESSAGE =
-  "Not available in the browser preview. Linkgo saves data only in the desktop app — run `bun run tauri:dev`.";
+  "This only works in the Linkgo app. Nothing is saved in this browser preview.";
 
 /**
  * Raised instead of calling a native command when the renderer runs in a plain

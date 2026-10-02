@@ -27,8 +27,8 @@ export function ListTruncationNotice({
     >
       <Info aria-hidden="true" className="size-4 shrink-0" />
       <span>
-        Showing the first {shownCount} of {totalCount} {noun}. Counts marked
-        &ldquo;shown&rdquo; cover only these rows.
+        Showing the first {shownCount} of {totalCount} {noun}. Totals marked
+        &ldquo;shown&rdquo; only count what&rsquo;s on screen.
       </span>
     </p>
   );

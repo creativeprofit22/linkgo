@@ -41,8 +41,8 @@ export function SafetyView(): React.ReactNode {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">Safety</h2>
               <p className="text-muted-foreground text-sm">
-                Local-first emergency stops, conservative rate limits, and
-                fixable operator history.
+                Pause everything in an emergency, keep posting limits low, and
+                fix problems.
               </p>
             </div>
           </div>
@@ -62,7 +62,7 @@ export function SafetyView(): React.ReactNode {
               size="sm"
               onClick={() => void loadSafety()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -78,9 +78,10 @@ export function SafetyView(): React.ReactNode {
         <>
           <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">Safety scope</p>
+              <p className="text-sm font-medium">Show campaign</p>
               <p className="text-muted-foreground text-xs">
-                Keep history visible for all campaigns, including archived rows.
+                See safety history for one campaign or all of them, including
+                archived ones.
               </p>
             </div>
             <select
@@ -111,22 +112,22 @@ export function SafetyView(): React.ReactNode {
             <CardContent className="space-y-4 p-4">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
-                  <p className="text-sm font-semibold">Global kill switch</p>
+                  <p className="text-sm font-semibold">Emergency pause</p>
                   <p className="text-muted-foreground text-xs">
-                    Blocks local schedule starts, agent run starts, and approved
-                    comment posting records.
+                    Stops all scheduling, all AI assistant tasks, and all
+                    approved comments from posting until you turn it off.
                   </p>
                 </div>
                 <div className="text-sm font-medium">
-                  {killSwitchEnabled ? "Enabled" : "Disabled"}
+                  {killSwitchEnabled ? "On — everything is paused" : "Off"}
                 </div>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Input
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="Reason for enabling the kill switch"
-                  aria-label="Kill switch reason"
+                  placeholder="Why are you pausing everything?"
+                  aria-label="Reason for pausing"
                   disabled={killSwitchSaving}
                 />
                 <Button
@@ -142,7 +143,9 @@ export function SafetyView(): React.ReactNode {
                 >
                   {killSwitchSaving
                     ? "Saving…"
-                    : `${killSwitchEnabled ? "Disable" : "Enable"} kill switch`}
+                    : killSwitchEnabled
+                      ? "Turn off emergency pause"
+                      : "Pause everything"}
                 </Button>
               </div>
             </CardContent>
@@ -150,19 +153,19 @@ export function SafetyView(): React.ReactNode {
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              label="Open errors"
+              label="Problems to fix"
               value={String(dashboard.summary.openErrors)}
             />
             <SummaryCard
-              label="Blocked today"
+              label="Stopped by limits today"
               value={String(dashboard.summary.blockedToday)}
             />
             <SummaryCard
-              label="Allowed today"
+              label="Allowed by limits today"
               value={String(dashboard.summary.allowedToday)}
             />
             <SummaryCard
-              label="Audit events"
+              label="Safety history"
               value={String(dashboard.summary.auditEvents)}
             />
           </div>
@@ -175,16 +178,16 @@ export function SafetyView(): React.ReactNode {
 
           <section className="space-y-3">
             <div>
-              <h3 className="text-lg font-semibold">Error queue</h3>
+              <h3 className="text-lg font-semibold">Problems to fix</h3>
               <p className="text-muted-foreground text-sm">
-                Failed publishes, rejected approvals, and failed agent runs land
-                here for operator follow-up.
+                Posts that didn't go out, rejected approvals, and AI assistant
+                tasks that failed show up here so you can follow up.
               </p>
             </div>
             {dashboard.errorQueueItems.length === 0 ? (
               <Card className="bg-card/70 border-dashed">
                 <CardContent className="text-muted-foreground p-8 text-center text-sm">
-                  No error queue items yet.
+                  Nothing to fix right now.
                 </CardContent>
               </Card>
             ) : (
@@ -240,8 +243,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Create a campaign to see campaign-scoped safety history. The global
-            kill switch is available now.
+            Create a campaign to see its safety history. You can use the
+            emergency pause any time.
           </p>
         </div>
       </CardContent>

@@ -28,7 +28,7 @@ test("renders six typed tool contracts with approval metadata", async ({
   await expect(getToolCard(page, "schedule_post")).toContainText(
     "Approval required",
   );
-  await expect(page.getByText("No agent runs yet")).toBeVisible();
+  await expect(page.getByText("No assistant tasks yet")).toBeVisible();
 });
 
 test("persists a completed dry-run with tool calls and events", async ({
@@ -39,14 +39,14 @@ test("persists a completed dry-run with tool calls and events", async ({
   await openAgentRuntime(page);
   await createDryRun(page);
 
-  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await page.getByRole("button", { name: "Start practice run" }).click();
 
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
   await expect(
-    page.getByText("research_posts", { exact: true }).nth(1),
+    page.getByText("Research posts", { exact: true }).nth(1),
   ).toBeVisible();
-  await expect(page.getByText("Tool completed")).toBeVisible();
-  await expect(page.getByText("Run completed")).toBeVisible();
+  await expect(page.getByText("Action done")).toBeVisible();
+  await expect(page.getByText("Task done")).toBeVisible();
 
   const counts = await getStateCounts(page);
   const toolCalls = await getAgentToolCalls(page);
@@ -98,7 +98,9 @@ test("failed quality-owned agent offers no Start and points to Drafts", async ({
 
   await expect(getBadge(page, "Failed").first()).toBeVisible();
   await expect(
-    page.getByText("Owned by the draft quality loop — resume it from Drafts."),
+    page.getByText(
+      "This task belongs to draft checks — continue it from Drafts.",
+    ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /^Start / })).toHaveCount(0);
 });
@@ -111,8 +113,8 @@ test("dry-run researcher persists discovery items through research_posts", async
   await openAgentRuntime(page);
   await createDryRun(page);
 
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
 
   const counts = await getStateCounts(page);
   expect(counts.candidateDiscoveryItems).toBe(3);
@@ -132,8 +134,8 @@ test("dry-run scorer applies candidate scores through score_relevance", async ({
     "Candidate IDs: 1. Auto-reject: true.",
   );
 
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
 
   const candidateScores = await page.evaluate(() => {
     const getCandidates = (
@@ -164,8 +166,8 @@ test("dry-run auditor persists exact identities and echoes provider-authored fin
   await openAgentRuntime(page);
   await createDryRun(page, "auditor");
 
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
 
   const toolCall = (await getAgentToolCalls(page))[0];
   const input = JSON.parse(toolCall?.input_json ?? "{}") as {
@@ -224,41 +226,41 @@ test("starts a provider-backed run through the native command boundary", async (
     };
   });
 
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("sk-test-custom-key");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
-  await dialog.getByLabel("Account label").fill("Runtime Custom API");
+  await dialog.getByLabel("Account label").fill("Runtime Other AI service");
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Connected").first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
-  await page.getByRole("button", { name: /Playbooks/ }).click();
+  await page.getByRole("button", { name: /^Brand voice/ }).click();
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
   const customInstructions =
     "Prefer punchy operator lessons with one concrete metric.";
-  await writerCard
-    .getByLabel("Custom runtime instructions")
-    .fill(customInstructions);
-  await writerCard.getByRole("button", { name: "Save playbook" }).click();
-  await expect(
-    writerCard.getByLabel("Custom runtime instructions"),
-  ).toHaveValue(customInstructions);
+  await writerCard.getByLabel("Your own instructions").fill(customInstructions);
+  await writerCard.getByRole("button", { name: "Save guide" }).click();
+  await expect(writerCard.getByLabel("Your own instructions")).toHaveValue(
+    customInstructions,
+  );
 
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await createCampaign(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "drafter", "linkedin_writer");
 
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
   await expect(page.getByText("Provider run completed.").first()).toBeVisible();
 
   const runs = await getAgentRuns(page);
@@ -376,15 +378,17 @@ test("feeds a validated tool result into a second provider turn before completio
       },
     };
   });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("sk-test-custom-key");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Connected").first()).toBeVisible();
@@ -395,8 +399,8 @@ test("feeds a validated tool result into a second provider turn before completio
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "researcher");
 
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
 
   const counts = await getStateCounts(page);
   expect(counts.candidateDiscoveryItems).toBe(1);
@@ -510,15 +514,17 @@ test("provider-backed score_relevance calls persist model-supplied scores", asyn
       },
     };
   });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("sk-test-custom-key");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Connected").first()).toBeVisible();
@@ -530,8 +536,8 @@ test("provider-backed score_relevance calls persist model-supplied scores", asyn
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "scorer");
 
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
 
   const candidateScores = await page.evaluate(() => {
     const getCandidates = (
@@ -617,15 +623,17 @@ test("provider duplicate research_posts calls are rejected before local writes",
       },
     };
   });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("sk-test-custom-key");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Connected").first()).toBeVisible();
@@ -636,8 +644,8 @@ test("provider duplicate research_posts calls are rejected before local writes",
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "researcher");
 
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
 
   const counts = await getStateCounts(page);
   const toolCalls = await getAgentToolCalls(page);
@@ -702,7 +710,7 @@ test("rejects research_posts writes for a different campaign", async ({
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "researcher");
 
-  await page.getByRole("button", { name: "Start Custom API" }).click();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
 
   await expect(getBadge(page, "Failed").first()).toBeVisible();
   const errorMessage = "Research request belongs to a different campaign";
@@ -734,7 +742,7 @@ for (const approvalPosition of ["first", "second"] as const) {
     await openAgentRuntime(page);
     await createProviderRun(page, "custom", "scheduler");
 
-    await page.getByRole("button", { name: "Start Custom API" }).click();
+    await page.getByRole("button", { name: "Start Other AI service" }).click();
 
     await expect(getBadge(page, "Failed").first()).toBeVisible();
     const errorMessage =
@@ -781,7 +789,7 @@ test("starts an Anthropic provider-backed run through the native command boundar
     };
   });
 
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const anthropicCard = page
     .getByText("Anthropic", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -801,7 +809,7 @@ test("starts an Anthropic provider-backed run through the native command boundar
   await createProviderRun(page, "anthropic");
 
   await page.getByRole("button", { name: "Start Anthropic" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
   await expect(
     page.getByText("Anthropic run completed.").first(),
   ).toBeVisible();
@@ -841,11 +849,11 @@ test("starts an OpenAI run after the account sign-in access token expired", asyn
   await createProviderRun(page, "openai");
   await page.getByRole("button", { name: "Start OpenAI" }).click();
 
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
   await expect(page.getByText("OpenAI renewed run.").first()).toBeVisible();
-  await expect(page.getByText("Agent provider is not connected")).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByText("Your AI service isn't connected", { exact: false }),
+  ).toHaveCount(0);
 });
 
 test("keeps a revoked OpenAI account sign-in blocked as not connected", async ({
@@ -876,17 +884,22 @@ test("keeps a revoked OpenAI account sign-in blocked as not connected", async ({
       return error instanceof Error ? error.message : String(error);
     }
   });
-  expect(message).toBe("Agent provider is not connected");
+  expect(message).toBe(
+    "Your AI service isn't connected. Connect it in Connected accounts, then try again.",
+  );
   expect((await getAgentRuns(page))[0]?.status).not.toBe("completed");
 
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await openAgentRuntime(page);
-  await page.getByRole("button", { name: "Create run" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create agent run" });
-  await dialog.getByLabel("Provider").selectOption("openai");
+  await page
+    .getByRole("button", { name: "New assistant task" })
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog", { name: "New assistant task" });
+  await dialog.getByLabel("AI service").selectOption("openai");
   await expect(
     dialog.getByText(
-      "Connect OpenAI in Integrations before creating this run.",
+      "Connect OpenAI in Connected accounts before you start this task.",
     ),
   ).toBeVisible();
 });
@@ -900,12 +913,12 @@ test("selects the LinkedIn writer playbook for drafter runs", async ({
 
   await createDryRun(page, "drafter", "linkedin_writer");
 
-  await expect(page.getByText("Playbook: LinkedIn Writer")).toBeVisible();
+  await expect(page.getByText("Brand voice: LinkedIn Writer")).toBeVisible();
   const runs = await getAgentRuns(page);
   expect(runs[0]?.playbook_key).toBe("linkedin_writer");
 
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
   await expect(
     page.getByText("with playbook LinkedIn Writer (linkedin_writer)").first(),
   ).toBeVisible();
@@ -951,21 +964,28 @@ test("hides disabled runtime playbooks from new agent runs", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Playbooks/ }).click();
+  await page.getByRole("button", { name: /^Brand voice/ }).click();
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
-  await writerCard.getByRole("switch", { name: "Runtime enabled" }).click();
-  await writerCard.getByRole("button", { name: "Save playbook" }).click();
-  await expect(writerCard.getByText("Disabled", { exact: true })).toBeVisible();
+  await writerCard
+    .getByRole("switch", { name: "Use with the AI assistant" })
+    .click();
+  await writerCard.getByRole("button", { name: "Save guide" }).click();
+  await expect(writerCard.getByText("Off", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await createCampaign(page);
   await openAgentRuntime(page);
-  await page.getByRole("button", { name: "Create run" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create agent run" });
-  await dialog.getByLabel("Agent role").selectOption("drafter");
+  await page
+    .getByRole("button", { name: "New assistant task" })
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog", { name: "New assistant task" });
+  await dialog
+    .getByLabel("What should the assistant do?")
+    .selectOption("drafter");
   await expect(
     dialog
-      .getByLabel("Playbook")
+      .getByLabel("Brand voice guide")
       .locator("option", { hasText: "LinkedIn Writer" }),
   ).toHaveCount(0);
 });
@@ -979,14 +999,14 @@ test("stops schedule dry-run at waiting approval without publishing", async ({
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
 
-  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await page.getByRole("button", { name: "Start practice run" }).click();
 
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
   await expect(
-    page.getByText("schedule_post", { exact: true }).nth(1),
+    page.getByText("Schedule post", { exact: true }).nth(1),
   ).toBeVisible();
   await expect(page.getByText("Requires approval")).toBeVisible();
-  await expect(page.getByText("Approval required").first()).toBeVisible();
+  await expect(page.getByText("Needs your approval").first()).toBeVisible();
 
   const counts = await getStateCounts(page);
   const toolCalls = await getAgentToolCalls(page);
@@ -1006,8 +1026,8 @@ test("rejects checkpoint tool results without a preceding assistant call ID", as
   await seedApproval(page);
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
 
   const checkpoint = await getAgentApprovalCheckpoint(page);
   const messages = JSON.parse(checkpoint.messages_json) as unknown[];
@@ -1045,24 +1065,24 @@ test("approves and explicitly resumes a durable schedule metadata continuation",
   await seedApproval(page);
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
   await expect(page.getByText("Review this item in Approvals.")).toBeVisible();
 
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved").first()).toBeVisible();
   expect((await getStateCounts(page)).agentRuns).toBe(1);
 
   await openAgentRuntime(page);
   const resumeButton = page.getByRole("button", {
-    name: "Resume approved run for agent run 1",
+    name: "Continue approved task for assistant task 1",
   });
   await expect(resumeButton).toBeVisible();
   await resumeButton.click();
 
-  await expect(page.getByText("Agent continuation completed")).toBeVisible();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(page.getByText("Assistant task finished")).toBeVisible();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
   const completedToolCalls = await getAgentToolCalls(page);
   expect(JSON.parse(completedToolCalls[0]?.output_json ?? "{}").summary).toBe(
     "Approval confirmed for schedule metadata only; no schedule record or publish action was created.",
@@ -1088,11 +1108,11 @@ test("rejects custom continuation without a Base URL before checkpoint mutation"
   await seedApproval(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "scheduler");
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
 
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved").first()).toBeVisible();
 
   const checkpointBefore = await getAgentApprovalCheckpoint(page);
@@ -1112,7 +1132,7 @@ test("rejects custom continuation without a Base URL before checkpoint mutation"
   });
 
   expect(await resumeRunThroughTestApi(page, 1)).toBe(
-    "Custom provider requires a Base URL override",
+    "Your custom AI service needs a web address. Add it in Connected accounts, then try again.",
   );
 
   const checkpointAfter = await getAgentApprovalCheckpoint(page);
@@ -1136,29 +1156,33 @@ test("reports a second approval interrupt without claiming continuation completi
   await seedApproval(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "scheduler");
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
 
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved").first()).toBeVisible();
   await seedApproval(page, 2);
   await installScheduleApprovalProvider(page, 2, "provider-schedule-second");
 
   await openAgentRuntime(page);
   await page
-    .getByRole("button", { name: "Resume approved run for agent run 1" })
+    .getByRole("button", {
+      name: "Continue approved task for assistant task 1",
+    })
     .click();
 
   await expect(
-    page.getByText("Agent continuation needs another approval"),
+    page.getByText("The assistant needs your approval again"),
   ).toBeVisible();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
-  await expect(page.getByText("Approval #2", { exact: true })).toBeVisible();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
   await expect(
-    page.getByText("Review required", { exact: true }),
+    page.getByText("Approval needed · reference 2", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Agent continuation completed")).toHaveCount(0);
+  await expect(
+    page.getByText("Paused until you approve", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Assistant task finished")).toHaveCount(0);
   expect((await getAgentRuns(page))[0]).toMatchObject({
     status: "waiting_approval",
     error_message: "",
@@ -1177,11 +1201,11 @@ test("reports recoverable provider failure with the saved continuation", async (
   await seedApproval(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "scheduler");
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
 
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved").first()).toBeVisible();
   await installFailingContinuationProvider(
     page,
@@ -1190,11 +1214,13 @@ test("reports recoverable provider failure with the saved continuation", async (
 
   await openAgentRuntime(page);
   await page
-    .getByRole("button", { name: "Resume approved run for agent run 1" })
+    .getByRole("button", {
+      name: "Continue approved task for assistant task 1",
+    })
     .click();
 
   await expect(
-    page.getByText("Agent continuation failed; recovery is ready"),
+    page.getByText("The assistant stopped. You can pick up where it left off."),
   ).toBeVisible();
   await expect(getBadge(page, "Failed").first()).toBeVisible();
   await expect(
@@ -1202,11 +1228,9 @@ test("reports recoverable provider failure with the saved continuation", async (
       .getByText("Continuation provider unavailable.", { exact: true })
       .first(),
   ).toBeVisible();
+  await expect(page.getByText("Result saved", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Continuation saved", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("The approved metadata result is saved.", { exact: false }),
+    page.getByText("Your approved result is saved.", { exact: false }),
   ).toBeVisible();
   expect((await getAgentRuns(page))[0]).toMatchObject({
     status: "failed",
@@ -1223,26 +1247,26 @@ test("rejecting through Approvals cancels the linked run without continuation", 
   await seedApproval(page);
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
   expect((await getStateCounts(page)).agentApprovalCheckpoints).toBe(1);
   await createDryRun(page, "scheduler");
-  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await page.getByRole("button", { name: "Start practice run" }).click();
   expect((await getStateCounts(page)).agentApprovalCheckpoints).toBe(2);
 
   await openApprovals(page);
   await expect(
     page.getByText(
-      "Rejection consequence: 2 linked waiting runs will be cancelled and their resumable checkpoints removed.",
+      "If you reject this: 2 waiting AI assistant tasks will be cancelled and can't be continued.",
       { exact: true },
     ),
   ).toBeVisible();
   await page.getByRole("button", { name: "Reject", exact: true }).click();
   const confirmation = page.getByRole("dialog", {
-    name: "Reject this approval?",
+    name: "Reject this post?",
   });
   await expect(confirmation).toContainText(
-    "2 linked waiting runs will be cancelled and their resumable checkpoints removed. The draft will stay in local history.",
+    "2 waiting AI assistant tasks will be cancelled and can't be continued. The draft stays in your history.",
   );
   await confirmation.getByRole("button", { name: "Reject approval" }).click();
   await expect(confirmation).toBeHidden();
@@ -1277,10 +1301,10 @@ test("reload recovery skips an approved tool after a continuation provider failu
   await seedApproval(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "scheduler");
-  await page.getByRole("button", { name: "Start Custom API" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start Other AI service" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved").first()).toBeVisible();
   await installFailingContinuationProvider(
     page,
@@ -1289,11 +1313,13 @@ test("reload recovery skips an approved tool after a continuation provider failu
 
   await openAgentRuntime(page);
   await page
-    .getByRole("button", { name: "Resume approved run for agent run 1" })
+    .getByRole("button", {
+      name: "Continue approved task for assistant task 1",
+    })
     .click();
 
   await expect(
-    page.getByText("Agent continuation failed; recovery is ready"),
+    page.getByText("The assistant stopped. You can pick up where it left off."),
   ).toBeVisible();
   await expect(getBadge(page, "Failed").first()).toBeVisible();
   expect((await getAgentRuns(page))[0]).toMatchObject({
@@ -1326,12 +1352,12 @@ test("reload recovery skips an approved tool after a continuation provider failu
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await openAgentRuntime(page);
   const recoverButton = page.getByRole("button", {
-    name: "Recover continuation for agent run 1",
+    name: "Pick up where it stopped for assistant task 1",
   });
   await expect(recoverButton).toBeVisible();
   await recoverButton.click();
 
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
   expect((await getAgentRuns(page))[0]).toMatchObject({
     status: "completed",
     output_summary: "Recovered provider continuation completed.",
@@ -1361,8 +1387,8 @@ test("resume rejects unapproved, mismatched, and missing approvals without publi
   await seedApproval(page);
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
-  await page.getByRole("button", { name: "Start Dry run" }).click();
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await page.getByRole("button", { name: "Start practice run" }).click();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
 
   expect(await resumeRunThroughTestApi(page, 1)).toBe(
     "Linked approval must be approved before resume",
@@ -1407,9 +1433,9 @@ test("double resume handles the approved tool once and keeps one history row", a
   await seedApproval(page);
   await openAgentRuntime(page);
   await createDryRun(page, "scheduler");
-  await page.getByRole("button", { name: "Start Dry run" }).click();
+  await page.getByRole("button", { name: "Start practice run" }).click();
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
 
   const outcomes = await page.evaluate(async () => {
     const resume = (
@@ -1450,13 +1476,15 @@ test("blocks archived campaign agent runtime mutations", async ({ page }) => {
   await openAgentRuntime(page);
 
   await expect(
-    page.getByText("Archived campaigns keep agent runtime history visible"),
+    page.getByText(
+      "This campaign is archived. You can still see its assistant",
+    ),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create run" }).first(),
+    page.getByRole("button", { name: "New assistant task" }).first(),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Start Dry run" }),
+    page.getByRole("button", { name: "Start practice run" }),
   ).toBeHidden();
 
   await page.waitForFunction(
@@ -1559,9 +1587,9 @@ test("mock SQLite rejects invalid agent run playbook keys and keeps empty valid"
 });
 
 function getBadge(page: Page, label: string): Locator {
-  return page
-    .locator("span")
-    .filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page.locator("span").filter({
+    hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
+  });
 }
 
 function getToolCard(page: Page, toolName: string): Locator {
@@ -1809,9 +1837,9 @@ async function seedApprovalReadiness(
 }
 
 async function openAgentRuntime(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Agent Runtime/ }).click();
+  await page.getByRole("button", { name: /^AI assistant/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Agent Runtime", exact: true }),
+    page.getByRole("heading", { name: "AI assistant", exact: true }),
   ).toBeVisible();
 }
 
@@ -1838,15 +1866,17 @@ async function createCampaign(
 }
 
 async function connectCustomProvider(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("test-custom-api-key");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("test-custom-api-key");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Connected").first()).toBeVisible();
@@ -1855,7 +1885,7 @@ async function connectCustomProvider(page: Page): Promise<void> {
 }
 
 async function signInOpenAiAccount(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const openAiCard = page
     .getByText("OpenAI", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -2037,17 +2067,20 @@ async function createProviderRun(
   role: "researcher" | "scorer" | "drafter" | "scheduler" = "researcher",
   playbookKey = "",
 ): Promise<void> {
-  await page.getByRole("button", { name: "Create run" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create agent run" });
+  await page
+    .getByRole("button", { name: "New assistant task" })
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog", { name: "New assistant task" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Agent role").selectOption(role);
+  await dialog.getByLabel("What should the assistant do?").selectOption(role);
   if (playbookKey)
-    await dialog.getByLabel("Playbook").selectOption(playbookKey);
-  await dialog.getByLabel("Provider").selectOption(providerKey);
+    await dialog.getByLabel("Brand voice guide").selectOption(playbookKey);
+  await dialog.getByLabel("AI service").selectOption(providerKey);
   await dialog
-    .getByLabel("Input summary")
+    .getByLabel("Instructions")
     .fill("Validate provider-backed runtime credentials.");
-  await dialog.getByRole("button", { name: "Create run" }).click();
+  await dialog.getByRole("button", { name: "Create task" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -2060,16 +2093,19 @@ async function createDryRun(
     | "auditor"
     | "scheduler" = "researcher",
   playbookKey = "",
-  inputSummary = "Validate runtime contracts for this campaign.",
+  inputSummary = "Check this campaign is ready for the AI assistant.",
 ): Promise<void> {
-  await page.getByRole("button", { name: "Create run" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create agent run" });
+  await page
+    .getByRole("button", { name: "New assistant task" })
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog", { name: "New assistant task" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Agent role").selectOption(role);
+  await dialog.getByLabel("What should the assistant do?").selectOption(role);
   if (playbookKey)
-    await dialog.getByLabel("Playbook").selectOption(playbookKey);
-  await dialog.getByLabel("Input summary").fill(inputSummary);
-  await dialog.getByRole("button", { name: "Create run" }).click();
+    await dialog.getByLabel("Brand voice guide").selectOption(playbookKey);
+  await dialog.getByLabel("Instructions").fill(inputSummary);
+  await dialog.getByRole("button", { name: "Create task" }).click();
   await expect(dialog).toBeHidden();
 }
 

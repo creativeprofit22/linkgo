@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Metrics tab records LinkedIn post performance snapshots for published approvals.
+The Analytics tab records LinkedIn post performance snapshots for published approvals.
 
 Operators can still enter full manual snapshots.
 
@@ -95,25 +95,25 @@ Target URNs resolve from `publish_attempts.platform_post_id` first, then `extern
 
 Jobs with no resolvable LinkedIn URN become `unavailable`.
 
-Due active jobs refresh only while Linkgo is open or hidden to tray, and the global kill switch blocks network calls.
+Due active jobs refresh only while Linkgo is open or hidden to tray, and the global kill switch (on screen: "Emergency pause") blocks network calls.
 
 Each successful API refresh inserts a `post_metrics` row, a normal `learning_events.metric_recorded` row, and a `metric_refresh_events.refresh_completed` row.
 
 ## UI behavior
 
-The Metrics tab includes:
+The Analytics tab includes:
 
 - Campaign filter.
 - Summary cards for manual metrics, API refresh state, due jobs, unavailable jobs, and API snapshots.
-- Start/stop controls for opt-in metric refresh.
-- Manual `Refresh LinkedIn metrics now` tick control.
-- Record metrics dialog for published posts.
-- Metric cards with source badge: `Manual` or `LinkedIn social metadata`.
+- Start/stop controls (`Turn on auto-update` / `Turn off auto-update`) for opt-in metric refresh.
+- Manual `Update from LinkedIn now` tick control.
+- Add results dialog for published posts.
+- Metric cards with source badge: `Added by you` or `From LinkedIn`.
 - Clear API limitation copy for API snapshots.
-- Refresh jobs and recent refresh events.
-- Save memory dialog from metric cards.
-- Campaign memory cards with archive/restore controls.
-- Learning event list.
+- Updates from LinkedIn section with refresh jobs (`Posts being tracked`) and recent refresh events (`Recent activity`).
+- Save lesson dialog from metric cards.
+- Campaign memory cards (shown under `What we've learned`) with archive/restore controls.
+- Learning event list (shown as `History`).
 
 Archived campaigns keep history visible but hide mutation controls.
 

@@ -10,6 +10,7 @@ import {
   submitOAuthCode,
   subscribeToAuthProgress,
 } from "@/features/integrations/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   AuthProgressEvent,
   AuthStatus,
@@ -39,8 +40,8 @@ interface UseIntegrationsState extends AuthStatus {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
-    ? error.message
-    : "Unexpected integration error";
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your connected accounts. Try again.";
 }
 
 export function useIntegrations(): UseIntegrationsState {
@@ -101,9 +102,9 @@ export function useIntegrations(): UseIntegrationsState {
   const saveKey = useCallback(async (input: SaveApiKeyInput) => {
     try {
       setStatus(await saveApiKey(input));
-      toast.success("Provider connected");
+      toast.success("Account connected");
     } catch (caught) {
-      toast.error("Provider was not connected", {
+      toast.error("We couldn't connect this account", {
         description: getErrorMessage(caught),
       });
       throw caught;
@@ -113,10 +114,10 @@ export function useIntegrations(): UseIntegrationsState {
   const beginOAuth = useCallback(async (input: OAuthStartInput) => {
     try {
       const result = await startOAuth(input);
-      toast.success("OAuth started");
+      toast.success("Sign-in started");
       return result;
     } catch (caught) {
-      toast.error("OAuth was not started", {
+      toast.error("We couldn't start sign-in", {
         description: getErrorMessage(caught),
       });
       throw caught;
@@ -126,9 +127,9 @@ export function useIntegrations(): UseIntegrationsState {
   const submitCode = useCallback(async (input: OAuthCodeInput) => {
     try {
       setStatus(await submitOAuthCode(input));
-      toast.success("OAuth connected");
+      toast.success("Account connected");
     } catch (caught) {
-      toast.error("OAuth code was not accepted", {
+      toast.error("That sign-in code didn't work", {
         description: getErrorMessage(caught),
       });
       throw caught;
@@ -139,7 +140,7 @@ export function useIntegrations(): UseIntegrationsState {
     try {
       setStatus(await cancelOAuth(input));
     } catch (caught) {
-      toast.error("Sign-in was not cancelled", {
+      toast.error("We couldn't cancel sign-in", {
         description: getErrorMessage(caught),
       });
       throw caught;
@@ -149,9 +150,9 @@ export function useIntegrations(): UseIntegrationsState {
   const disconnect = useCallback(async (input: LogoutInput) => {
     try {
       setStatus(await disconnectProvider(input));
-      toast.success("Provider disconnected");
+      toast.success("Account disconnected");
     } catch (caught) {
-      toast.error("Provider was not disconnected", {
+      toast.error("We couldn't disconnect this account", {
         description: getErrorMessage(caught),
       });
       throw caught;
@@ -162,7 +163,7 @@ export function useIntegrations(): UseIntegrationsState {
     try {
       setStatus(await checkProvider(input));
     } catch (caught) {
-      toast.error("Provider health check failed", {
+      toast.error("Connection check failed", {
         description: getErrorMessage(caught),
       });
       throw caught;

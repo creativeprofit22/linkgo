@@ -4,7 +4,7 @@
 
 The Settings page exposes app-level preferences that are not campaign-specific.
 
-This slice adds one Startup control: `Launch Linkgo at login`.
+This slice adds one Startup control: `Open Linkgo when I sign in`.
 
 ## Tauri boundary
 
@@ -36,9 +36,9 @@ The Settings page shows a Startup card with one switch.
 
 Loading or saving disables the switch.
 
-A successful change shows either `Launch on login enabled` or `Launch on login disabled`.
+A successful change shows either `Linkgo will open when you sign in` or `Linkgo won't open when you sign in`.
 
-A failed change keeps the prior state and shows `Launch-on-login setting was not changed`.
+A failed change keeps the prior state and shows `We couldn't change your startup setting`.
 
 ## Persistence
 
@@ -53,7 +53,7 @@ The `settings` window has its own capability (`src-tauri/capabilities/settings.j
 ## Exclusions
 
 - No hidden startup args in this slice.
-- No scheduler start on login.
+- No scheduler (shown as **Auto-posting**) start on login.
 - No background daemon.
 - No scheduler or metric refresh execution after Linkgo quits.
 - No additional settings in this slice.

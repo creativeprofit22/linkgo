@@ -27,7 +27,7 @@ test("creates a required-metadata calendar slot from an approved post", async ({
 
   await expect(getBadge(page, "Proof")).toBeVisible();
   await expect(getBadge(page, "Planned")).toBeVisible();
-  await expect(page.getByText("carousel", { exact: true })).toBeVisible();
+  await expect(page.getByText("Carousel", { exact: true })).toBeVisible();
   await expect(
     page.getByText("Show the operator proof behind the workflow."),
   ).toBeVisible();
@@ -52,7 +52,7 @@ test("schedules a planned calendar slot through approval scheduling", async ({
     timezone: "Europe/London",
   });
 
-  await page.getByRole("button", { name: "Schedule slot" }).click();
+  await page.getByRole("button", { name: "Schedule post" }).click();
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
 
   const [job] = await getScheduleJobs(page);
@@ -75,15 +75,13 @@ test("hides schedule action when approval has a completed schedule job", async (
   await openCalendar(page);
   await createCalendarSlot(page, { slotFor: "2026-07-17T09:00" });
 
-  await page.getByRole("button", { name: "Schedule slot" }).click();
+  await page.getByRole("button", { name: "Schedule post" }).click();
   await markScheduleCompletedAndApprovalApproved(page, 1, 1);
   await page.getByRole("button", { name: "Refresh" }).click();
 
+  await expect(page.getByText("2026-07-17T09:00 · local · Done")).toBeVisible();
   await expect(
-    page.getByText("2026-07-17T09:00 · local · completed"),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Schedule slot" }),
+    page.getByRole("button", { name: "Schedule post" }),
   ).toBeHidden();
 });
 
@@ -96,21 +94,21 @@ test("edits calendar slot metadata and keeps it after refresh", async ({
   await createCalendarSlot(page, { slotFor: "2026-07-17T11:00" });
 
   await page.getByRole("button", { name: "Edit" }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit calendar slot" });
-  await dialog.getByLabel("Purpose").selectOption("conversion");
+  const dialog = page.getByRole("dialog", { name: "Edit planned post" });
+  await dialog.getByLabel("Goal").selectOption("conversion");
   await dialog.getByLabel("Format").selectOption("video");
   await dialog.getByLabel("Angle").fill("Edited conversion planning angle.");
   await dialog
-    .getByLabel("Visual direction")
+    .getByLabel("Look and feel")
     .fill("Edited short video with a founder talking head.");
-  await dialog.getByLabel("CTA").fill("Book a planning session.");
+  await dialog.getByLabel("Call to action").fill("Book a planning session.");
   await dialog.getByLabel("Notes").fill("Edited after team review.");
-  await dialog.getByRole("button", { name: "Save slot" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(getBadge(page, "Conversion")).toBeVisible();
-  await expect(page.getByText("video", { exact: true })).toBeVisible();
+  await expect(page.getByText("Video", { exact: true })).toBeVisible();
   await expect(
     page.getByText("Edited conversion planning angle."),
   ).toBeVisible();
@@ -134,7 +132,7 @@ test("archives a slot and hides the schedule action", async ({ page }) => {
 
   await expect(getBadge(page, "Archived")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Schedule slot" }),
+    page.getByRole("button", { name: "Schedule post" }),
   ).toBeHidden();
 });
 
@@ -149,14 +147,16 @@ test("archived campaigns block new slots and slot changes", async ({
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await page.getByRole("combobox").selectOption("1");
-  await expect(page.getByText("Campaign is archived")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create slot" }),
+    page.getByText("This campaign is archived", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Plan a post" }),
   ).toBeDisabled();
   await expect(page.getByRole("button", { name: "Edit" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Archive" })).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Schedule slot" }),
+    page.getByRole("button", { name: "Schedule post" }),
   ).toBeHidden();
 });
 
@@ -187,15 +187,15 @@ interface ScheduleJobRow {
 }
 
 function getBadge(page: Page, label: string): Locator {
-  return page
-    .locator("span")
-    .filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page.locator("span").filter({
+    hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
+  });
 }
 
 async function openCalendar(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Calendar/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Content Calendar", exact: true }),
+    page.getByRole("heading", { name: "Calendar", exact: true }),
   ).toBeVisible();
 }
 
@@ -224,13 +224,11 @@ async function createReadyDraft(
   await addCandidate(page);
   await openDrafts(page);
   await createDraft(page, variant);
-  await page.getByRole("button", { name: "Select for review" }).click();
-  await expect(getBadge(page, "Ready for review")).toBeVisible();
-  const auditPanel = page.getByRole("region", { name: /AI audit/ });
-  await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
-  await expect(
-    auditPanel.getByText("Completed", { exact: true }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Choose this version" }).click();
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  const auditPanel = page.getByRole("region", { name: /AI review/ });
+  await auditPanel.getByRole("button", { name: "Review with AI" }).click();
+  await expect(auditPanel.getByText("Done", { exact: true })).toBeVisible();
 }
 
 async function makeDraftApprovalEligible(page: Page): Promise<void> {
@@ -258,9 +256,9 @@ async function makeDraftApprovalEligible(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -288,8 +286,8 @@ async function createCampaign(page: Page): Promise<void> {
 }
 
 async function addCandidate(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
   await expect(dialog).toBeVisible();
   await page
     .getByLabel("LinkedIn post URL")
@@ -303,10 +301,10 @@ async function addCandidate(page: Page): Promise<void> {
     .fill("https://www.linkedin.com/in/jane-operator/");
   await page.getByLabel("Posted at").fill("2026-06-25");
   await page.getByLabel("Source keyword").fill("founder content");
-  await page.getByLabel("Relevance score").fill("87");
+  await page.getByLabel("Match score").fill("87");
   await page.getByLabel("Score reason").fill("Strong audience overlap.");
   await page.getByLabel("Notes").fill("Good calendar candidate.");
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -330,11 +328,11 @@ async function createDraft(
 }
 
 async function createReview(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create review" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create review" });
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  const dialog = page.getByRole("dialog", { name: "Send for approval" });
   await expect(dialog).toBeVisible();
   await page.getByLabel("Reviewer notes").fill("Human pass before scheduling.");
-  await dialog.getByRole("button", { name: "Create review" }).click();
+  await dialog.getByRole("button", { name: "Send for approval" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -342,24 +340,24 @@ async function createCalendarSlot(
   page: Page,
   input: CalendarSlotInput,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Create slot" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create calendar slot" });
+  await page.getByRole("button", { name: "Plan a post" }).click();
+  const dialog = page.getByRole("dialog", { name: "Plan a post" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Slot for").fill(input.slotFor);
-  await dialog.getByLabel("Timezone label").fill(input.timezone ?? "local");
-  await dialog.getByLabel("Purpose").selectOption(input.purpose ?? "trust");
+  await dialog.getByLabel("Date and time").fill(input.slotFor);
+  await dialog.getByLabel("Time zone").fill(input.timezone ?? "local");
+  await dialog.getByLabel("Goal").selectOption(input.purpose ?? "trust");
   await dialog.getByLabel("Format").selectOption(input.format ?? "text");
   await dialog
     .getByLabel("Angle")
     .fill(input.angle ?? "Build trust with a practical operator lesson.");
   await dialog
-    .getByLabel("Visual direction")
+    .getByLabel("Look and feel")
     .fill(input.visualDirection ?? "Text-only post with a crisp first line.");
   await dialog
-    .getByLabel("CTA")
+    .getByLabel("Call to action")
     .fill(input.cta ?? "Save this before your next outbound sprint.");
   await dialog.getByLabel("Notes").fill(input.notes ?? "");
-  await dialog.getByRole("button", { name: "Create slot" }).click();
+  await dialog.getByRole("button", { name: "Plan post" }).click();
   await expect(dialog).toBeHidden();
 }
 

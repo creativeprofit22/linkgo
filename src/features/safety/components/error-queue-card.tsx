@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { SafetyStatusBadge } from "@/features/safety/components/safety-status-badge";
+import {
+  ERROR_STATUS_LABELS,
+  SafetyStatusBadge,
+} from "@/features/safety/components/safety-status-badge";
 import type {
   ErrorQueueItem,
   ErrorQueueStatus,
@@ -14,6 +17,15 @@ const NEXT_STATUSES: Record<ErrorQueueStatus, ErrorQueueStatus[]> = {
   awaiting_review: ["resolved", "failed"],
   resolved: ["in_progress"],
   failed: ["in_progress"],
+};
+
+const SOURCE_LABELS: Record<ErrorQueueItem["source_type"], string> = {
+  approval: "Approval",
+  publish_attempt: "Posting",
+  schedule_job: "Scheduled post",
+  agent_run: "AI assistant task",
+  workflow_run: "Automation",
+  manual: "Added by you",
 };
 
 interface ErrorQueueCardProps {
@@ -36,8 +48,7 @@ export function ErrorQueueCard({
           <div className="space-y-1">
             <CardTitle className="text-base">{item.title}</CardTitle>
             <p className="text-muted-foreground text-xs">
-              {item.source_type.replace(/_/gu, " ")} #
-              {item.source_id ?? "manual"}
+              {SOURCE_LABELS[item.source_type]}
               {item.campaign_name ? ` · ${item.campaign_name}` : ""}
             </p>
           </div>
@@ -48,12 +59,12 @@ export function ErrorQueueCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm">{item.detail || "No detail recorded."}</p>
+        <p className="text-sm">{item.detail || "No details saved."}</p>
         {item.resolution_notes && (
           <Textarea
             value={item.resolution_notes}
             readOnly
-            aria-label="Resolution notes"
+            aria-label="How it was fixed"
           />
         )}
         <div className="flex flex-wrap gap-2">
@@ -73,7 +84,7 @@ export function ErrorQueueCard({
                 })
               }
             >
-              Move to {status.replace(/_/gu, " ")}
+              Mark as “{ERROR_STATUS_LABELS[status]}”
             </Button>
           ))}
         </div>

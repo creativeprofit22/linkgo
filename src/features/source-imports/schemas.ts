@@ -28,19 +28,19 @@ const SOURCE_IMPORT_FIELD_LABELS: Record<
   keyof typeof SOURCE_IMPORT_FIELD_LIMITS,
   string
 > = {
-  url: "URL",
+  url: "Link",
   content: "Post text",
   authorName: "Author name",
   authorProfileUrl: "Author profile URL",
-  postedAt: "Posted time",
-  platformResourceUrn: "Platform resource URN",
+  postedAt: "Post date",
+  platformResourceUrn: "LinkedIn post ID",
   sourceKeyword: "Source keyword",
   notes: "Notes",
 };
 
 export const sourceImportRowSchema = z.strictObject({
-  url: z.string().trim().min(1, "LinkedIn post URL is required").max(1000),
-  content: z.string().trim().min(1, "Post text is required").max(3000),
+  url: z.string().trim().min(1, "Add the LinkedIn post link").max(1000),
+  content: z.string().trim().min(1, "Add the post text").max(3000),
   authorName: z.string().trim().max(160).optional().default(""),
   authorProfileUrl: z.string().trim().max(1000).optional().default(""),
   postedAt: z.string().trim().max(80).nullable().optional().default(null),
@@ -53,10 +53,10 @@ export const createSourceImportBatchSchema =
   normalizedSourceConnectorBatchInputSchema.extend({
     rows: z
       .array(z.unknown())
-      .min(1, "Include at least one source post")
+      .min(1, "Add at least one post")
       .max(
         MAX_SOURCE_IMPORT_ROWS,
-        `Import up to ${MAX_SOURCE_IMPORT_ROWS} rows`,
+        `Import up to ${MAX_SOURCE_IMPORT_ROWS} posts at a time`,
       ),
   });
 
@@ -72,7 +72,7 @@ function formatRowValidationError(
           ? SOURCE_IMPORT_FIELD_LABELS[
               field as keyof typeof SOURCE_IMPORT_FIELD_LABELS
             ]
-          : "Row";
+          : "Post";
       return `${label}: ${issue.message}`;
     })
     .join("; ");
@@ -166,7 +166,7 @@ export function parseSourceImportText(
 ): PreparedSourceImportBatchInput {
   if (sourceText.length > MAX_SOURCE_IMPORT_TEXT_LENGTH) {
     throw new Error(
-      `Source JSON must be ${MAX_SOURCE_IMPORT_TEXT_LENGTH.toLocaleString("en-US")} characters or less`,
+      `Paste up to ${MAX_SOURCE_IMPORT_TEXT_LENGTH.toLocaleString("en-US")} characters`,
     );
   }
 
@@ -174,7 +174,9 @@ export function parseSourceImportText(
   try {
     parsedJson = JSON.parse(sourceText);
   } catch {
-    throw new Error("Source text must be valid JSON");
+    throw new Error(
+      "This doesn't look like a valid JSON list. Check it matches the example.",
+    );
   }
 
   const batchResult = createSourceImportBatchSchema.safeParse({

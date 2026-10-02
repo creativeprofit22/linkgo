@@ -27,10 +27,10 @@ export const bannedTopicSchema = z
   .pipe(
     z
       .string()
-      .min(1, "Remove empty banned-topic lines")
+      .min(1, "Remove the empty lines from blocked topics")
       .max(
         MAX_BANNED_TOPIC_LENGTH,
-        `Banned topics must be ${MAX_BANNED_TOPIC_LENGTH} characters or fewer`,
+        `Each blocked topic can be up to ${MAX_BANNED_TOPIC_LENGTH} characters`,
       ),
   );
 
@@ -59,20 +59,20 @@ export const updateCandidateIntakePolicySchema = z
     campaignId: candidateIntakePolicyCampaignIdSchema,
     maxPostAgeDays: z
       .number()
-      .int("Maximum post age must be a whole number")
+      .int("Use a whole number of days")
       .min(
         MIN_MAX_POST_AGE_DAYS,
-        `Maximum post age must be at least ${MIN_MAX_POST_AGE_DAYS} day`,
+        `Choose at least ${MIN_MAX_POST_AGE_DAYS} day`,
       )
       .max(
         MAX_MAX_POST_AGE_DAYS,
-        `Maximum post age must be ${MAX_MAX_POST_AGE_DAYS} days or fewer`,
+        `Choose ${MAX_MAX_POST_AGE_DAYS} days or fewer`,
       ),
     bannedTopics: z
       .array(bannedTopicSchema)
       .max(
         MAX_BANNED_TOPICS,
-        `Use no more than ${MAX_BANNED_TOPICS} banned topics`,
+        `Add no more than ${MAX_BANNED_TOPICS} blocked topics`,
       ),
   })
   .superRefine((value, context) => {
@@ -83,7 +83,7 @@ export const updateCandidateIntakePolicySchema = z
         context.addIssue({
           code: "custom",
           path: ["bannedTopics", index],
-          message: `Duplicate banned topic: ${topic}`,
+          message: `This topic is listed twice: ${topic}`,
         });
       }
       seen.add(normalized);

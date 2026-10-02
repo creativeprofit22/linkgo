@@ -37,7 +37,7 @@ export function SettingsPage(): React.ReactNode {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-muted-foreground text-sm">
-            Control local Linkgo app behavior.
+            Choose how Linkgo behaves on this computer.
           </p>
         </div>
 
@@ -56,20 +56,22 @@ export function SettingsPage(): React.ReactNode {
                     className="text-sm leading-none font-medium"
                     htmlFor="launch-on-login"
                   >
-                    Launch Linkgo at login
+                    Open Linkgo when I sign in
                   </label>
                   <p className="text-muted-foreground max-w-xl text-sm">
-                    Uses the operating system startup setting. Linkgo still only
-                    runs jobs while the app is open or hidden to tray.
+                    Linkgo can only post on schedule while it&rsquo;s open or
+                    minimized to the tray.
                   </p>
                 </div>
                 <div className="text-muted-foreground space-y-1 text-xs">
                   <p>
-                    Status: <span>{enabled ? "Enabled" : "Disabled"}</span>
+                    Status: <span>{enabled ? "On" : "Off"}</span>
                   </p>
-                  {lastSynced ? <p>Last synced: {lastSynced}</p> : null}
+                  {lastSynced ? <p>Last updated: {lastSynced}</p> : null}
                   {lastError ? (
-                    <p className="text-destructive">Last error: {lastError}</p>
+                    <p className="text-destructive">
+                      Last problem: {lastError}
+                    </p>
                   ) : null}
                   {desktopRequiredMessage ? (
                     <p id="launch-on-login-desktop-required">

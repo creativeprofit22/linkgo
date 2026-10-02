@@ -94,8 +94,7 @@ export function getNextCampaignBacklogDueAt(
   now: Date = new Date(),
 ): string {
   const dueLocal = formatUtcAsDateTimeLocal(dueAt, recurrenceTimeZone);
-  if (dueLocal === "")
-    throw new Error("Due time or recurrence time zone is invalid");
+  if (dueLocal === "") throw new Error("The due time or time zone isn't valid");
   const localCursor = new Date(`${dueLocal}:00.000Z`);
   const days = recurrence === "daily" ? 1 : 7;
 
@@ -106,7 +105,7 @@ export function getNextCampaignBacklogDueAt(
     if (Date.parse(nextDueAt) > now.getTime()) return nextDueAt;
   }
 
-  throw new Error("The next recurring due time could not be calculated");
+  throw new Error("We couldn't work out when the next repeating task is due");
 }
 
 export async function setCampaignBacklogItemStatus(

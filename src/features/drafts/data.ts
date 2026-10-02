@@ -925,11 +925,14 @@ export function boundErrorMessage(caught: unknown, fallback: string): string {
 }
 
 export function boundDraftAiAuditError(caught: unknown): string {
-  return boundErrorMessage(caught, "Draft AI audit failed");
+  return boundErrorMessage(caught, "The AI review didn't finish. Try again.");
 }
 
 export function boundDraftQualityError(caught: unknown): string {
-  return boundErrorMessage(caught, "Quality loop failed");
+  return boundErrorMessage(
+    caught,
+    "The quality check didn't finish. Try again.",
+  );
 }
 
 /**

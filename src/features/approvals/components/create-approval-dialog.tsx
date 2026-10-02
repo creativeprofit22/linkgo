@@ -35,7 +35,7 @@ interface CreateApprovalFormState {
 }
 
 function getDraftLabel(draft: ApprovalEligibleDraft): string {
-  const author = draft.target_author_name || "Unknown author";
+  const author = draft.target_author_name || "Author not known";
   const excerpt = draft.target_content.trim().slice(0, 70);
   return excerpt ? `${author} — ${excerpt}` : author;
 }
@@ -80,7 +80,7 @@ export function CreateApprovalDialog({
     draftOptions.find((draft) => String(draft.id) === form.draftId) ?? null;
   const createDisabled = disabled || draftOptions.length === 0;
   const archivedDisabledReason = selectedCampaignArchived
-    ? "Archived campaigns cannot create approvals. Restore the campaign before review."
+    ? "This campaign is archived, so you can't send posts for approval. Restore the campaign first."
     : null;
 
   useEffect(() => {
@@ -118,16 +118,16 @@ export function CreateApprovalDialog({
             }
             title={archivedDisabledReason ?? undefined}
           >
-            <CheckCircle2 className="size-4" /> Create review
+            <CheckCircle2 className="size-4" /> Send for approval
           </Button>
         </DialogTrigger>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleSubmit} className="space-y-5">
             <DialogHeader>
-              <DialogTitle>Create review</DialogTitle>
+              <DialogTitle>Send for approval</DialogTitle>
               <DialogDescription>
-                Turn one selected, clean draft variant into a local human review
-                record. This does not call LinkedIn.
+                Send one checked draft version to be approved. Nothing is posted
+                to LinkedIn yet.
               </DialogDescription>
             </DialogHeader>
 
@@ -153,7 +153,7 @@ export function CreateApprovalDialog({
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
                 <option value="" disabled>
-                  Select ready draft
+                  Choose a ready draft
                 </option>
                 {draftOptions.map((draft) => (
                   <option key={draft.id} value={draft.id}>
@@ -175,7 +175,7 @@ export function CreateApprovalDialog({
                     reviewerNotes: event.target.value,
                   }))
                 }
-                placeholder="What should the operator check before approval?"
+                placeholder="What should you check before approving?"
               />
               <p className="text-muted-foreground text-xs">
                 {form.reviewerNotes.length}/1000
@@ -185,7 +185,7 @@ export function CreateApprovalDialog({
             {selectedDraft && (
               <div className="bg-muted/30 space-y-2 rounded-xl border p-4">
                 <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                  Selected variant preview
+                  Chosen version preview
                 </p>
                 <p className="text-sm leading-relaxed whitespace-pre-line">
                   {composeLinkedInCommentary(selectedDraft.variant)}
@@ -202,7 +202,7 @@ export function CreateApprovalDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting || !form.draftId}>
-                {submitting ? "Creating…" : "Create review"}
+                {submitting ? "Sending…" : "Send for approval"}
               </Button>
             </DialogFooter>
           </form>

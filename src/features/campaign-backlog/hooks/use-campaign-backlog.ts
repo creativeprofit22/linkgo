@@ -7,6 +7,7 @@ import {
   setCampaignBacklogItemStatus,
   updateCampaignBacklogItem,
 } from "@/features/campaign-backlog/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CampaignBacklogDashboard,
   CampaignBacklogFilters,
@@ -22,7 +23,9 @@ import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected backlog error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your tasks. Please try again.";
 }
 
 const DEFAULT_FILTERS: CampaignBacklogFilters = {
@@ -121,7 +124,9 @@ export function useCampaignBacklog(): UseCampaignBacklogState {
   const runMutation = useCallback(
     async <T>(action: () => Promise<T>, successTitle: string): Promise<T> => {
       if (pendingRef.current) {
-        throw new Error("Another backlog change is still being saved");
+        throw new Error(
+          "Another task change is still saving. Please wait a moment.",
+        );
       }
       pendingRef.current = true;
       setPending(true);
@@ -131,7 +136,7 @@ export function useCampaignBacklog(): UseCampaignBacklogState {
         await loadBacklog();
         return result;
       } catch (caught) {
-        toast.error("Backlog was not changed", {
+        toast.error("We couldn't save your task change", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -145,19 +150,13 @@ export function useCampaignBacklog(): UseCampaignBacklogState {
 
   const createItem = useCallback(
     (input: CreateCampaignBacklogItemInput) =>
-      runMutation(
-        () => createCampaignBacklogItem(input),
-        "Backlog item created",
-      ),
+      runMutation(() => createCampaignBacklogItem(input), "Task created"),
     [runMutation],
   );
 
   const updateItem = useCallback(
     (input: UpdateCampaignBacklogItemInput) =>
-      runMutation(
-        () => updateCampaignBacklogItem(input),
-        "Backlog item updated",
-      ),
+      runMutation(() => updateCampaignBacklogItem(input), "Task updated"),
     [runMutation],
   );
 
@@ -167,7 +166,7 @@ export function useCampaignBacklog(): UseCampaignBacklogState {
         async () => {
           const result = await setCampaignBacklogItemStatus({ id, status });
           if (status === "completed" && result.successor !== null) {
-            toast.success("Next recurring item scheduled", {
+            toast.success("Next repeating task scheduled", {
               description: new Intl.DateTimeFormat(undefined, {
                 dateStyle: "medium",
                 timeStyle: "short",
@@ -176,9 +175,7 @@ export function useCampaignBacklog(): UseCampaignBacklogState {
           }
           return result;
         },
-        status === "completed"
-          ? "Backlog item completed"
-          : "Backlog status updated",
+        status === "completed" ? "Task completed" : "Task status updated",
       ),
     [runMutation],
   );

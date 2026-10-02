@@ -1,12 +1,8 @@
 import { Badge } from "@/components/ui/badge";
-import type { CampaignStatus } from "@/features/campaigns/types";
-
-const statusLabels: Record<CampaignStatus, string> = {
-  draft: "Draft",
-  active: "Active",
-  paused: "Paused",
-  archived: "Archived",
-};
+import {
+  CAMPAIGN_STATUS_LABELS,
+  type CampaignStatus,
+} from "@/features/campaigns/types";
 
 const statusVariants: Record<
   CampaignStatus,
@@ -23,5 +19,9 @@ export function CampaignStatusBadge({
 }: {
   status: CampaignStatus;
 }): React.ReactNode {
-  return <Badge variant={statusVariants[status]}>{statusLabels[status]}</Badge>;
+  return (
+    <Badge variant={statusVariants[status]}>
+      {CAMPAIGN_STATUS_LABELS[status]}
+    </Badge>
+  );
 }

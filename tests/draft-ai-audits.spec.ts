@@ -1088,7 +1088,7 @@ async function openSeededAuditPanel(page: Page) {
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
   return page
-    .getByRole("heading", { name: /AI audit for variant/ })
+    .getByRole("heading", { name: /AI review for version/ })
     .locator("xpath=ancestor::section[1]");
 }
 
@@ -1113,7 +1113,7 @@ async function connectCustomAuditProvider(page: Page): Promise<void> {
 
 async function installUiAuditProvider(
   page: Page,
-  mode: "success" | "gated" | "retry",
+  mode: "success" | "gated" | "retry" | "disconnected",
 ): Promise<void> {
   await page.evaluate(
     ({ auditFindings, providerMode }) => {
@@ -1150,6 +1150,10 @@ async function installUiAuditProvider(
             };
           }
           attempts += 1;
+          if (providerMode === "disconnected") {
+            // Exact native linkgo_agent_provider_stream error text.
+            throw new Error("Provider is not connected");
+          }
           if (providerMode === "retry" && attempts === 1) {
             throw new Error("Injected audit provider outage");
           }
@@ -1185,16 +1189,18 @@ test.describe("draft AI audit action", () => {
   }) => {
     const panel = await openSeededAuditPanel(page);
 
-    await panel.getByRole("button", { name: "Run AI audit" }).click();
+    await panel.getByRole("button", { name: "Review with AI" }).click();
 
-    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Done", { exact: true })).toBeVisible();
     await expect(
-      panel.getByRole("definition").filter({ hasText: "Dry run" }),
+      panel
+        .getByRole("definition")
+        .filter({ hasText: "Practice mode (no AI used)" }),
     ).toBeVisible();
     await expect(
       panel.getByText("dry-run-local", { exact: true }),
     ).toBeVisible();
-    await expect(panel.getByText("Findings (6/6)")).toBeVisible();
+    await expect(panel.getByText("Suggestions (6/6)")).toBeVisible();
     expect((await getAuditState(page)).runs).toEqual([
       expect.objectContaining({ provider_key: "dry_run", status: "completed" }),
     ]);
@@ -1231,13 +1237,13 @@ test.describe("draft AI audit action", () => {
     await installUiAuditProvider(page, "success");
     const panel = await openSeededAuditPanel(page);
 
-    await panel.getByLabel("Provider").selectOption("custom");
-    await panel.getByLabel("Model").fill("custom-audit-model");
-    await panel.getByRole("button", { name: "Run AI audit" }).click();
+    await panel.getByLabel("AI service").selectOption("custom");
+    await panel.getByLabel("AI model").fill("custom-audit-model");
+    await panel.getByRole("button", { name: "Review with AI" }).click();
 
-    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Done", { exact: true })).toBeVisible();
     await expect(
-      panel.getByRole("definition").filter({ hasText: "Custom API" }),
+      panel.getByRole("definition").filter({ hasText: "Other AI service" }),
     ).toBeVisible();
     await expect(
       panel.getByRole("definition").filter({ hasText: "custom-audit-model" }),
@@ -1253,16 +1259,49 @@ test.describe("draft AI audit action", () => {
     page,
   }) => {
     const panel = await openSeededAuditPanel(page);
-    await panel.getByLabel("Provider").selectOption("anthropic");
+    await panel.getByLabel("AI service").selectOption("anthropic");
 
-    await panel.getByRole("button", { name: "Run AI audit" }).click();
+    await panel.getByRole("button", { name: "Review with AI" }).click();
 
-    await expect(panel.getByText("Failed", { exact: true })).toBeVisible();
-    await expect(panel.getByText("Provider is not connected")).toHaveCount(2);
+    await expect(
+      panel.getByText("Didn't finish", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel.getByText(
+        "Your AI service isn't connected. Connect it in Connected accounts, then try again.",
+      ),
+    ).toHaveCount(2);
     expect((await getAuditState(page)).runs[0]).toMatchObject({
       provider_key: "anthropic",
       status: "failed",
-      error_message: "Agent provider is not connected",
+      error_message:
+        "Your AI service isn't connected. Connect it in Connected accounts, then try again.",
+    });
+  });
+
+  test("shows the native provider error in plain language while storing it raw", async ({
+    page,
+  }) => {
+    await connectCustomAuditProvider(page);
+    await installUiAuditProvider(page, "disconnected");
+    const panel = await openSeededAuditPanel(page);
+    await panel.getByLabel("AI service").selectOption("custom");
+
+    await panel.getByRole("button", { name: "Review with AI" }).click();
+
+    await expect(
+      panel.getByText("Didn't finish", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel.getByText(
+        "Your AI service isn't connected. Connect it in Connected accounts, then try again.",
+      ),
+    ).toHaveCount(2);
+    await expect(panel.getByText("Provider is not connected")).toHaveCount(0);
+    expect((await getAuditState(page)).runs[0]).toMatchObject({
+      provider_key: "custom",
+      status: "failed",
+      error_message: "Provider is not connected",
     });
   });
 
@@ -1272,8 +1311,8 @@ test.describe("draft AI audit action", () => {
     await connectCustomAuditProvider(page);
     await installUiAuditProvider(page, "gated");
     const panel = await openSeededAuditPanel(page);
-    await panel.getByLabel("Provider").selectOption("custom");
-    const runButton = panel.getByRole("button", { name: "Run AI audit" });
+    await panel.getByLabel("AI service").selectOption("custom");
+    const runButton = panel.getByRole("button", { name: "Review with AI" });
 
     await runButton.evaluate((button: HTMLButtonElement) => {
       button.click();
@@ -1281,16 +1320,16 @@ test.describe("draft AI audit action", () => {
     });
 
     await expect(
-      panel.getByRole("button", { name: /Running AI audit/ }),
+      panel.getByRole("button", { name: /Reviewing/ }),
     ).toBeDisabled();
-    await expect(panel.getByText("Running", { exact: true })).toBeVisible();
+    await expect(panel.getByText("In progress", { exact: true })).toBeVisible();
     expect((await getAuditState(page)).runs).toHaveLength(1);
     await page.evaluate(() =>
       (
         window as unknown as { __RELEASE_AUDIT_PROVIDER__: () => void }
       ).__RELEASE_AUDIT_PROVIDER__(),
     );
-    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Done", { exact: true })).toBeVisible();
     expect((await getAuditState(page)).runs).toHaveLength(1);
   });
 
@@ -1300,17 +1339,19 @@ test.describe("draft AI audit action", () => {
     await connectCustomAuditProvider(page);
     await installUiAuditProvider(page, "retry");
     const panel = await openSeededAuditPanel(page);
-    await panel.getByLabel("Provider").selectOption("custom");
+    await panel.getByLabel("AI service").selectOption("custom");
 
-    await panel.getByRole("button", { name: "Run AI audit" }).click();
-    await expect(panel.getByText("Failed", { exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "Review with AI" }).click();
+    await expect(
+      panel.getByText("Didn't finish", { exact: true }),
+    ).toBeVisible();
     await expect(panel.getByText("Injected audit provider outage")).toHaveCount(
       2,
     );
 
-    await panel.getByRole("button", { name: "Run AI audit" }).click();
+    await panel.getByRole("button", { name: "Review with AI" }).click();
 
-    await expect(panel.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Done", { exact: true })).toBeVisible();
     const state = await getAuditState(page);
     expect(state.runs.map((run) => run.status)).toEqual([
       "failed",

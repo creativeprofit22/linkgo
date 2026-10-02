@@ -14,8 +14,8 @@ export function BrowserPreviewBanner(): ReactNode {
       role="status"
       className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-900 dark:text-amber-200"
     >
-      Browser preview — nothing is saved. Run the Linkgo desktop app to use your
-      data.
+      You're looking at a preview in your browser, so nothing is saved. Open the
+      Linkgo app to work with your real data.
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
   updateDraftVariant,
   reconcileStaleDraftQuality,
 } from "@/features/drafts/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import {
   runDraftQualityLoop,
   resumeDraftQualityLoop,
@@ -66,7 +67,9 @@ interface UseDraftsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected drafts error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your drafts. Try again.";
 }
 
 function getDefaultCampaignId(
@@ -190,7 +193,7 @@ export function useDrafts(): UseDraftsState {
         await loadDraftsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Draft was not created", { description: message });
+        toast.error("We couldn't create the draft", { description: message });
         throw caught;
       }
     },
@@ -204,7 +207,7 @@ export function useDrafts(): UseDraftsState {
         await loadDraftsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Draft was not updated", { description: message });
+        toast.error("We couldn't save the draft", { description: message });
         throw caught;
       }
     },
@@ -218,7 +221,7 @@ export function useDrafts(): UseDraftsState {
         await loadDraftsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Draft variant was not updated", { description: message });
+        toast.error("We couldn't save this version", { description: message });
         throw caught;
       }
     },
@@ -232,7 +235,7 @@ export function useDrafts(): UseDraftsState {
         await loadDraftsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Draft variant status was not changed", {
+        toast.error("We couldn't update this version", {
           description: message,
         });
         throw caught;
@@ -248,7 +251,7 @@ export function useDrafts(): UseDraftsState {
         await loadDraftsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Draft was not archived", { description: message });
+        toast.error("We couldn't archive the draft", { description: message });
         throw caught;
       }
     },
@@ -259,10 +262,10 @@ export function useDrafts(): UseDraftsState {
     async (input: RunDraftAiAuditInput) => {
       try {
         await runDraftAiAuditRecord(input);
-        toast.success("AI audit completed");
+        toast.success("AI review finished");
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("AI audit failed", { description: message });
+        toast.error("The AI review didn't finish", { description: message });
         throw caught;
       } finally {
         await loadDraftsForCampaign(selectedCampaignId);
@@ -282,9 +285,9 @@ export function useDrafts(): UseDraftsState {
         if (resume)
           await resumeDraftQualityLoop(input as ContinueDraftQualityInput);
         else await runDraftQualityLoop(input);
-        toast.success("Draft quality loop completed");
+        toast.success("Done improving your draft");
       } catch (caught) {
-        toast.error("Draft quality loop stopped", {
+        toast.error("Improving your draft stopped", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -313,13 +316,13 @@ export function useDrafts(): UseDraftsState {
       try {
         await generateDraftVariants(input);
         await loadDraftsForCampaign(selectedCampaignId);
-        toast.success("Draft variants generated", {
-          description: "Review them in Generated drafts pending.",
+        toast.success("AI versions are ready", {
+          description: "Review them in AI drafts to review.",
         });
       } catch (caught) {
         await loadDraftsForCampaign(selectedCampaignId);
         const message = getErrorMessage(caught);
-        toast.error("Draft variants were not generated", {
+        toast.error("The AI couldn't write versions", {
           description: message,
         });
         throw caught;
@@ -333,12 +336,12 @@ export function useDrafts(): UseDraftsState {
       try {
         await saveGeneratedDraft(input);
         await loadDraftsForCampaign(selectedCampaignId);
-        toast.success("Generated variants saved as a draft", {
-          description: "Deterministic audits ran on the saved draft.",
+        toast.success("AI versions saved as a draft", {
+          description: "Linkgo ran its automatic checks on the draft.",
         });
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Generated draft was not saved", { description: message });
+        toast.error("We couldn't save the AI draft", { description: message });
         throw caught;
       }
     },
@@ -352,7 +355,7 @@ export function useDrafts(): UseDraftsState {
         await loadDraftsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Generated draft request was not dismissed", {
+        toast.error("We couldn't dismiss the AI draft", {
           description: message,
         });
         throw caught;

@@ -38,7 +38,7 @@ Delivered in this slice:
 - Target post, candidate post, dedupe key, and candidate discovery tables.
 - Manual LinkedIn post add flow.
 - Per-campaign duplicate prevention by normalized URL and content hash.
-- Queue cards grouped by triage status.
+- Ideas tab cards grouped by triage status.
 - Status updates for `new`, `shortlisted`, `rejected`, and `drafted`.
 - Dry-run/provider researcher suggestions persisted through `research_posts`.
 - Dry-run/provider scorer outputs applied through `score_relevance` after campaign ownership validation.
@@ -78,7 +78,7 @@ Delivered in this slice:
 - Deterministic HTTPS LinkedIn source, absolute timestamp/age, Unicode whole-word topic, and successful-contact identity checks.
 - Policy enforcement at the shared candidate transaction boundary before candidate artifacts are written.
 - Local JSON imports on the enforced path; attended single-candidate entry remains an explicit operator override.
-- Queue policy summary/editor with archived read-only, retry, validation, keyboard, and responsive states.
+- Ideas tab policy summary/editor with archived read-only, retry, validation, keyboard, and responsive states.
 - Policy-labeled import history and transaction rollback coverage for mixed batches.
 
 Roadmap 3D now consumes this policy-enforced boundary. A compliant production connector remains excluded. No scraping, remote lookup, model call, drafting, commenting, scheduling, or publishing was added.
@@ -96,7 +96,7 @@ Delivered in this slice:
 - Migrations 24 through 26 with required due times, explicit IANA recurrence zones, eight work categories, two owner labels, five lifecycle statuses, one-off/daily/weekly recurrence, and bounded history indexes.
 - Atomic, stored-zone recurring completion with one future successor, daylight-saving wall-clock preservation, and missed-interval coalescing.
 - Manual create, edit, start, block, resume, complete, and confirmed cancel flows.
-- Cross-campaign Backlog tab with summary counts, campaign/owner/open-history filters, grouped due work, bounded history, and archived guidance.
+- Cross-campaign Tasks tab with summary counts, campaign/owner/open-history filters, grouped due work, bounded history, and archived guidance.
 - Data-boundary transition checks, request-race protection, rollback injection, responsive and accessibility coverage.
 - Roadmap 19 completion through a durable cross-feature backlog complementing workflow, scheduler, approval, metric refresh, and error stores.
 
@@ -140,9 +140,9 @@ Delivered in this slice:
 - One candidate artifact per surviving accepted planner candidate in the native materialization transaction.
 - Strict relevance context and exact score-set contracts; synthetic score fabrication is removed.
 - `BEGIN IMMEDIATE` claim and score-write transactions with duplicate-attempt and stale/cross-campaign protection.
-- Connected-provider `Score batch` confirmation in Workflows with visible scope, model, threshold, and conservative rejection default.
+- Connected-provider `Score ideas` confirmation in Automations with visible scope, model, threshold, and conservative rejection default.
 - No-provider, no-artifact, all-removed, all-scored, archived, kill-switch, provider-failure, retry, and atomic-validation states.
-- Autopilot scorer provenance and workflow-owned read-only Backlog projections.
+- Autopilot scorer provenance and workflow-owned read-only Tasks tab projections.
 - Rust migration/planner tests and Playwright coverage across scope, context, success, rollback, retries, concurrency, responsive behavior, and accessibility.
 
 Roadmap 5 remains partial because unattended/background scoring ownership and the production connector are not delivered. Roadmap 11 gains candidate artifact flow but remains partial. The native planner stays model-free and never invokes this attended executor path.
@@ -222,7 +222,7 @@ Delivered in this slice:
 
 - `content_calendar_slots` table with one slot per approval.
 - Required purpose, local slot time, timezone, format, angle, visual direction, CTA, and optional notes.
-- Calendar tab between Approvals and Scheduler with all-campaign planning, campaign filtering, summary cards, create/edit/archive actions, and schedule-slot action.
+- Calendar tab between Approvals and Auto-posting with all-campaign planning, campaign filtering, summary cards, create/edit/archive actions, and schedule-slot action.
 - Slot lists joined to campaign, approval, draft variant, source post, schedule job, and successful publish attempt context.
 - Lifecycle labels derived from approval, schedule job, publish attempt, and archived slot state.
 
@@ -242,7 +242,7 @@ Delivered in this slice:
 - Durable local metric refresh settings, jobs, locks, retry metadata, and refresh events.
 - Campaign memory notes approved by a human operator.
 - Append-only learning events for metric and memory actions.
-- Metrics tab with campaign filtering, summaries, refresh controls, metric cards, source badges, memory cards, and event stream.
+- Analytics tab with campaign filtering, summaries, refresh controls, metric cards, source badges, memory cards, and event stream.
 
 LinkedIn scraping, member-post impression/click analytics, organization analytics, AI learning loops, and after-quit metric jobs are not implemented in this slice.
 
@@ -258,7 +258,7 @@ Delivered in this slice:
 - Workflow run, step, event, and step-execution tables.
 - Manual content pipeline state machine: `research -> score -> draft -> audit -> approve -> schedule -> measure`.
 - Foreground executor controls that launch linked role-specific agent runs and stop at approvals.
-- Workflows tab with campaign filtering, summary cards, step controls, and event history.
+- Automations tab with campaign filtering, summary cards, step controls, and event history.
 - Archived-campaign mutation blocking.
 
 Workflow-owned background jobs, LinkedIn API commenting, and generic workflow building are not implemented in this slice.
@@ -278,7 +278,7 @@ Delivered in this slice:
 - Six Zod tool contracts: `research_posts`, `score_relevance`, `draft_post`, `audit_post`, `schedule_post`, and `collect_metrics`.
 - Provider-independent runtime interfaces, native Tauri provider adapter, and deterministic `dry_run` provider.
 - Provider-backed execution after explicit credential connection, with model credentials, provider payload construction, tool definitions, and transport handling kept behind the Tauri command boundary.
-- Provider-aware Agent Runtime tab with contract visibility and local run history.
+- Provider-aware AI assistant tab with contract visibility and local run history.
 - Approval-gated `schedule_post` behavior.
 - Archived-campaign mutation blocking.
 
@@ -296,8 +296,8 @@ Delivered in this slice:
 - Built-in TypeScript playbook definitions for LinkedIn Writer, LinkedIn Humanizer, Content Calendar, LinkedIn Commenter, and Campaign Analyst.
 - `agent_runs.playbook_key` persistence for selected runtime playbooks.
 - `agent_playbook_overrides` for local enable/disable state and bounded custom instructions.
-- Playbooks tab for cards, role/tool/roadmap badges, custom overrides, and guidance-only commenter visibility.
-- Agent Runtime playbook selection filtered by compatible role and enabled runtime state.
+- Brand voice tab for cards, role/tool/roadmap badges, custom overrides, and guidance-only commenter visibility.
+- AI assistant tab playbook selection filtered by compatible role and enabled runtime state.
 - Provider and dry-run prompt assembly that layers selected playbook instructions on top of non-removable safety lines.
 
 Scraping, autonomous publishing, autonomous commenting, browser automation, and external telemetry are not implemented in this slice.
@@ -315,7 +315,7 @@ Delivered in this slice:
 - Daily post scheduling cap enforcement using each campaign's `daily_post_limit`.
 - Append-only safety audit events and rate-limit decisions.
 - Error queue items for failed publish attempts, rejected approvals, and failed agent runs.
-- Safety tab with summaries, campaign filtering, kill switch controls, event history, and status transitions.
+- Safety tab with summaries, campaign filtering, Emergency pause (kill switch) controls, event history, and status transitions.
 
 External telemetry and non-approved autonomous actions are not implemented in this slice.
 
@@ -355,7 +355,7 @@ Delivered in this slice:
 - Opt-in worker loop that runs while Linkgo is open or hidden to tray.
 - Due approved scheduled LinkedIn posts publish through the shared native OAuth helper.
 - Retryable failures keep schedules active with backoff; terminal failures return approvals to `approved` and create error queue items.
-- Scheduler tab with status, start/stop, manual tick, pending due jobs, recent events, and scheduler-linked attempts.
+- Auto-posting tab with status, start/stop, manual tick, pending due jobs, recent events, and scheduler-linked attempts.
 
 Launch-on-login can open Linkgo, but running after the Linkgo process quits, LinkedIn API commenting, scraping, and autonomous content generation are not implemented.
 
@@ -376,7 +376,7 @@ Delivered in this slice:
 - Native Tauri credential storage boundary for API keys and OAuth credentials.
 - LinkedIn OAuth start, manual code submission, state validation, token exchange path, refresh path, logout, and status checks.
 - Connected LinkedIn member metadata backfill through OIDC userinfo.
-- Integrations tab with provider cards and no secret rendering.
+- Connected accounts tab with provider cards and no secret rendering.
 - OAuth-backed LinkedIn post publishing command used only by explicit approved/scheduled post actions.
 
 Autonomous content generation, autonomous LinkedIn commenting, scraping, arbitrary browser automation, and external telemetry are not implemented.

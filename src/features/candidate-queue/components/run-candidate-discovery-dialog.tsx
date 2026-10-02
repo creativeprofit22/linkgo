@@ -71,7 +71,7 @@ function parseSeedKeywords(value: string): ParsedSeedKeywords {
   if (longKeyword !== undefined) {
     return {
       keywords: [],
-      error: `Seed keywords must be ${MAX_SEED_KEYWORD_LENGTH} characters or fewer. Shorten “${longKeyword.slice(0, 40)}${longKeyword.length > 40 ? "…" : ""}”.`,
+      error: `Each starting keyword can be up to ${MAX_SEED_KEYWORD_LENGTH} characters. Shorten “${longKeyword.slice(0, 40)}${longKeyword.length > 40 ? "…" : ""}”.`,
     };
   }
 
@@ -144,20 +144,20 @@ export function RunCandidateDiscoveryDialog({
           variant="outline"
           disabled={disabled || campaign === null}
         >
-          <Search className="size-4" /> Run discovery
+          <Search className="size-4" /> Find topics
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Run discovery</DialogTitle>
+            <DialogTitle>Find topics</DialogTitle>
             <DialogDescription>
-              Save local keyword, trend, and source-prompt suggestions. This
-              does not scrape LinkedIn.
+              Get keyword, trend, and topic ideas for this campaign. Linkgo
+              doesn't copy pages from LinkedIn.
             </DialogDescription>
           </DialogHeader>
 
-          <Field label="Seed keywords" htmlFor="discovery-seeds">
+          <Field label="Starting keywords" htmlFor="discovery-seeds">
             <Textarea
               id="discovery-seeds"
               value={form.seedKeywords}
@@ -199,12 +199,12 @@ export function RunCandidateDiscoveryDialog({
               }
               maxLength={1000}
               rows={4}
-              placeholder="What should the researcher prioritize?"
+              placeholder="What should Linkgo focus on?"
             />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Provider" htmlFor="discovery-provider">
+            <Field label="AI service" htmlFor="discovery-provider">
               <select
                 id="discovery-provider"
                 value={form.providerKey}
@@ -220,7 +220,7 @@ export function RunCandidateDiscoveryDialog({
                 ))}
               </select>
             </Field>
-            <Field label="Model" htmlFor="discovery-model">
+            <Field label="AI model" htmlFor="discovery-model">
               <Input
                 id="discovery-model"
                 value={form.modelName}
@@ -239,7 +239,7 @@ export function RunCandidateDiscoveryDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={submitting || campaign === null}>
-              {submitting ? "Running…" : "Run discovery"}
+              {submitting ? "Finding…" : "Find topics"}
             </Button>
           </DialogFooter>
         </form>

@@ -97,7 +97,9 @@ function validateCampaignForm(form: CampaignFormState): FormValidation {
   if (result.success) return { ok: true, value: input };
   return {
     ok: false,
-    error: result.error.issues[0]?.message ?? "Campaign input is invalid.",
+    error:
+      result.error.issues[0]?.message ??
+      "Some campaign details don't look right. Check them and try again.",
   };
 }
 
@@ -146,7 +148,7 @@ export function AddCampaignDialog({
           form={form}
           setForm={setForm}
           title="New campaign"
-          description="Create the local campaign context Linkgo will use for queueing and drafts later."
+          description="Tell Linkgo what this campaign is about. We use it to find ideas and write drafts."
           submitLabel="Create campaign"
           submittingLabel="Creating…"
           submitting={submitting}
@@ -208,7 +210,7 @@ export function EditCampaignDialog({
           form={form}
           setForm={setForm}
           title={`Edit ${campaign.name}`}
-          description="Update campaign context used for future queueing, drafts, and approvals."
+          description="Update the details Linkgo uses for new ideas, drafts, and approvals."
           submitLabel="Save changes"
           submittingLabel="Saving…"
           submitting={submitting}
@@ -359,10 +361,10 @@ function CampaignForm({
 
       <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
         <div className="min-w-0">
-          <Label htmlFor="campaign-autopilot">Local autopilot planner</Label>
+          <Label htmlFor="campaign-autopilot">Include in Autopilot</Label>
           <p className="text-muted-foreground text-xs">
-            Makes active campaigns eligible for source-to-work planning after
-            you start the planner. No external action starts.
+            When this campaign is active and you start Autopilot, Linkgo can
+            turn its imported posts into tasks. Nothing is posted.
           </p>
         </div>
         <Switch

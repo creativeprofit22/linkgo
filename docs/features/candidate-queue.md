@@ -1,6 +1,6 @@
 # Candidate Queue Feature
 
-Candidate Queue turns the Queue tab into a local-first intake and triage surface for approved LinkedIn post candidates. Operators can add one attended manual override or import a bounded local JSON batch through the campaign policy gate.
+Candidate Queue turns the Ideas tab into a local-first intake and triage surface for approved LinkedIn post candidates. Operators can add one attended manual override or import a bounded local JSON batch through the campaign policy gate.
 
 ## Purpose
 
@@ -72,7 +72,7 @@ Source imports reuse the same native insert with policy enforcement (see Source 
 
 The renderer has no direct SQL access to candidate tables. The remaining reads and single-row writes live in `src-tauri/src/candidate_queue_store.rs`. Every input rejects unknown fields and non-positive ids:
 
-- `linkgo_candidate_list` (`listCandidatePage`, `listCandidates`): returns `{ rows, totalCount }` — candidates joined with their target post, rejected last, then newest update first, capped at 500 rows. `totalCount` is the uncapped match count, read in the same transaction. `listCandidates` returns only the rows. When `totalCount` exceeds the rows, the Queue shows "Showing the first 500 of N", uses `totalCount` for Total, and labels scored, shortlisted, average and per-status counts as covering the shown rows.
+- `linkgo_candidate_list` (`listCandidatePage`, `listCandidates`): returns `{ rows, totalCount }` — candidates joined with their target post, rejected last, then newest update first, capped at 500 rows. `totalCount` is the uncapped match count, read in the same transaction. `listCandidates` returns only the rows. When `totalCount` exceeds the rows, the Ideas tab shows "Showing the first 500 of N ideas", uses `totalCount` for Total, and labels scored, shortlisted, average and per-status counts as covering the shown rows.
 - `linkgo_candidate_discovery_list` (`listDiscoveryItems`): non-dismissed suggestions, promoted last, then highest confidence and newest first. Capped at 200 rows.
 - `linkgo_candidate_agent_run_context`: checks the campaign exists and is not archived, then returns up to 12 seed keywords and up to 50 unscored `new` candidate ids. The agent run starts only after this returns, so no provider call runs inside a database transaction.
 - `linkgo_candidate_update` (`updateCandidate`/`setCandidateStatus`): sets only the fields provided. An explicit `relevanceScore: null` clears the score. Status, score (0–100), reason (≤ 500) and notes (≤ 1000, trimmed) are re-validated natively. A missing id is a silent no-op, as before.
@@ -93,8 +93,8 @@ Tests: `src-tauri/src/candidate_queue_store_tests.rs`.
 
 - Header and explanation that intake, discovery, and scoring are operator-triggered while external actions remain gated.
 - Campaign selector.
-- Candidate intake policy summary and accessible editor, including archived read-only state and manual-override disclosure.
-- `Run discovery`, `Score candidates`, `Import source posts`, and `Add candidate` actions.
+- Candidate intake policy summary (on screen: `Idea filters`) and accessible editor, including archived read-only state and manual-override disclosure.
+- `Find topics`, `Score ideas`, `Import posts`, and `Add idea` actions.
 - Loading and retry states.
 - No-campaign and empty-queue states.
 - Summary cards for total candidates, suggestions, scored candidates, shortlisted candidates, and average score.

@@ -2,19 +2,19 @@ import { Badge } from "@/components/ui/badge";
 import type { AgentRunStatus, AgentToolCallStatus } from "@/agent";
 
 const runLabels: Record<AgentRunStatus, string> = {
-  queued: "Queued",
-  running: "Running",
-  waiting_approval: "Waiting approval",
-  completed: "Completed",
+  queued: "Not started",
+  running: "In progress",
+  waiting_approval: "Waiting for approval",
+  completed: "Done",
   failed: "Failed",
   cancelled: "Cancelled",
 };
 
 const toolLabels: Record<AgentToolCallStatus, string> = {
-  requested: "Requested",
-  running: "Running",
-  waiting_approval: "Waiting approval",
-  completed: "Completed",
+  requested: "Asked for",
+  running: "In progress",
+  waiting_approval: "Waiting for approval",
+  completed: "Done",
   failed: "Failed",
   rejected: "Rejected",
 };

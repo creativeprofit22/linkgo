@@ -51,7 +51,7 @@ A successful Linkgo comment attempt blocks intake when its target has the same n
 
 The evaluator is native (`evaluate_intake_policy` in `src-tauri/src/candidate_policy.rs`) and is the required path for local source imports and every connector that feeds the Roadmap 3D planner boundary. Policy evaluation happens before target, candidate, or dedupe writes, inside the row's pinned transaction. It ports the former renderer evaluator exactly: WHATWG URL parsing (`url` crate, `src-tauri/src/js_url.rs`), NFKC + lowercase topic matching with JS whitespace and Unicode letter/number boundaries (`unicode-normalization`), and V8-compatible ISO-8601 parsing including calendar and offset checks. Parity tests pin each helper to outputs recorded from the old JS on Node 22.
 
-`createCandidate(input)` intentionally omits enforcement. `Add candidate` is an attended override for an operator deliberately capturing historical or exceptional material. It is not an autopilot-safe path.
+`createCandidate(input)` intentionally omits enforcement. `Add idea` is an attended override for an operator deliberately capturing historical or exceptional material. It is not an autopilot-safe path.
 
 ## Data API
 
@@ -68,7 +68,7 @@ Updates reject missing or archived campaigns and atomically upsert the age limit
 
 ## UI
 
-The Candidate Queue policy card appears directly after campaign selection. It summarizes the age limit, fixed source/timestamp/contact rules, banned-topic count, and attended manual override. `Edit policy` opens a keyboard-operable Radix dialog with inline validation and preserved values after failures. Archived campaigns remain visible and read-only.
+The Ideas tab's policy card (on screen: `Idea filters`) appears directly after campaign selection. It summarizes the age limit, fixed source/timestamp/contact rules, banned-topic count, and attended manual override. `Edit filters` opens a keyboard-operable Radix dialog (`Edit idea filters`) with inline validation and preserved values after failures. Archived campaigns remain visible and read-only.
 
 ## Safety exclusions
 

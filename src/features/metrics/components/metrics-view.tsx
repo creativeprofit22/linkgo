@@ -9,9 +9,39 @@ import { useMetrics } from "@/features/metrics/hooks/use-metrics";
 import type {
   CampaignMemory,
   MetricRefreshDashboard,
+  MetricRefreshEventSeverity,
+  MetricRefreshEventType,
+  MetricRefreshJobStatus,
   NativeMetricRefreshStatus,
   PostMetricWithDetails,
 } from "@/features/metrics/types";
+import { toPlainMessage } from "@/lib/plain-message";
+
+const refreshJobStatusLabels: Record<MetricRefreshJobStatus, string> = {
+  active: "On",
+  paused: "Paused",
+  unavailable: "Not available",
+  failed: "Didn't update",
+};
+
+const refreshEventTypeLabels: Record<MetricRefreshEventType, string> = {
+  refresh_started: "Update started",
+  refresh_completed: "Updated",
+  refresh_retry_scheduled: "Will try again",
+  refresh_unavailable: "Not available",
+  refresh_failed: "Didn't update",
+  refresh_blocked: "Held back",
+  worker_started: "Auto-update turned on",
+  worker_stopped: "Auto-update turned off",
+  tick_started: "Check started",
+  tick_completed: "Check done",
+};
+
+const refreshEventSeverityLabels: Record<MetricRefreshEventSeverity, string> = {
+  info: "Info",
+  warning: "Heads up",
+  error: "Problem",
+};
 
 export function MetricsView(): React.ReactNode {
   const {
@@ -43,10 +73,10 @@ export function MetricsView(): React.ReactNode {
   const refreshControlStops =
     refreshStatus?.running === true || refreshStatus?.enabled === true;
   const refreshActionLabel = refreshStatus?.running
-    ? "Stop metric refresh"
+    ? "Turn off auto-update"
     : refreshStatus?.enabled
-      ? "Disable metric refresh"
-      : "Start metric refresh";
+      ? "Turn off auto-update"
+      : "Turn on auto-update";
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -57,10 +87,12 @@ export function MetricsView(): React.ReactNode {
               <BarChart3 className="size-5" />
             </div>
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">Metrics</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                Analytics
+              </h2>
               <p className="text-muted-foreground text-sm">
-                Local snapshots plus opt-in LinkedIn social metadata refresh.
-                Publishing and commenting stay human-approved.
+                See how your posts perform and what you&rsquo;ve learned. Linkgo
+                never posts without your OK.
               </p>
             </div>
           </div>
@@ -71,7 +103,7 @@ export function MetricsView(): React.ReactNode {
             variant="outline"
             onClick={() => void loadMetrics()}
           >
-            Refresh
+            Reload
           </Button>
           <div className="flex items-center gap-2">
             <Button
@@ -94,7 +126,7 @@ export function MetricsView(): React.ReactNode {
             onClick={() => void refreshNow()}
           >
             <RefreshCw className="size-4" />
-            Refresh LinkedIn metrics now
+            Update from LinkedIn now
           </Button>
           <RecordPostMetricDialog
             eligibleApprovals={eligibleApprovals}
@@ -118,7 +150,7 @@ export function MetricsView(): React.ReactNode {
               size="sm"
               onClick={() => void loadMetrics()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -127,7 +159,7 @@ export function MetricsView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading metrics…
+            Loading analytics…
           </CardContent>
         </Card>
       ) : campaigns.length === 0 ? (
@@ -136,9 +168,10 @@ export function MetricsView(): React.ReactNode {
         <>
           <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">Selected campaign</p>
+              <p className="text-sm font-medium">Campaign</p>
               <p className="text-muted-foreground text-xs">
-                Metric snapshots and learning events are stored locally.
+                Your results and what you&rsquo;ve learned stay on this
+                computer.
               </p>
             </div>
             <select
@@ -161,15 +194,16 @@ export function MetricsView(): React.ReactNode {
           {selectedCampaignArchived && (
             <Card className="bg-muted/40 border-dashed">
               <CardContent className="text-muted-foreground p-4 text-sm">
-                Archived campaigns keep metric history visible, but new metrics
-                and memory changes are blocked. Restore the campaign first.
+                This campaign is archived. You can see its past results, but you
+                can&rsquo;t add results or change notes. Restore the campaign
+                first.
               </CardContent>
             </Card>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              label="Measured posts"
+              label="Posts tracked"
               value={String(summary.measuredPosts)}
             />
             <SummaryCard
@@ -177,42 +211,41 @@ export function MetricsView(): React.ReactNode {
               value={summary.totalImpressions.toLocaleString()}
             />
             <SummaryCard
-              label="Avg engagement"
+              label="Average engagement"
               value={formatPercent(summary.averageEngagementRate)}
             />
             <SummaryCard
-              label="Active memories"
+              label="Active notes"
               value={String(summary.activeMemories)}
             />
-            <SummaryCard label="API refresh" value={refreshStatusLabel} />
+            <SummaryCard label="Auto-update" value={refreshStatusLabel} />
             <SummaryCard
-              label="Due refreshes"
+              label="Updates due"
               value={String(refreshDashboard?.summary.dueJobs ?? 0)}
             />
             <SummaryCard
-              label="Unavailable"
+              label="Not available"
               value={String(refreshDashboard?.summary.unavailableJobs ?? 0)}
             />
             <SummaryCard
-              label="Last API snapshots"
+              label="Updates from LinkedIn"
               value={String(refreshDashboard?.summary.apiSnapshots ?? 0)}
             />
           </div>
 
           <Card className="border-linkgo-blue/30 bg-linkgo-blue/5">
             <CardContent className="text-muted-foreground p-4 text-sm">
-              LinkedIn member API refresh collects reactions and comments from
-              social metadata. Impressions, profile visits, link clicks,
-              reposts, and CTR remain manual until Linkgo supports an approved
-              analytics provider.
+              Linkgo can bring in reactions and comments from LinkedIn for you.
+              For now, add impressions, profile visits, link clicks, reposts,
+              and click-through rate yourself.
             </CardContent>
           </Card>
 
           {eligibleApprovals.length === 0 && !selectedCampaignArchived && (
             <Card className="bg-card/70 border-dashed">
               <CardContent className="text-muted-foreground p-4 text-sm">
-                No published posts are ready for metrics. Publish an approved
-                post from Approvals first.
+                None of your posts have gone out yet. Post an approved post from
+                Approvals first.
               </CardContent>
             </Card>
           )}
@@ -234,16 +267,18 @@ export function MetricsView(): React.ReactNode {
 
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold">Campaign memory</h3>
+              <h3 className="text-lg font-semibold">
+                What we&rsquo;ve learned
+              </h3>
               <p className="text-muted-foreground text-sm">
-                Human-approved lessons saved from metric evidence.
+                Lessons you saved from your post results.
               </p>
             </div>
             {memory.length === 0 ? (
               <Card className="bg-card/70 border-dashed">
                 <CardContent className="text-muted-foreground p-4 text-sm">
-                  No campaign memory yet. Save memory from a metric card after
-                  recording performance.
+                  Nothing saved yet. Add results for a post, then click Save
+                  lesson on it.
                 </CardContent>
               </Card>
             ) : (
@@ -272,9 +307,9 @@ export function MetricsView(): React.ReactNode {
 function getMetricRefreshStatusLabel(
   status: NativeMetricRefreshStatus | null,
 ): string {
-  if (status?.running === true) return "Running";
-  if (status?.enabled === true) return "Enabled (not running)";
-  return "Stopped";
+  if (status?.running === true) return "On";
+  if (status?.enabled === true) return "On (paused)";
+  return "Off";
 }
 
 function getMetricsSummary(
@@ -315,36 +350,35 @@ function MetricRefreshPanel({
   return (
     <section className="space-y-4">
       <div>
-        <h3 className="text-lg font-semibold">LinkedIn metric refresh</h3>
+        <h3 className="text-lg font-semibold">Updates from LinkedIn</h3>
         <p className="text-muted-foreground text-sm">
-          Durable local jobs and recent worker events.
+          Posts Linkgo checks for new results, and recent activity.
         </p>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="bg-card/70">
           <CardContent className="p-4">
-            <p className="text-sm font-medium">Refresh jobs</p>
+            <p className="text-sm font-medium">Posts being tracked</p>
             {jobs.length === 0 ? (
               <p className="text-muted-foreground mt-3 text-sm">
-                No refresh jobs yet. Run a refresh after publishing a post.
+                Nothing tracked yet. After a post goes out, click Update from
+                LinkedIn now.
               </p>
             ) : (
               <div className="mt-3 space-y-3">
                 {jobs.slice(0, 5).map((job) => (
                   <div key={job.id} className="rounded-lg border p-3 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">
-                        Approval #{job.approval_id}
-                      </span>
+                      <span className="font-medium">Your post</span>
                       <span className="bg-muted text-muted-foreground rounded-full border px-2 py-0.5 text-xs">
-                        {job.status}
+                        {refreshJobStatusLabels[job.status]}
                       </span>
                     </div>
                     <p className="text-muted-foreground mt-1 truncate">
-                      {job.target_urn || job.last_error || "No LinkedIn URN"}
+                      {job.last_error || "Tracking this post on LinkedIn"}
                     </p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      Next refresh: {job.next_refresh_at || "—"}
+                      Next update: {job.next_refresh_at || "—"}
                     </p>
                   </div>
                 ))}
@@ -354,23 +388,26 @@ function MetricRefreshPanel({
         </Card>
         <Card className="bg-card/70">
           <CardContent className="p-4">
-            <p className="text-sm font-medium">Recent refresh events</p>
+            <p className="text-sm font-medium">Recent activity</p>
             {events.length === 0 ? (
               <p className="text-muted-foreground mt-3 text-sm">
-                No refresh events yet.
+                No activity yet.
               </p>
             ) : (
               <div className="mt-3 space-y-3">
                 {events.slice(0, 6).map((event) => (
                   <div key={event.id} className="rounded-lg border p-3 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{event.summary}</span>
+                      <span className="font-medium">
+                        {toPlainMessage(event.summary)}
+                      </span>
                       <span className="text-muted-foreground text-xs">
-                        {event.severity}
+                        {refreshEventSeverityLabels[event.severity]}
                       </span>
                     </div>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      {event.event_type} · {event.created_at}
+                      {refreshEventTypeLabels[event.event_type]} ·{" "}
+                      {event.created_at}
                     </p>
                   </div>
                 ))}
@@ -412,8 +449,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Metrics attach to
-            published approvals inside a campaign.
+            Go to Campaigns and create a campaign first. Then you can track
+            results for the posts in it.
           </p>
         </div>
       </CardContent>
@@ -429,10 +466,10 @@ function EmptyMetrics(): React.ReactNode {
           <BarChart3 className="size-7" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">No metrics yet</h3>
+          <h3 className="text-lg font-semibold">No results yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Publish a post from Approvals, then record a manual metric snapshot
-            here.
+            Post an approved post from Approvals, then click Add results to
+            record how it did.
           </p>
         </div>
       </CardContent>

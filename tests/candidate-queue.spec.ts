@@ -69,10 +69,8 @@ test("candidate intake fields expose schema max lengths", async ({ page }) => {
   await createCampaign(page);
   await openQueue(page);
 
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  await expect(
-    page.getByRole("dialog", { name: "Add candidate" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  await expect(page.getByRole("dialog", { name: "Add idea" })).toBeVisible();
 
   await expect(page.getByLabel("Source keyword")).toHaveAttribute(
     "maxlength",
@@ -112,7 +110,7 @@ test("duplicate candidate add shows toast and keeps one candidate", async ({
   await addCandidate(page);
   await addCandidate(page, { expectSuccess: false });
 
-  await expect(page.getByText("Candidate was not added")).toBeVisible();
+  await expect(page.getByText("We couldn't add this idea")).toBeVisible();
   await expect(
     page.getByText("Candidate already exists for this campaign"),
   ).toBeVisible();
@@ -145,7 +143,7 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
   const callsBeforeCreate = await sqlExecuteCallCount(page);
   await addCandidate(page, { expectSuccess: false });
 
-  await expect(page.getByText("Candidate was not added")).toBeVisible();
+  await expect(page.getByText("We couldn't add this idea")).toBeVisible();
   await expect(page.getByText("Injected dedupe insert failure")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Jane Operator" }),
@@ -194,17 +192,15 @@ test("archived campaigns disable discovery and scoring actions", async ({
 
   await page
     .getByRole("combobox")
-    .selectOption({ label: "Founder-led growth (archived)" });
+    .selectOption({ label: "Founder-led growth (Archived)" });
 
   await expect(
-    page.getByRole("button", { name: "Run discovery" }),
+    page.getByRole("button", { name: "Find topics" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Score candidates" }),
+    page.getByRole("button", { name: "Score ideas" }),
   ).toBeDisabled();
-  await expect(
-    page.getByRole("button", { name: "Add candidate" }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add idea" })).toBeDisabled();
 });
 
 test("keeps the latest campaign candidates when an earlier load resolves last", async ({
@@ -334,9 +330,7 @@ test("candidate deletion requires confirmation", async ({ page }) => {
   await addCandidate(page);
 
   page.on("dialog", async (dialog) => {
-    expect(dialog.message()).toBe(
-      "Delete this candidate? This cannot be undone.",
-    );
+    expect(dialog.message()).toBe("Delete this idea? You can't undo this.");
     await dialog.accept();
   });
 
@@ -438,7 +432,7 @@ test("linked draft deletion blocks its workflow and rolls back atomically", asyn
   });
   await page.getByRole("button", { name: "Delete", exact: true }).click();
 
-  await expect(page.getByText("Candidate was not deleted")).toBeVisible();
+  await expect(page.getByText("We couldn't delete this idea")).toBeVisible();
   await expect(
     page.getByText("Injected candidate deletion workflow event failure"),
   ).toBeVisible();
@@ -496,7 +490,7 @@ test("queue renders no-campaign empty state", async ({ page }) => {
   await openQueue(page);
 
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("No campaigns yet", { exact: true }),
@@ -511,14 +505,14 @@ test("discovery blocks seed keywords over schema max length", async ({
   await createCampaign(page);
   await openQueue(page);
 
-  await page.getByRole("button", { name: "Run discovery" }).click();
-  const dialog = page.getByRole("dialog", { name: "Run discovery" });
-  await page.getByLabel("Seed keywords").fill("a".repeat(81));
-  await dialog.getByRole("button", { name: "Run discovery" }).click();
+  await page.getByRole("button", { name: "Find topics" }).click();
+  const dialog = page.getByRole("dialog", { name: "Find topics" });
+  await page.getByLabel("Starting keywords").fill("a".repeat(81));
+  await dialog.getByRole("button", { name: "Find topics" }).click();
 
   await expect(dialog).toBeVisible();
   await expect(
-    page.getByText("Seed keywords must be 80 characters or fewer."),
+    page.getByText("Each starting keyword can be up to 80 characters."),
   ).toBeVisible();
   const agentRunInsertCount = await page.evaluate(() => {
     const calls =
@@ -541,10 +535,10 @@ test("dry-run discovery creates, promotes, and dismisses suggestions", async ({
   await createCampaign(page);
   await openQueue(page);
 
-  await page.getByRole("button", { name: "Run discovery" }).click();
+  await page.getByRole("button", { name: "Find topics" }).click();
   await page
-    .getByRole("dialog", { name: "Run discovery" })
-    .getByRole("button", { name: "Run discovery" })
+    .getByRole("dialog", { name: "Find topics" })
+    .getByRole("button", { name: "Find topics" })
     .click();
 
   await expect(
@@ -554,8 +548,10 @@ test("dry-run discovery creates, promotes, and dismisses suggestions", async ({
     page.getByText("Operator-led AI workflow proof", { exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Promote keyword" }).first().click();
-  await expect(page.getByText("Promoted", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add to keywords" }).first().click();
+  await expect(
+    page.getByText("Added to keywords", { exact: true }),
+  ).toBeVisible();
 
   const generatedKeywordCount = await page.evaluate(() => {
     const getKeywords = (
@@ -587,10 +583,10 @@ test("failed discovery promotion rolls back generated keyword", async ({
   await createCampaign(page);
   await openQueue(page);
 
-  await page.getByRole("button", { name: "Run discovery" }).click();
+  await page.getByRole("button", { name: "Find topics" }).click();
   await page
-    .getByRole("dialog", { name: "Run discovery" })
-    .getByRole("button", { name: "Run discovery" })
+    .getByRole("dialog", { name: "Find topics" })
+    .getByRole("button", { name: "Find topics" })
     .click();
 
   await expect(
@@ -602,9 +598,9 @@ test("failed discovery promotion rolls back generated keyword", async ({
     ).__LINKGO_FAIL_DISCOVERY_STATUS_UPDATE__ = true;
   });
   const callsBeforePromote = await sqlExecuteCallCount(page);
-  await page.getByRole("button", { name: "Promote keyword" }).first().click();
+  await page.getByRole("button", { name: "Add to keywords" }).first().click();
 
-  await expect(page.getByText("Suggestion was not promoted")).toBeVisible();
+  await expect(page.getByText("We couldn't add this keyword")).toBeVisible();
   await expect(
     page.getByText("Injected discovery status update failure"),
   ).toBeVisible();
@@ -657,11 +653,11 @@ test("dry-run scoring applies rationale and can auto-reject new low scores", asy
     content: "Second unscored candidate.",
   });
 
-  await page.getByRole("button", { name: "Score candidates" }).click();
-  await page.getByLabel("Reject new candidates below minimum score").check();
+  await page.getByRole("button", { name: "Score ideas" }).click();
+  await page.getByLabel("Reject new ideas below the minimum match").check();
   await page
-    .getByRole("dialog", { name: "Score candidates" })
-    .getByRole("button", { name: "Score candidates" })
+    .getByRole("dialog", { name: "Score ideas" })
+    .getByRole("button", { name: "Score ideas" })
     .click();
 
   await expect(
@@ -688,16 +684,16 @@ test("shows the uncapped total and a notice when the list is truncated", async (
   await openQueue(page);
 
   await expect(page.getByTestId("list-truncation-notice")).toHaveText(
-    /Showing the first 500 of 503 candidates/u,
+    /Showing the first 500 of 503 ideas/u,
   );
   await expect(page.getByText("503", { exact: true })).toBeVisible();
   await expect(page.getByText("Scored (shown)", { exact: true })).toBeVisible();
 });
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -743,10 +739,8 @@ async function addCandidate(
     authorName?: string;
   } = { expectSuccess: true, score: "87" },
 ): Promise<void> {
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  await expect(
-    page.getByRole("dialog", { name: "Add candidate" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  await expect(page.getByRole("dialog", { name: "Add idea" })).toBeVisible();
 
   await page
     .getByLabel("LinkedIn post URL")
@@ -765,11 +759,11 @@ async function addCandidate(
   await page.getByLabel("Posted at").fill("2026-06-25");
   await page.getByLabel("Source keyword").fill("founder content");
   if (options.score !== null) {
-    await page.getByLabel("Relevance score").fill(options.score ?? "87");
+    await page.getByLabel("Match score").fill(options.score ?? "87");
     await page.getByLabel("Score reason").fill("Strong audience overlap.");
   }
   await page.getByLabel("Notes").fill("Good comment opportunity.");
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   if (options.expectSuccess ?? true) await expect(dialog).toBeHidden();
 }

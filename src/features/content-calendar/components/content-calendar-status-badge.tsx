@@ -1,10 +1,37 @@
 import { Badge } from "@/components/ui/badge";
 import type {
+  PublishAttemptStatus,
+  ScheduleJobStatus,
+} from "@/features/approvals/types";
+import type {
+  ContentCalendarFormat,
   ContentCalendarPurpose,
   ContentCalendarSlotWithDetails,
 } from "@/features/content-calendar/types";
 
-const purposeLabels: Record<ContentCalendarPurpose, string> = {
+export const formatLabels: Record<ContentCalendarFormat, string> = {
+  text: "Text post",
+  image: "Image",
+  carousel: "Carousel",
+  document: "Document",
+  video: "Video",
+  poll: "Poll",
+  event: "Event",
+};
+
+export const scheduleStatusLabels: Record<ScheduleJobStatus, string> = {
+  scheduled: "Scheduled",
+  cancelled: "Cancelled",
+  completed: "Done",
+  failed: "Didn't post",
+};
+
+export const publishStatusLabels: Record<PublishAttemptStatus, string> = {
+  succeeded: "Posted",
+  failed: "Didn't post",
+};
+
+export const purposeLabels: Record<ContentCalendarPurpose, string> = {
   reach: "Reach",
   trust: "Trust",
   proof: "Proof",
@@ -31,7 +58,7 @@ export type ContentCalendarLifecycle =
 
 const lifecycleLabels: Record<ContentCalendarLifecycle, string> = {
   archived: "Archived",
-  published: "Published",
+  published: "Posted",
   scheduled: "Scheduled",
   planned: "Planned",
 };

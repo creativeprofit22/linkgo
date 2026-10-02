@@ -9,6 +9,7 @@ import {
   scheduleApproval,
   setApprovalStatus,
 } from "@/features/approvals/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   ApprovalEligibleDraft,
   ApprovalWithDetails,
@@ -59,7 +60,9 @@ interface UseApprovalsState {
 type ReloadResult = { ok: true } | { ok: false; error: string };
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected approvals error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with approvals. Try again.";
 }
 
 /**
@@ -188,7 +191,7 @@ export function useApprovals(): UseApprovalsState {
   const reloadAfterMutation = useCallback(async (): Promise<void> => {
     const result = await reloadSelectedCampaign();
     if (!result.ok) {
-      toast.error("Saved, but approvals could not be refreshed", {
+      toast.error("Saved, but we couldn't refresh your approvals", {
         description: result.error,
       });
     }
@@ -273,7 +276,7 @@ export function useApprovals(): UseApprovalsState {
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error(
-          getMutationFailureTitle(caught, "Approval record was not created"),
+          getMutationFailureTitle(caught, "We couldn't send it for approval"),
           {
             description: message,
           },
@@ -292,7 +295,7 @@ export function useApprovals(): UseApprovalsState {
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error(
-          getMutationFailureTitle(caught, "Approval status was not changed"),
+          getMutationFailureTitle(caught, "We couldn't update this approval"),
           {
             description: message,
           },
@@ -314,7 +317,7 @@ export function useApprovals(): UseApprovalsState {
           .then(setSafetySettings)
           .catch(() => undefined);
         toast.error(
-          getMutationFailureTitle(caught, "Approval was not scheduled"),
+          getMutationFailureTitle(caught, "We couldn't schedule this post"),
           { description: message },
         );
         throw caught;
@@ -331,7 +334,7 @@ export function useApprovals(): UseApprovalsState {
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error(
-          getMutationFailureTitle(caught, "Schedule was not cancelled"),
+          getMutationFailureTitle(caught, "We couldn't cancel the schedule"),
           { description: message },
         );
         throw caught;
@@ -348,7 +351,10 @@ export function useApprovals(): UseApprovalsState {
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error(
-          getMutationFailureTitle(caught, "Publish attempt was not recorded"),
+          getMutationFailureTitle(
+            caught,
+            "We couldn't save the posting result",
+          ),
           {
             description: message,
           },
@@ -380,7 +386,7 @@ export function useApprovals(): UseApprovalsState {
         ? safetyResult
         : null;
     if (failure) {
-      toast.error("Approvals were not refreshed", {
+      toast.error("We couldn't refresh your approvals", {
         description: failure.error,
       });
     }

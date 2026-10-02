@@ -30,7 +30,7 @@ export function CampaignMemoryCard({
             <MetricSignalBadge signal={memory.signal} />
             <CampaignMemoryStatusBadge status={memory.status} />
             <span className="text-muted-foreground text-sm">
-              {memory.confidence}% confidence
+              {memory.confidence}% sure
             </span>
           </div>
           {!selectedCampaignArchived && (

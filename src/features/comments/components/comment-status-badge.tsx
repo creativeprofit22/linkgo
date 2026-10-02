@@ -7,7 +7,7 @@ import type {
 
 const threadStatusLabels: Record<CommentThreadStatus, string> = {
   drafting: "Drafting",
-  needs_review: "Needs review",
+  needs_review: "Waiting for approval",
   changes_requested: "Changes requested",
   approved: "Approved",
   rejected: "Rejected",
@@ -30,7 +30,7 @@ const threadStatusVariants: Record<
 
 const variantStatusLabels: Record<CommentVariantStatus, string> = {
   draft: "Draft",
-  selected: "Selected",
+  selected: "Chosen",
   rejected: "Rejected",
 };
 
@@ -44,9 +44,9 @@ const variantStatusVariants: Record<
 };
 
 const auditSeverityLabels: Record<CommentAuditSeverity, string> = {
-  block: "Blocked",
-  warning: "Warnings",
-  pass: "Passed",
+  block: "Needs fixing",
+  warning: "Worth a look",
+  pass: "Looks good",
 };
 
 const auditSeverityVariants: Record<

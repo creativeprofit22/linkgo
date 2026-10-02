@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Scheduler tab controls an opt-in native background worker for approved scheduled LinkedIn posts.
+The **Auto-posting** tab controls an opt-in native background worker (the scheduler) for approved scheduled LinkedIn posts.
 
 It runs only while Linkgo is running or hidden to the system tray. It does not run after the Linkgo process quits.
 
@@ -20,7 +20,7 @@ Native commands:
 - `linkgo_scheduler_start`
 - `linkgo_scheduler_stop`
 - `linkgo_scheduler_tick`
-- `linkgo_scheduler_dashboard_get` (`src-tauri/src/scheduler_store.rs`): the renderer's only scheduler read. It takes an optional positive `campaignId` and rejects unknown fields. It recreates a missing settings row and returns the settings, the kill switch, summary counts, up to 20 due jobs, 50 recent events and 25 recent attempts, all from one transaction. The renderer has no direct SQL access to scheduler tables. Tests: `src-tauri/src/scheduler_store_tests.rs`.
+- `linkgo_scheduler_dashboard_get` (`src-tauri/src/scheduler_store.rs`): the renderer's only scheduler read. It takes an optional positive `campaignId` and rejects unknown fields. It recreates a missing settings row and returns the settings, the kill switch (on screen: "Emergency pause"), summary counts, up to 20 due jobs, 50 recent events and 25 recent attempts, all from one transaction. The renderer has no direct SQL access to scheduler tables. Tests: `src-tauri/src/scheduler_store_tests.rs`.
 
 ## Schema
 
@@ -82,7 +82,7 @@ Ambiguous outcome (timeout after send, 5xx, unreadable success):
 
 - Records no attempt row; the execution becomes `outcome_unknown`.
 - Leaves the approval `scheduled` and the job unfinished, with its lock cleared.
-- Is **never retried automatically**. The job stays excluded until an operator reconciles it in Safety.
+- Is **never retried automatically**. The job stays excluded until an operator reconciles it in Safety (on screen: "Check what happened to these posts").
 - Creates a warning error queue item and a `job_blocked` scheduler event.
 
 Retries happen only after a definite failure (4xx including 429, connect failure, or a credential/scope failure before send).
@@ -95,39 +95,39 @@ Kill switch block:
 
 ## UI behavior
 
-The Scheduler tab shows:
+The Auto-posting tab shows:
 
-- Status: `Stopped`, `Stopped after restart`, `Running`, or `Ticking`.
-- Start scheduler, stop scheduler, run due jobs now, and refresh controls.
-- A kill-switch banner when global safety is enabled.
-- Due and pending schedule cards.
-- Recent scheduler events.
-- Scheduler-linked publish attempts.
+- Status: `Off`, `Off after restart`, `On`, or `Checking…`.
+- Turn on auto-posting, Turn off auto-posting, Post what's due now, and Refresh controls.
+- An "Emergency pause is on" banner when the global kill switch is enabled.
+- Due and pending schedule cards ("Coming up").
+- Recent scheduler events ("Recent activity").
+- Scheduler-linked publish attempts ("Recent posting attempts"). Each row leads with the post's opening line (the approved variant's `hook`, returned as `variant_hook`; "Approved post" when it is empty), then the campaign name ("Campaign removed" when it is gone) and the outcome.
 
 ## Restart and crash behavior
 
-The saved `enabled` flag records the operator's last choice (it changes only when the operator presses Start or Stop), but Linkgo does **not** start the worker on launch. If the scheduler was on before a restart — tray Quit, crash or forced kill — status reads `enabled: true, running: false` until the operator presses Start again. A scheduler that was stopped before the restart reads `enabled: false, running: false`. Power loss is expected to behave the same as a forced kill but is untested.
+The saved `enabled` flag records the operator's last choice (it changes only when the operator presses Turn on auto-posting or Turn off auto-posting), but Linkgo does **not** start the worker on launch. If the scheduler was on before a restart — tray Quit, crash or forced kill — status reads `enabled: true, running: false` until the operator presses Turn on auto-posting again. A scheduler that was stopped before the restart reads `enabled: false, running: false`. Power loss is expected to behave the same as a forced kill but is untested.
 
 On startup Linkgo only runs the recovery sweep, which never contacts LinkedIn. The same sweep runs again whenever **Safety** lists open publishes. An execution is **stale** when it has had no update for 10 minutes (`STALE_EXECUTION_SECONDS`); the sweep only touches stale executions:
 
 - a stale `reserved` execution (never sent) is released as `abandoned`, and its job stays retryable;
 - a stale `in_flight` execution (may have reached LinkedIn) becomes `outcome_unknown` and is never retried automatically.
 
-An execution interrupted less than 10 minutes before Linkgo restarted is not stale yet, so it still shows as in progress rather than outcome unknown. Its lease still blocks a duplicate publish with the same idempotency key.
+An execution interrupted less than 10 minutes before Linkgo restarted is not stale yet, so it still shows as "Posting…" rather than "Couldn't confirm". Its lease still blocks a duplicate publish with the same idempotency key.
 
-The Scheduler tab makes this visible: when status is `enabled: true, running: false`, the status card reads **Stopped after restart** and a notice says the scheduler was on before Linkgo last closed and asks the operator to check Safety before pressing Start scheduler. Nothing starts automatically; the notice clears once the operator starts or stops the scheduler.
+The Auto-posting tab makes this visible: when status is `enabled: true, running: false`, the status card reads **Off after restart** and a notice ("Auto-posting turned off when Linkgo restarted") says auto-posting was on when Linkgo last closed and asks the operator to check Safety before pressing Turn on auto-posting. Nothing starts automatically; the notice clears once the operator starts or stops the scheduler.
 
 Operator recovery after a restart:
 
-1. Open **Safety** and reconcile every publish marked outcome unknown: check LinkedIn, then choose Posted (with the URL) or Not posted and type the confirmation. If Linkgo restarted less than 10 minutes after the interruption, a publish may still show as in progress; wait and reopen Safety before pressing Start.
-2. Review due jobs on the Scheduler screen.
-3. Press Start.
+1. Open **Safety** and, under "Check what happened to these posts", reconcile every publish marked "Couldn't confirm": press **Check what happened**, check LinkedIn, then choose Posted on LinkedIn (with the link) or Not posted, type the confirmation and press **Confirm result**. If Linkgo restarted less than 10 minutes after the interruption, a publish may still show as "Posting…"; wait and reopen Safety before pressing Turn on auto-posting.
+2. Review due jobs under "Coming up" on the Auto-posting screen.
+3. Press Turn on auto-posting.
 
 Verified on the packaged Windows build with a hard kill (`docs/verification/2026-09-27-desktop-release-candidate.md`).
 
 ## Explicit exclusions
 
-- Launch-on-login can open Linkgo, but the scheduler still only runs while Linkgo is running or hidden to tray and only after the operator starts it.
+- Launch-on-login ("Open Linkgo when I sign in") can open Linkgo, but the scheduler still only runs while Linkgo is running or hidden to tray and only after the operator starts it.
 - No scheduler execution after Linkgo quits.
 - No LinkedIn API commenting.
 - No scraping or browser automation.

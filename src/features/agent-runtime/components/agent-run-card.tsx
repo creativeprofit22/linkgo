@@ -8,6 +8,9 @@ import {
   AgentRunStatusBadge,
   AgentToolCallStatusBadge,
 } from "@/features/agent-runtime/components/agent-status-badge";
+import { getAssistantActionLabel } from "@/lib/assistant-action-labels";
+import { toPlainMessage } from "@/lib/plain-message";
+import type { ApprovalStatus } from "@/features/approvals/types";
 import type {
   AgentRunWithDetails,
   CancelAgentRunInput,
@@ -29,6 +32,32 @@ interface AgentRunCardProps {
 
 const terminalStatuses = ["completed", "cancelled"];
 
+const roleLabels: Record<string, string> = {
+  researcher: "Find ideas",
+  scorer: "Score ideas",
+  drafter: "Write drafts",
+  auditor: "Check drafts",
+  scheduler: "Plan schedule",
+  analyst: "Review results",
+};
+
+const approvalStatusLabels: Record<ApprovalStatus, string> = {
+  needs_review: "Waiting for approval",
+  changes_requested: "Changes requested",
+  approved: "Approved",
+  rejected: "Rejected",
+  scheduled: "Scheduled",
+  published: "Posted",
+  cancelled: "Cancelled",
+};
+
+const campaignStatusLabels: Record<string, string> = {
+  draft: "Draft",
+  active: "Active",
+  paused: "Paused",
+  archived: "Archived",
+};
+
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -37,18 +66,18 @@ function getCheckpointGuidance(run: AgentRunWithDetails): string {
   const checkpoint = run.checkpoint;
   if (checkpoint === null) return "";
   if (checkpoint.phase === "continuation_ready") {
-    return "The approved metadata result is saved. Recover to continue without executing the approved tool again. No schedule or publish action was created.";
+    return "Your approved result is saved. Pick up where it stopped — the approved action won't run twice. Nothing was scheduled or posted.";
   }
   if (checkpoint.approval_status === "approved") {
-    return "Approval is confirmed. Resume explicitly to record metadata and continue the provider conversation. This does not schedule or publish.";
+    return "You approved this. Choose Continue to save the result and let the AI service carry on. This doesn't schedule or post anything.";
   }
   if (
     checkpoint.approval_status === "needs_review" ||
     checkpoint.approval_status === "changes_requested"
   ) {
-    return "Review this item in Approvals. The agent remains paused and no provider, schedule, or publish action will run.";
+    return "Review this item in Approvals. The AI assistant stays paused. Nothing is sent to the AI service, scheduled, or posted until you do.";
   }
-  return "The linked approval is no longer approved, so this continuation cannot resume.";
+  return "This item is no longer approved, so the task can't continue.";
 }
 
 export function AgentRunCard({
@@ -70,6 +99,10 @@ export function AgentRunCard({
     restartableStatus && run.qualityStartBlocked;
   const startableStatus = restartableStatus && !run.qualityStartBlocked;
   const providerLabel = AGENT_PROVIDER_LABELS[run.provider_key];
+  const startLabel =
+    run.provider_key === "dry_run"
+      ? "Start practice run"
+      : `Start ${providerLabel}`;
   const playbook = getAgentPlaybook(run.playbook_key);
   const canStart = startableStatus && !killSwitchEnabled && providerConnected;
   const startBlockedByKillSwitch = startableStatus && killSwitchEnabled;
@@ -83,8 +116,8 @@ export function AgentRunCard({
     !selectedCampaignArchived;
   const resumeLabel =
     checkpoint?.phase === "continuation_ready"
-      ? "Recover continuation"
-      : "Resume approved run";
+      ? "Pick up where it stopped"
+      : "Continue approved task";
   const canCancel = !terminalStatuses.includes(run.status);
 
   return (
@@ -94,27 +127,29 @@ export function AgentRunCard({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="flex items-center gap-2 text-xl">
-                <Bot className="text-linkgo-blue size-5" /> {run.agent_role}
+                <Bot className="text-linkgo-blue size-5" />{" "}
+                {roleLabels[run.agent_role] ?? run.agent_role}
               </CardTitle>
               <AgentRunStatusBadge status={run.status} />
               <Badge variant="outline">{providerLabel}</Badge>
               {run.playbook_key && (
                 <Badge variant="outline">
-                  Playbook: {playbook?.label ?? run.playbook_key}
+                  Brand voice: {playbook?.label ?? run.playbook_key}
                 </Badge>
               )}
               {run.workflowRun && (
                 <Badge variant="outline">
-                  Workflow: {run.workflowRun.title}
+                  Automation: {run.workflowRun.title}
                 </Badge>
               )}
             </div>
             <p className="text-muted-foreground text-sm">
-              {run.campaign.name} · {run.campaign.status} campaign ·{" "}
-              {run.model_name}
+              {run.campaign.name} ·{" "}
+              {campaignStatusLabels[run.campaign.status] ?? run.campaign.status}{" "}
+              campaign · {run.model_name}
             </p>
             <p className="text-muted-foreground text-sm">
-              Iterations: {run.iteration_count} · Created {run.created_at}
+              Rounds: {run.iteration_count} · Created {run.created_at}
             </p>
             {run.input_summary && (
               <p className="max-w-3xl text-sm whitespace-pre-wrap">
@@ -128,7 +163,7 @@ export function AgentRunCard({
             )}
             {run.error_message && (
               <p className="text-destructive max-w-3xl text-sm whitespace-pre-wrap">
-                {run.error_message}
+                {toPlainMessage(run.error_message)}
               </p>
             )}
             {checkpoint && (
@@ -140,17 +175,17 @@ export function AgentRunCard({
                 <div className="flex flex-wrap items-center gap-2">
                   <ShieldCheck className="text-linkgo-blue size-4" />
                   <span className="font-medium">
-                    Approval #{checkpoint.approval_id}
+                    Approval needed · reference {checkpoint.approval_id}
                   </span>
                   <Badge variant="outline">
-                    {checkpoint.approval_status.replace(/_/gu, " ")}
+                    {approvalStatusLabels[checkpoint.approval_status]}
                   </Badge>
                   <Badge variant="outline">
                     {checkpoint.phase === "continuation_ready"
-                      ? "Continuation saved"
+                      ? "Result saved"
                       : checkpoint.approval_status === "approved"
-                        ? "Ready to resume"
-                        : "Review required"}
+                        ? "Ready to continue"
+                        : "Paused until you approve"}
                   </Badge>
                 </div>
                 <p className="text-muted-foreground">
@@ -158,13 +193,14 @@ export function AgentRunCard({
                 </p>
                 {killSwitchEnabled && (
                   <p className="text-muted-foreground">
-                    Resume is blocked by the global kill switch.
+                    Can't continue while the emergency pause is on.
                     {killSwitchReason ? ` ${killSwitchReason}` : ""}
                   </p>
                 )}
                 {!killSwitchEnabled && !providerConnected && (
                   <p className="text-muted-foreground">
-                    Connect {providerLabel} in Integrations before resuming.
+                    Connect {providerLabel} in Connected accounts before you
+                    continue.
                   </p>
                 )}
               </div>
@@ -178,7 +214,7 @@ export function AgentRunCard({
                   size="sm"
                   onClick={() => void onStartRun({ id: run.id })}
                 >
-                  Start {providerLabel}
+                  {startLabel}
                 </Button>
               )}
               {canResume && (
@@ -186,7 +222,7 @@ export function AgentRunCard({
                   type="button"
                   size="sm"
                   disabled={resuming}
-                  aria-label={`${resumeLabel} for agent run ${run.id}`}
+                  aria-label={`${resumeLabel} for assistant task ${run.id}`}
                   onClick={() => void onResumeRun({ id: run.id })}
                 >
                   <RefreshCw
@@ -194,22 +230,22 @@ export function AgentRunCard({
                       resuming ? "size-4 motion-safe:animate-spin" : "size-4"
                     }
                   />
-                  {resuming ? "Resuming…" : resumeLabel}
+                  {resuming ? "Continuing…" : resumeLabel}
                 </Button>
               )}
               {startBlockedByQualityLoop && (
                 <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                  Owned by the draft quality loop — resume it from Drafts.
+                  This task belongs to draft checks — continue it from Drafts.
                 </p>
               )}
               {startBlockedByMissingProvider && (
                 <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                  Connect {providerLabel} in Integrations first.
+                  Connect {providerLabel} in Connected accounts first.
                 </p>
               )}
               {startBlockedByKillSwitch && (
                 <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                  Global kill switch is enabled.
+                  Emergency pause is on.
                   {killSwitchReason ? ` ${killSwitchReason}` : ""}
                 </p>
               )}
@@ -221,7 +257,7 @@ export function AgentRunCard({
                   disabled={resuming}
                   onClick={() => void onCancelRun({ id: run.id })}
                 >
-                  Cancel run
+                  Cancel task
                 </Button>
               )}
             </div>
@@ -232,13 +268,13 @@ export function AgentRunCard({
         <Card className="bg-card/60">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Wrench className="text-linkgo-blue size-4" /> Tool calls
+              <Wrench className="text-linkgo-blue size-4" /> Assistant actions
             </CardTitle>
           </CardHeader>
           <CardContent>
             {run.toolCalls.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No tool calls yet. Start the run to persist validated calls.
+                No actions yet. Start the task to see what the assistant does.
               </p>
             ) : (
               <div className="space-y-3">
@@ -248,7 +284,9 @@ export function AgentRunCard({
                     className="bg-muted/30 rounded-xl border p-3 text-sm"
                   >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{toolCall.tool_name}</span>
+                      <span className="font-medium">
+                        {getAssistantActionLabel(toolCall.tool_name)}
+                      </span>
                       {toolCall.provider_tool_call_id && (
                         <Badge variant="outline">
                           {toolCall.provider_tool_call_id}
@@ -263,12 +301,12 @@ export function AgentRunCard({
                     </div>
                     {toolCall.error_message && (
                       <p className="text-destructive mb-2">
-                        {toolCall.error_message}
+                        {toPlainMessage(toolCall.error_message)}
                       </p>
                     )}
                     <details className="space-y-2">
                       <summary className="text-muted-foreground cursor-pointer text-xs font-medium uppercase">
-                        JSON payloads
+                        Technical details
                       </summary>
                       <pre className="bg-background/80 mt-2 overflow-auto rounded-lg border p-3 text-xs">
                         {formatJson({

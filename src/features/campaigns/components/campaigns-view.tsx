@@ -30,9 +30,9 @@ export function CampaignsView(): React.ReactNode {
                 Campaigns
               </h2>
               <p className="text-muted-foreground text-sm">
-                Define local-first growth contexts. Autopilot makes active
-                campaigns eligible for the opt-in local planner; publishing and
-                commenting stay approval-gated.
+                Group your posts by goal and audience. Active campaigns can be
+                included in Autopilot. Linkgo never posts or comments without
+                your OK.
               </p>
             </div>
           </div>
@@ -53,7 +53,7 @@ export function CampaignsView(): React.ReactNode {
               size="sm"
               onClick={() => void loadCampaigns()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -98,8 +98,8 @@ function EmptyCampaigns({
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Start with one campaign. Linkgo uses this context for guarded source
-            intake, local planning, drafting, and human approvals.
+            Start with one campaign. Linkgo uses it to find ideas, write drafts,
+            and ask for your OK before anything posts.
           </p>
         </div>
         <AddCampaignDialog onCreate={onCreate} />

@@ -12,16 +12,39 @@ type SafetyStatusBadgeProps =
   | { kind: "audit-severity"; value: SafetyAuditSeverity }
   | { kind: "rate-decision"; value: RateLimitDecision };
 
+export const ERROR_STATUS_LABELS: Record<ErrorQueueStatus, string> = {
+  open: "Needs attention",
+  in_progress: "Working on it",
+  awaiting_review: "Ready to check",
+  resolved: "Fixed",
+  failed: "Couldn't fix",
+};
+
+const LABELS: Record<SafetyStatusBadgeProps["kind"], Record<string, string>> = {
+  "error-status": ERROR_STATUS_LABELS,
+  "error-severity": {
+    warning: "Minor",
+    error: "Problem",
+    critical: "Urgent",
+  },
+  "audit-severity": {
+    info: "Info",
+    warning: "Warning",
+    block: "Stopped",
+  },
+  "rate-decision": {
+    allowed: "Allowed",
+    blocked: "Over limit",
+  },
+};
+
 export function SafetyStatusBadge(
   props: SafetyStatusBadgeProps,
 ): React.ReactNode {
-  const label = props.value.replace(/_/gu, " ");
+  const label =
+    LABELS[props.kind][props.value] ?? props.value.replace(/_/gu, " ");
   const variant = getVariant(props);
-  return (
-    <Badge className="capitalize" variant={variant}>
-      {label}
-    </Badge>
-  );
+  return <Badge variant={variant}>{label}</Badge>;
 }
 
 function getVariant(

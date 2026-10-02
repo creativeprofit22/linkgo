@@ -5,6 +5,7 @@ import {
   getCandidateIntakePolicy,
   updateCandidateIntakePolicy,
 } from "@/features/candidate-policy/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CandidateIntakePolicy,
   UpdateCandidateIntakePolicyInput,
@@ -23,8 +24,8 @@ interface UseCandidatePolicyState {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
-    ? error.message
-    : "Unexpected candidate policy error";
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your idea filters. Please try again.";
 }
 
 export function useCandidatePolicy(
@@ -80,10 +81,10 @@ export function useCandidatePolicy(
           setPolicy(savedPolicy);
           setError(null);
         }
-        toast.success("Candidate intake policy saved");
+        toast.success("Idea filters saved");
         return savedPolicy;
       } catch (caught) {
-        toast.error("Candidate intake policy was not saved", {
+        toast.error("We couldn't save your idea filters", {
           description: getErrorMessage(caught),
         });
         throw caught;

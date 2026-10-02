@@ -82,7 +82,7 @@ export function CreateCommentThreadDialog({
   );
   const createDisabled = disabled || candidateOptions.length === 0;
   const archivedReason = selectedCampaignArchived
-    ? "Archived campaigns cannot create comments. Restore the campaign before commenting."
+    ? "This campaign is archived. Restore it before you write comments."
     : null;
 
   useEffect(() => {
@@ -137,7 +137,7 @@ export function CreateCommentThreadDialog({
             disabled={createDisabled}
             title={archivedReason ?? undefined}
           >
-            <Plus className="size-4" /> Create comment
+            <Plus className="size-4" /> Write a comment
           </Button>
         </DialogTrigger>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -146,14 +146,14 @@ export function CreateCommentThreadDialog({
             className="space-y-5"
           >
             <DialogHeader>
-              <DialogTitle>Create comment</DialogTitle>
+              <DialogTitle>Write a comment</DialogTitle>
               <DialogDescription>
-                Draft one to three local LinkedIn replies. Linkgo audits them,
-                but humans approve and manually post them.
+                Write one to three versions of your LinkedIn reply. Linkgo
+                checks them, and nothing posts until you approve it.
               </DialogDescription>
             </DialogHeader>
 
-            <Field label="Candidate target" htmlFor="comment-candidate">
+            <Field label="Post to reply to" htmlFor="comment-candidate">
               <select
                 id="comment-candidate"
                 value={form.candidateId}
@@ -167,7 +167,7 @@ export function CreateCommentThreadDialog({
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
                 <option value="" disabled>
-                  Select candidate
+                  Choose a post
                 </option>
                 {candidateOptions.map((candidate) => (
                   <option
@@ -180,7 +180,7 @@ export function CreateCommentThreadDialog({
               </select>
             </Field>
 
-            <Field label="Operator notes" htmlFor="comment-notes">
+            <Field label="Your notes" htmlFor="comment-notes">
               <Input
                 id="comment-notes"
                 value={form.operatorNotes}
@@ -191,13 +191,13 @@ export function CreateCommentThreadDialog({
                   }))
                 }
                 maxLength={2000}
-                placeholder="Manual context for reviewer"
+                placeholder="Anything your approver should know"
               />
             </Field>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <Label>Reply variants</Label>
+                <Label>Reply versions</Label>
                 <Button
                   type="button"
                   size="sm"
@@ -205,14 +205,14 @@ export function CreateCommentThreadDialog({
                   disabled={form.variants.length >= 3}
                   onClick={addVariant}
                 >
-                  <Plus className="size-4" /> Add variant
+                  <Plus className="size-4" /> Add version
                 </Button>
               </div>
               {form.variants.map((variant, index) => (
                 <div key={index} className="space-y-2 rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-3">
                     <Label htmlFor={`comment-variant-${index}`}>
-                      Variant {index + 1}
+                      Version {index + 1}
                     </Label>
                     <Button
                       type="button"
@@ -244,7 +244,7 @@ export function CreateCommentThreadDialog({
 
             <DialogFooter>
               <Button type="submit" disabled={submitting || createDisabled}>
-                {submitting ? "Creating…" : "Create comment"}
+                {submitting ? "Saving…" : "Save comment"}
               </Button>
             </DialogFooter>
           </form>

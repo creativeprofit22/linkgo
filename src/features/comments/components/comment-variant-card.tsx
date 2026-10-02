@@ -69,7 +69,7 @@ export function CommentVariantCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">
-              Reply variant {variant.variant_number}
+              Reply version {variant.variant_number}
             </CardTitle>
             <CommentVariantStatusBadge status={variant.status} />
             <CommentAuditSeverityBadge severity={variant.auditSeverity} />
@@ -94,7 +94,7 @@ export function CommentVariantCard({
           >
             <div className="space-y-2">
               <Label htmlFor={`comment-variant-${variant.id}`}>
-                Comment body
+                Comment text
               </Label>
               <Textarea
                 id={`comment-variant-${variant.id}`}
@@ -105,8 +105,8 @@ export function CommentVariantCard({
                 required
               />
               <p className="text-muted-foreground text-xs">
-                {body.length}/1,250 characters. This is Linkgo's conservative
-                local cap.
+                {body.length}/1,250 characters. Linkgo keeps replies under this
+                length to play it safe.
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
@@ -114,15 +114,15 @@ export function CommentVariantCard({
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save and re-audit"}
+                {saving ? "Saving…" : "Save and check again"}
               </Button>
             </div>
           </form>
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
-            <TextBlock label="Raw body" value={variant.body} />
+            <TextBlock label="Your text" value={variant.body} />
             <TextBlock
-              label="LinkedIn LittleText preview"
+              label="How it will look on LinkedIn"
               value={escapeLinkedInLittleText(variant.body)}
             />
           </div>
@@ -143,7 +143,7 @@ export function CommentVariantCard({
           }
           onClick={() => setStatus("selected")}
         >
-          Select
+          Use this version
         </Button>
         <Button
           type="button"

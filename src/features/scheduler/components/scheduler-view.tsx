@@ -4,6 +4,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DueScheduleCard } from "@/features/scheduler/components/due-schedule-card";
 import { SchedulerEventList } from "@/features/scheduler/components/scheduler-event-list";
 import { useScheduler } from "@/features/scheduler/hooks/use-scheduler";
+import type { PublishAttemptStatus } from "@/features/approvals/types";
+import { toPlainMessage } from "@/lib/plain-message";
+
+const attemptStatusLabels: Record<PublishAttemptStatus, string> = {
+  succeeded: "Posted",
+  failed: "Didn't post",
+};
 
 export function SchedulerView(): React.ReactNode {
   const {
@@ -28,12 +35,12 @@ export function SchedulerView(): React.ReactNode {
   // auto-starts it.
   const interrupted = status?.enabled === true && !status.running && !ticking;
   const statusLabel = ticking
-    ? "Ticking"
+    ? "Checking…"
     : status?.running
-      ? "Running"
+      ? "On"
       : interrupted
-        ? "Stopped after restart"
-        : "Stopped";
+        ? "Off after restart"
+        : "Off";
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -45,11 +52,11 @@ export function SchedulerView(): React.ReactNode {
             </div>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                Scheduler
+                Auto-posting
               </h2>
               <p className="text-muted-foreground text-sm">
-                Runs only approved scheduled posts while Linkgo is open or
-                hidden to tray.
+                Approved posts go out on time while Linkgo is open or minimized
+                to the tray. Linkgo never posts without your OK.
               </p>
             </div>
           </div>
@@ -71,7 +78,7 @@ export function SchedulerView(): React.ReactNode {
             onClick={() => void tick()}
           >
             <RefreshCw className="mr-2 size-4" />
-            Run due jobs now
+            Post what's due now
           </Button>
           {status?.running ? (
             <Button
@@ -81,7 +88,7 @@ export function SchedulerView(): React.ReactNode {
               onClick={() => void stop()}
             >
               <Square className="mr-2 size-4" />
-              Stop scheduler
+              Turn off auto-posting
             </Button>
           ) : (
             <Button
@@ -90,7 +97,7 @@ export function SchedulerView(): React.ReactNode {
               onClick={() => void start()}
             >
               <Play className="mr-2 size-4" />
-              Start scheduler
+              Turn on auto-posting
             </Button>
           )}
         </div>
@@ -109,7 +116,7 @@ export function SchedulerView(): React.ReactNode {
               size="sm"
               onClick={() => void loadScheduler()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -120,10 +127,13 @@ export function SchedulerView(): React.ReactNode {
           <CardContent role="status" className="flex items-start gap-3 p-4">
             <AlertCircle className="mt-0.5 size-5 text-amber-600" />
             <div>
-              <p className="font-medium">Scheduler stopped after restart</p>
+              <p className="font-medium">
+                Auto-posting turned off when Linkgo restarted
+              </p>
               <p className="text-muted-foreground text-sm">
-                The scheduler was on before Linkgo last closed. Check Safety for
-                any publish marked outcome unknown, then press Start scheduler.
+                Auto-posting was on when Linkgo last closed. Go to Safety and
+                look for any post marked &ldquo;Couldn&rsquo;t confirm&rdquo;,
+                then press Turn on auto-posting.
               </p>
             </div>
           </CardContent>
@@ -133,7 +143,7 @@ export function SchedulerView(): React.ReactNode {
       {loading || dashboard === null ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading scheduler…
+            Loading auto-posting…
           </CardContent>
         </Card>
       ) : (
@@ -143,10 +153,10 @@ export function SchedulerView(): React.ReactNode {
               <CardContent className="flex items-start gap-3 p-4">
                 <AlertCircle className="text-destructive mt-0.5 size-5" />
                 <div>
-                  <p className="font-medium">Global kill switch is enabled</p>
+                  <p className="font-medium">Emergency pause is on</p>
                   <p className="text-muted-foreground text-sm">
-                    Scheduler starts are blocked. Due jobs stay scheduled until
-                    the switch is disabled.
+                    Auto-posting can&rsquo;t be turned on. Posts that are due
+                    stay scheduled until you turn off the pause in Safety.
                     {dashboard.killSwitchReason
                       ? ` Reason: ${dashboard.killSwitchReason}`
                       : ""}
@@ -158,10 +168,10 @@ export function SchedulerView(): React.ReactNode {
 
           <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">Scheduler scope</p>
+              <p className="text-sm font-medium">Show posts from</p>
               <p className="text-muted-foreground text-xs">
-                Filter pending jobs, events, and scheduler-linked publish
-                attempts.
+                Show upcoming posts, activity, and posting attempts for every
+                campaign, or just one.
               </p>
             </div>
             <select
@@ -185,7 +195,7 @@ export function SchedulerView(): React.ReactNode {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard label="Status" value={statusLabel} />
             <SummaryCard
-              label="Pending"
+              label="Waiting"
               value={String(dashboard.summary.pendingJobs)}
             />
             <SummaryCard
@@ -193,27 +203,28 @@ export function SchedulerView(): React.ReactNode {
               value={String(dashboard.summary.dueJobs)}
             />
             <SummaryCard
-              label="Failed"
+              label="Didn't post"
               value={String(dashboard.summary.failedJobs)}
             />
             <SummaryCard
-              label="Attempts"
+              label="Posting attempts"
               value={String(dashboard.summary.recentAttempts)}
             />
           </div>
 
           <section className="space-y-3">
             <div>
-              <h3 className="text-lg font-semibold">Due and pending jobs</h3>
+              <h3 className="text-lg font-semibold">Coming up</h3>
               <p className="text-muted-foreground text-sm">
-                Shows scheduled LinkedIn posts due in the next 24 hours plus any
-                retry errors.
+                Scheduled LinkedIn posts due in the next 24 hours, plus any that
+                need another try.
               </p>
             </div>
             {dashboard.dueJobs.length === 0 ? (
               <Card className="bg-card/70 border-dashed">
                 <CardContent className="text-muted-foreground p-8 text-center text-sm">
-                  No due scheduler jobs.
+                  No posts are due in the next 24 hours. Schedule an approved
+                  post in Calendar to see it here.
                 </CardContent>
               </Card>
             ) : (
@@ -225,45 +236,55 @@ export function SchedulerView(): React.ReactNode {
             )}
           </section>
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <SchedulerEventList events={dashboard.recentEvents} />
             <Card className="bg-card/70">
               <CardContent className="space-y-3 p-4">
                 <div>
-                  <h3 className="font-semibold">
-                    Recent scheduler publish attempts
-                  </h3>
+                  <h3 className="font-semibold">Recent posting attempts</h3>
                   <p className="text-muted-foreground text-sm">
-                    Successes and failures tied to schedule jobs.
+                    Scheduled posts that went out, and any that didn&rsquo;t.
                   </p>
                 </div>
                 {dashboard.recentAttempts.length === 0 ? (
                   <p className="text-muted-foreground py-6 text-center text-sm">
-                    No scheduler publish attempts yet.
+                    No posting attempts yet.
                   </p>
                 ) : (
-                  <div className="space-y-3">
+                  <ul
+                    aria-label="Recent posting attempts"
+                    className="space-y-3"
+                  >
                     {dashboard.recentAttempts.map((attempt) => (
-                      <div
+                      <li
                         key={attempt.id}
                         className="rounded-lg border p-3 text-sm"
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-medium">
-                            {attempt.campaign_name ?? "Campaign removed"} ·
-                            Approval #{attempt.approval_id}
-                          </p>
-                          <span>{attempt.status}</span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p
+                              className="truncate font-medium"
+                              title={attempt.variant_hook || undefined}
+                            >
+                              {attempt.variant_hook || "Approved post"}
+                            </p>
+                            <p className="text-muted-foreground truncate text-xs">
+                              {attempt.campaign_name ?? "Campaign removed"}
+                            </p>
+                          </div>
+                          <span className="shrink-0">
+                            {attemptStatusLabels[attempt.status]}
+                          </span>
                         </div>
-                        <p className="text-muted-foreground mt-1">
+                        <p className="text-muted-foreground mt-1 break-words">
                           {attempt.status === "succeeded"
                             ? attempt.external_post_url ||
                               attempt.platform_post_id
-                            : attempt.error_message}
+                            : toPlainMessage(attempt.error_message)}
                         </p>
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </CardContent>
             </Card>

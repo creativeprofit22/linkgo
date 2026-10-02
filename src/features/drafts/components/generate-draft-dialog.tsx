@@ -51,8 +51,17 @@ interface GenerateDraftFormState {
   voiceNotes: string;
 }
 
+const WORKFLOW_STATUS_LABELS: Record<
+  EligibleDraftWorkflowOption["status"],
+  string
+> = {
+  running: "In progress",
+  blocked: "Waiting on you",
+  failed: "Didn't finish",
+};
+
 function getCandidateLabel(candidate: CandidateWithTarget): string {
-  const author = candidate.target.author_name || "Unknown author";
+  const author = candidate.target.author_name || "Author not known";
   const excerpt = candidate.target.content.trim().slice(0, 70);
   return excerpt ? `${author} — ${excerpt}` : author;
 }
@@ -175,20 +184,20 @@ export function GenerateDraftDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" variant="secondary" disabled={generateDisabled}>
-          <Sparkles className="size-4" /> Generate variants
+          <Sparkles className="size-4" /> Write with AI
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Generate draft variants</DialogTitle>
+            <DialogTitle>Write versions with AI</DialogTitle>
             <DialogDescription>
-              Generated text is local until you save it as a draft. Publishing
-              still requires approval.
+              Nothing is saved until you choose to keep it as a draft. Linkgo
+              never posts without your OK.
             </DialogDescription>
           </DialogHeader>
 
-          <Field label="Candidate" htmlFor="generate-draft-candidate">
+          <Field label="Idea" htmlFor="generate-draft-candidate">
             <select
               id="generate-draft-candidate"
               value={form.candidateId}
@@ -207,7 +216,7 @@ export function GenerateDraftDialog({
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
               <option value="" disabled>
-                Select candidate
+                Choose an idea
               </option>
               {candidateOptions.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
@@ -218,7 +227,7 @@ export function GenerateDraftDialog({
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Provider" htmlFor="generate-draft-provider">
+            <Field label="AI service" htmlFor="generate-draft-provider">
               <select
                 id="generate-draft-provider"
                 value={form.providerKey}
@@ -239,7 +248,7 @@ export function GenerateDraftDialog({
                 ))}
               </select>
             </Field>
-            <Field label="Model" htmlFor="generate-draft-model">
+            <Field label="AI model" htmlFor="generate-draft-model">
               <Input
                 id="generate-draft-model"
                 value={form.modelName}
@@ -249,7 +258,7 @@ export function GenerateDraftDialog({
                 maxLength={120}
               />
             </Field>
-            <Field label="Playbook" htmlFor="generate-draft-playbook">
+            <Field label="Brand voice" htmlFor="generate-draft-playbook">
               <select
                 id="generate-draft-playbook"
                 value={form.playbookKey}
@@ -262,10 +271,10 @@ export function GenerateDraftDialog({
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
                 <option value="linkedin_writer">LinkedIn Writer</option>
-                <option value="">No playbook</option>
+                <option value="">No brand voice</option>
               </select>
             </Field>
-            <Field label="Variants" htmlFor="generate-draft-count">
+            <Field label="Number of versions" htmlFor="generate-draft-count">
               <select
                 id="generate-draft-count"
                 value={form.variantCount}
@@ -284,7 +293,7 @@ export function GenerateDraftDialog({
           </div>
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Content intent</legend>
+            <legend className="text-sm font-medium">Post type</legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {DRAFT_CONTENT_INTENTS.map((intent) => {
                 const route = DRAFT_PROMPT_ROUTES[intent];
@@ -316,7 +325,7 @@ export function GenerateDraftDialog({
           </fieldset>
 
           {candidateWorkflowOptions.length > 0 ? (
-            <Field label="Workflow scope" htmlFor="generate-draft-workflow">
+            <Field label="Automation" htmlFor="generate-draft-workflow">
               <select
                 id="generate-draft-workflow"
                 value={form.workflowRunId}
@@ -329,16 +338,16 @@ export function GenerateDraftDialog({
               >
                 {candidateWorkflowOptions.length > 1 ? (
                   <option value="" disabled>
-                    Choose a workflow or ad-hoc draft
+                    Choose an automation or a one-off draft
                   </option>
                 ) : null}
-                <option value="adhoc">Ad-hoc draft — no workflow</option>
+                <option value="adhoc">One-off draft — no automation</option>
                 {candidateWorkflowOptions.map((option) => (
                   <option
                     key={option.workflowRunId}
                     value={option.workflowRunId}
                   >
-                    {option.title} · {option.status}
+                    {option.title} · {WORKFLOW_STATUS_LABELS[option.status]}
                   </option>
                 ))}
               </select>
@@ -346,8 +355,8 @@ export function GenerateDraftDialog({
                 id="generate-draft-workflow-help"
                 className="text-muted-foreground text-xs"
               >
-                Linked workflows stay on Draft until you explicitly save the
-                generated variants.
+                The automation waits at the Draft step until you save the AI
+                versions.
               </p>
             </Field>
           ) : null}
@@ -358,7 +367,7 @@ export function GenerateDraftDialog({
               value={form.angle}
               onChange={(event) => updateField("angle", event.target.value)}
               maxLength={240}
-              placeholder="Operator lesson, teardown, contrarian take…"
+              placeholder="A lesson learned, a how-to, a bold opinion…"
             />
           </Field>
           <Field label="Voice notes" htmlFor="generate-draft-voice-notes">
@@ -380,7 +389,7 @@ export function GenerateDraftDialog({
                 submitting || generateDisabled || form.workflowRunId === ""
               }
             >
-              {submitting ? "Generating…" : "Generate variants"}
+              {submitting ? "Writing…" : "Write versions"}
             </Button>
           </DialogFooter>
         </form>

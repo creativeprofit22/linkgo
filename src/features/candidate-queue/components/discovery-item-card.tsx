@@ -20,7 +20,7 @@ interface DiscoveryItemCardProps {
 const kindLabels: Record<CandidateDiscoveryItem["kind"], string> = {
   keyword: "Keyword",
   trend: "Trend",
-  source_prompt: "Source prompt",
+  source_prompt: "Topic idea",
 };
 
 export function DiscoveryItemCard({
@@ -58,10 +58,10 @@ export function DiscoveryItemCard({
         )}
         <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
           {item.confidence_score !== null && (
-            <span>Confidence {item.confidence_score}/100</span>
+            <span>How sure: {item.confidence_score}/100</span>
           )}
           {item.source_keyword && <span>Source: {item.source_keyword}</span>}
-          {item.status === "promoted" && <span>Promoted</span>}
+          {item.status === "promoted" && <span>Added to keywords</span>}
         </div>
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
@@ -72,7 +72,7 @@ export function DiscoveryItemCard({
             disabled={disabled || item.status === "promoted"}
             onClick={() => void onPromote(item.id)}
           >
-            Promote keyword
+            Add to keywords
           </Button>
         )}
         <Button

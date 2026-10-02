@@ -12,6 +12,7 @@ import {
   updateCommentThread,
   updateCommentVariant,
 } from "@/features/comments/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CommentEligibleCandidate,
   CommentThreadWithDetails,
@@ -55,7 +56,9 @@ interface UseCommentsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected comments error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your comments. Try again.";
 }
 
 function getDefaultCampaignId(
@@ -156,7 +159,7 @@ export function useComments(): UseCommentsState {
         await createCommentThread(input);
         await loadCommentsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Comment thread was not created", {
+        toast.error("We couldn't save this comment", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -171,7 +174,7 @@ export function useComments(): UseCommentsState {
         await updateCommentThread(input);
         await loadCommentsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Comment notes were not saved", {
+        toast.error("We couldn't save your notes", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -186,7 +189,7 @@ export function useComments(): UseCommentsState {
         await updateCommentVariant(input);
         await loadCommentsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Comment variant was not saved", {
+        toast.error("We couldn't save this version", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -201,7 +204,7 @@ export function useComments(): UseCommentsState {
         await setCommentVariantStatus(input);
         await loadCommentsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Comment variant status was not changed", {
+        toast.error("We couldn't update this version", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -216,7 +219,7 @@ export function useComments(): UseCommentsState {
         await setCommentThreadStatus(input);
         await loadCommentsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Comment review status was not changed", {
+        toast.error("We couldn't update this comment", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -238,7 +241,7 @@ export function useComments(): UseCommentsState {
         void getSafetySettings()
           .then(setSafetySettings)
           .catch(() => undefined);
-        toast.error("Comment attempt was not recorded", {
+        toast.error("We couldn't save the posting result", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -255,7 +258,7 @@ export function useComments(): UseCommentsState {
       ]);
       setSafetySettings(loadedSafetySettings);
     } catch (caught) {
-      toast.error("Comments were not refreshed", {
+      toast.error("We couldn't refresh your comments", {
         description: getErrorMessage(caught),
       });
     }

@@ -9,8 +9,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "anthropic",
     label: PROVIDER_LABELS.anthropic,
-    description:
-      "Claude provider credentials for GG AI-backed agent execution.",
+    description: "Connect Claude so the AI assistant can write for you.",
     methods: ["api_key", "oauth"],
     defaultMethod: "api_key",
     scopes: [],
@@ -21,7 +20,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "xiaomi",
     label: PROVIDER_LABELS.xiaomi,
-    description: "Xiaomi MiMo credentials for GG AI-backed agent execution.",
+    description: "Connect Xiaomi MiMo so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -32,7 +31,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "openai",
     label: PROVIDER_LABELS.openai,
-    description: "OpenAI credentials for GG AI-backed agent execution.",
+    description: "Connect OpenAI so the AI assistant can write for you.",
     methods: ["api_key", "oauth"],
     defaultMethod: "api_key",
     scopes: [],
@@ -43,7 +42,8 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "gemini",
     label: PROVIDER_LABELS.gemini,
-    description: "Gemini Code Assist token for GG AI-backed agent execution.",
+    description:
+      "Connect Gemini Code Assist so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -54,7 +54,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "glm",
     label: PROVIDER_LABELS.glm,
-    description: "Z.AI / GLM credentials for GG AI-backed agent execution.",
+    description: "Connect Z.AI / GLM so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -65,7 +65,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "moonshot",
     label: PROVIDER_LABELS.moonshot,
-    description: "Moonshot credentials for GG AI-backed agent execution.",
+    description: "Connect Moonshot so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -76,7 +76,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "deepseek",
     label: PROVIDER_LABELS.deepseek,
-    description: "DeepSeek credentials for GG AI-backed agent execution.",
+    description: "Connect DeepSeek so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -87,7 +87,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "openrouter",
     label: PROVIDER_LABELS.openrouter,
-    description: "OpenRouter credentials for GG AI-backed agent execution.",
+    description: "Connect OpenRouter so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -98,7 +98,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "sakana",
     label: PROVIDER_LABELS.sakana,
-    description: "Sakana credentials for GG AI-backed agent execution.",
+    description: "Connect Sakana so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -109,7 +109,7 @@ const GG_AI_API_KEY_PROVIDERS: AuthProvider[] = [
   {
     key: "minimax",
     label: PROVIDER_LABELS.minimax,
-    description: "MiniMax credentials for GG AI-backed agent execution.",
+    description: "Connect MiniMax so the AI assistant can write for you.",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
@@ -124,20 +124,19 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
   {
     key: "custom",
     label: PROVIDER_LABELS.custom,
-    description:
-      "Linkgo-only OpenAI-compatible endpoint for custom GG AI execution.",
+    description: "Use your own OpenAI-compatible AI service (advanced).",
     methods: ["api_key"],
     defaultMethod: "api_key",
     scopes: [],
     models: [DEFAULT_AGENT_MODELS.custom],
-    secretLabel: "Provider API key",
+    secretLabel: "Access key",
     docsUrl: "https://platform.openai.com/docs/api-reference",
   },
   {
     key: "linkedin",
     label: PROVIDER_LABELS.linkedin,
     description:
-      "3-legged OAuth foundation for approval-gated posting and comments.",
+      "Connect your LinkedIn account. Nothing is posted or commented without your OK.",
     methods: ["oauth"],
     defaultMethod: "oauth",
     scopes: [

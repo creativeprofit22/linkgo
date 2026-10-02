@@ -5,12 +5,13 @@ import type {
   LearningEvent,
   LearningEventType,
 } from "@/features/metrics/types";
+import { toPlainMessage } from "@/lib/plain-message";
 
 const eventLabels: Record<LearningEventType, string> = {
-  metric_recorded: "Metric recorded",
-  memory_created: "Memory created",
-  memory_archived: "Memory archived",
-  memory_restored: "Memory restored",
+  metric_recorded: "Results added",
+  memory_created: "Lesson saved",
+  memory_archived: "Lesson archived",
+  memory_restored: "Lesson restored",
 };
 
 export function LearningEventList({
@@ -22,14 +23,14 @@ export function LearningEventList({
     <Card className="bg-card/70">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Activity className="text-linkgo-blue size-5" /> Learning events
+          <Activity className="text-linkgo-blue size-5" /> History
         </CardTitle>
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No learning events yet. Record metrics or save memory to create the
-            first event.
+            Nothing here yet. Add results or save a lesson, and it shows up
+            here.
           </p>
         ) : (
           <div className="space-y-3">
@@ -46,7 +47,7 @@ export function LearningEventList({
                     {event.created_at}
                   </span>
                 </div>
-                <p>{event.summary}</p>
+                <p>{toPlainMessage(event.summary)}</p>
               </div>
             ))}
           </div>

@@ -70,14 +70,15 @@ export function CreateWorkflowRunDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" disabled={disabled}>
-          <Plus className="size-4" /> Create workflow run
+          <Plus className="size-4" /> New automation
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create workflow run</DialogTitle>
+          <DialogTitle>New automation</DialogTitle>
           <DialogDescription>
-            Start a resumable local content pipeline for one campaign.
+            Set up the steps for one campaign. You can pause and continue it any
+            time.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -111,18 +112,18 @@ export function CreateWorkflowRunDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="workflow-context-summary">Context summary</Label>
+            <Label htmlFor="workflow-context-summary">Notes (optional)</Label>
             <Textarea
               id="workflow-context-summary"
               value={contextSummary}
               maxLength={1000}
               onChange={(event) => setContextSummary(event.target.value)}
-              placeholder="Optional notes for the operator or later agent runtime."
+              placeholder="Anything you or the AI assistant should keep in mind."
             />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={submitDisabled}>
-              {saving ? "Creating…" : "Create workflow run"}
+              {saving ? "Creating…" : "Create automation"}
             </Button>
           </DialogFooter>
         </form>

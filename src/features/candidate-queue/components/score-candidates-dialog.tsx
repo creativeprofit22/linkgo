@@ -99,22 +99,24 @@ export function ScoreCandidatesDialog({
           variant="outline"
           disabled={disabled || campaignId === null}
         >
-          <Gauge className="size-4" /> Score candidates
+          <Gauge className="size-4" /> Score ideas
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Score candidates</DialogTitle>
+            <DialogTitle>Score ideas</DialogTitle>
             <DialogDescription>
-              Score {scorableCandidates.length} unscored new candidate
-              {scorableCandidates.length === 1 ? "" : "s"}. Status changes only
-              happen when you opt in below.
+              Score {scorableCandidates.length} new idea
+              {scorableCandidates.length === 1 ? "" : "s"} that{" "}
+              {scorableCandidates.length === 1 ? "hasn't" : "haven't"} been
+              scored. Linkgo only changes their status if you tick the box
+              below.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Minimum score" htmlFor="score-minimum">
+            <Field label="Minimum match" htmlFor="score-minimum">
               <Input
                 id="score-minimum"
                 type="number"
@@ -130,7 +132,7 @@ export function ScoreCandidatesDialog({
                 required
               />
             </Field>
-            <Field label="Provider" htmlFor="score-provider">
+            <Field label="AI service" htmlFor="score-provider">
               <select
                 id="score-provider"
                 value={form.providerKey}
@@ -148,7 +150,7 @@ export function ScoreCandidatesDialog({
             </Field>
           </div>
 
-          <Field label="Model" htmlFor="score-model">
+          <Field label="AI model" htmlFor="score-model">
             <Input
               id="score-model"
               value={form.modelName}
@@ -173,7 +175,7 @@ export function ScoreCandidatesDialog({
                 }))
               }
             />
-            Reject new candidates below minimum score
+            Reject new ideas below the minimum match
           </label>
 
           <DialogFooter>
@@ -185,7 +187,7 @@ export function ScoreCandidatesDialog({
                 scorableCandidates.length === 0
               }
             >
-              {submitting ? "Scoring…" : "Score candidates"}
+              {submitting ? "Scoring…" : "Score ideas"}
             </Button>
           </DialogFooter>
         </form>

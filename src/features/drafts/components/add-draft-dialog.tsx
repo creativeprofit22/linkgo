@@ -74,7 +74,7 @@ function toDraftInput(form: DraftFormState): CreateDraftInput {
 }
 
 function getCandidateLabel(candidate: CandidateWithTarget): string {
-  const author = candidate.target.author_name || "Unknown author";
+  const author = candidate.target.author_name || "Author not known";
   const excerpt = candidate.target.content.trim().slice(0, 60);
   return excerpt ? `${author} — ${excerpt}` : author;
 }
@@ -108,7 +108,7 @@ export function AddDraftDialog({
   );
   const createDisabled = disabled || candidateOptions.length === 0;
   const archivedDisabledReason = selectedCampaignArchived
-    ? "Archived campaigns cannot create drafts. Restore the campaign before drafting."
+    ? "This campaign is archived, so you can't add drafts. Restore the campaign first."
     : null;
 
   useEffect(() => {
@@ -187,12 +187,12 @@ export function AddDraftDialog({
             <DialogHeader>
               <DialogTitle>Create draft</DialogTitle>
               <DialogDescription>
-                Add manual LinkedIn variants. Linkgo runs deterministic checks
-                only; there is no AI generation or publishing in this slice.
+                Write your own versions of a LinkedIn post. Linkgo runs quick
+                automatic checks. Nothing is posted.
               </DialogDescription>
             </DialogHeader>
 
-            <Field label="Candidate" htmlFor="draft-candidate">
+            <Field label="Idea" htmlFor="draft-candidate">
               <select
                 id="draft-candidate"
                 value={form.candidateId}
@@ -203,7 +203,7 @@ export function AddDraftDialog({
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
                 <option value="" disabled>
-                  Select candidate
+                  Choose an idea
                 </option>
                 {candidateOptions.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
@@ -214,7 +214,7 @@ export function AddDraftDialog({
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Content intent" htmlFor="draft-content-intent">
+              <Field label="Post type" htmlFor="draft-content-intent">
                 <select
                   id="draft-content-intent"
                   value={form.contentIntent}
@@ -252,7 +252,7 @@ export function AddDraftDialog({
                   value={form.notes}
                   onChange={(event) => updateField("notes", event.target.value)}
                   maxLength={1000}
-                  placeholder="Operator context for review"
+                  placeholder="Anything to remember when you review it"
                 />
               </Field>
             </div>
@@ -260,9 +260,9 @@ export function AddDraftDialog({
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-medium">Variants</h3>
+                  <h3 className="font-medium">Versions</h3>
                   <p className="text-muted-foreground text-sm">
-                    Add one to five manual options.
+                    Write one to five versions.
                   </p>
                 </div>
                 <Button
@@ -272,7 +272,7 @@ export function AddDraftDialog({
                   disabled={form.variants.length >= 5}
                   onClick={addVariant}
                 >
-                  Add variant
+                  Add version
                 </Button>
               </div>
 
@@ -282,7 +282,7 @@ export function AddDraftDialog({
                   className="bg-muted/30 space-y-3 rounded-xl border p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <h4 className="text-sm font-medium">Variant {index + 1}</h4>
+                    <h4 className="text-sm font-medium">Version {index + 1}</h4>
                     <Button
                       type="button"
                       size="sm"
@@ -290,19 +290,19 @@ export function AddDraftDialog({
                       disabled={form.variants.length === 1}
                       onClick={() => removeVariant(index)}
                     >
-                      <Trash2 className="size-4" /> Remove variant
+                      <Trash2 className="size-4" /> Remove version
                     </Button>
                   </div>
                   <VariantField
                     id={`draft-variant-${index}-hook`}
-                    label="Hook"
+                    label="Opening line"
                     maxLength={500}
                     value={variant.hook}
                     onChange={(value) => updateVariant(index, "hook", value)}
                   />
                   <VariantField
                     id={`draft-variant-${index}-body`}
-                    label="Body"
+                    label="Main text"
                     maxLength={3000}
                     rows={5}
                     value={variant.body}
@@ -310,7 +310,7 @@ export function AddDraftDialog({
                   />
                   <VariantField
                     id={`draft-variant-${index}-cta`}
-                    label="CTA"
+                    label="Call to action"
                     maxLength={500}
                     value={variant.cta}
                     onChange={(value) => updateVariant(index, "cta", value)}
@@ -337,7 +337,7 @@ export function AddDraftDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting || !form.candidateId}>
-                {submitting ? "Creating…" : "Create draft"}
+                {submitting ? "Saving…" : "Create draft"}
               </Button>
             </DialogFooter>
           </form>

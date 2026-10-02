@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CandidatePolicyRuleKey } from "@/features/candidate-policy";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   SourceImportBatchDetail,
   SourceImportBatchStatus,
@@ -18,23 +19,23 @@ interface SourceImportBatchListProps {
 }
 
 const BATCH_STATUS_LABELS: Record<SourceImportBatchStatus, string> = {
-  processing: "Processing",
-  completed: "Completed",
-  completed_with_errors: "Review items",
+  processing: "In progress",
+  completed: "Done",
+  completed_with_errors: "Some posts need a look",
   failed: "Failed",
 };
 
 const ITEM_STATUS_LABELS: Record<SourceImportItemStatus, string> = {
-  pending: "Pending",
-  accepted: "Accepted",
-  duplicate: "Duplicate",
-  rejected: "Rejected",
+  pending: "Not checked yet",
+  accepted: "Added",
+  duplicate: "Already saved",
+  rejected: "Skipped",
 };
 
 const POLICY_RULE_LABELS: Record<CandidatePolicyRuleKey, string> = {
-  source: "Source",
-  age: "Age",
-  banned_topic: "Banned topic",
+  source: "Link",
+  age: "Post age",
+  banned_topic: "Blocked topic",
   already_contacted: "Already contacted",
 };
 
@@ -67,7 +68,7 @@ function BatchDetail({
       <summary className="source-import-batch-summary focus-visible:ring-ring flex cursor-pointer list-none flex-col gap-3 px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium">Batch {batch.id}</span>
+            <span className="text-sm font-medium">Import {batch.id}</span>
             <Badge variant={getBatchBadgeVariant(batch.status)}>
               {BATCH_STATUS_LABELS[batch.status]}
             </Badge>
@@ -80,16 +81,16 @@ function BatchDetail({
           </time>
         </div>
         <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          <span>{batch.accepted_count} accepted</span>
-          <span>{batch.duplicate_count} duplicate</span>
-          <span>{batch.rejected_count} rejected</span>
+          <span>{batch.accepted_count} added</span>
+          <span>{batch.duplicate_count} already saved</span>
+          <span>{batch.rejected_count} skipped</span>
         </div>
       </summary>
 
       <div className="bg-muted/20 border-t px-4 py-3">
         {batch.error_message ? (
           <p className="text-destructive mb-3 text-sm break-words">
-            {batch.error_message}
+            {toPlainMessage(batch.error_message)}
           </p>
         ) : null}
         <ol className="space-y-2">
@@ -98,19 +99,19 @@ function BatchDetail({
               key={item.id}
               className="bg-background grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-[auto_auto_1fr] sm:items-start"
             >
-              <span className="font-medium">Row {item.row_number}</span>
+              <span className="font-medium">Post {item.row_number}</span>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">
                   {ITEM_STATUS_LABELS[item.status]}
                 </Badge>
                 {item.policy_rule_key ? (
                   <span className="text-xs font-medium">
-                    Policy: {POLICY_RULE_LABELS[item.policy_rule_key]}
+                    Filter: {POLICY_RULE_LABELS[item.policy_rule_key]}
                   </span>
                 ) : null}
               </div>
               <p className="text-muted-foreground min-w-0 break-words">
-                {item.reason || "Waiting for an outcome."}
+                {item.reason || "Not checked yet."}
               </p>
             </li>
           ))}
@@ -135,18 +136,18 @@ export function SourceImportBatchList({
             aria-hidden="true"
           />
           <h3 className="text-sm font-semibold tracking-wide uppercase">
-            Recent source imports
+            Recent imports
           </h3>
         </div>
         <span className="text-muted-foreground text-xs">
-          {batches.length} recent batch{batches.length === 1 ? "" : "es"}
+          {batches.length} recent import{batches.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-5 text-sm">
-            Loading source import history…
+            Loading your imports…
           </CardContent>
         </Card>
       ) : error ? (
@@ -165,15 +166,15 @@ export function SourceImportBatchList({
               size="sm"
               onClick={() => void onRetry()}
             >
-              <RefreshCw className="size-4" /> Retry
+              <RefreshCw className="size-4" /> Try again
             </Button>
           </CardContent>
         </Card>
       ) : batches.length === 0 ? (
         <Card className="bg-card/70 border-dashed">
           <CardContent className="text-muted-foreground p-5 text-sm">
-            No source imports yet. Paste approved source-post JSON to create a
-            reviewable batch.
+            No imports yet. Select Import posts to add a list of posts you can
+            review.
           </CardContent>
         </Card>
       ) : (

@@ -11,10 +11,10 @@ test("starts the scheduler from the Scheduler tab", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await openScheduler(page);
 
-  await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Start scheduler" }).click();
-  await expect(page.getByText("Running", { exact: true })).toBeVisible();
-  await expect(page.getByText("Stopped after restart")).toHaveCount(0);
+  await expect(page.getByText("Off", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Turn on auto-posting" }).click();
+  await expect(page.getByText("On", { exact: true })).toBeVisible();
+  await expect(page.getByText("Off after restart")).toHaveCount(0);
 });
 
 test("flags a scheduler that was on before Linkgo restarted", async ({
@@ -29,20 +29,22 @@ test("flags a scheduler that was on before Linkgo restarted", async ({
   await openScheduler(page);
 
   await expect(
-    page.getByText("Stopped after restart", { exact: true }),
+    page.getByText("Off after restart", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Stopped", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Off", { exact: true })).toHaveCount(0);
   const notice = page
     .getByRole("status")
-    .filter({ hasText: "Scheduler stopped after restart" });
+    .filter({ hasText: "Auto-posting turned off when Linkgo restarted" });
   await expect(notice).toContainText(
-    "Check Safety for any publish marked outcome unknown",
+    "Go to Safety and look for any post marked “Couldn’t confirm”",
   );
-  const startButton = page.getByRole("button", { name: "Start scheduler" });
+  const startButton = page.getByRole("button", {
+    name: "Turn on auto-posting",
+  });
   await expect(startButton).toBeEnabled();
 
   await startButton.click();
-  await expect(page.getByText("Running", { exact: true })).toBeVisible();
+  await expect(page.getByText("On", { exact: true })).toBeVisible();
   await expect(notice).toHaveCount(0);
 });
 
@@ -53,8 +55,10 @@ test("runs a due scheduled post and records a successful publish", async ({
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
 
   await openScheduler(page);
-  await expect(page.getByText("Due now")).toBeVisible();
-  await page.getByRole("button", { name: "Run due jobs now" }).click();
+  await expect(
+    page.getByText("Due now", { exact: true }).first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Post what's due now" }).click();
   await expect(
     page.getByText("Scheduled LinkedIn post was published."),
   ).toBeVisible();
@@ -65,9 +69,17 @@ test("runs a due scheduled post and records a successful publish", async ({
   expect(attempt.status).toBe("succeeded");
   expect(attempt.schedule_job_id).toBe(schedule.id);
 
+  const attemptRow = page
+    .getByRole("list", { name: "Recent posting attempts" })
+    .getByRole("listitem")
+    .first();
+  await expect(attemptRow).toContainText(cleanVariant().hook);
+  await expect(attemptRow).toContainText("Founder-led scheduler growth");
+  await expect(attemptRow).toContainText("Posted");
+
   await openApprovals(page);
-  await expect(getBadge(page, "Published")).toBeVisible();
-  await expect(getBadge(page, "Completed").first()).toBeVisible();
+  await expect(getBadge(page, "Posted")).toBeVisible();
+  await expect(getBadge(page, "Done").first()).toBeVisible();
 });
 
 test("keeps a failed due publish scheduled for retry", async ({ page }) => {
@@ -81,7 +93,7 @@ test("keeps a failed due publish scheduled for retry", async ({ page }) => {
   });
 
   await openScheduler(page);
-  await page.getByRole("button", { name: "Run due jobs now" }).click();
+  await page.getByRole("button", { name: "Post what's due now" }).click();
   await expect(
     page.getByText("Scheduled LinkedIn publish failed and will retry."),
   ).toBeVisible();
@@ -108,7 +120,7 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
   });
 
   await openScheduler(page);
-  await page.getByRole("button", { name: "Run due jobs now" }).click();
+  await page.getByRole("button", { name: "Post what's due now" }).click();
   await expect(
     page.getByText("Scheduled LinkedIn publish failed permanently."),
   ).toBeVisible();
@@ -120,7 +132,9 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
 
   await openApprovals(page);
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(getBadge(page, "Failed").first()).toBeVisible();
+  await expect(
+    getBadge(page, "Didn't post").filter({ visible: true }).first(),
+  ).toBeVisible();
 });
 
 test("global kill switch blocks due jobs without publishing", async ({
@@ -135,17 +149,19 @@ test("global kill switch blocks due jobs without publishing", async ({
   });
 
   await openSafety(page);
-  await page.getByLabel("Kill switch reason").fill("Pause scheduler tests.");
-  await page.getByRole("button", { name: "Enable kill switch" }).click();
-  await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+  await page.getByLabel("Reason for pausing").fill("Pause scheduler tests.");
+  await page.getByRole("button", { name: "Pause everything" }).click();
+  await expect(
+    page.getByText("On — everything is paused", { exact: true }),
+  ).toBeVisible();
 
   await openScheduler(page);
   await expect(
-    page.getByRole("button", { name: "Start scheduler" }),
+    page.getByRole("button", { name: "Turn on auto-posting" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Run due jobs now" }).click();
+  await page.getByRole("button", { name: "Post what's due now" }).click();
   await expect(
-    page.getByText("global kill switch is enabled").first(),
+    page.getByText("didn't go out because everything is paused").first(),
   ).toBeVisible();
 
   const [schedule] = await getScheduleJobs(page);
@@ -179,15 +195,15 @@ interface PublishAttemptRow {
 }
 
 function getBadge(page: Page, label: string): Locator {
-  return page
-    .locator("span")
-    .filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page.locator("span").filter({
+    hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
+  });
 }
 
 async function openScheduler(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Scheduler/ }).click();
+  await page.getByRole("button", { name: /^Auto-posting/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Scheduler", exact: true }),
+    page.getByRole("heading", { name: "Auto-posting", exact: true }),
   ).toBeVisible();
 }
 
@@ -212,13 +228,13 @@ async function createApprovedScheduledPost(
   await createReadyDraft(page, cleanVariant());
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await page.getByRole("button", { name: "Schedule", exact: true }).click();
-  await page.getByLabel("Scheduled for").fill(scheduledFor);
-  await page.getByLabel("Timezone label").fill("local");
-  const dialog = page.getByRole("dialog", { name: "Schedule approval" });
-  await dialog.getByRole("button", { name: "Schedule approval" }).click();
+  await page.getByLabel("Date and time").fill(scheduledFor);
+  await page.getByLabel("Time zone").fill("local");
+  const dialog = page.getByRole("dialog", { name: "Schedule post" });
+  await dialog.getByRole("button", { name: "Schedule post" }).click();
   await expect(dialog).toBeHidden();
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
 }
@@ -232,13 +248,11 @@ async function createReadyDraft(
   await addCandidate(page);
   await openDrafts(page);
   await createDraft(page, variant);
-  await page.getByRole("button", { name: "Select for review" }).click();
-  await expect(getBadge(page, "Ready for review")).toBeVisible();
-  const auditPanel = page.getByRole("region", { name: /AI audit/ });
-  await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
-  await expect(
-    auditPanel.getByText("Completed", { exact: true }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Choose this version" }).click();
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  const auditPanel = page.getByRole("region", { name: /AI review/ });
+  await auditPanel.getByRole("button", { name: "Review with AI" }).click();
+  await expect(auditPanel.getByText("Done", { exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const api = (
       window as unknown as {
@@ -263,9 +277,9 @@ async function createReadyDraft(
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -293,8 +307,8 @@ async function createCampaign(page: Page): Promise<void> {
 }
 
 async function addCandidate(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
   await expect(dialog).toBeVisible();
   await page
     .getByLabel("LinkedIn post URL")
@@ -308,10 +322,10 @@ async function addCandidate(page: Page): Promise<void> {
     .fill("https://www.linkedin.com/in/jane-operator/");
   await page.getByLabel("Posted at").fill("2026-06-25");
   await page.getByLabel("Source keyword").fill("founder content");
-  await page.getByLabel("Relevance score").fill("87");
+  await page.getByLabel("Match score").fill("87");
   await page.getByLabel("Score reason").fill("Strong audience overlap.");
   await page.getByLabel("Notes").fill("Good scheduler candidate.");
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -335,11 +349,11 @@ async function createDraft(
 }
 
 async function createReview(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create review" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create review" });
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  const dialog = page.getByRole("dialog", { name: "Send for approval" });
   await expect(dialog).toBeVisible();
   await page.getByLabel("Reviewer notes").fill("Human pass before scheduling.");
-  await dialog.getByRole("button", { name: "Create review" }).click();
+  await dialog.getByRole("button", { name: "Send for approval" }).click();
   await expect(dialog).toBeHidden();
 }
 

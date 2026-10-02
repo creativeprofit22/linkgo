@@ -32,7 +32,7 @@ export function CandidateCard({
       : `${candidate.relevance_score}/100`;
 
   function confirmDeleteCandidate(): void {
-    if (window.confirm("Delete this candidate? This cannot be undone.")) {
+    if (window.confirm("Delete this idea? You can't undo this.")) {
       void onDelete(candidate.id);
     }
   }
@@ -73,7 +73,7 @@ export function CandidateCard({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Delete candidate from ${authorName}`}
+            aria-label={`Delete idea from ${authorName}`}
             onClick={confirmDeleteCandidate}
           >
             <Trash2 className="size-4" />
@@ -89,7 +89,7 @@ export function CandidateCard({
         <div className="grid gap-3 text-sm sm:grid-cols-2">
           <InfoBlock label="Campaign" value={candidate.campaign_name} />
           <InfoBlock
-            label="Relevance"
+            label="Match score"
             value={scoreLabel}
             muted={candidate.relevance_score === null}
           />

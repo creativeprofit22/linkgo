@@ -102,7 +102,7 @@ const WorkflowsView = lazy(() =>
 
 const featureViewFallback = (
   <div className="text-muted-foreground py-8 text-sm" role="status">
-    Loading section...
+    Loading…
   </div>
 );
 
@@ -140,7 +140,7 @@ const tabs: RoadmapTab[] = [
   {
     id: "campaigns",
     label: "Campaigns",
-    description: "Local campaign setup and planner eligibility.",
+    description: "Group your posts by goal and audience.",
     icon: Target,
     enabled: true,
     docHref: "docs/features/campaigns.md",
@@ -148,23 +148,23 @@ const tabs: RoadmapTab[] = [
   {
     id: "autopilot",
     label: "Autopilot",
-    description: "Opt-in local source-to-work planning and history.",
+    description: "Let Linkgo suggest what to work on next.",
     icon: Route,
     enabled: true,
     docHref: "docs/features/autopilot-planner.md",
   },
   {
     id: "backlog",
-    label: "Backlog",
-    description: "Campaign due work, ownership, and recurring planning.",
+    label: "Tasks",
+    description: "What’s due, who owns it, and repeating tasks.",
     icon: ClipboardList,
     enabled: true,
     docHref: "docs/features/campaign-backlog.md",
   },
   {
     id: "queue",
-    label: "Queue",
-    description: "Candidate posts, dedupe, and relevance triage.",
+    label: "Ideas",
+    description: "Posts and topics worth writing about or replying to.",
     icon: ListChecks,
     enabled: true,
     docHref: "docs/features/candidate-queue.md",
@@ -172,7 +172,7 @@ const tabs: RoadmapTab[] = [
   {
     id: "drafts",
     label: "Drafts",
-    description: "Manual draft variants and deterministic audit checks.",
+    description: "Write and compare post versions, with quality checks.",
     icon: FileText,
     enabled: true,
     docHref: "docs/features/drafts.md",
@@ -180,7 +180,7 @@ const tabs: RoadmapTab[] = [
   {
     id: "approvals",
     label: "Approvals",
-    description: "Human review, scheduling, and publish attempt tracking.",
+    description: "Review posts before anything goes live.",
     icon: CheckCircle2,
     enabled: true,
     docHref: "docs/features/approvals.md",
@@ -188,15 +188,15 @@ const tabs: RoadmapTab[] = [
   {
     id: "calendar",
     label: "Calendar",
-    description: "Post planning before scheduler execution.",
+    description: "Plan when each post goes out.",
     icon: CalendarDays,
     enabled: true,
     docHref: "docs/features/content-calendar.md",
   },
   {
     id: "scheduler",
-    label: "Scheduler",
-    description: "Opt-in due post publishing while Linkgo is running.",
+    label: "Auto-posting",
+    description: "Approved posts go out on time while Linkgo is open.",
     icon: Clock3,
     enabled: true,
     docHref: "docs/features/scheduler.md",
@@ -204,47 +204,47 @@ const tabs: RoadmapTab[] = [
   {
     id: "comments",
     label: "Comments",
-    description: "Approval-gated local reply drafting and history.",
+    description: "Draft replies and approve them before they post.",
     icon: MessageCircle,
     enabled: true,
     docHref: "docs/features/comments.md",
   },
   {
     id: "metrics",
-    label: "Metrics",
-    description: "Manual post metrics, campaign memory, and learning events.",
+    label: "Analytics",
+    description: "See how posts perform and what you’ve learned.",
     icon: BarChart3,
     enabled: true,
     docHref: "docs/features/metrics.md",
   },
   {
     id: "workflows",
-    label: "Workflows",
-    description: "Resumable pipeline runs and progress events.",
+    label: "Automations",
+    description: "Follow the steps of automated tasks.",
     icon: Workflow,
     enabled: true,
     docHref: "docs/features/workflows.md",
   },
   {
     id: "agents",
-    label: "Agent Runtime",
-    description: "Typed local tool loop and dry-run provider.",
+    label: "AI assistant",
+    description: "See what the AI assistant did, and try it safely.",
     icon: Bot,
     enabled: true,
     docHref: "docs/features/agent-runtime.md",
   },
   {
     id: "playbooks",
-    label: "Playbooks",
-    description: "Reusable LinkedIn prompt modules and operator guidance.",
+    label: "Brand voice",
+    description: "Writing guides that shape how the AI writes for you.",
     icon: NotebookTabs,
     enabled: true,
     docHref: "docs/features/playbooks.md",
   },
   {
     id: "integrations",
-    label: "Integrations",
-    description: "AI credentials and LinkedIn OAuth foundation.",
+    label: "Connected accounts",
+    description: "Connect LinkedIn and your AI account.",
     icon: KeyRound,
     enabled: true,
     docHref: "docs/features/integrations.md",
@@ -252,7 +252,8 @@ const tabs: RoadmapTab[] = [
   {
     id: "safety",
     label: "Safety",
-    description: "Kill switch, rate limits, and error queue.",
+    description:
+      "Emergency stop, daily limits, and anything that needs fixing.",
     icon: ShieldAlert,
     enabled: true,
     docHref: "docs/features/safety-observability.md",
@@ -284,13 +285,14 @@ export function HomePage(): React.ReactNode {
               <h1 className="text-lg font-semibold">Linkgo</h1>
             </div>
             <p className="text-muted-foreground hidden text-sm sm:block">
-              LinkedIn growth operations, built local-first and approval-gated.
+              Plan, write and share LinkedIn posts. Nothing goes live without
+              your OK.
             </p>
           </div>
 
           <nav
             className="flex gap-2 overflow-x-auto pb-1 sm:-mr-2 sm:block sm:min-h-0 sm:flex-1 sm:space-y-2 sm:overflow-x-hidden sm:overflow-y-auto sm:pr-2 sm:pb-0"
-            aria-label="Linkgo sections"
+            aria-label="Main menu"
           >
             {tabs.map((tab) => {
               const Icon = tab.icon;

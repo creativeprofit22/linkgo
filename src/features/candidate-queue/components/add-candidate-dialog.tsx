@@ -117,16 +117,16 @@ export function AddCandidateDialog({
           type="button"
           disabled={disabled || campaignOptions.length === 0}
         >
-          <Plus className="size-4" /> Add candidate
+          <Plus className="size-4" /> Add idea
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Add candidate</DialogTitle>
+            <DialogTitle>Add idea</DialogTitle>
             <DialogDescription>
-              Manually capture a LinkedIn post for local triage. Scoring and
-              publishing stay gated for later slices.
+              Save a LinkedIn post you want to write about or reply to. Nothing
+              is posted.
             </DialogDescription>
           </DialogHeader>
 
@@ -227,7 +227,7 @@ export function AddCandidateDialog({
                 placeholder="2026-06-25 or 2h ago"
               />
             </Field>
-            <Field label="Relevance score" htmlFor="candidate-score">
+            <Field label="Match score" htmlFor="candidate-score">
               <Input
                 id="candidate-score"
                 type="number"
@@ -265,7 +265,7 @@ export function AddCandidateDialog({
                 value={form.notes}
                 onChange={(event) => updateField("notes", event.target.value)}
                 maxLength={1000}
-                placeholder="Operator notes"
+                placeholder="Your notes"
               />
             </Field>
           </div>
@@ -279,7 +279,7 @@ export function AddCandidateDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || !form.campaignId}>
-              {submitting ? "Adding…" : "Add candidate"}
+              {submitting ? "Adding…" : "Add idea"}
             </Button>
           </DialogFooter>
         </form>

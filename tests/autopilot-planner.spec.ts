@@ -13,17 +13,15 @@ test("shows local-only first-use guidance and opt-in controls", async ({
   await openAutopilot(page);
 
   await expect(
-    page.getByText(
-      /never fetches externally, runs a model, publishes, or comments/u,
-    ),
+    page.getByText(/never fetches from the web, uses AI, posts, or comments/u),
   ).toBeVisible();
-  await expect(page.getByText("Planner status: Stopped")).toBeVisible();
+  await expect(page.getByText("Autopilot status: Stopped")).toBeVisible();
   await expect(page.getByText("Create a campaign first")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Plan now" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Check now" })).toBeEnabled();
   await expect(
-    page.getByRole("button", { name: "Start planner" }),
+    page.getByRole("button", { name: "Start Autopilot" }),
   ).toBeEnabled();
-  await expect(page.getByLabel("Campaign")).toHaveValue("all");
+  await expect(page.getByLabel("Campaign", { exact: true })).toHaveValue("all");
 });
 
 test("materializes eligible work on the immediate tick after Start planner", async ({
@@ -35,12 +33,14 @@ test("materializes eligible work on the immediate tick after Start planner", asy
   await seedAutopilotBatch(page, 1);
   await openAutopilot(page);
 
-  await expectMetric(page, "Eligible now", "1");
-  await page.getByRole("button", { name: "Start planner" }).click();
+  await expectMetric(page, "Ready now", "1");
+  await page.getByRole("button", { name: "Start Autopilot" }).click();
 
   await expect(page.getByText("Plan #1 · Started planner")).toBeVisible();
-  await expect(page.getByText("Item #1 · pending")).toBeVisible();
-  await expect(page.getByText("Run #1 · queued")).toBeVisible();
+  await expect(page.getByText("Task #1 · Not started")).toBeVisible();
+  await expect(
+    page.getByText("Automation #1 · Waiting to start"),
+  ).toBeVisible();
   const state = await getPlannerState(page);
   expect(state.plans).toHaveLength(1);
   expect(state.backlog).toHaveLength(1);
@@ -50,8 +50,8 @@ test("materializes eligible work on the immediate tick after Start planner", asy
     "tick_started",
   ]);
 
-  await page.getByRole("button", { name: "Stop planner" }).click();
-  await expect(page.getByText("Planner status: Stopped")).toBeVisible();
+  await page.getByRole("button", { name: "Stop Autopilot" }).click();
+  await expect(page.getByText("Autopilot status: Stopped")).toBeVisible();
 });
 
 test("materializes one linked plan, backlog item, and score-first workflow exactly once", async ({
@@ -63,20 +63,22 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
   await seedAutopilotBatch(page, 1);
   await openAutopilot(page);
 
-  await expectMetric(page, "Eligible now", "1");
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await expectMetric(page, "Ready now", "1");
+  await page.getByRole("button", { name: "Check now" }).click();
 
   await expect(page.getByText("Plan #1 · Planner launch")).toBeVisible();
-  await expect(page.getByText("Item #1 · pending")).toBeVisible();
-  await expect(page.getByText("Run #1 · queued")).toBeVisible();
-  await expect(page.getByText("Current step: score")).toBeVisible();
-  await expectMetric(page, "Planned", "1");
+  await expect(page.getByText("Task #1 · Not started")).toBeVisible();
+  await expect(
+    page.getByText("Automation #1 · Waiting to start"),
+  ).toBeVisible();
+  await expect(page.getByText("Current step: Score ideas")).toBeVisible();
+  await expectMetric(page, "Tasks created", "1");
   await capturePlannerScreenshot(
     page,
     ".gg/screenshots/autopilot-planner-desktop.png",
   );
 
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
   const state = await getPlannerState(page);
   expect(state.plans).toHaveLength(1);
   expect(state.backlog).toHaveLength(1);
@@ -90,17 +92,19 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
   );
   expect(state.runs[0]?.current_step_key).toBe("score");
 
-  await page.getByRole("button", { name: /Backlog/u }).click();
+  await page.getByRole("button", { name: /^Tasks/u }).click();
   await expect(
     page.getByText(
-      "Autopilot plan #1 · source batch #1 · queued workflow #1.",
+      "Created by Autopilot plan #1 · import #1 · automation #1.",
       { exact: false },
     ),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /Workflows/u }).click();
+  await page.getByRole("button", { name: /^Automations/u }).click();
   await expect(
-    page.getByText("Autopilot plan #1 · source batch #1.", { exact: false }),
+    page.getByText("Started by Autopilot from your imported ideas.", {
+      exact: false,
+    }),
   ).toBeVisible();
   await expect(page.getByText("Current step: Score relevance")).toBeVisible();
 });
@@ -114,17 +118,17 @@ test("stores one durable skipped outcome when accepted candidates no longer exis
   await seedAutopilotBatch(page, 1, { currentCandidate: false });
   await openAutopilot(page);
 
-  await expectMetric(page, "Eligible now", "1");
-  await page.getByRole("button", { name: "Plan now" }).click();
-  await expectMetric(page, "Eligible now", "0");
+  await expectMetric(page, "Ready now", "1");
+  await page.getByRole("button", { name: "Check now" }).click();
+  await expectMetric(page, "Ready now", "0");
   await expectMetric(page, "Skipped", "1");
-  await expect(page.getByText("Outcome: Skipped")).toBeVisible();
+  await expect(page.getByText("Result: Skipped")).toBeVisible();
   await expect(
     page.getByText(
       "No current accepted candidates remain for source batch #1.",
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
 
   const state = await getPlannerState(page);
   expect(state.plans).toHaveLength(1);
@@ -143,13 +147,13 @@ test("blocks starts and manual materialization behind the global kill switch", a
   await setKillSwitch(page, true, "Operator pause");
   await openAutopilot(page);
 
-  await expect(page.getByText("Global kill switch is enabled")).toBeVisible();
+  await expect(page.getByText("Pause everything is on")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Start planner" }),
+    page.getByRole("button", { name: "Start Autopilot" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
   await expect(
-    page.getByText("Autopilot planner tick blocked by the global kill switch."),
+    page.getByText("Autopilot check stopped because everything is paused."),
   ).toBeVisible();
   expect((await getPlannerState(page)).plans).toHaveLength(0);
 });
@@ -176,16 +180,16 @@ test("stops later batches when the kill switch changes during a bounded tick", a
   });
   await openAutopilot(page);
 
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
 
   await expect(
     page.getByRole("status").filter({
-      hasText: "Tick stopped: 1 planned, 0 skipped, 0 failed, 1 blocked.",
+      hasText: "Check stopped early: 1 planned, 0 skipped, 0 failed, 1 paused.",
     }),
   ).toBeVisible();
   await expect(
     page.getByText(
-      "Source batch materialization blocked by the global kill switch.",
+      "An import wasn't turned into tasks because everything is paused.",
       { exact: true },
     ),
   ).toBeVisible();
@@ -205,8 +209,8 @@ test("stops later batches when the kill switch changes during a bounded tick", a
   });
 
   await setKillSwitch(page, false);
-  await page.getByRole("button", { name: "Plan now" }).click();
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
   state = await getPlannerState(page);
   expect(state.plans).toHaveLength(2);
   expect(state.backlog).toHaveLength(2);
@@ -228,9 +232,9 @@ test("attributes rollback failures to the campaign filter and recovers on retry"
   });
   await openAutopilot(page);
 
-  await page.getByRole("button", { name: "Plan now" }).click();
-  await page.getByLabel("Campaign").selectOption("1");
-  await expectMetric(page, "Failures · 7 days", "1");
+  await page.getByRole("button", { name: "Check now" }).click();
+  await page.getByLabel("Campaign", { exact: true }).selectOption("1");
+  await expectMetric(page, "Problems · 7 days", "1");
   await expect(
     page.getByText(
       "Source batch #1 could not be planned due to a local database error.",
@@ -247,7 +251,7 @@ test("attributes rollback failures to the campaign filter and recovers on retry"
   expect(state.runs).toHaveLength(0);
   expect(state.steps).toHaveLength(0);
 
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
   state = await getPlannerState(page);
   expect(state.plans).toHaveLength(1);
   expect(state.backlog).toHaveLength(1);
@@ -260,19 +264,19 @@ test("starts and stops once while duplicate planner actions are guarded", async 
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
 
-  await page.getByRole("button", { name: "Start planner" }).click();
+  await page.getByRole("button", { name: "Start Autopilot" }).click();
   await expect(
-    page.getByText("Planner status: Running while Linkgo is open"),
+    page.getByText("Autopilot status: Running while Linkgo is open"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Stop planner" }).click();
-  await expect(page.getByText("Planner status: Stopped")).toBeVisible();
+  await page.getByRole("button", { name: "Stop Autopilot" }).click();
+  await expect(page.getByText("Autopilot status: Stopped")).toBeVisible();
 
-  await page.getByRole("button", { name: "Plan now" }).evaluate((button) => {
+  await page.getByRole("button", { name: "Check now" }).evaluate((button) => {
     (button as HTMLButtonElement).click();
     (button as HTMLButtonElement).click();
   });
   await expect(
-    page.getByText("Autopilot planner tick completed.").last(),
+    page.getByText("Autopilot check finished.").last(),
   ).toBeVisible();
   const events = await page.evaluate(() =>
     (
@@ -293,17 +297,14 @@ test("keeps a successful start when its dashboard refresh fails", async ({
   await openAutopilot(page);
   await setAutopilotDashboardFailure(page, true);
 
-  await page.getByRole("button", { name: "Start planner" }).click();
+  await page.getByRole("button", { name: "Start Autopilot" }).click();
 
   await expect(
-    page.getByText("Planner status: Running while Linkgo is open"),
+    page.getByText("Autopilot status: Running while Linkgo is open"),
   ).toBeVisible();
-  await expectSuccessfulActionWithRefreshFailure(
-    page,
-    "Autopilot planner started",
-  );
+  await expectSuccessfulActionWithRefreshFailure(page, "Autopilot started");
   await expect(
-    page.getByText("Autopilot planner was not started", { exact: true }),
+    page.getByText("We couldn't start Autopilot", { exact: true }),
   ).toHaveCount(0);
 });
 
@@ -312,21 +313,18 @@ test("keeps a successful stop when its dashboard refresh fails", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
-  await page.getByRole("button", { name: "Start planner" }).click();
+  await page.getByRole("button", { name: "Start Autopilot" }).click();
   await expect(
-    page.getByText("Planner status: Running while Linkgo is open"),
+    page.getByText("Autopilot status: Running while Linkgo is open"),
   ).toBeVisible();
   await setAutopilotDashboardFailure(page, true);
 
-  await page.getByRole("button", { name: "Stop planner" }).click();
+  await page.getByRole("button", { name: "Stop Autopilot" }).click();
 
-  await expect(page.getByText("Planner status: Stopped")).toBeVisible();
-  await expectSuccessfulActionWithRefreshFailure(
-    page,
-    "Autopilot planner stopped",
-  );
+  await expect(page.getByText("Autopilot status: Stopped")).toBeVisible();
+  await expectSuccessfulActionWithRefreshFailure(page, "Autopilot stopped");
   await expect(
-    page.getByText("Autopilot planner was not stopped", { exact: true }),
+    page.getByText("We couldn't stop Autopilot", { exact: true }),
   ).toHaveCount(0);
 });
 
@@ -340,21 +338,21 @@ test("keeps a successful tick result when its dashboard refresh fails", async ({
   await openAutopilot(page);
   await setAutopilotDashboardFailure(page, true);
 
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
 
   await expectSuccessfulActionWithRefreshFailure(
     page,
-    "Autopilot planner tick completed",
+    "Autopilot check finished",
   );
   await expect(
     page
-      .getByText("Tick complete: 1 planned, 0 skipped, 0 failed.", {
+      .getByText("Check finished: 1 planned, 0 skipped, 0 failed.", {
         exact: true,
       })
       .last(),
   ).toBeVisible();
   await expect(
-    page.getByText("Autopilot planner tick failed", { exact: true }),
+    page.getByText("We couldn't finish the Autopilot check", { exact: true }),
   ).toHaveCount(0);
   expect((await getPlannerState(page)).plans).toHaveLength(1);
 });
@@ -374,16 +372,14 @@ test("rejects invalid native status data and recovers with Retry", async ({
   });
   await openAutopilot(page);
 
-  await expect(
-    page.getByText("Autopilot planner could not be loaded"),
-  ).toBeVisible();
+  await expect(page.getByText("We couldn't load Autopilot")).toBeVisible();
   await page.evaluate(() => {
     (
       window as unknown as { __LINKGO_AUTOPILOT_STATUS_RESULT__?: unknown }
     ).__LINKGO_AUTOPILOT_STATUS_RESULT__ = undefined;
   });
-  await page.getByRole("button", { name: "Retry" }).click();
-  await expect(page.getByText("Planner status: Stopped")).toBeVisible();
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByText("Autopilot status: Stopped")).toBeVisible();
 });
 
 test("keeps the latest campaign filter when an older response resolves last", async ({
@@ -401,10 +397,10 @@ test("keeps the latest campaign filter when an older response resolves last", as
     createdAt: "2026-07-31T11:00:00.000Z",
   });
   await openAutopilot(page);
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
 
   await delayCampaignSelects(page, 1);
-  await page.getByLabel("Campaign").selectOption("1");
+  await page.getByLabel("Campaign", { exact: true }).selectOption("1");
   await page.waitForFunction(
     () =>
       (
@@ -415,7 +411,7 @@ test("keeps the latest campaign filter when an older response resolves last", as
         }
       ).__LINKGO_SQL_DELAYED_CAMPAIGN_SELECT_COUNT__?.(1) !== 0,
   );
-  await page.getByLabel("Campaign").selectOption("2");
+  await page.getByLabel("Campaign", { exact: true }).selectOption("2");
   await expect(
     page.getByText("Plan #2 · Second planner campaign"),
   ).toBeVisible();
@@ -434,9 +430,9 @@ test("reflows at 320 pixels with forced colors, reduced motion, and keyboard foc
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
 
-  await expect(page.getByRole("button", { name: "Plan now" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Check now" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Start planner" }),
+    page.getByRole("button", { name: "Start Autopilot" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Refresh" }).focus();
   await expect(page.getByRole("button", { name: "Refresh" })).toBeFocused();
@@ -490,7 +486,7 @@ async function createCampaign(
   await page.getByRole("button", { name: "New campaign" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await dialog.getByLabel("Name").fill(name);
-  if (autopilot) await dialog.getByLabel("Local autopilot planner").click();
+  if (autopilot) await dialog.getByLabel("Include in Autopilot").click();
   await dialog.getByRole("button", { name: "Create campaign" }).click();
   await expect(dialog).toBeHidden();
 }
@@ -578,12 +574,12 @@ async function expectSuccessfulActionWithRefreshFailure(
 ): Promise<void> {
   await expect(page.getByText(successMessage, { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Dashboard refresh failed", { exact: true }),
+    page.getByText("We couldn't refresh this page", { exact: true }),
   ).toBeVisible();
   await expect(
     page
       .getByText(
-        "The planner action succeeded, but the dashboard could not be refreshed: Injected autopilot planner load failure",
+        "That worked, but we couldn't refresh this page: Injected autopilot planner load failure",
         { exact: true },
       )
       .first(),

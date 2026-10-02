@@ -138,7 +138,8 @@ export function ProviderLoginDialog({
     (!requiresBaseUrl || baseUrl.trim() !== "");
   const safeAccountLabel = account?.account_label || account?.provider_label;
   const maskedSecret = useMemo(
-    () => (connected ? "Connected; secret is stored outside the UI." : ""),
+    () =>
+      connected ? "Connected. Your key is stored safely and never shown." : "",
     [connected],
   );
 
@@ -195,7 +196,7 @@ export function ProviderLoginDialog({
     }
 
     setCopyAuthUrlError(
-      "Could not copy automatically. Open the authorization URL and copy it from your browser address bar.",
+      "We couldn't copy the link. Open the sign-in link and copy it from your browser's address bar.",
     );
   }
 
@@ -245,8 +246,8 @@ export function ProviderLoginDialog({
         <DialogHeader>
           <DialogTitle>{provider.label} connection</DialogTitle>
           <DialogDescription>
-            Secrets stay in the native Tauri boundary. Linkgo only shows status
-            and health.
+            Your sign-in details stay private on this computer. Linkgo only
+            shows whether the connection works.
           </DialogDescription>
         </DialogHeader>
 
@@ -258,7 +259,7 @@ export function ProviderLoginDialog({
                 <p className="text-muted-foreground mt-1">
                   Signed in with {provider.label} account
                   {renewing
-                    ? " · access renews automatically on the next agent run"
+                    ? " · access renews automatically the next time the AI assistant uses it"
                     : expiry !== null
                       ? ` · access renews before ${expiry}`
                       : ""}
@@ -313,13 +314,13 @@ export function ProviderLoginDialog({
                   type="password"
                   value={apiKey}
                   autoComplete="off"
-                  placeholder="Paste key once; Linkgo will not render it again"
+                  placeholder="Paste your key once. Linkgo won't show it again."
                   onChange={(event) => setApiKey(event.target.value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor={`${provider.key}-base-url`}>
-                  Base URL override{requiresBaseUrl ? " (required)" : ""}
+                  Web address{requiresBaseUrl ? " (required)" : ""}
                 </Label>
                 <Input
                   id={`${provider.key}-base-url`}
@@ -327,8 +328,8 @@ export function ProviderLoginDialog({
                   required={requiresBaseUrl}
                   placeholder={
                     requiresBaseUrl
-                      ? "Required, e.g. https://api.example.com/v1"
-                      : "Optional advanced override"
+                      ? "Required, for example https://api.example.com/v1"
+                      : "Optional — leave blank unless you know you need it"
                   }
                   onChange={(event) => {
                     setBaseUrl(event.target.value);
@@ -337,9 +338,9 @@ export function ProviderLoginDialog({
                 />
                 <p className="text-muted-foreground text-xs">
                   {requiresBaseUrl
-                    ? "Custom API providers need an OpenAI-compatible endpoint."
-                    : "GG AI uses provider defaults unless you set this."}{" "}
-                  Use https:// for hosted providers.
+                    ? "A custom AI service needs an OpenAI-compatible address."
+                    : "Leave blank to use the AI service's usual address."}{" "}
+                  Online services must use https://.
                 </p>
                 {showLocalConsent && (
                   <div className="flex items-start gap-2 rounded-md border p-2">
@@ -362,8 +363,8 @@ export function ProviderLoginDialog({
                         id={`${provider.key}-allow-local-hint`}
                         className="text-muted-foreground text-xs"
                       >
-                        Your API key will be sent to this address. Plain http://
-                        is only allowed for local endpoints.
+                        Your key will be sent to this address. Plain http://
+                        only works for addresses on this computer or network.
                       </p>
                     </div>
                   </div>
@@ -418,15 +419,15 @@ export function ProviderLoginDialog({
                 disabled={busy}
                 onClick={() => void handleStartOAuth()}
               >
-                Continue with OAuth
+                Connect LinkedIn account
               </Button>
               {oauthStart !== null && (
                 <div className="space-y-3 rounded-lg border p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm" role="status">
                       {oauthStart.browserOpened
-                        ? "Opened the authorization page in your browser."
-                        : "Couldn't open your browser. Copy the authorization URL instead."}
+                        ? "Opened the sign-in page in your browser."
+                        : "Couldn't open your browser. Copy the sign-in link instead."}
                     </p>
                     <Button
                       type="button"
@@ -436,7 +437,7 @@ export function ProviderLoginDialog({
                       onClick={() => void handleCopyAuthUrl()}
                     >
                       <Copy className="size-3" />
-                      {copiedAuthUrl ? "Copied" : "Copy authorization URL"}
+                      {copiedAuthUrl ? "Copied" : "Copy sign-in link"}
                     </Button>
                   </div>
                   {copyAuthUrlError !== null && (
@@ -446,7 +447,7 @@ export function ProviderLoginDialog({
                   )}
                   <div className="space-y-2">
                     <Label htmlFor={`${provider.key}-oauth-code`}>
-                      Authorization code
+                      Sign-in code
                     </Label>
                     <Textarea
                       id={`${provider.key}-oauth-code`}
@@ -460,7 +461,7 @@ export function ProviderLoginDialog({
                     disabled={busy || oauthCode.trim() === ""}
                     onClick={() => void handleSubmitCode()}
                   >
-                    Submit code
+                    Finish connecting
                   </Button>
                 </div>
               )}
@@ -475,7 +476,7 @@ export function ProviderLoginDialog({
             disabled={busy}
             onClick={() => void onCheck({ providerKey: provider.key })}
           >
-            Check health
+            Check connection
           </Button>
           {account !== null && (
             <Button

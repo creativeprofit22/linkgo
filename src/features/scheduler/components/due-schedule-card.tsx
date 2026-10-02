@@ -1,7 +1,26 @@
 import { AlertTriangle, CalendarClock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import type { ScheduleJobStatus } from "@/features/approvals/types";
 import type { DueScheduleCardItem } from "@/features/scheduler/types";
+import { toPlainMessage } from "@/lib/plain-message";
+
+const jobStatusLabels: Record<ScheduleJobStatus, string> = {
+  scheduled: "Scheduled",
+  cancelled: "Cancelled",
+  completed: "Done",
+  failed: "Didn't post",
+};
+
+const approvalStatusLabels: Record<string, string> = {
+  needs_review: "Waiting for approval",
+  changes_requested: "Changes requested",
+  approved: "Approved",
+  rejected: "Rejected",
+  scheduled: "Scheduled",
+  published: "Posted",
+  cancelled: "Cancelled",
+};
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "Not set";
@@ -31,32 +50,34 @@ export function DueScheduleCard({
             <div>
               <p className="font-medium">{job.campaign_name}</p>
               <p className="text-muted-foreground line-clamp-2 text-sm">
-                {job.variant_hook || `Approval #${job.approval_id}`}
+                {job.variant_hook || "Approved post"}
               </p>
             </div>
           </div>
           <Badge variant={hasError ? "warning" : "secondary"}>
-            {job.status}
+            {jobStatusLabels[job.status]}
           </Badge>
         </div>
 
         <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <Detail label="Scheduled" value={formatDate(job.scheduled_for)} />
           <Detail
-            label="Attempts"
-            value={`${job.attempt_count ?? 0}/${job.max_attempts ?? 3}`}
+            label="Tries"
+            value={`${job.attempt_count ?? 0} of ${job.max_attempts ?? 3}`}
           />
-          <Detail label="Next retry" value={formatDate(job.next_attempt_at)} />
+          <Detail label="Next try" value={formatDate(job.next_attempt_at)} />
           <Detail
             label="Approval"
-            value={`#${job.approval_id} · ${job.approval_status}`}
+            value={
+              approvalStatusLabels[job.approval_status] ?? "Unknown status"
+            }
           />
         </div>
 
         {hasError && (
           <div className="text-linkgo-amber border-linkgo-amber/30 bg-linkgo-amber/10 flex items-start gap-2 rounded-lg border p-3 text-sm">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <p>{job.last_error}</p>
+            <p>{toPlainMessage(job.last_error ?? "")}</p>
           </div>
         )}
       </CardContent>

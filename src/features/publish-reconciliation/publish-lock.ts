@@ -30,6 +30,6 @@ export function findPublishLock(
 
 export function getPublishLockLabel(lock: PublishLock): string {
   return lock === "awaiting_reconciliation"
-    ? "Awaiting reconciliation in Safety"
-    : "Publishing in progress";
+    ? "We couldn't confirm it posted. Check it in Safety."
+    : "Posting…";
 }

@@ -61,13 +61,13 @@ export const relevanceScoringContextSchema = z
       issueContext.addIssue({
         code: "custom",
         path: ["candidates"],
-        message: "Relevance scoring candidates must be unique",
+        message: "Each idea can only be scored once per round",
       });
     }
     if (JSON.stringify(context).length > MAX_RELEVANCE_SCORING_CONTEXT_LENGTH) {
       issueContext.addIssue({
         code: "custom",
-        message: `Relevance scoring context cannot exceed ${MAX_RELEVANCE_SCORING_CONTEXT_LENGTH} characters`,
+        message: `The scoring notes can be up to ${MAX_RELEVANCE_SCORING_CONTEXT_LENGTH} characters`,
       });
     }
   });
@@ -114,8 +114,8 @@ const playbookKeySchema = z
 
 export const createCandidateSchema = z.object({
   campaignId: z.number().int().positive(),
-  url: z.string().trim().min(1, "LinkedIn post URL is required").max(1000),
-  content: z.string().trim().min(1, "Post text is required").max(3000),
+  url: z.string().trim().min(1, "Add the LinkedIn post link").max(1000),
+  content: z.string().trim().min(1, "Add the post text").max(3000),
   authorName: z.string().trim().max(160).default(""),
   authorProfileUrl: z.string().trim().max(1000).default(""),
   postedAt: z.string().trim().max(80).nullable().optional().default(null),

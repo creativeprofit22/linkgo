@@ -42,11 +42,11 @@ export function WorkflowsView(): React.ReactNode {
             </div>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                Workflows
+                Automations
               </h2>
               <p className="text-muted-foreground text-sm">
-                Resumable content pipeline runs, planner origins, manual
-                executor controls, and local event history.
+                Follow the steps of automated tasks. You can pause, continue, or
+                stop any of them, and see what happened.
               </p>
             </div>
           </div>
@@ -72,7 +72,7 @@ export function WorkflowsView(): React.ReactNode {
               size="sm"
               onClick={() => void loadWorkflows()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -81,7 +81,7 @@ export function WorkflowsView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading workflows…
+            Loading automations…
           </CardContent>
         </Card>
       ) : campaigns.length === 0 ? (
@@ -97,7 +97,7 @@ export function WorkflowsView(): React.ReactNode {
                 Selected campaign
               </label>
               <p className="text-muted-foreground text-xs">
-                Workflow runs and event history are stored locally.
+                Automations and their history are saved on this computer.
               </p>
             </div>
             <select
@@ -121,26 +121,27 @@ export function WorkflowsView(): React.ReactNode {
           {selectedCampaignArchived && (
             <Card className="bg-muted/40 border-dashed">
               <CardContent className="text-muted-foreground p-4 text-sm">
-                Archived campaigns keep workflow history visible, but new runs
-                and step changes are blocked. Restore the campaign first.
+                This campaign is archived. You can still see its automations,
+                but you can't start new ones or change steps. Restore the
+                campaign first.
               </CardContent>
             </Card>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              label="Active runs"
+              label="In progress"
               value={String(summary.activeRuns)}
             />
             <SummaryCard
-              label="Waiting approval"
+              label="Waiting for approval"
               value={String(summary.waitingApproval)}
             />
             <SummaryCard
-              label="Blocked/failed"
+              label="Stuck or failed"
               value={String(summary.blockedFailed)}
             />
-            <SummaryCard label="Completed" value={String(summary.completed)} />
+            <SummaryCard label="Done" value={String(summary.completed)} />
           </div>
 
           {runs.length === 0 ? (
@@ -218,8 +219,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Workflows attach to one
-            campaign.
+            Open Campaigns and create a campaign first. Each automation belongs
+            to one campaign.
           </p>
         </div>
       </CardContent>
@@ -235,10 +236,10 @@ function EmptyRuns(): React.ReactNode {
           <Workflow className="size-7" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">No workflow runs yet</h3>
+          <h3 className="text-lg font-semibold">No automations yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Create a content pipeline run to track research, scoring, drafting,
-            approval, scheduling, and measurement.
+            Start an automation to follow each step: finding ideas, scoring
+            them, writing drafts, approval, scheduling, and results.
           </p>
         </div>
       </CardContent>

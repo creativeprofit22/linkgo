@@ -61,8 +61,25 @@ function formatDueAt(item: CampaignBacklogItemDetail): string {
     }).format(new Date(item.due_at));
     return `${dueAt} (${item.recurrence_timezone})`;
   } catch {
-    return `${DATE_FORMATTER.format(new Date(item.due_at))} (invalid schedule zone)`;
+    return `${DATE_FORMATTER.format(new Date(item.due_at))} (time zone not recognised)`;
   }
+}
+
+const LINKED_STATUS_LABELS: Record<string, string> = {
+  pending: "Not started",
+  queued: "Waiting to start",
+  running: "In progress",
+  waiting_approval: "Waiting for approval",
+  blocked: "On hold",
+  completed: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  skipped: "Skipped",
+};
+
+function formatLinkedStatus(value: string | null | undefined): string {
+  if (value == null) return "Unknown";
+  return LINKED_STATUS_LABELS[value] ?? value.replace(/_/gu, " ");
 }
 
 export function CampaignBacklogItemCard({
@@ -86,7 +103,7 @@ export function CampaignBacklogItemCard({
   const mutationDisabled =
     pending || archived || terminal || workflowControlled;
   const plannerOrigin = plannerLinked
-    ? `Autopilot plan #${item.autopilot_plan_id} · source batch #${item.source_import_batch_id} · queued workflow #${item.workflow_run_id}.`
+    ? `Created by Autopilot plan #${item.autopilot_plan_id} · import #${item.source_import_batch_id} · automation #${item.workflow_run_id}.`
     : "";
 
   return (
@@ -125,12 +142,12 @@ export function CampaignBacklogItemCard({
           />
           <Fact
             icon={Repeat2}
-            label="Recurrence"
+            label="Repeats"
             value={CAMPAIGN_BACKLOG_RECURRENCE_LABELS[item.recurrence]}
           />
           <Fact
             icon={Tags}
-            label="Work type"
+            label="Task type"
             value={CAMPAIGN_BACKLOG_WORK_TYPE_LABELS[item.work_type]}
           />
         </dl>
@@ -139,37 +156,39 @@ export function CampaignBacklogItemCard({
           <div className="text-muted-foreground mt-4 space-y-1 border-s-2 ps-3 text-xs leading-relaxed break-words">
             <p>{plannerOrigin}</p>
             <p>
-              Status follows the Workflows score step:{" "}
-              {item.linked_score_step_status?.replace(/_/gu, " ")} (
-              {item.linked_workflow_status?.replace(/_/gu, " ")} workflow).
+              Status follows the scoring step in Automations:{" "}
+              {formatLinkedStatus(item.linked_score_step_status)} (automation:{" "}
+              {formatLinkedStatus(item.linked_workflow_status)}).
             </p>
             <p>
               {item.linked_score_step_status === "blocked" ||
               item.linked_score_step_status === "failed"
-                ? "Open Workflows to retry scoring."
-                : "Open Workflows to manage scoring."}
+                ? "Open Automations to try scoring again."
+                : "Open Automations to manage scoring."}
             </p>
           </div>
         ) : plannerLinked ? (
           <p className="text-muted-foreground mt-4 border-s-2 ps-3 text-xs leading-relaxed break-words">
-            {plannerOrigin} The linked workflow is unavailable, so this legacy
-            item remains manually recoverable.
+            {plannerOrigin} Its automation is no longer available, so you can
+            update this task yourself.
           </p>
         ) : item.owner_type === "linkgo" ? (
           <p className="text-muted-foreground mt-4 border-s-2 ps-3 text-xs leading-relaxed">
-            Manually created Linkgo responsibility label. It is not
-            planner-linked and runs no external action.
+            You marked Linkgo as the owner. This is just a label. It isn't part
+            of Autopilot and doesn't post or do anything outside Linkgo.
           </p>
         ) : null}
         {item.recurrence !== "none" && !terminal ? (
           <p className="text-muted-foreground mt-2 text-xs">
-            Completing this item creates one future {item.recurrence} successor.
+            When you complete this task, Linkgo adds the next{" "}
+            {CAMPAIGN_BACKLOG_RECURRENCE_LABELS[item.recurrence].toLowerCase()}{" "}
+            one.
           </p>
         ) : null}
         {archived && !terminal ? (
           <p className="mt-4 rounded-lg border p-3 text-sm">
-            This campaign is archived. Its backlog is read-only until the
-            campaign is restored.
+            This campaign is archived. You can view its tasks but can't change
+            them until you restore the campaign.
           </p>
         ) : null}
       </CardContent>
@@ -193,7 +212,7 @@ export function CampaignBacklogItemCard({
               disabled={mutationDisabled}
               onClick={() => void onSetStatus(item.id, "in_progress")}
             >
-              <Play aria-hidden="true" className="size-4" /> Resume
+              <Play aria-hidden="true" className="size-4" /> Continue
             </Button>
           ) : null}
           <Button
@@ -213,7 +232,8 @@ export function CampaignBacklogItemCard({
               disabled={mutationDisabled}
               onClick={() => void onSetStatus(item.id, "pending")}
             >
-              <CirclePause aria-hidden="true" className="size-4" /> Pending
+              <CirclePause aria-hidden="true" className="size-4" /> Mark not
+              started
             </Button>
           ) : null}
           {item.status !== "blocked" ? (
@@ -224,7 +244,7 @@ export function CampaignBacklogItemCard({
               disabled={mutationDisabled}
               onClick={() => void onSetStatus(item.id, "blocked")}
             >
-              <Ban aria-hidden="true" className="size-4" /> Block
+              <Ban aria-hidden="true" className="size-4" /> Put on hold
             </Button>
           ) : null}
           <UpsertCampaignBacklogItemDialog

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Roadmap 5A connects a Roadmap 3D planner workflow to attended model scoring without turning the native planner into a model runner. The operator starts scoring from Workflows, reviews the exact durable candidate scope, chooses a connected provider/model, confirms the threshold policy, and sees the resulting state projected into Autopilot and Backlog.
+Roadmap 5A connects a Roadmap 3D planner workflow to attended model scoring without turning the native planner into a model runner. The operator starts scoring from Automations, reviews the exact durable candidate scope, chooses a connected provider/model, confirms the threshold policy, and sees the resulting state projected into Autopilot and Tasks.
 
 Roadmap 5 remains partial. This slice completes attended planner-linked scoring; unattended/background scoring and a compliant production source connector remain future work.
 
@@ -15,8 +15,8 @@ Candidate artifacts preserve provenance rather than foreign-key ownership. Delet
 ## Operator flow
 
 1. The local planner creates a score-first workflow, exact candidate artifacts, and one Linkgo-owned scoring backlog item.
-2. Workflows displays **Score batch** for the planner score step.
-3. The dialog shows scope counts, excludes `dry_run`, defaults to the first connected provider and its project model, uses a minimum score of 60, and leaves low-score rejection unchecked.
+2. Automations displays **Score ideas** (dialog "Score these ideas") for the planner score step.
+3. The dialog shows scope counts, excludes `dry_run` (shown as **Practice mode (no AI used)**), defaults to the first connected provider and its project model, uses a minimum score of 60, and leaves low-score rejection unchecked.
 4. The operator confirms the provider, model, threshold, and optional rejection policy.
 5. The restricted native claim command acquires one SQLx connection, starts `BEGIN IMMEDIATE`, revalidates scope, and atomically creates the attempt, scorer run, agent artifact, workflow projection, and backlog projection.
 6. The selected provider receives one labeled JSON context block containing only the approved campaign and attached candidate fields; the network call runs after the claim commits.
@@ -56,14 +56,14 @@ The workflow score step owns the linked one-off scoring item:
 - `completed` projects to `completed`;
 - `skipped` projects to `cancelled`.
 
-Terminal legacy backlog rows are never reopened, and projection never creates a recurring successor. Live planner-linked backlog controls are read-only; recovery happens in Workflows.
+Terminal legacy backlog rows are never reopened, and projection never creates a recurring successor. Live planner-linked backlog controls are read-only; recovery happens in Automations.
 
 ## Safety boundaries
 
 - The native Autopilot Planner never invokes a provider.
 - Scoring is foreground, attended, and operator-confirmed.
 - `dry_run` is unavailable for planner-linked scoring.
-- The global kill switch is read again inside the pinned native score-write transaction. If it changes during provider latency, Linkgo commits a blocked scorer/execution/workflow/backlog projection plus safety audit evidence, returns a bounded explicit error, and leaves every candidate unchanged.
+- The global kill switch (on screen: **Emergency pause**) is read again inside the pinned native score-write transaction. If it changes during provider latency, Linkgo commits a blocked scorer/execution/workflow/backlog projection plus safety audit evidence, returns a bounded explicit error, and leaves every candidate unchanged.
 - Archived campaign state, missing provider, missing scope, and invalid context fail closed.
 - Provider calls occur outside SQLite transactions.
 - Credentials remain behind the native Tauri provider boundary.

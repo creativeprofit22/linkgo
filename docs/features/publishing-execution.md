@@ -2,7 +2,7 @@
 
 ## Purpose
 
-One native execution path publishes approved LinkedIn posts and approved comments. Manual publish dialogs and the background scheduler both call it. It reserves a durable execution row before any network I/O and settles every linked local record in one transaction afterward. It also keeps uncertain remote outcomes visible until an operator reconciles them.
+One native execution path publishes approved LinkedIn posts and approved comments. Manual publish dialogs and the background scheduler (shown as **Auto-posting**) both call it. It reserves a durable execution row before any network I/O and settles every linked local record in one transaction afterward. It also keeps uncertain remote outcomes visible until an operator reconciles them (on screen: **Check what happened**).
 
 Linkgo does **not** promise exactly-once LinkedIn delivery. The contract below explains why.
 
@@ -143,21 +143,21 @@ Rules:
 - `not_posted` records a failed attempt and releases the subject. It can then be published again.
 - Both resolve the "outcome unknown" error-queue item. Nothing is deleted, and the note is stored on the execution.
 
-UI: the Safety view shows a **Publishing needs reconciliation** card (`src/features/publish-reconciliation`). Rows that are still in progress show "In progress". `outcome_unknown` rows get a Reconcile dialog with the resolution choice, a URL field required for "posted", an optional note, and a typed `RECONCILE` confirmation. The dialog warns that marking something "not posted" when it really posted can lead to a duplicate on the next publish.
+UI: the Safety view shows a **Check what happened to these posts** card (`src/features/publish-reconciliation`). Rows that are still in progress show "In progress". `outcome_unknown` rows (badge: **Couldn't confirm**) get a **Check what happened** button that opens a "Confirm what happened to this post" (or "…this comment") dialog with the resolution choice, a URL field required for "posted", an optional note, and a typed `RECONCILE` confirmation. The dialog warns that marking something "not posted" when it really posted can lead to a duplicate on the next publish.
 
 ### Operator runbook
 
-1. Open Safety → Publishing needs reconciliation.
+1. Open Safety → Check what happened to these posts.
 2. For each `outcome_unknown` row, open the LinkedIn profile or activity feed of the connected account and look for the post or comment text.
 3. If you find it, choose **Posted on LinkedIn** and paste its URL.
 4. If you are sure it is absent, choose **Not posted**. Wait a few minutes first, because LinkedIn can be slow to show new activity.
-5. Rows stuck in `reserved` or `in_flight` clear automatically within about 10 minutes once the scheduler worker is running or ticked.
+5. Rows stuck in `reserved` or `in_flight` clear automatically within about 10 minutes once the scheduler worker is running (**Turn on auto-posting**) or ticked (**Post what's due now**).
 
 Live LinkedIn actions and any data-destructive recovery (deleting rows, editing the database by hand) need explicit user authorization and are not part of this runbook.
 
 ## Preserved safety controls
 
-- Global kill switch: checked inside the reservation transaction; no row is reserved and LinkedIn is not called while it is on. The scheduler also skips due jobs.
+- Global kill switch (on screen: **Emergency pause**): checked inside the reservation transaction; no row is reserved and LinkedIn is not called while it is on. The scheduler also skips due jobs.
 - Scope checks (`w_member_social`, `w_member_social_feed`) in the live transport before any request.
 - Reviewed-revision readiness gate, content-bound idempotency-key check and typed-confirmation dialogs are unchanged.
 - Daily comment limit counts succeeded attempts plus open comment executions, so concurrent comments cannot exceed it.

@@ -37,7 +37,7 @@ export const campaignBacklogIsoTimestampSchema = z
 const titleSchema = z
   .string()
   .trim()
-  .min(1, "Title is required")
+  .min(1, "Add a title")
   .max(
     CAMPAIGN_BACKLOG_TITLE_MAX_LENGTH,
     `Title must be ${CAMPAIGN_BACKLOG_TITLE_MAX_LENGTH} characters or fewer`,
@@ -60,7 +60,9 @@ export const campaignBacklogFiltersSchema = z.object({
   view: campaignBacklogViewSchema.default("open"),
 });
 
-const recurrenceTimeZoneSchema = z.string().max(100, "Time zone is too long");
+const recurrenceTimeZoneSchema = z
+  .string()
+  .max(100, "That time zone name is too long");
 
 function validateRecurrenceTimeZone(
   value: { recurrence: string; recurrenceTimeZone: string },
@@ -71,7 +73,7 @@ function validateRecurrenceTimeZone(
       context.addIssue({
         code: "custom",
         path: ["recurrenceTimeZone"],
-        message: "One-off items do not use a recurrence time zone",
+        message: "One-time tasks don't need a time zone",
       });
     }
     return;
@@ -80,7 +82,7 @@ function validateRecurrenceTimeZone(
     context.addIssue({
       code: "custom",
       path: ["recurrenceTimeZone"],
-      message: "Choose a valid IANA time zone",
+      message: "Choose a time zone from the list",
     });
   }
 }

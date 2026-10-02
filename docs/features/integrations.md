@@ -2,7 +2,7 @@
 
 ## Scope
 
-Linkgo has a native credential boundary for its provider catalog, Linkgo-only custom OpenAI-compatible endpoints, and LinkedIn OAuth.
+Linkgo has a native credential boundary (managed in the **Connected accounts** section) for its provider catalog, Linkgo-only custom OpenAI-compatible endpoints, and LinkedIn OAuth.
 
 GG AI providers exposed in Linkgo:
 
@@ -29,7 +29,7 @@ GG AI providers exposed in Linkgo:
 ## Supported flows
 
 - GG AI providers use API-key/token auth.
-- OpenAI and Anthropic can also connect with **account sign-in** (OAuth + PKCE), behind a required risk acknowledgement that native code enforces. OpenAI waits on a loopback listener at `127.0.0.1:1455` (5-minute timeout, paste fallback); Anthropic uses a pasted `code#state`. Tokens stay native, are refreshed 5 minutes before expiry under a per-provider lock, and a rejected refresh shows **Reauth required** / "Reconnect needed". Signing in replaces a saved API key for that provider (after confirmation) and vice versa; **Sign out** deletes the tokens. Decision record, terms status and risks: [`ai-account-sign-in.md`](ai-account-sign-in.md).
+- OpenAI and Anthropic can also connect with **account sign-in** (OAuth + PKCE), behind a required risk acknowledgement that native code enforces. OpenAI waits on a loopback listener at `127.0.0.1:1455` (5-minute timeout, paste fallback); Anthropic uses a pasted `code#state`. Tokens stay native, are refreshed 5 minutes before expiry under a per-provider lock, and a rejected refresh shows **Sign in again** / "Reconnect needed". Signing in replaces a saved API key for that provider (after confirmation) and vice versa; **Sign out** deletes the tokens. Decision record, terms status and risks: [`ai-account-sign-in.md`](ai-account-sign-in.md).
 - `linkgo_auth_oauth_cancel` stops a waiting OpenAI/Anthropic sign-in and drops its pending PKCE session.
 - Large credentials are split across several keyring entries (`<provider>#1..n`) because Windows Credential Manager caps each entry at 2560 bytes; older single-entry credentials still load.
 - Gemini is labeled as a Gemini Code Assist access token to avoid confusing it with a normal AI Studio key.
@@ -48,7 +48,7 @@ The native destination policy (`src-tauri/src/net/destination.rs`) checks every 
 
 Transport (`src-tauri/src/net/transport.rs`): environment proxies are ignored, redirects are never followed (a redirect response fails the request, so `x-api-key`/`Authorization` headers and bodies cannot be forwarded), connect timeout 10 s, total 120 s, HTTPS-only for non-consented destinations, DNS answers pointing at private networks are dropped for non-consented hosts, responses are capped at 8 MiB (LinkedIn 1 MiB) and provider error text at 500 characters.
 
-**Re-save requirement:** a Base URL saved by an older build that points at a local/private address, or uses `http://`, now fails with an actionable error. The native status re-checks the saved Base URL against the same policy, so such a provider shows **Reauth required** with that error on its Integrations card and is not treated as ready for agent runs. Reconnect the provider and tick the consent checkbox (or switch to `https://`).
+**Re-save requirement:** a Base URL saved by an older build that points at a local/private address, or uses `http://`, now fails with an actionable error. The native status re-checks the saved Base URL against the same policy, so such a provider shows **Sign in again** with that error on its Connected accounts card and is not treated as ready for agent runs. Reconnect the provider and tick the consent checkbox (or switch to `https://`).
 
 Consented local endpoints are trusted by design. See `docs/security/threat-model.md`.
 
@@ -71,8 +71,8 @@ Consented local endpoints are trusted by design. See `docs/security/threat-model
 
 Connected AI provider credentials can execute agent runs only after the operator presses start. Signed-in OpenAI runs go to the ChatGPT-plan Codex backend and only ChatGPT-plan models are accepted there, so every run dialog and blank-model fallback defaults OpenAI to the first ChatGPT-plan model (`gpt-6-sol`) when OpenAI is connected by sign-in, and to `gpt-4.1-mini` when it is connected by API key (`defaultAgentModelFor` / `resolveDefaultAgentModel`); signed-in Anthropic runs send the Claude Code identity headers and system prefix Anthropic requires, and may still be refused by Anthropic.
 
-LinkedIn publishing is approval-gated. Operators can publish from approval cards, and the native scheduler can publish only already-approved scheduled posts while Linkgo is running or hidden to tray.
+LinkedIn publishing is approval-gated. Operators can publish from approval cards, and the native scheduler (shown as **Auto-posting**) can publish only already-approved scheduled posts while Linkgo is running or hidden to tray.
 
 LinkedIn comment posting is approval-gated and requires Community Management API product access plus `w_member_social_feed`; existing OAuth connections may need reconnecting after the scope is approved.
 
-Dry-run agent runs remain available without credentials.
+Dry-run agent runs (shown as **Practice mode (no AI used)**) remain available without credentials.

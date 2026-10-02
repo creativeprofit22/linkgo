@@ -45,11 +45,11 @@ export function AgentRuntimeView(): React.ReactNode {
             </div>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                Agent Runtime
+                AI assistant
               </h2>
               <p className="text-muted-foreground text-sm">
-                Typed local model/tool loop, dry-run provider, and
-                approval-gated tool contracts.
+                See what the AI assistant did, and try it safely. It never posts
+                without your OK.
               </p>
             </div>
           </div>
@@ -78,7 +78,7 @@ export function AgentRuntimeView(): React.ReactNode {
               size="sm"
               onClick={() => void loadAgentRuntime()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -87,7 +87,7 @@ export function AgentRuntimeView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading agent runtime…
+            Loading AI assistant…
           </CardContent>
         </Card>
       ) : campaigns.length === 0 ? (
@@ -98,7 +98,8 @@ export function AgentRuntimeView(): React.ReactNode {
             <div>
               <p className="text-sm font-medium">Selected campaign</p>
               <p className="text-muted-foreground text-xs">
-                Agent runs, tool calls, and runtime events are stored locally.
+                Assistant tasks, their actions, and their history are saved on
+                this computer.
               </p>
             </div>
             <select
@@ -121,23 +122,23 @@ export function AgentRuntimeView(): React.ReactNode {
           {selectedCampaignArchived && (
             <Card className="bg-muted/40 border-dashed">
               <CardContent className="text-muted-foreground p-4 text-sm">
-                Archived campaigns keep agent runtime history visible, but new
-                runs and runtime changes are blocked. Restore the campaign
-                first.
+                This campaign is archived. You can still see its assistant
+                history, but you can't start new tasks or make changes. Restore
+                the campaign first.
               </CardContent>
             </Card>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              label="Active runs"
+              label="In progress"
               value={String(summary.activeRuns)}
             />
             <SummaryCard
-              label="Waiting approval"
+              label="Waiting for approval"
               value={String(summary.waitingApproval)}
             />
-            <SummaryCard label="Completed" value={String(summary.completed)} />
+            <SummaryCard label="Done" value={String(summary.completed)} />
             <SummaryCard label="Failed" value={String(summary.failed)} />
           </div>
 
@@ -217,8 +218,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Agent runs attach to one
-            campaign.
+            Open Campaigns and create a campaign first. Each assistant task
+            belongs to one campaign.
           </p>
         </div>
       </CardContent>
@@ -234,10 +235,10 @@ function EmptyRuns(): React.ReactNode {
           <Bot className="size-7" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">No agent runs yet</h3>
+          <h3 className="text-lg font-semibold">No assistant tasks yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Create a dry-run to validate the local provider loop, typed tool
-            contracts, and approval gates.
+            Start a practice run to see how the AI assistant works. Practice
+            mode uses no AI and nothing is posted.
           </p>
         </div>
       </CardContent>

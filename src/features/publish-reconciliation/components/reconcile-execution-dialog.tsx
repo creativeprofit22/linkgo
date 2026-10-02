@@ -33,12 +33,12 @@ const RESOLUTION_OPTIONS: {
   {
     value: "posted",
     label: "Posted on LinkedIn",
-    help: "I found it on LinkedIn. Record it as published with its URL.",
+    help: "I found it on LinkedIn. Mark it as posted and add its link.",
   },
   {
     value: "not_posted",
     label: "Not posted",
-    help: "I checked LinkedIn and it does not exist. Allow publishing again.",
+    help: "I checked LinkedIn and it isn't there. Let me post it again.",
   },
 ];
 
@@ -103,17 +103,17 @@ export function ReconcileExecutionDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant="outline" disabled={disabled}>
-          Reconcile
+          Check what happened
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Reconcile {itemLabel} publish</DialogTitle>
+            <DialogTitle>Confirm what happened to this {itemLabel}</DialogTitle>
             <DialogDescription>
-              Check LinkedIn for this {itemLabel} from{" "}
-              {execution.campaignName || "an unknown campaign"}, then record
-              what actually happened.
+              Look on LinkedIn for this {itemLabel} from{" "}
+              {execution.campaignName || "a campaign we don't know"}, then tell
+              us what really happened.
             </DialogDescription>
           </DialogHeader>
 
@@ -145,14 +145,14 @@ export function ReconcileExecutionDialog({
           </fieldset>
 
           <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-3 text-sm">
-            Marking “Not posted” when LinkedIn actually created the {itemLabel}{" "}
-            allows it to be published again and may cause a duplicate on
-            LinkedIn. Only choose it after checking LinkedIn.
+            If you choose “Not posted” but the {itemLabel} is really on
+            LinkedIn, it could be posted twice. Only choose it after you check
+            LinkedIn.
           </div>
 
           {resolution === "posted" && (
             <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-url`}>LinkedIn URL or URN</Label>
+              <Label htmlFor={`${idPrefix}-url`}>LinkedIn link</Label>
               <Input
                 id={`${idPrefix}-url`}
                 value={externalUrl}
@@ -164,7 +164,7 @@ export function ReconcileExecutionDialog({
               />
               {urlMissing && (
                 <p className="text-muted-foreground text-xs">
-                  Required when marking as posted.
+                  Add the link to mark it as posted.
                 </p>
               )}
             </div>
@@ -203,7 +203,7 @@ export function ReconcileExecutionDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {submitting ? "Reconciling…" : "Reconcile"}
+              {submitting ? "Saving…" : "Confirm result"}
             </Button>
           </DialogFooter>
         </form>

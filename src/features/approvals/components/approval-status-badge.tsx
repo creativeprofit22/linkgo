@@ -6,25 +6,25 @@ import type {
 } from "@/features/approvals/types";
 
 const approvalLabels: Record<ApprovalStatus, string> = {
-  needs_review: "Needs review",
+  needs_review: "Waiting for approval",
   changes_requested: "Changes requested",
   approved: "Approved",
   rejected: "Rejected",
   scheduled: "Scheduled",
-  published: "Published",
+  published: "Posted",
   cancelled: "Cancelled",
 };
 
 const scheduleLabels: Record<ScheduleJobStatus, string> = {
   scheduled: "Scheduled",
   cancelled: "Cancelled",
-  completed: "Completed",
-  failed: "Failed",
+  completed: "Done",
+  failed: "Didn't post",
 };
 
 const publishAttemptLabels: Record<PublishAttemptStatus, string> = {
-  succeeded: "Succeeded",
-  failed: "Failed",
+  succeeded: "Went live",
+  failed: "Didn't post",
 };
 
 const approvalVariants: Record<

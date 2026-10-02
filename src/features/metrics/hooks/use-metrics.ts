@@ -16,6 +16,7 @@ import {
   startMetricRefresh,
   stopMetricRefresh,
 } from "@/features/metrics/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CampaignMemory,
   CreateCampaignMemoryInput,
@@ -50,9 +51,12 @@ interface UseMetricsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  if (typeof error === "string" && error.trim() !== "") return error;
+  if (typeof error === "string" && error.trim() !== "")
+    return toPlainMessage(error);
 
-  return error instanceof Error ? error.message : "Unexpected metrics error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your analytics. Try again.";
 }
 
 function getDefaultCampaignId(
@@ -160,7 +164,7 @@ export function useMetrics(): UseMetricsState {
         await loadMetricsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Metric snapshot was not recorded", {
+        toast.error("We couldn't save these results", {
           description: message,
         });
         throw caught;
@@ -176,7 +180,7 @@ export function useMetrics(): UseMetricsState {
         await loadMetricsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Campaign memory was not saved", { description: message });
+        toast.error("We couldn't save this lesson", { description: message });
         throw caught;
       }
     },
@@ -188,10 +192,12 @@ export function useMetrics(): UseMetricsState {
       const status = await startMetricRefresh();
       setRefreshStatus(status);
       await loadMetricsForCampaign(selectedCampaignId);
-      toast.success("Metric refresh started");
+      toast.success("Auto-update is on");
     } catch (caught) {
       const message = getErrorMessage(caught);
-      toast.error("Metric refresh was not started", { description: message });
+      toast.error("We couldn't turn on auto-update", {
+        description: message,
+      });
       throw caught;
     }
   }, [loadMetricsForCampaign, selectedCampaignId]);
@@ -201,10 +207,12 @@ export function useMetrics(): UseMetricsState {
       const status = await stopMetricRefresh();
       setRefreshStatus(status);
       await loadMetricsForCampaign(selectedCampaignId);
-      toast.success("Metric refresh stopped");
+      toast.success("Auto-update is off");
     } catch (caught) {
       const message = getErrorMessage(caught);
-      toast.error("Metric refresh was not stopped", { description: message });
+      toast.error("We couldn't turn off auto-update", {
+        description: message,
+      });
       throw caught;
     }
   }, [loadMetricsForCampaign, selectedCampaignId]);
@@ -214,14 +222,16 @@ export function useMetrics(): UseMetricsState {
       const result = await runMetricRefreshTick();
       await loadMetricsForCampaign(selectedCampaignId);
       toast.success(
-        `${result.refreshed} refreshed, ${result.unavailable} unavailable, ${result.failed} failed`,
+        `${result.refreshed} updated, ${result.unavailable} not available, ${result.failed} didn't update`,
         {
-          description: `${result.retryScheduled} retry scheduled, ${result.blocked} blocked`,
+          description: `${result.retryScheduled} will try again, ${result.blocked} held back`,
         },
       );
     } catch (caught) {
       const message = getErrorMessage(caught);
-      toast.error("Metric refresh tick failed", { description: message });
+      toast.error("We couldn't update from LinkedIn", {
+        description: message,
+      });
       throw caught;
     }
   }, [loadMetricsForCampaign, selectedCampaignId]);
@@ -233,7 +243,7 @@ export function useMetrics(): UseMetricsState {
         await loadMetricsForCampaign(selectedCampaignId);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Campaign memory status was not changed", {
+        toast.error("We couldn't update this lesson", {
           description: message,
         });
         throw caught;

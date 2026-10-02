@@ -14,6 +14,14 @@ const severityClassName = {
   pass: "text-linkgo-green",
 } as const;
 
+/** Turns a stored rule key like `max_length` into a readable "Max length". */
+function formatRuleKey(ruleKey: string): string {
+  const words = ruleKey.replace(/[_-]+/g, " ").trim();
+  return words === ""
+    ? "Check"
+    : words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function AuditFindingList({
   findings,
 }: {
@@ -21,14 +29,12 @@ export function AuditFindingList({
 }): React.ReactNode {
   if (findings.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
-        No audit findings have been recorded yet.
-      </p>
+      <p className="text-muted-foreground text-sm">No check results yet.</p>
     );
   }
 
   return (
-    <ul className="space-y-2" aria-label="Deterministic check findings">
+    <ul className="space-y-2" aria-label="Automatic check results">
       {findings.map((finding) => {
         const Icon = severityIcon[finding.severity];
         return (
@@ -43,7 +49,9 @@ export function AuditFindingList({
               )}
             />
             <span className="min-w-0">
-              <span className="font-medium">{finding.rule_key}</span>
+              <span className="font-medium">
+                {formatRuleKey(finding.rule_key)}
+              </span>
               <span className="text-muted-foreground">
                 {": "}
                 {finding.message}

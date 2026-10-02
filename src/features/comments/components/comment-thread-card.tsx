@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { toPlainMessage } from "@/lib/plain-message";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { CommentVariantCard } from "@/features/comments/components/comment-variant-card";
@@ -141,7 +142,7 @@ export function CommentThreadCard({
             </div>
             <p className="text-muted-foreground text-sm">
               Campaign: {thread.campaign_name}
-              {archived ? " (archived)" : ""} · Source keyword:{" "}
+              {archived ? " (archived)" : ""} · Found with keyword:{" "}
               {thread.target.source_keyword || "—"}
             </p>
           </div>
@@ -151,7 +152,7 @@ export function CommentThreadCard({
             rel="noreferrer"
             className="text-linkgo-blue inline-flex items-center gap-1 text-sm font-medium hover:underline"
           >
-            Open target <ExternalLink className="size-3.5" />
+            Open post <ExternalLink className="size-3.5" />
           </a>
         </div>
       </CardHeader>
@@ -159,7 +160,7 @@ export function CommentThreadCard({
       <CardContent className="space-y-5">
         <div className="bg-background/70 rounded-lg border p-4">
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Target post
+            Post you're replying to
           </p>
           <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">
             {thread.target.target_content}
@@ -169,10 +170,10 @@ export function CommentThreadCard({
         <div className="bg-background/70 space-y-3 rounded-lg border p-4">
           <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-semibold">Thread notes</p>
+              <p className="text-sm font-semibold">Notes</p>
               <p className="text-muted-foreground text-xs">
-                Operator and reviewer context stays local and editable before
-                archive.
+                Notes stay on this computer. You can edit them until the
+                campaign is archived.
               </p>
             </div>
             <div className="flex gap-2">
@@ -201,14 +202,14 @@ export function CommentThreadCard({
           <div className="grid gap-3 md:grid-cols-2">
             <NoteField
               id={`operator-notes-${thread.id}`}
-              label="Operator notes"
+              label="Your notes"
               value={operatorNotes}
               disabled={archived || savingNotes}
               onChange={setOperatorNotes}
             />
             <NoteField
               id={`reviewer-notes-${thread.id}`}
-              label="Reviewer notes"
+              label="Approver notes"
               value={reviewerNotes}
               disabled={archived || savingNotes}
               onChange={setReviewerNotes}
@@ -229,26 +230,26 @@ export function CommentThreadCard({
         {thread.attempts.length > 0 && (
           <div className="space-y-3">
             <Separator />
-            <p className="text-sm font-semibold">Comment attempt history</p>
+            <p className="text-sm font-semibold">Posting history</p>
             {thread.attempts.map((attempt) => (
               <div key={attempt.id} className="rounded-lg border p-3 text-sm">
                 <p className="font-medium">
-                  {attempt.status === "succeeded" ? "Posted" : "Failed"} ·{" "}
+                  {attempt.status === "succeeded" ? "Posted" : "Didn't post"} ·{" "}
                   {attempt.created_at}
                 </p>
                 {attempt.external_comment_url && (
                   <p className="text-muted-foreground break-all">
-                    URL: {attempt.external_comment_url}
+                    Link: {attempt.external_comment_url}
                   </p>
                 )}
                 {attempt.platform_comment_id && (
                   <p className="text-muted-foreground break-all">
-                    ID: {attempt.platform_comment_id}
+                    Reference: {attempt.platform_comment_id}
                   </p>
                 )}
                 {attempt.error_message && (
                   <p className="text-destructive mt-1">
-                    {attempt.error_message}
+                    {toPlainMessage(attempt.error_message)}
                   </p>
                 )}
               </div>
@@ -260,8 +261,8 @@ export function CommentThreadCard({
       <CardFooter className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         {archived ? (
           <p className="text-muted-foreground text-sm">
-            Archived campaign history is visible, but comment mutations are
-            blocked.
+            This campaign is archived. You can see its history, but you
+            can&rsquo;t change its comments.
           </p>
         ) : (
           <>
@@ -271,7 +272,7 @@ export function CommentThreadCard({
               disabled={!canSubmit}
               onClick={() => setStatus("needs_review")}
             >
-              Submit for review
+              Send for approval
             </Button>
             <Button
               type="button"
@@ -313,7 +314,7 @@ export function CommentThreadCard({
             </Button>
             {canRecordAttempt && killSwitchEnabled ? (
               <p className="text-muted-foreground text-sm">
-                Post via LinkedIn is hidden by the global kill switch
+                Posting to LinkedIn is hidden because the emergency pause is on
                 {killSwitchReason ? `: ${killSwitchReason}` : "."}
               </p>
             ) : canRecordAttempt && targetUrn ? (
@@ -330,8 +331,8 @@ export function CommentThreadCard({
               </>
             ) : canRecordAttempt ? (
               <p className="text-muted-foreground text-sm">
-                LinkedIn target URN could not be resolved from the candidate
-                URL; use manual recording.
+                We couldn&rsquo;t find this post on LinkedIn from its link. Post
+                your reply on LinkedIn yourself, then mark it as posted here.
               </p>
             ) : null}
             <RecordCommentAttemptDialog
@@ -339,7 +340,7 @@ export function CommentThreadCard({
               status="succeeded"
               onRecord={onRecordAttempt}
               disabled={!canRecordAttempt}
-              triggerLabel="Record posted manually"
+              triggerLabel="Mark as posted"
             />
             <RecordCommentAttemptDialog
               thread={thread}
@@ -377,7 +378,7 @@ function NoteField({
         value={value}
         maxLength={2000}
         disabled={disabled}
-        placeholder="Add local workflow context."
+        placeholder="Add a note."
         onChange={(event) => onChange(event.target.value)}
       />
       <span className="text-muted-foreground block text-right text-xs">

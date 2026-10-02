@@ -218,7 +218,7 @@ export function UpsertCampaignBacklogItemDialog({
       setSubmitError(
         caught instanceof Error
           ? caught.message
-          : "Backlog item could not be saved",
+          : "We couldn't save this task. Please try again.",
       );
     }
   };
@@ -243,19 +243,17 @@ export function UpsertCampaignBacklogItemDialog({
           ) : (
             <Plus aria-hidden="true" className="size-4" />
           )}
-          {editing ? "Edit" : "New backlog item"}
+          {editing ? "Edit" : "New task"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           <DialogHeader>
-            <DialogTitle>
-              {editing ? "Edit backlog item" : "Create backlog item"}
-            </DialogTitle>
+            <DialogTitle>{editing ? "Edit task" : "Create task"}</DialogTitle>
             <DialogDescription>
-              Plan who is responsible and when work is due. A manually created
-              Linkgo owner is a responsibility label; planner linkage is created
-              only from an approved source batch. Neither runs external actions.
+              Choose who owns this task and when it's due. Setting Linkgo as the
+              owner is just a label. Tasks never post or do anything on
+              LinkedIn.
             </DialogDescription>
           </DialogHeader>
 
@@ -293,7 +291,7 @@ export function UpsertCampaignBacklogItemDialog({
             </FormField>
 
             <FormField
-              label="Work type"
+              label="Task type"
               error={fieldErrors.workType}
               id="backlog-work-type"
             >
@@ -346,7 +344,7 @@ export function UpsertCampaignBacklogItemDialog({
                 maxLength={CAMPAIGN_BACKLOG_DETAILS_MAX_LENGTH}
                 aria-invalid={Boolean(fieldErrors.details)}
                 onChange={(event) => updateField("details", event.target.value)}
-                placeholder="Add the context needed to complete this work."
+                placeholder="Add anything you'll need to finish this task."
               />
             )}
           </FormField>
@@ -395,7 +393,7 @@ export function UpsertCampaignBacklogItemDialog({
             </FormField>
 
             <FormField
-              label="Recurrence"
+              label="Repeats"
               error={fieldErrors.recurrence}
               id="backlog-recurrence"
             >
@@ -447,8 +445,8 @@ export function UpsertCampaignBacklogItemDialog({
                     id="backlog-recurrence-time-zone-help"
                     className="text-muted-foreground text-xs leading-relaxed"
                   >
-                    Future items keep this wall-clock time even when the device
-                    time zone changes.
+                    Repeating tasks stay at this time of day, even if your
+                    computer's time zone changes.
                   </p>
                 </>
               )}
@@ -471,7 +469,7 @@ export function UpsertCampaignBacklogItemDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : editing ? "Save changes" : "Create item"}
+              {pending ? "Saving…" : editing ? "Save changes" : "Create task"}
             </Button>
           </DialogFooter>
         </form>

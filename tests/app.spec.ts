@@ -25,7 +25,7 @@ test("sidebar sections scroll vertically when the window is short", async ({
   await page.setViewportSize({ width: 1280, height: 600 });
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  const nav = page.getByRole("navigation", { name: "Linkgo sections" });
+  const nav = page.getByRole("navigation", { name: "Main menu" });
   const metrics = await nav.evaluate((element) => ({
     clientHeight: element.clientHeight,
     scrollHeight: element.scrollHeight,
@@ -71,23 +71,20 @@ test("autopilot, backlog, queue, drafts, approvals, metrics, workflows, and agen
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await page.getByRole("button", { name: /Autopilot/ }).click();
+  await page.getByRole("button", { name: /^Autopilot/ }).click();
   await expect(
     page.getByRole("heading", { name: "Autopilot", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Autopilot/ })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-
-  await page.getByRole("button", { name: /Backlog/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Campaign Backlog" }),
-  ).toBeVisible();
+    page.getByRole("button", { name: /^Autopilot/ }),
+  ).toHaveAttribute("aria-current", "page");
 
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
+
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: /Drafts/ }).click();
@@ -104,29 +101,27 @@ test("autopilot, backlog, queue, drafts, approvals, metrics, workflows, and agen
     "page",
   );
 
-  await page.getByRole("button", { name: /Metrics/ }).click();
+  await page.getByRole("button", { name: /^Analytics/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Metrics", exact: true }),
+    page.getByRole("heading", { name: "Analytics", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Metrics/ })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("button", { name: /^Analytics/ }),
+  ).toHaveAttribute("aria-current", "page");
 
-  await page.getByRole("button", { name: /Workflows/ }).click();
+  await page.getByRole("button", { name: /^Automations/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Workflows", exact: true }),
+    page.getByRole("heading", { name: "Automations", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Workflows/ })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("button", { name: /^Automations/ }),
+  ).toHaveAttribute("aria-current", "page");
 
-  await page.getByRole("button", { name: /Agent Runtime/ }).click();
+  await page.getByRole("button", { name: /^AI assistant/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Agent Runtime", exact: true }),
+    page.getByRole("heading", { name: "AI assistant", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Agent Runtime/ }),
+    page.getByRole("button", { name: /^AI assistant/ }),
   ).toHaveAttribute("aria-current", "page");
 });

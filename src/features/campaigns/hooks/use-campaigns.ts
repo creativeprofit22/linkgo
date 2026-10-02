@@ -7,6 +7,7 @@ import {
   setCampaignStatus,
   updateCampaign as updateCampaignRecord,
 } from "@/features/campaigns/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CampaignStatus,
   CampaignWithKeywords,
@@ -28,11 +29,14 @@ interface UseCampaignsState {
 function getErrorMessage(error: unknown): string {
   if (error instanceof z.ZodError) {
     const issue = error.issues[0];
-    if (!issue) return "Campaign input is invalid";
-    const path = issue.path.map(String).join(".");
-    return path ? `${path}: ${issue.message}` : issue.message;
+    if (!issue) {
+      return "Some campaign details don't look right. Check them and try again.";
+    }
+    return issue.message;
   }
-  return error instanceof Error ? error.message : "Unexpected campaign error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with this campaign. Please try again.";
 }
 
 export function useCampaigns(): UseCampaignsState {
@@ -64,7 +68,9 @@ export function useCampaigns(): UseCampaignsState {
         await loadCampaigns();
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Campaign was not created", { description: message });
+        toast.error("We couldn't create this campaign", {
+          description: message,
+        });
         throw caught;
       }
     },
@@ -78,7 +84,9 @@ export function useCampaigns(): UseCampaignsState {
         await loadCampaigns();
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Campaign was not updated", { description: message });
+        toast.error("We couldn't save your campaign changes", {
+          description: message,
+        });
         throw caught;
       }
     },
@@ -92,7 +100,7 @@ export function useCampaigns(): UseCampaignsState {
         await loadCampaigns();
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Campaign status was not changed", {
+        toast.error("We couldn't change this campaign's status", {
           description: message,
         });
         throw caught;

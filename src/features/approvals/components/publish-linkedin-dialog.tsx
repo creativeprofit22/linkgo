@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { toPlainMessage } from "@/lib/plain-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { assertApprovalCanPublishViaLinkedIn } from "@/features/approvals/data";
@@ -36,10 +37,12 @@ interface UnknownOutcomeState {
   message: string;
 }
 
-const CONFIRMATION_TEXT = "Publish now";
+const CONFIRMATION_TEXT = "Post now";
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "LinkedIn publish failed";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong. Check LinkedIn before you try again.";
 }
 
 function getPublishScheduleJobId(
@@ -87,20 +90,20 @@ export function PublishLinkedInDialog({
   const showOutcome = (outcome: ExecutionOutcome): void => {
     switch (outcome.status) {
       case "succeeded":
-        toast.success("Published to LinkedIn", {
+        toast.success("Posted to LinkedIn", {
           description: outcome.platformId || outcome.externalUrl,
         });
         handleOpenChange(false);
         return;
       case "failed":
-        toast.error("LinkedIn publish failed", {
-          description: outcome.message,
+        toast.error("Your post didn't go out", {
+          description: toPlainMessage(outcome.message),
         });
         handleOpenChange(false);
         return;
       case "blocked":
-        toast.error("LinkedIn publish blocked", {
-          description: outcome.message,
+        toast.error("Linkgo stopped this post", {
+          description: toPlainMessage(outcome.message),
         });
         handleOpenChange(false);
         return;
@@ -113,7 +116,7 @@ export function PublishLinkedInDialog({
         });
         toast.warning(OUTCOME_UNKNOWN_TITLE, {
           description:
-            "Do not publish again. Check LinkedIn and reconcile in Safety.",
+            "Don't post again. Check LinkedIn, then confirm what happened in Safety.",
         });
         return;
     }
@@ -138,7 +141,7 @@ export function PublishLinkedInDialog({
         ...(scheduleJobId === undefined ? {} : { scheduleJobId }),
       });
     } catch (caught) {
-      toast.error("LinkedIn publish blocked", {
+      toast.error("Linkgo stopped this post", {
         description: getErrorMessage(caught),
       });
       setSubmitting(false);
@@ -151,7 +154,7 @@ export function PublishLinkedInDialog({
       const outcome = await publishLinkedInPost(publishInput);
       showOutcome(outcome);
     } catch (caught) {
-      toast.error("LinkedIn publish failed", {
+      toast.error("Your post didn't go out", {
         description: getErrorMessage(caught),
       });
     } finally {
@@ -164,21 +167,22 @@ export function PublishLinkedInDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" disabled={disabled}>
-          <Send className="size-4" /> Publish via LinkedIn
+          <Send className="size-4" /> Post to LinkedIn
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Publish to LinkedIn</DialogTitle>
+            <DialogTitle>Post to LinkedIn now</DialogTitle>
             <DialogDescription>
-              This will publish to LinkedIn using the connected account.
+              This posts to LinkedIn from your connected account. Linkgo never
+              posts without your OK.
             </DialogDescription>
           </DialogHeader>
 
           <div className="bg-muted/40 max-h-72 overflow-auto rounded-xl border p-4">
             <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-              Exact escaped LinkedIn preview
+              Exactly how it will look on LinkedIn
             </p>
             <p className="text-sm leading-relaxed whitespace-pre-line">
               {commentary}
@@ -186,15 +190,15 @@ export function PublishLinkedInDialog({
           </div>
 
           <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-3 text-sm">
-            Publishing is irreversible. Confirm the account and text before
-            sending.
+            You can't undo a post from here. Check the account and the text
+            before you post.
           </div>
 
           {unknownOutcome !== null && (
             <OutcomeUnknownAlert
               itemLabel="post"
               executionId={unknownOutcome.executionId}
-              message={unknownOutcome.message}
+              message={toPlainMessage(unknownOutcome.message)}
             />
           )}
 
@@ -215,7 +219,7 @@ export function PublishLinkedInDialog({
               id={`publish-linkedin-help-${approval.id}`}
               className="text-muted-foreground text-xs"
             >
-              The button unlocks only for this exact confirmation text.
+              The post button only turns on when you type these exact words.
             </p>
           </div>
 
@@ -234,7 +238,7 @@ export function PublishLinkedInDialog({
                 submitting || !confirmationMatches || unknownOutcome !== null
               }
             >
-              {submitting ? "Publishing…" : "Publish via LinkedIn"}
+              {submitting ? "Posting…" : "Post to LinkedIn"}
             </Button>
           </DialogFooter>
         </form>

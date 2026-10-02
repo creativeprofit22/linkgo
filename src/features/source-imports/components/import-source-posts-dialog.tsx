@@ -21,6 +21,7 @@ import type {
   CreateSourceImportBatchInput,
   SourceImportBatchResult,
 } from "@/features/source-imports/types";
+import { toPlainMessage } from "@/lib/plain-message";
 
 const SOURCE_IMPORT_EXAMPLE = `[
   {
@@ -42,7 +43,9 @@ interface ImportSourcePostsDialogProps {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Source import failed";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "We couldn't import these posts. Please try again.";
 }
 
 function ResultSummary({
@@ -58,17 +61,19 @@ function ResultSummary({
     >
       <p className="font-medium">
         {result.status === "completed"
-          ? "Import completed"
+          ? "Import finished"
           : result.status === "failed"
             ? "Import stopped"
-            : "Import completed with review items"}
+            : "Import finished. Some posts need a look"}
       </p>
       <p className="text-muted-foreground">
-        {result.acceptedCount} accepted, {result.duplicateCount} duplicate,{" "}
-        {result.rejectedCount} rejected.
+        {result.acceptedCount} added, {result.duplicateCount} already saved,{" "}
+        {result.rejectedCount} skipped.
       </p>
       {result.errorMessage ? (
-        <p className="text-destructive break-words">{result.errorMessage}</p>
+        <p className="text-destructive break-words">
+          {toPlainMessage(result.errorMessage)}
+        </p>
       ) : null}
     </div>
   );
@@ -119,32 +124,32 @@ export function ImportSourcePostsDialog({
           variant="outline"
           disabled={disabled || campaignId === null}
         >
-          <FileInput className="size-4" /> Import source posts
+          <FileInput className="size-4" /> Import posts
         </Button>
       </DialogTrigger>
       <DialogContent className="source-import-dialog max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Import source posts</DialogTitle>
+            <DialogTitle>Import posts</DialogTitle>
             <DialogDescription>
-              Paste approved source-post data for this campaign. Every row is
-              checked against the selected campaign policy before candidate data
-              is stored. Import stays local and does not request LinkedIn data.
+              Paste a list of posts for this campaign. Each post is checked
+              against your idea filters before Linkgo saves it as an idea.
+              Linkgo doesn't contact LinkedIn to do this.
             </DialogDescription>
           </DialogHeader>
 
           {result === null ? (
             <>
               <div className="space-y-2">
-                <Label htmlFor="source-import-json">Source posts JSON</Label>
+                <Label htmlFor="source-import-json">Posts (JSON)</Label>
                 <p
                   id="source-import-help"
                   className="text-muted-foreground text-sm"
                 >
-                  Use a JSON array with 1–{MAX_SOURCE_IMPORT_ROWS} rows. Each
-                  row requires <code>url</code>, <code>content</code>, and an
-                  absolute <code>postedAt</code> timestamp with a timezone.
-                  Maximum source size is{" "}
+                  Paste a JSON list of 1–{MAX_SOURCE_IMPORT_ROWS} posts, like
+                  the example below. Each post needs a <code>url</code>, its{" "}
+                  <code>content</code>, and a <code>postedAt</code> date and
+                  time with a time zone. You can paste up to{" "}
                   {MAX_SOURCE_IMPORT_TEXT_LENGTH.toLocaleString("en-US")}{" "}
                   characters.
                 </p>
@@ -184,10 +189,10 @@ export function ImportSourcePostsDialog({
               </div>
 
               <p className="text-muted-foreground text-xs">
-                Rows that fail source, age, banned-topic, or prior-contact rules
-                are recorded as rejected without candidate artifacts. Import
-                does not call a model, draft, approve, comment, schedule, or
-                publish.
+                Posts that don't pass your idea filters (link, post age, blocked
+                topics, or people you've already contacted) are skipped and not
+                saved as ideas. Importing never uses AI, writes drafts,
+                approves, comments, schedules, or posts.
               </p>
             </>
           ) : (

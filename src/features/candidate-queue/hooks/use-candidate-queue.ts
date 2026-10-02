@@ -14,6 +14,7 @@ import {
   setCandidateStatus,
   updateCandidate as updateCandidateRecord,
 } from "@/features/candidate-queue/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CandidateDiscoveryItem,
   CandidateStatus,
@@ -49,8 +50,8 @@ interface UseCandidateQueueState {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
-    ? error.message
-    : "Unexpected candidate queue error";
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your ideas. Please try again.";
 }
 
 function getDefaultCampaignId(
@@ -188,7 +189,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
         await loadSelectedCampaign(input.campaignId, true);
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Candidate was not added", { description: message });
+        toast.error("We couldn't add this idea", { description: message });
         throw caught;
       }
     },
@@ -202,7 +203,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
         await reloadSelectedCampaign();
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Candidate was not updated", { description: message });
+        toast.error("We couldn't update this idea", { description: message });
         throw caught;
       }
     },
@@ -216,7 +217,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
         await reloadSelectedCampaign();
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Candidate status was not changed", {
+        toast.error("We couldn't change this idea's status", {
           description: message,
         });
         throw caught;
@@ -232,7 +233,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
         await reloadSelectedCampaign();
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Candidate was not deleted", { description: message });
+        toast.error("We couldn't delete this idea", { description: message });
         throw caught;
       }
     },
@@ -244,10 +245,10 @@ export function useCandidateQueue(): UseCandidateQueueState {
       try {
         await runCandidateDiscovery(input);
         await loadSelectedCampaign(input.campaignId, true);
-        toast.success("Discovery run completed");
+        toast.success("New topic ideas found");
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Discovery was not run", { description: message });
+        toast.error("We couldn't find topics", { description: message });
         throw caught;
       }
     },
@@ -259,10 +260,10 @@ export function useCandidateQueue(): UseCandidateQueueState {
       try {
         await scoreCandidates(input);
         await loadSelectedCampaign(input.campaignId, true);
-        toast.success("Candidate scoring completed");
+        toast.success("Ideas scored");
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Candidates were not scored", { description: message });
+        toast.error("We couldn't score your ideas", { description: message });
         throw caught;
       }
     },
@@ -277,10 +278,10 @@ export function useCandidateQueue(): UseCandidateQueueState {
           await reloadSelectedCampaign();
         }
         setCampaigns(await listCampaigns());
-        toast.success("Keyword promoted");
+        toast.success("Keyword added");
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Suggestion was not promoted", { description: message });
+        toast.error("We couldn't add this keyword", { description: message });
         throw caught;
       }
     },
@@ -294,10 +295,12 @@ export function useCandidateQueue(): UseCandidateQueueState {
         if (selectedCampaignIdRef.current === input.campaignId) {
           await reloadSelectedCampaign();
         }
-        toast.success("Suggestion dismissed");
+        toast.success("Topic idea dismissed");
       } catch (caught) {
         const message = getErrorMessage(caught);
-        toast.error("Suggestion was not dismissed", { description: message });
+        toast.error("We couldn't dismiss this topic idea", {
+          description: message,
+        });
         throw caught;
       }
     },

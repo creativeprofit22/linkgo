@@ -4,7 +4,7 @@
 
 Roadmap 3D is implemented. The Autopilot Planner is an opt-in, local-only bridge from completed policy-enforced source batches to explicit Linkgo work.
 
-One eligible source batch creates exactly one durable plan, one due-now Linkgo scoring backlog item, and one queued content workflow. Research is already represented by the accepted source batch, so the workflow's `research` step is complete and `score` is the first pending step.
+One eligible source batch creates exactly one durable plan, one due-now Linkgo scoring backlog item (shown in **Tasks**), and one queued content workflow (shown in **Automations**). Research is already represented by the accepted source batch, so the workflow's `research` step is complete and `score` is the first pending step.
 
 Roadmap 3 remains partial and blocked on one compliant production source connector. The only available connector is operator-supplied `local_json`.
 
@@ -17,15 +17,15 @@ A source batch is processable by a planner tick when:
 - the batch originally accepted at least one row; and
 - no `autopilot_plans` row already owns the batch.
 
-The bounded eligibility query and the dashboard's **Eligible now** count use this same predicate. They run oldest-first with `autopilot_planner_settings.max_batches_per_tick`, default `3`.
+The bounded eligibility query and the dashboard's **Ready now** count use this same predicate. They run oldest-first with `autopilot_planner_settings.max_batches_per_tick`, default `3`.
 
 Terminal batches with zero originally accepted rows are ignored. Processing and failed batches are ignored. Draft, paused, archived, and non-autopilot campaigns are ignored.
 
-Current candidate links determine the outcome after selection, not whether a batch is processable. A processable batch with at least one surviving accepted candidate creates linked backlog and workflow work. If every originally accepted candidate was later deleted, the tick instead creates one durable `skipped` plan with no backlog/workflow links. The plan removes the batch from **Eligible now**, and the unique source-batch key prevents repeated retries.
+Current candidate links determine the outcome after selection, not whether a batch is processable. A processable batch with at least one surviving accepted candidate creates linked backlog and workflow work. If every originally accepted candidate was later deleted, the tick instead creates one durable `skipped` plan with no backlog/workflow links. The plan removes the batch from **Ready now**, and the unique source-batch key prevents repeated retries.
 
 ## Atomic lifecycle
 
-For every selected batch, the native planner opens one immediate SQLite transaction, re-reads `safety_settings`, and only then revalidates campaign state, autopilot eligibility, batch state, current candidate count, and absence of an existing plan. If the global kill switch was enabled after selection or an earlier batch, the transaction records one batch-linked `planner_blocked` event, creates no plan/backlog/workflow records, and stops the tick.
+For every selected batch, the native planner opens one immediate SQLite transaction, re-reads `safety_settings`, and only then revalidates campaign state, autopilot eligibility, batch state, current candidate count, and absence of an existing plan. If the global kill switch (on screen: Safety → **Emergency pause**, button **Pause everything**) was enabled after selection or an earlier batch, the transaction records one batch-linked `planner_blocked` event, creates no plan/backlog/workflow records, and stops the tick.
 
 A planned transaction creates:
 
@@ -69,20 +69,20 @@ A production connector is not enabled by changing the TypeScript registry alone.
 
 The dashboard is read natively (`linkgo_autopilot_planner_dashboard` in `src-tauri/src/planning_reads.rs`). It takes an optional positive campaign and rejects unknown fields, and it returns the summary counts, 30 recent plans, 50 recent events and the kill-switch state, all from one transaction. The renderer has no SQL access to planner tables.
 
-The Autopilot tab sits between Campaigns and Backlog. It provides:
+The Autopilot tab sits between Campaigns and Tasks. It provides:
 
 - exact local-only scope copy;
-- refresh, bounded manual tick, and start/stop controls;
+- **Refresh**, bounded manual tick (**Check now**), and start/stop controls (**Start Autopilot**/**Stop Autopilot**);
 - disabled start behavior and a visible banner under the global kill switch;
 - all-campaign or campaign-specific filtering;
-- processable (labeled **Eligible now**), planned, skipped, and campaign-attributed seven-day batch-failure counts;
+- processable (labeled **Ready now**), planned, skipped, and campaign-attributed seven-day batch-failure counts;
 - first-use guidance for campaign eligibility and approved source import;
 - source-to-plan cards with imported/current/planned candidate counts;
 - linked backlog and workflow IDs/states, score-step state, and latest scorer provider/status;
 - paused, draft, archived, empty, filtered-empty, loading, error/retry, pending, blocked, skipped, failure, and success states; and
-- bounded recent planner events with explicit severity text.
+- bounded recent planner events (**Recent Autopilot activity**) with explicit severity text.
 
-Backlog cards distinguish manually created Linkgo responsibility labels from planner-linked rows. Live planner-linked scoring items are read-only projections of the score step and direct recovery to Workflows. Workflow cards show `Autopilot plan #… · source batch #…` origins and aggregate current/unscored/scored/removed candidate artifacts. Autopilot and Backlog never start the model.
+Tasks cards distinguish manually created Linkgo responsibility labels from planner-linked rows. Live planner-linked scoring items are read-only projections of the score step and direct recovery to Automations. Automations cards show a `Started by Autopilot from your imported ideas.` origin and aggregate current/unscored/scored/removed candidate artifacts. Autopilot and Tasks never start the model.
 
 The hook guards duplicate actions and uses monotonically increasing request IDs so an older campaign-filter response cannot overwrite the latest selection. Native responses are parsed with Zod. Controls fail clearly outside the Tauri desktop runtime.
 
@@ -98,13 +98,13 @@ The planner only creates local records. It does not:
 - run after Linkgo quits;
 - send notifications or external telemetry.
 
-Publishing and commenting remain human approval-gated. Roadmap 5A adds a separate attended `Score batch` action in Workflows for the exact artifacts. The native planner remains model-free; see `docs/features/relevance-scoring.md`.
+Publishing and commenting remain human approval-gated. Roadmap 5A adds a separate attended `Score ideas` action in Automations for the exact artifacts. The native planner remains model-free; see `docs/features/relevance-scoring.md`.
 
 ## Verification
 
 Rust tests cover real SQLite constraints, `tick_failed` validity, oldest-first bounds, eligibility exclusions, research/score workflow state, repeat and concurrent idempotency, deleted-candidate skips, campaign-attributed rollback failures, initial kill-switch blocking, and a deterministic mid-tick kill-switch trigger that blocks the second eligible batch.
 
-Playwright covers native response parsing, planner controls, exact linkage, Backlog and Workflow origin markers, repeated ticks, processable-count parity before and after durable deleted-candidate skips, campaign-filtered rollback failure visibility and recovery, initial and mid-tick kill-switch behavior, stale campaign responses, loading/error/empty states, keyboard focus, duplicate action guards, reduced motion, forced colors, and 320-pixel reflow.
+Playwright covers native response parsing, planner controls, exact linkage, Tasks and Automations origin markers, repeated ticks, processable-count parity before and after durable deleted-candidate skips, campaign-filtered rollback failure visibility and recovery, initial and mid-tick kill-switch behavior, stale campaign responses, loading/error/empty states, keyboard focus, duplicate action guards, reduced motion, forced colors, and 320-pixel reflow.
 
 Run:
 

@@ -6,9 +6,9 @@ import { expect, test, type Page } from "@playwright/test";
  */
 
 const PREVIEW_BANNER_TEXT =
-  "Browser preview — nothing is saved. Run the Linkgo desktop app to use your data.";
+  "You're looking at a preview in your browser, so nothing is saved. Open the Linkgo app to work with your real data.";
 const DESKTOP_REQUIRED_TEXT =
-  "Not available in the browser preview. Linkgo saves data only in the desktop app";
+  "This only works in the Linkgo app. Nothing is saved in this browser preview.";
 
 async function expectPreviewBanner(page: Page): Promise<void> {
   const banner = page
@@ -37,7 +37,9 @@ test("approvals explain the desktop requirement instead of a runtime TypeError",
     page.getByRole("alert").filter({ hasText: DESKTOP_REQUIRED_TEXT }),
   ).toBeVisible();
   await expect(page.getByText(/TypeError|undefined/)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("settings disables launch-on-login in the browser preview", async ({
@@ -46,7 +48,9 @@ test("settings disables launch-on-login in the browser preview", async ({
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await expectPreviewBanner(page);
 
-  const toggle = page.getByRole("switch", { name: "Launch Linkgo at login" });
+  const toggle = page.getByRole("switch", {
+    name: "Open Linkgo when I sign in",
+  });
   await expect(toggle).toBeDisabled();
   await expect(page.getByText(DESKTOP_REQUIRED_TEXT)).toBeVisible();
 });
@@ -55,19 +59,21 @@ test("scheduler controls explain the desktop requirement and never fake success"
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Scheduler/ }).click();
+  await page.getByRole("button", { name: /^Auto-posting/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Scheduler", exact: true }),
+    page.getByRole("heading", { name: "Auto-posting", exact: true }),
   ).toBeVisible();
   await expect(page.getByText(DESKTOP_REQUIRED_TEXT).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Start scheduler" }).click();
-  await expect(page.getByText("Scheduler was not started")).toBeVisible();
-  await page.getByRole("button", { name: "Run due jobs now" }).click();
-  await expect(page.getByText("Scheduler tick failed")).toBeVisible();
+  await page.getByRole("button", { name: "Turn on auto-posting" }).click();
+  await expect(
+    page.getByText("We couldn't turn on auto-posting"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Post what's due now" }).click();
+  await expect(page.getByText("We couldn't check for due posts")).toBeVisible();
 
-  await expect(page.getByText("Scheduler started")).toHaveCount(0);
-  await expect(page.getByText("Scheduler tick completed")).toHaveCount(0);
+  await expect(page.getByText("Auto-posting is on")).toHaveCount(0);
+  await expect(page.getByText("Checked for due posts")).toHaveCount(0);
   await expect(page.getByText("Running", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/require(s)? the Tauri/)).toHaveCount(0);
 
@@ -111,9 +117,9 @@ test("integrations disable credential changes and never report fake success", as
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Integrations", exact: true }),
+    page.getByRole("heading", { name: "Connected accounts", exact: true }),
   ).toBeVisible();
 
   const connectButtons = page.getByRole("button", {
@@ -149,5 +155,5 @@ test("integrations disable credential changes and never report fake success", as
   });
   expect(result.ok).toBe(false);
   expect(result.name).toBe("DesktopRequiredError");
-  await expect(page.getByText("Provider connected")).toHaveCount(0);
+  await expect(page.getByText("Account connected")).toHaveCount(0);
 });

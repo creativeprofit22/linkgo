@@ -9,6 +9,7 @@ import {
   startScheduler,
   stopScheduler,
 } from "@/features/scheduler/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   SchedulerDashboard,
   SchedulerStatusPayload,
@@ -32,7 +33,9 @@ interface UseSchedulerState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected scheduler error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with auto-posting. Try again.";
 }
 
 export function useScheduler(): UseSchedulerState {
@@ -96,9 +99,9 @@ export function useScheduler(): UseSchedulerState {
       const nextStatus = await startScheduler();
       setStatus(nextStatus);
       await loadDashboard(selectedCampaignId);
-      toast.success("Scheduler started");
+      toast.success("Auto-posting is on");
     } catch (caught) {
-      toast.error("Scheduler was not started", {
+      toast.error("We couldn't turn on auto-posting", {
         description: getErrorMessage(caught),
       });
       throw caught;
@@ -116,9 +119,9 @@ export function useScheduler(): UseSchedulerState {
       const nextStatus = await stopScheduler();
       setStatus(nextStatus);
       await loadDashboard(selectedCampaignId);
-      toast.success("Scheduler stopped");
+      toast.success("Auto-posting is off");
     } catch (caught) {
-      toast.error("Scheduler was not stopped", {
+      toast.error("We couldn't turn off auto-posting", {
         description: getErrorMessage(caught),
       });
       throw caught;
@@ -134,12 +137,12 @@ export function useScheduler(): UseSchedulerState {
     try {
       const result = await runSchedulerTick();
       await loadDashboard(selectedCampaignId);
-      toast.success("Scheduler tick completed", {
-        description: `${result.published} published, ${result.retryScheduled} retries, ${result.failed} failed, ${result.blocked} blocked`,
+      toast.success("Checked for due posts", {
+        description: `${result.published} posted, ${result.retryScheduled} will try again, ${result.failed} didn't post, ${result.blocked} held back`,
       });
       return result;
     } catch (caught) {
-      toast.error("Scheduler tick failed", {
+      toast.error("We couldn't check for due posts", {
         description: getErrorMessage(caught),
       });
       throw caught;

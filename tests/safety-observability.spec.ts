@@ -14,19 +14,21 @@ test("Safety tab renders settings, summaries, and empty states", async ({
   await openSafety(page);
 
   await expect(
-    page.getByText("Global kill switch", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Open errors")).toBeVisible();
-  await expect(page.getByText("Blocked today")).toBeVisible();
-  await expect(page.getByText("Allowed today")).toBeVisible();
-  await expect(page.getByText("Audit events", { exact: true })).toBeVisible();
-  await expect(page.getByText("No error queue items yet.")).toBeVisible();
-  await expect(
-    page.getByText("No rate-limit decisions recorded yet."),
+    page.getByText("Emergency pause", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("No safety audit events recorded yet."),
+    page.getByRole("heading", { name: "Problems to fix", exact: true }),
   ).toBeVisible();
+  await expect(page.getByText("Stopped by limits today")).toBeVisible();
+  await expect(page.getByText("Allowed by limits today")).toBeVisible();
+  await expect(
+    page.getByText("Safety history", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText("Nothing to fix right now.")).toBeVisible();
+  await expect(
+    page.getByText("Nothing has been checked against your posting limits yet."),
+  ).toBeVisible();
+  await expect(page.getByText("No safety activity yet.")).toBeVisible();
 });
 
 test("Global kill switch hides approval scheduling and agent dry-run start actions", async ({
@@ -41,22 +43,26 @@ test("Global kill switch hides approval scheduling and agent dry-run start actio
   );
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await openAgentRuntime(page);
   await createDryRun(page);
   await openSafety(page);
 
   await page
-    .getByLabel("Kill switch reason")
+    .getByLabel("Reason for pausing")
     .fill("Pause local automation during review.");
-  await page.getByRole("button", { name: "Enable kill switch" }).click();
-  await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Pause everything" }).click();
+  await expect(
+    page.getByText("On — everything is paused", { exact: true }),
+  ).toBeVisible();
 
   await openApprovals(page);
   await expect(
     page.getByRole("button", { name: "Schedule", exact: true }),
   ).toBeHidden();
-  await expect(page.getByText("Global kill switch is enabled.")).toBeVisible();
+  await expect(
+    page.getByText("Pause everything is on, so posts can't be scheduled."),
+  ).toBeVisible();
   await expect(
     page.getByText("Pause local automation during review."),
   ).toBeVisible();
@@ -70,9 +76,11 @@ test("Global kill switch hides approval scheduling and agent dry-run start actio
 
   await openAgentRuntime(page);
   await expect(
-    page.getByRole("button", { name: "Start dry-run" }),
+    page.getByRole("button", { name: "Start practice run" }),
   ).toBeHidden();
-  await expect(page.getByText("Global kill switch is enabled.")).toBeVisible();
+  await expect(
+    page.getByText("Emergency pause is on.", { exact: false }).first(),
+  ).toBeVisible();
   await expect(
     page.getByText("Pause local automation during review."),
   ).toBeVisible();
@@ -115,17 +123,17 @@ test("Daily post scheduling cap blocks a second same-day schedule", async ({
   await createReadyDraftOnCurrentCampaign(page, cleanVariant(), "first");
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await scheduleApproval(page, "2026-06-25T14:30", "local");
 
   await createReadyDraftOnCurrentCampaign(page, secondVariant(), "second");
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await page.getByRole("button", { name: "Schedule", exact: true }).click();
-  await page.getByLabel("Scheduled for").fill("2026-06-25T18:00");
-  await page.getByLabel("Timezone label").fill("local");
-  await page.getByRole("button", { name: "Schedule approval" }).click();
+  await page.getByLabel("Date and time").fill("2026-06-25T18:00");
+  await page.getByLabel("Time zone").fill("local");
+  await page.getByRole("button", { name: "Schedule post" }).click();
 
   await expect
     .poll(async () => {
@@ -161,16 +169,16 @@ test("Failed publish attempt creates an open error queue item", async ({
   );
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Record failure" }).click();
-  await page.getByLabel("Failure reason").fill("Local browser was offline.");
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Mark as not posted" }).click();
+  await page.getByLabel("What went wrong").fill("Local browser was offline.");
+  await page.getByRole("button", { name: "Save result" }).click();
 
   await openSafety(page);
   await expect(
     page.getByRole("heading", { name: "Publish attempt failed" }),
   ).toBeVisible();
-  await expect(getBadge(page, "open")).toBeVisible();
+  await expect(getBadge(page, "Needs attention")).toBeVisible();
 
   const items = await getErrorQueueItems(page);
   expect(items).toEqual(
@@ -196,18 +204,18 @@ test("Error queue item moves open to in progress to awaiting review to resolved"
   );
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Record failure" }).click();
-  await page.getByLabel("Failure reason").fill("Local browser was offline.");
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Mark as not posted" }).click();
+  await page.getByLabel("What went wrong").fill("Local browser was offline.");
+  await page.getByRole("button", { name: "Save result" }).click();
   await openSafety(page);
 
-  await page.getByRole("button", { name: "Move to in progress" }).click();
-  await expect(getBadge(page, "in progress")).toBeVisible();
-  await page.getByRole("button", { name: "Move to awaiting review" }).click();
-  await expect(getBadge(page, "awaiting review")).toBeVisible();
-  await page.getByRole("button", { name: "Move to resolved" }).click();
-  await expect(getBadge(page, "resolved")).toBeVisible();
+  await page.getByRole("button", { name: "Mark as “Working on it”" }).click();
+  await expect(getBadge(page, "Working on it")).toBeVisible();
+  await page.getByRole("button", { name: "Mark as “Ready to check”" }).click();
+  await expect(getBadge(page, "Ready to check")).toBeVisible();
+  await page.getByRole("button", { name: "Mark as “Fixed”" }).click();
+  await expect(getBadge(page, "Fixed")).toBeVisible();
 
   const items = await getErrorQueueItems(page);
   expect(items[0]?.status).toBe("resolved");
@@ -362,20 +370,24 @@ test("Safety reconciles an outcome-unknown publish only after typed confirmation
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await openSafety(page);
 
-  await expect(page.getByText("Publishing needs reconciliation")).toBeVisible();
-  const inFlight = page.getByLabel("Comment execution 8");
+  await expect(
+    page.getByText("Check what happened to these posts"),
+  ).toBeVisible();
+  const inFlight = page.getByLabel("Comment attempt 8");
   await expect(inFlight.getByText("In progress")).toBeVisible();
-  await expect(inFlight.getByRole("button", { name: "Reconcile" })).toHaveCount(
-    0,
-  );
+  await expect(
+    inFlight.getByRole("button", { name: "Check what happened" }),
+  ).toHaveCount(0);
 
-  const unknown = page.getByLabel("Post execution 7");
-  await unknown.getByRole("button", { name: "Reconcile" }).click();
-  const dialog = page.getByRole("dialog", { name: "Reconcile post publish" });
+  const unknown = page.getByLabel("Post attempt 7");
+  await unknown.getByRole("button", { name: "Check what happened" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Confirm what happened to this post",
+  });
   await dialog.getByLabel("Posted on LinkedIn").check();
-  const submit = dialog.getByRole("button", { name: "Reconcile" });
+  const submit = dialog.getByRole("button", { name: "Confirm result" });
   await dialog
-    .getByLabel("LinkedIn URL or URN")
+    .getByLabel("LinkedIn link")
     .fill("https://www.linkedin.com/feed/update/urn:li:share:123/");
   await expect(submit).toBeDisabled();
   await dialog.getByLabel("Type “RECONCILE” to confirm").fill("reconcile");
@@ -383,7 +395,7 @@ test("Safety reconciles an outcome-unknown publish only after typed confirmation
   await dialog.getByLabel("Type “RECONCILE” to confirm").fill("RECONCILE");
   await submit.click();
 
-  await expect(page.getByLabel("Post execution 7")).toHaveCount(0);
+  await expect(page.getByLabel("Post attempt 7")).toHaveCount(0);
   const inputs = await page.evaluate(
     () =>
       (window as unknown as Record<string, unknown>)
@@ -408,16 +420,16 @@ async function openSafety(page: Page): Promise<void> {
 }
 
 async function openAgentRuntime(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Agent Runtime/ }).click();
+  await page.getByRole("button", { name: /^AI assistant/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Agent Runtime", exact: true }),
+    page.getByRole("heading", { name: "AI assistant", exact: true }),
   ).toBeVisible();
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -463,13 +475,14 @@ async function createReadyDraftOnCurrentCampaign(
   await addCandidate(page, suffix);
   await openDrafts(page);
   await createDraft(page, variant);
-  await page.getByRole("button", { name: "Select for review" }).first().click();
-  await expect(getBadge(page, "Ready for review")).toBeVisible();
-  const auditPanel = page.getByRole("region", { name: /AI audit/ }).first();
-  await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
-  await expect(
-    auditPanel.getByText("Completed", { exact: true }),
-  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Choose this version" })
+    .first()
+    .click();
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  const auditPanel = page.getByRole("region", { name: /AI review/ }).first();
+  await auditPanel.getByRole("button", { name: "Review with AI" }).click();
+  await expect(auditPanel.getByText("Done", { exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const api = (
       window as unknown as {
@@ -494,8 +507,8 @@ async function createReadyDraftOnCurrentCampaign(
 }
 
 async function addCandidate(page: Page, suffix: string): Promise<void> {
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
   await expect(dialog).toBeVisible();
   await dialog
     .getByLabel("LinkedIn post URL")
@@ -509,10 +522,10 @@ async function addCandidate(page: Page, suffix: string): Promise<void> {
     .fill("https://www.linkedin.com/in/jane-operator/");
   await dialog.getByLabel("Posted at").fill("2026-06-25");
   await dialog.getByLabel("Source keyword").fill("founder content");
-  await dialog.getByLabel("Relevance score").fill("87");
+  await dialog.getByLabel("Match score").fill("87");
   await dialog.getByLabel("Score reason").fill("Strong audience overlap.");
   await dialog.getByLabel("Notes").fill("Good approval candidate.");
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -536,13 +549,13 @@ async function createDraft(
 }
 
 async function createReview(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create review" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create review" });
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  const dialog = page.getByRole("dialog", { name: "Send for approval" });
   await expect(dialog).toBeVisible();
   await dialog
     .getByLabel("Reviewer notes")
     .fill("Human pass before scheduling.");
-  await dialog.getByRole("button", { name: "Create review" }).click();
+  await dialog.getByRole("button", { name: "Send for approval" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -552,10 +565,10 @@ async function scheduleApproval(
   timezone: string,
 ): Promise<void> {
   await page.getByRole("button", { name: "Schedule", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Schedule approval" });
-  await dialog.getByLabel("Scheduled for").fill(scheduledFor);
-  await dialog.getByLabel("Timezone label").fill(timezone);
-  await dialog.getByRole("button", { name: "Schedule approval" }).click();
+  const dialog = page.getByRole("dialog", { name: "Schedule post" });
+  await dialog.getByLabel("Date and time").fill(scheduledFor);
+  await dialog.getByLabel("Time zone").fill(timezone);
+  await dialog.getByRole("button", { name: "Schedule post" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -583,13 +596,18 @@ async function scheduleApprovalViaDataApi(
 }
 
 async function createDryRun(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create run" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create agent run" });
+  await page
+    .getByRole("button", { name: "New assistant task" })
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog", { name: "New assistant task" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Agent role").selectOption("researcher");
   await dialog
-    .getByLabel("Input summary")
-    .fill("Validate runtime contracts for this campaign.");
-  await dialog.getByRole("button", { name: "Create run" }).click();
+    .getByLabel("What should the assistant do?")
+    .selectOption("researcher");
+  await dialog
+    .getByLabel("Instructions")
+    .fill("Check this campaign is ready for the AI assistant.");
+  await dialog.getByRole("button", { name: "Create task" }).click();
   await expect(dialog).toBeHidden();
 }

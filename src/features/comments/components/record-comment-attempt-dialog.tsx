@@ -78,7 +78,8 @@ export function RecordCommentAttemptDialog({
           variant={isSuccess ? "default" : "outline"}
           disabled={disabled}
         >
-          {triggerLabel ?? (isSuccess ? "Record posted" : "Record failure")}
+          {triggerLabel ??
+            (isSuccess ? "Mark as posted" : "Mark as not posted")}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -88,16 +89,19 @@ export function RecordCommentAttemptDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              {isSuccess ? "Record posted comment" : "Record failed comment"}
+              {isSuccess
+                ? "Mark comment as posted"
+                : "Mark comment as not posted"}
             </DialogTitle>
             <DialogDescription>
-              Store manual LinkedIn comment history locally as a fallback.
+              Use this when you posted (or tried to post) on LinkedIn yourself.
+              Linkgo saves it in this comment&rsquo;s history.
             </DialogDescription>
           </DialogHeader>
 
           {isSuccess ? (
             <div className="space-y-4">
-              <Field label="Comment URL" htmlFor={`comment-url-${thread.id}`}>
+              <Field label="Comment link" htmlFor={`comment-url-${thread.id}`}>
                 <Input
                   id={`comment-url-${thread.id}`}
                   type="url"
@@ -112,7 +116,7 @@ export function RecordCommentAttemptDialog({
                 />
               </Field>
               <Field
-                label="Platform comment ID"
+                label="LinkedIn comment reference"
                 htmlFor={`comment-id-${thread.id}`}
               >
                 <Input
@@ -124,17 +128,20 @@ export function RecordCommentAttemptDialog({
                       platformCommentId: event.target.value,
                     }))
                   }
-                  placeholder="Optional if URL is present"
+                  placeholder="Not needed if you added a link"
                 />
               </Field>
               {successReferenceMissing ? (
                 <p className="text-muted-foreground text-sm">
-                  Add a comment URL or platform comment ID.
+                  Add the comment link or its LinkedIn reference.
                 </p>
               ) : null}
             </div>
           ) : (
-            <Field label="Error message" htmlFor={`comment-error-${thread.id}`}>
+            <Field
+              label="What went wrong"
+              htmlFor={`comment-error-${thread.id}`}
+            >
               <Textarea
                 id={`comment-error-${thread.id}`}
                 value={form.errorMessage}
@@ -146,7 +153,7 @@ export function RecordCommentAttemptDialog({
                 }
                 required
                 maxLength={2000}
-                placeholder="Paste the manual posting failure or reviewer note."
+                placeholder="Paste the error you saw, or a note about why it didn't post."
               />
             </Field>
           )}
@@ -156,7 +163,7 @@ export function RecordCommentAttemptDialog({
               type="submit"
               disabled={submitting || successReferenceMissing}
             >
-              {submitting ? "Recording…" : "Record attempt"}
+              {submitting ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </form>

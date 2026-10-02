@@ -3,18 +3,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AgentRunEvent } from "@/features/agent-runtime/types";
 import type { AgentRunEventType } from "@/agent";
+import { toPlainMessage } from "@/lib/plain-message";
 
 const eventLabels: Record<AgentRunEventType, string> = {
-  run_created: "Run created",
-  model_started: "Model started",
-  model_streamed: "Model streamed",
-  tool_requested: "Tool requested",
-  tool_completed: "Tool completed",
-  tool_failed: "Tool failed",
-  approval_required: "Approval required",
-  run_completed: "Run completed",
-  run_failed: "Run failed",
-  run_cancelled: "Run cancelled",
+  run_created: "Task created",
+  model_started: "AI started",
+  model_streamed: "AI replied",
+  tool_requested: "Action asked for",
+  tool_completed: "Action done",
+  tool_failed: "Action failed",
+  approval_required: "Needs your approval",
+  run_completed: "Task done",
+  run_failed: "Task failed",
+  run_cancelled: "Task cancelled",
 };
 
 export function AgentEventList({
@@ -26,13 +27,14 @@ export function AgentEventList({
     <Card className="bg-card/60">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Activity className="text-linkgo-blue size-4" /> Runtime events
+          <Activity className="text-linkgo-blue size-4" /> History
         </CardTitle>
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No runtime events yet.
+            Nothing has happened yet. Activity shows up here once the task
+            starts.
           </p>
         ) : (
           <div className="space-y-3">
@@ -49,7 +51,7 @@ export function AgentEventList({
                     {event.created_at}
                   </span>
                 </div>
-                <p>{event.summary}</p>
+                <p>{toPlainMessage(event.summary)}</p>
               </div>
             ))}
           </div>

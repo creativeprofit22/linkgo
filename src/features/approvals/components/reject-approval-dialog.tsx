@@ -78,9 +78,9 @@ export function RejectApprovalDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Reject this approval?</DialogTitle>
+            <DialogTitle>Reject this post?</DialogTitle>
             <DialogDescription>
-              {linkedAgentRunConsequence} The draft will stay in local history.
+              {linkedAgentRunConsequence} The draft stays in your history.
             </DialogDescription>
           </DialogHeader>
 
@@ -92,7 +92,7 @@ export function RejectApprovalDialog({
               maxLength={REASON_MAX_LENGTH}
               rows={4}
               aria-describedby={counterId}
-              placeholder="Why is this approval rejected?"
+              placeholder="Why are you rejecting this post?"
               onChange={(event) => setReason(event.target.value)}
             />
             <p id={counterId} className="text-muted-foreground text-xs">

@@ -1,5 +1,12 @@
 export type CampaignStatus = "draft" | "active" | "paused" | "archived";
 
+export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  draft: "Draft",
+  active: "Active",
+  paused: "Paused",
+  archived: "Archived",
+};
+
 export type CampaignKeywordSource = "manual" | "generated" | "learned";
 
 export interface Campaign {

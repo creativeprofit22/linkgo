@@ -18,11 +18,10 @@ export function PlaybooksView(): React.ReactNode {
             </div>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                Playbooks
+                Brand voice
               </h2>
               <p className="text-muted-foreground text-sm">
-                Reusable LinkedIn prompt modules layered on top of stable local
-                tool contracts.
+                Writing guides that shape how the AI writes for you.
               </p>
             </div>
           </div>
@@ -49,7 +48,7 @@ export function PlaybooksView(): React.ReactNode {
               size="sm"
               onClick={() => void loadPlaybooks()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -58,16 +57,16 @@ export function PlaybooksView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading playbooks…
+            Loading brand voice guides…
           </CardContent>
         </Card>
       ) : (
         <>
           <Card className="bg-card/70">
             <CardContent className="text-muted-foreground p-4 text-sm">
-              Playbooks shape model prompts and operator guidance only. They do
-              not add scraping, autonomous publishing, autonomous commenting,
-              browser automation, or external telemetry.
+              These guides only shape how the AI writes and the tips you see.
+              They never let Linkgo copy data from other sites, post or comment
+              on its own, control your browser, or send your data anywhere.
             </CardContent>
           </Card>
           <div className="grid gap-4 xl:grid-cols-2">

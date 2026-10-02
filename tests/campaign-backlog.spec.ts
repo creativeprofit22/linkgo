@@ -21,8 +21,8 @@ test("creates Operator and Linkgo work and filters the visible owner", async ({
   await createBacklogItem(page, {
     title: "Review launch research",
     workType: "Research",
-    owner: "Operator",
-    recurrence: "One-off",
+    owner: "You",
+    recurrence: "One time",
     dueAt: futureLocalDateTime(2),
   });
   await createBacklogItem(page, {
@@ -41,9 +41,7 @@ test("creates Operator and Linkgo work and filters the visible owner", async ({
   ).toBeVisible();
   await expect(page.getByText("Research", { exact: true })).toBeVisible();
   await expect(page.getByText("Scoring", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Operator", { exact: true }).last(),
-  ).toBeVisible();
+  await expect(page.getByText("You", { exact: true }).last()).toBeVisible();
   await expect(page.getByText("Linkgo", { exact: true }).last()).toBeVisible();
   await expect(page.getByText("Weekly", { exact: true })).toBeVisible();
   await expect(page.getByText(/America\/New_York/)).toBeVisible();
@@ -63,9 +61,7 @@ test("creates Operator and Linkgo work and filters the visible owner", async ({
   await expect(
     page.getByRole("heading", { name: "Prepare launch scoring" }),
   ).toBeVisible();
-  await expect(
-    page.getByText(/Manually created Linkgo responsibility label/u),
-  ).toBeVisible();
+  await expect(page.getByText(/You marked Linkgo as the owner/u)).toBeVisible();
 });
 
 test("enforces lifecycle transitions through UI and the direct data boundary", async ({
@@ -87,9 +83,9 @@ test("enforces lifecycle transitions through UI and the direct data boundary", a
   await expect(
     itemCard().getByText("In progress", { exact: true }),
   ).toBeVisible();
-  await itemCard().getByRole("button", { name: "Block" }).click();
-  await expect(itemCard().getByText("Blocked", { exact: true })).toBeVisible();
-  await itemCard().getByRole("button", { name: "Resume" }).click();
+  await itemCard().getByRole("button", { name: "Put on hold" }).click();
+  await expect(itemCard().getByText("On hold", { exact: true })).toBeVisible();
+  await itemCard().getByRole("button", { name: "Continue" }).click();
   await expect(
     itemCard().getByText("In progress", { exact: true }),
   ).toBeVisible();
@@ -98,7 +94,7 @@ test("enforces lifecycle transitions through UI and the direct data boundary", a
 
   await page.getByLabel("View").selectOption("history");
   await expect(item()).toBeVisible();
-  await expect(page.getByText("Completed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Done", { exact: true })).toBeVisible();
 
   const completedRows = await getBacklogState(page);
   const invalidTransitionError = await callBacklogApi(
@@ -180,11 +176,11 @@ test("coalesces recurring completion and rolls back a failed successor", async (
 
   await completeItem(page, "Overdue daily review", false);
   await expect(
-    page.getByText("Next recurring item scheduled").last(),
+    page.getByText("Next repeating task scheduled").last(),
   ).toBeVisible();
   await completeItem(page, "Overdue weekly review", false);
   await expect(
-    page.getByText("Next recurring item scheduled").last(),
+    page.getByText("Next repeating task scheduled").last(),
   ).toBeVisible();
   let rows = await getBacklogState(page);
   for (const title of ["Overdue daily review", "Overdue weekly review"]) {
@@ -236,8 +232,8 @@ test("confirms recurring cancellation and creates no successor", async ({
   const dialog = page.getByRole("dialog", {
     name: /Cancel “Stop recurring metrics”/,
   });
-  await expect(dialog).toContainText("stops the weekly recurrence chain");
-  await dialog.getByRole("button", { name: "Cancel item" }).click();
+  await expect(dialog).toContainText("stops the weekly repeat");
+  await dialog.getByRole("button", { name: "Cancel task" }).click();
   await expect(dialog).toBeHidden();
   await page.getByLabel("View").selectOption("history");
   await expect(
@@ -260,13 +256,13 @@ test("wires create and edit validation errors to their invalid controls", async 
     .getByLabel("Details")
     .fill("Keep this context through validation.");
   await createDialog.getByLabel("Due time").fill("");
-  await createDialog.getByRole("button", { name: "Create item" }).click();
+  await createDialog.getByRole("button", { name: "Create task" }).click();
 
   await expectFieldValidation(
     createDialog,
     "Title",
     "backlog-title-error",
-    "Title is required",
+    "Add a title",
   );
   await expectFieldValidation(
     createDialog,
@@ -284,7 +280,7 @@ test("wires create and edit validation errors to their invalid controls", async 
   await expectFieldValidationToClear(createTitle);
   await createDueTime.fill(futureLocalDateTime(3));
   await expectFieldValidationToClear(createDueTime);
-  await createDialog.getByRole("button", { name: "Create item" }).click();
+  await createDialog.getByRole("button", { name: "Create task" }).click();
   await expect(createDialog).toBeHidden();
 
   const heading = page.getByRole("heading", {
@@ -294,7 +290,7 @@ test("wires create and edit validation errors to their invalid controls", async 
     "xpath=ancestor::div[contains(@class,'overflow-hidden')][1]",
   );
   await card.getByRole("button", { name: "Edit" }).click();
-  const editDialog = page.getByRole("dialog", { name: "Edit backlog item" });
+  const editDialog = page.getByRole("dialog", { name: "Edit task" });
   await editDialog.getByLabel("Title").fill("");
   await editDialog.getByLabel("Due time").fill("");
   await editDialog.getByRole("button", { name: "Save changes" }).click();
@@ -303,7 +299,7 @@ test("wires create and edit validation errors to their invalid controls", async 
     editDialog,
     "Title",
     "backlog-title-error",
-    "Title is required",
+    "Add a title",
   );
   await expectFieldValidation(
     editDialog,
@@ -333,8 +329,8 @@ test("preserves form values, reports storage failure, and prevents duplicate cre
   await dialog
     .getByLabel("Details")
     .fill("Keep this context after validation.");
-  await dialog.getByRole("button", { name: "Create item" }).click();
-  await expect(dialog.getByText("Title is required")).toBeVisible();
+  await dialog.getByRole("button", { name: "Create task" }).click();
+  await expect(dialog.getByText("Add a title")).toBeVisible();
   await expect(dialog.getByLabel("Details")).toHaveValue(
     "Keep this context after validation.",
   );
@@ -346,7 +342,7 @@ test("preserves form values, reports storage failure, and prevents duplicate cre
       window as unknown as { __LINKGO_FAIL_BACKLOG_INSERT__?: boolean }
     ).__LINKGO_FAIL_BACKLOG_INSERT__ = true;
   });
-  await dialog.getByRole("button", { name: "Create item" }).click();
+  await dialog.getByRole("button", { name: "Create task" }).click();
   await expect(
     dialog.getByText("Injected backlog insert failure"),
   ).toBeVisible();
@@ -355,7 +351,7 @@ test("preserves form values, reports storage failure, and prevents duplicate cre
     "Keep this context after validation.",
   );
 
-  await dialog.getByRole("button", { name: "Create item" }).dblclick();
+  await dialog.getByRole("button", { name: "Create task" }).dblclick();
   await expect(dialog).toBeHidden();
   const rows = (await getBacklogState(page)).filter(
     (row) => row.title === "Storage failure item",
@@ -376,7 +372,7 @@ test("does not report a committed create as failed when refresh reads fail", asy
     ).__LINKGO_FAIL_BACKLOG_SELECT__ = true;
   });
 
-  await dialog.getByRole("button", { name: "Create item" }).click();
+  await dialog.getByRole("button", { name: "Create task" }).click();
 
   await expect(dialog).toBeHidden();
   const rows = (await getBacklogState(page)).filter(
@@ -417,9 +413,7 @@ test("keeps archived campaign history readable and rejects every mutation", asyn
     page.getByRole("heading", { name: "Archived completed work" }),
   ).toBeVisible();
   await expect(page.getByText("Archived campaign history")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "New backlog item" }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "New task" })).toBeDisabled();
 
   const rows = await getBacklogState(page);
   const openItem = rows.find((row) => row.title === "Archived open work");
@@ -544,9 +538,7 @@ test("refreshes the latest filters after a delayed mutation", async ({
   await expect(campaignBItem).toBeVisible();
 
   await releaseBacklogMutations(page);
-  await expect(
-    page.getByRole("button", { name: "New backlog item" }),
-  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "New task" })).toBeEnabled();
   await expect(campaignFilter).toHaveValue("2");
   await expect(ownerFilter).toHaveValue("linkgo");
   await expect(viewFilter).toHaveValue("history");
@@ -573,10 +565,10 @@ test("supports keyboard focus return, narrow reflow, zoom, reduced motion, and f
   ]);
   await openBacklog(page);
 
-  const trigger = page.getByRole("button", { name: "New backlog item" });
+  const trigger = page.getByRole("button", { name: "New task" });
   await trigger.focus();
   await page.keyboard.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Create backlog item" });
+  const dialog = page.getByRole("dialog", { name: "Create task" });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
@@ -652,7 +644,7 @@ test.describe("stored recurrence zone under device travel", () => {
       "xpath=ancestor::div[contains(@class,'overflow-hidden')][1]",
     );
     await card.getByRole("button", { name: "Edit" }).click();
-    const editDialog = page.getByRole("dialog", { name: "Edit backlog item" });
+    const editDialog = page.getByRole("dialog", { name: "Edit task" });
     await expect(editDialog.getByLabel("Schedule time zone")).toHaveValue(
       "America/New_York",
     );
@@ -767,13 +759,13 @@ async function openBacklogWithCampaign(
 
 async function openBacklog(page: Page): Promise<void> {
   await page
-    .getByRole("navigation", { name: "Linkgo sections" })
-    .getByRole("button", { name: /^Backlog/ })
+    .getByRole("navigation", { name: "Main menu" })
+    .getByRole("button", { name: /^Tasks/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Campaign Backlog", exact: true }),
+    page.getByRole("heading", { name: "Tasks", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Loading campaign backlog…")).toBeHidden();
+  await expect(page.getByText("Loading tasks…")).toBeHidden();
 }
 
 async function createCampaign(page: Page, name: string): Promise<void> {
@@ -785,8 +777,8 @@ async function createCampaign(page: Page, name: string): Promise<void> {
 }
 
 async function openCreateDialog(page: Page) {
-  await page.getByRole("button", { name: "New backlog item" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create backlog item" });
+  await page.getByRole("button", { name: "New task" }).click();
+  const dialog = page.getByRole("dialog", { name: "Create task" });
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -800,7 +792,7 @@ async function createBacklogItem(
   await dialog.getByLabel("Due time").fill(options.dueAt);
   if (options.workType) {
     await dialog
-      .getByLabel("Work type")
+      .getByLabel("Task type")
       .selectOption({ label: options.workType });
   }
   if (options.owner) {
@@ -808,10 +800,10 @@ async function createBacklogItem(
   }
   if (options.recurrence) {
     await dialog
-      .getByLabel("Recurrence")
+      .getByLabel("Repeats")
       .selectOption({ label: options.recurrence });
   }
-  await dialog.getByRole("button", { name: "Create item" }).click();
+  await dialog.getByRole("button", { name: "Create task" }).click();
   await expect(dialog).toBeHidden();
 }
 

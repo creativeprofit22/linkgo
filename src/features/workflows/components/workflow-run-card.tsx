@@ -33,18 +33,83 @@ interface WorkflowRunCardProps {
 
 const terminalStatuses = ["completed", "cancelled"];
 
+const draftIntentLabels: Record<string, string> = {
+  event: "Event post",
+  launch: "Launch post",
+  idea: "Idea post",
+  community: "Community post",
+};
+
+const draftStatusLabels: Record<string, string> = {
+  drafting: "Draft",
+  needs_revision: "Needs changes",
+  ready_for_review: "Ready for review",
+  archived: "Archived",
+};
+
+const agentRoleLabels: Record<string, string> = {
+  researcher: "Finding ideas",
+  scorer: "Scoring ideas",
+  drafter: "Writing drafts",
+  auditor: "Checking drafts",
+  scheduler: "Scheduling",
+  analyst: "Reviewing results",
+};
+
+const agentStatusLabels: Record<string, string> = {
+  queued: "Not started",
+  running: "In progress",
+  waiting_approval: "Waiting for approval",
+  completed: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+const campaignStatusLabels: Record<string, string> = {
+  draft: "Draft",
+  active: "Active",
+  paused: "Paused",
+  archived: "Archived",
+};
+
+const stepKeyLabels: Record<string, string> = {
+  research: "Find ideas",
+  score: "Score ideas",
+  draft: "Write drafts",
+  audit: "Check drafts",
+  approve: "Approve",
+  schedule: "Schedule",
+  measure: "Check results",
+};
+
+function labelFor(labels: Record<string, string>, value: string): string {
+  return labels[value] ?? value.replace(/_/g, " ");
+}
+
 function getArtifactChipLabel(
   artifact: WorkflowRunWithDetails["artifacts"][number],
 ): string {
   if (artifact.artifact_type === "draft") {
-    if (artifact.draft_removed)
-      return `Draft #${artifact.artifact_id} · removed`;
-    const intent = artifact.draft_content_intent ?? "idea";
-    const status = artifact.draft_status ?? "unknown";
-    return `Draft #${artifact.artifact_id} · ${intent} · ${status}`;
+    if (artifact.draft_removed) return "Draft · removed";
+    const intent = labelFor(
+      draftIntentLabels,
+      artifact.draft_content_intent ?? "idea",
+    );
+    const status =
+      artifact.draft_status === null
+        ? "Status unknown"
+        : labelFor(draftStatusLabels, artifact.draft_status);
+    return `Draft · ${intent} · ${status}`;
   }
-  const baseLabel = `Agent run #${artifact.artifact_id}`;
-  const details = [artifact.agent_role, artifact.agent_status].filter(Boolean);
+  const baseLabel = `AI assistant task #${artifact.artifact_id}`;
+  const details = [
+    artifact.agent_role === null
+      ? null
+      : labelFor(agentRoleLabels, artifact.agent_role),
+    artifact.agent_status === null
+      ? null
+      : labelFor(agentStatusLabels, artifact.agent_status),
+  ].filter(Boolean);
   return details.length > 0
     ? `${baseLabel} · ${details.join(" · ")}`
     : baseLabel;
@@ -91,7 +156,7 @@ export function WorkflowRunCard({
   const autopilotOrigin =
     run.autopilot_plan_id == null
       ? null
-      : `Autopilot plan #${run.autopilot_plan_id} · source batch #${run.source_import_batch_id}.`;
+      : "Started by Autopilot from your imported ideas.";
 
   async function handleAddNote(): Promise<void> {
     const trimmed = note.trim();
@@ -115,37 +180,39 @@ export function WorkflowRunCard({
               <WorkflowRunStatusBadge status={run.status} />
             </div>
             <p className="text-muted-foreground text-sm">
-              {run.campaign.name} · {run.campaign.status} campaign
+              {run.campaign.name} ·{" "}
+              {labelFor(campaignStatusLabels, run.campaign.status)} campaign
             </p>
             {autopilotOrigin ? (
               <p className="text-muted-foreground max-w-3xl border-s-2 ps-3 text-xs leading-relaxed break-words">
-                {autopilotOrigin} The local planner created this run; executor
-                work and external actions remain operator-triggered or
-                approval-gated.
+                {autopilotOrigin} Each step still waits for you to start it, and
+                nothing is posted without your OK.
               </p>
             ) : null}
             <p className="text-sm">
-              Current step: {run.currentStep?.title ?? run.current_step_key}
+              Current step:{" "}
+              {run.currentStep?.title ??
+                labelFor(stepKeyLabels, run.current_step_key)}
             </p>
             {unscopedScoreStep ? (
               <p className="text-muted-foreground text-xs">
-                Scoring is disabled because no candidate scope is attached.
+                Scoring is off because no ideas are attached.
               </p>
             ) : null}
             {plannerDraftStep ? (
               <p className="text-muted-foreground text-xs">
-                This planner-linked draft step is save-only. Open Drafts,
-                generate variants, and save one to continue to audit.
+                Finish this step in Drafts: write versions and save one. Then
+                come back here to check it.
               </p>
             ) : null}
             {plannerAuditStep ? (
               <p className="text-muted-foreground text-xs">
-                Audits every saved variant’s current revision, using the
-                provider and model inherited from draft generation.
+                Checks the latest copy of every saved version, using the same AI
+                service that wrote the drafts.
               </p>
             ) : null}
             <p className="text-muted-foreground text-sm">
-              {run.completedStepCount}/{run.totalStepCount} steps complete ·{" "}
+              {run.completedStepCount} of {run.totalStepCount} steps done ·{" "}
               {run.progressPercent}%
             </p>
             {run.context_summary && (
@@ -156,12 +223,12 @@ export function WorkflowRunCard({
             {run.candidateScope !== null || visibleArtifacts.length > 0 ? (
               <div
                 className="flex max-w-3xl flex-wrap gap-2"
-                aria-label="Workflow artifacts"
+                aria-label="Linked items"
               >
                 {run.candidateScope !== null ? (
                   <Badge variant="outline">
-                    Candidate scope: {run.candidateScope.current} current,{" "}
-                    {run.candidateScope.unscored} unscored,{" "}
+                    Ideas: {run.candidateScope.current} attached,{" "}
+                    {run.candidateScope.unscored} not scored yet,{" "}
                     {run.candidateScope.removed} removed
                   </Badge>
                 ) : null}
@@ -190,7 +257,7 @@ export function WorkflowRunCard({
                 />
               ) : unscopedScoreStep ? (
                 <Button type="button" size="sm" disabled>
-                  No candidate scope
+                  No ideas attached
                 </Button>
               ) : (
                 <>
@@ -201,7 +268,7 @@ export function WorkflowRunCard({
                       disabled={actionPending}
                       onClick={() => void onStartRun({ id: run.id })}
                     >
-                      Start run
+                      Start automation
                     </Button>
                   ) : null}
                   {canExecute ? (
@@ -214,11 +281,11 @@ export function WorkflowRunCard({
                     >
                       {actionPending
                         ? plannerAuditStep
-                          ? "Auditing saved variants…"
-                          : "Running executor…"
+                          ? "Checking saved versions…"
+                          : "Working on next step…"
                         : plannerAuditStep
-                          ? "Audit all saved variants"
-                          : "Run executor"}
+                          ? "Check all saved versions"
+                          : "Do next step"}
                     </Button>
                   ) : null}
                   {canResume ? (
@@ -231,11 +298,11 @@ export function WorkflowRunCard({
                     >
                       {actionPending
                         ? plannerAuditStep
-                          ? "Resuming variant audits…"
-                          : "Resuming…"
+                          ? "Continuing checks…"
+                          : "Continuing…"
                         : plannerAuditStep
-                          ? "Resume variant audits"
-                          : "Resume executor"}
+                          ? "Continue checks"
+                          : "Continue automation"}
                     </Button>
                   ) : null}
                 </>
@@ -248,7 +315,7 @@ export function WorkflowRunCard({
                   disabled={actionPending}
                   onClick={() => void onCancelRun({ id: run.id })}
                 >
-                  Cancel run
+                  Stop automation
                 </Button>
               )}
             </div>
@@ -273,8 +340,8 @@ export function WorkflowRunCard({
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 maxLength={1000}
-                placeholder="Add note to workflow history"
-                aria-label="Workflow note"
+                placeholder="Add a note to this automation's history"
+                aria-label="Automation note"
                 className="min-h-16"
               />
               <Button

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Playbooks are reusable LinkedIn prompt modules for Linkgo's local-first agent runtime and operator workflows.
+Playbooks (shown as writing guides in the **Brand voice** section) are reusable LinkedIn prompt modules for Linkgo's local-first agent runtime (shown as **AI assistant**) and operator workflows.
 
 They keep writer, humanizer, calendar, commenter, and analyst guidance modular instead of expanding one giant system prompt.
 
@@ -16,7 +16,7 @@ They keep writer, humanizer, calendar, commenter, and analyst guidance modular i
 
 ## Runtime behavior
 
-Runtime-enabled playbooks can be selected when creating an agent run if they are compatible with the chosen role and enabled in the Playbooks tab.
+Runtime-enabled playbooks can be selected when creating an agent run if they are compatible with the chosen role and enabled in the Brand voice tab.
 
 The selected key is stored on `agent_runs.playbook_key`.
 
@@ -44,7 +44,7 @@ Prompt assembly keeps locked safety lines after custom instructions:
 
 ## UI
 
-The Playbooks tab shows all five built-ins as cards with role, tool, roadmap, enabled/disabled, and guidance-only badges.
+The Brand voice tab shows all five built-ins as cards with role, tool, **On**/**Off**, and guidance-only (**Tips only**) badges.
 
 Runtime playbooks can be enabled or disabled and can store bounded custom runtime instructions.
 
@@ -54,11 +54,11 @@ The LinkedIn Commenter card is visible as guidance-only and intentionally expose
 
 Playwright covers:
 
-- Rendering the Playbooks tab and five built-ins.
+- Rendering the Brand voice tab and five built-ins.
 - Editing custom instructions and persisting an override row.
 - Disabling a runtime playbook and marking it disabled.
 - Keeping the commenter playbook guidance-only with no autonomous posting action.
-- Runtime playbook selection, provider prompt injection, and disabled-playbook filtering from the Agent Runtime create dialog.
+- Runtime playbook selection, provider prompt injection, and disabled-playbook filtering from the AI assistant **New assistant task** dialog.
 
 Rust `playbooks::tests` cover input validation, upsert/update ordering, rollback on injected storage failure, and concurrent upserts leaving one consistent row.
 

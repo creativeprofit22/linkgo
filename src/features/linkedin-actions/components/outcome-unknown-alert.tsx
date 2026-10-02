@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { toPlainMessage } from "@/lib/plain-message";
 
 interface OutcomeUnknownAlertProps {
   itemLabel: string;
@@ -6,7 +7,8 @@ interface OutcomeUnknownAlertProps {
   executionId: number;
 }
 
-export const OUTCOME_UNKNOWN_TITLE = "Outcome unknown — check LinkedIn";
+export const OUTCOME_UNKNOWN_TITLE =
+  "We couldn't confirm it posted — check LinkedIn";
 
 export function OutcomeUnknownAlert({
   itemLabel,
@@ -26,12 +28,14 @@ export function OutcomeUnknownAlert({
         {OUTCOME_UNKNOWN_TITLE}
       </p>
       <p className="mt-2">
-        LinkedIn may have created this {itemLabel}. Do not publish it again.
-        Check LinkedIn, then reconcile execution #{executionId} in Safety →
-        Publishing needs reconciliation.
+        This {itemLabel} may already be on LinkedIn. Don't post it again. Check
+        LinkedIn, then go to Safety → Check what happened to these posts and
+        confirm attempt #{executionId}.
       </p>
       {message && (
-        <p className="text-muted-foreground mt-2 break-words">{message}</p>
+        <p className="text-muted-foreground mt-2 break-words">
+          {toPlainMessage(message)}
+        </p>
       )}
     </div>
   );

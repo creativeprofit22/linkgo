@@ -14,12 +14,14 @@ test("Comments tab renders no-campaign and empty states", async ({ page }) => {
   await expect(
     page.getByText("No campaigns yet", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Open Campaigns first")).toBeVisible();
+  await expect(
+    page.getByText("Go to Campaigns and create a campaign first"),
+  ).toBeVisible();
 
   await createCampaign(page);
   await openComments(page);
   await expect(
-    page.getByText("No comment threads yet", { exact: true }),
+    page.getByText("No comments yet", { exact: true }),
   ).toBeVisible();
 });
 
@@ -37,8 +39,8 @@ test("A shortlisted candidate can become a comment thread with variants and audi
   ).toBeVisible();
   await expect(page.getByText(cleanComment()).first()).toBeVisible();
   await expect(page.getByText(secondCleanComment()).first()).toBeVisible();
-  await expect(page.getByText("required text").first()).toBeVisible();
-  await expect(page.getByText("external link").first()).toBeVisible();
+  await expect(page.getByText("Missing text").first()).toBeVisible();
+  await expect(page.getByText("Links", { exact: true }).first()).toBeVisible();
 
   const counts = await getStateCounts(page);
   expect(counts.commentThreads).toBe(1);
@@ -54,17 +56,17 @@ test("Comment thread notes can be edited and persist after reopening Comments", 
   await openComments(page);
   await createCommentThread(page, cleanComment());
 
-  await page.getByLabel("Operator notes").fill("Updated operator context.");
-  await page.getByLabel("Reviewer notes").fill("Reviewer follow-up note.");
+  await page.getByLabel("Your notes").fill("Updated operator context.");
+  await page.getByLabel("Approver notes").fill("Reviewer follow-up note.");
   await page.getByRole("button", { name: "Save notes" }).click();
   await expect(page.getByRole("button", { name: "Save notes" })).toBeDisabled();
 
   await openCampaigns(page);
   await openComments(page);
-  await expect(page.getByLabel("Operator notes")).toHaveValue(
+  await expect(page.getByLabel("Your notes")).toHaveValue(
     "Updated operator context.",
   );
-  await expect(page.getByLabel("Reviewer notes")).toHaveValue(
+  await expect(page.getByLabel("Approver notes")).toHaveValue(
     "Reviewer follow-up note.",
   );
 });
@@ -80,14 +82,14 @@ test("A blocked comment variant cannot be selected or submitted for review", asy
     "I would read more at https://example.com because this post names a useful 3-step workflow.",
   );
 
-  await expect(getBadge(page, "Blocked").first()).toBeVisible();
+  await expect(getBadge(page, "Needs fixing").first()).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Select", exact: true }),
+    page.getByRole("button", { name: "Use this version", exact: true }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Submit for review" }),
+    page.getByRole("button", { name: "Send for approval" }),
   ).toBeDisabled();
-  await expect(getBadge(page, "Needs review")).toBeHidden();
+  await expect(getBadge(page, "Waiting for approval")).toBeHidden();
 });
 
 test("A rejected comment thread moves to History with Cancel disabled", async ({
@@ -97,8 +99,10 @@ test("A rejected comment thread moves to History with Cancel disabled", async ({
   await createShortlistedCandidate(page, "rejected");
   await openComments(page);
   await createCommentThread(page, cleanComment());
-  await page.getByRole("button", { name: "Select", exact: true }).click();
-  await page.getByRole("button", { name: "Submit for review" }).click();
+  await page
+    .getByRole("button", { name: "Use this version", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Send for approval" }).click();
   await page
     .getByRole("button", { name: "Reject", exact: true })
     .last()
@@ -120,17 +124,17 @@ test("Approved comment posts through mocked LinkedIn API and records success", a
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "api-success");
 
-  await page.getByRole("button", { name: "Post via LinkedIn" }).click();
+  await page.getByRole("button", { name: "Post to LinkedIn" }).click();
   const dialog = page.getByRole("dialog", { name: "Post comment" });
-  await expect(dialog.getByText("Exact escaped comment preview")).toBeVisible();
+  await expect(dialog.getByText("Exactly what will post")).toBeVisible();
   await expect(
-    dialog.getByRole("button", { name: "Post via LinkedIn" }),
+    dialog.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeDisabled();
   await dialog.getByLabel(/Type “Post comment”/).fill("Post comment");
-  await dialog.getByRole("button", { name: "Post via LinkedIn" }).click();
+  await dialog.getByRole("button", { name: "Post to LinkedIn" }).click();
 
   await expect(getBadge(page, "Posted")).toBeVisible();
-  await expect(page.getByText("Comment attempt history")).toBeVisible();
+  await expect(page.getByText("Posting history")).toBeVisible();
   const attempts = await getCommentAttempts(page);
   expect(attempts).toEqual(
     expect.arrayContaining([
@@ -174,10 +178,10 @@ test("Open outcome_unknown publish execution locks comment API posting", async (
   await createApprovedComment(page, "locked-by-execution");
 
   await expect(
-    page.getByRole("button", { name: "Post via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeDisabled();
   await expect(
-    page.getByText("Awaiting reconciliation in Safety"),
+    page.getByText("We couldn't confirm it posted. Check it in Safety."),
   ).toBeVisible();
   await expect.poll(() => getCommentPublishInvokeCount(page)).toBe(0);
 });
@@ -194,12 +198,12 @@ test("LinkedIn API comment failure records failed attempt and Safety error", asy
       "LinkedIn Community Management access or w_member_social_feed scope required";
   });
 
-  await page.getByRole("button", { name: "Post via LinkedIn" }).click();
+  await page.getByRole("button", { name: "Post to LinkedIn" }).click();
   const dialog = page.getByRole("dialog", { name: "Post comment" });
   await dialog.getByLabel(/Type “Post comment”/).fill("Post comment");
-  await dialog.getByRole("button", { name: "Post via LinkedIn" }).click();
+  await dialog.getByRole("button", { name: "Post to LinkedIn" }).click();
 
-  await expect(page.getByText("LinkedIn comment failed")).toBeVisible();
+  await expect(page.getByText("Your comment didn't post")).toBeVisible();
   const attempts = await getCommentAttempts(page);
   expect(attempts).toEqual(
     expect.arrayContaining([expect.objectContaining({ status: "failed" })]),
@@ -216,29 +220,31 @@ test("A clean variant can be reviewed approved and manually recorded posted", as
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "posted");
 
-  await page.getByRole("button", { name: "Record posted" }).click();
-  const dialog = page.getByRole("dialog", { name: "Record posted comment" });
+  await page.getByRole("button", { name: "Mark as posted" }).click();
+  const dialog = page.getByRole("dialog", { name: "Mark comment as posted" });
   await expect(
-    dialog.getByRole("button", { name: "Record attempt" }),
+    dialog.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
   await expect(
-    dialog.getByText("Add a comment URL or platform comment ID."),
+    dialog.getByText("Add the comment link or its LinkedIn reference."),
   ).toBeVisible();
-  await dialog.getByLabel("Platform comment ID").fill("comment-success-id");
+  await dialog
+    .getByLabel("LinkedIn comment reference")
+    .fill("comment-success-id");
   await expect(
-    dialog.getByRole("button", { name: "Record attempt" }),
+    dialog.getByRole("button", { name: "Save", exact: true }),
   ).toBeEnabled();
-  await dialog.getByLabel("Platform comment ID").fill("");
+  await dialog.getByLabel("LinkedIn comment reference").fill("");
   await expect(
-    dialog.getByRole("button", { name: "Record attempt" }),
+    dialog.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
   await dialog
-    .getByLabel("Comment URL")
+    .getByLabel("Comment link")
     .fill("https://www.linkedin.com/feed/update/comment-success/");
-  await dialog.getByRole("button", { name: "Record attempt" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(getBadge(page, "Posted")).toBeVisible();
-  await expect(page.getByText("Comment attempt history")).toBeVisible();
+  await expect(page.getByText("Posting history")).toBeVisible();
   await expect(page.getByText("comment-success")).toBeVisible();
 
   const attempts = await getCommentAttempts(page);
@@ -285,16 +291,19 @@ test("Daily comment cap blocks a second same-day successful posted attempt", asy
   await openComments(page);
   await createCommentThread(page, secondCleanComment());
   await page
-    .getByRole("button", { name: "Select", exact: true })
+    .getByRole("button", { name: "Use this version", exact: true })
     .first()
     .click();
-  await page.getByRole("button", { name: "Submit for review" }).first().click();
-  await page.getByRole("button", { name: "Approve" }).first().click();
-  await page.getByRole("button", { name: "Record posted" }).first().click();
+  await page.getByRole("button", { name: "Send for approval" }).first().click();
   await page
-    .getByLabel("Comment URL")
+    .getByRole("button", { name: "Approve", exact: true })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Mark as posted" }).first().click();
+  await page
+    .getByLabel("Comment link")
     .fill("https://www.linkedin.com/feed/update/comment-two/");
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page.getByText("Daily comment limit reached")).toBeVisible();
   const rateLimitEvents = await getRateLimitEvents(page);
@@ -316,16 +325,18 @@ test("Global kill switch hides API posting and direct publish blocks before nati
   await createApprovedComment(page, "kill-switch");
   await openSafety(page);
   await page
-    .getByLabel("Kill switch reason")
+    .getByLabel("Reason for pausing")
     .fill("Pause comments for review.");
-  await page.getByRole("button", { name: "Enable kill switch" }).click();
+  await page.getByRole("button", { name: "Pause everything" }).click();
 
   await openComments(page);
   await expect(
-    page.getByRole("button", { name: "Post via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
   await expect(
-    page.getByText("Post via LinkedIn is hidden by the global kill switch"),
+    page.getByText(
+      "Posting to LinkedIn is hidden because the emergency pause is on",
+    ),
   ).toBeVisible();
 
   const message = await publishCommentViaLinkedInDataApi(page, {
@@ -350,11 +361,11 @@ test("Daily comment cap blocks API posting before native invoke", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "api-cap-one");
-  await page.getByRole("button", { name: "Record posted" }).click();
+  await page.getByRole("button", { name: "Mark as posted" }).click();
   await page
-    .getByLabel("Comment URL")
+    .getByLabel("Comment link")
     .fill("https://www.linkedin.com/feed/update/comment-one/");
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await createShortlistedCandidate(page, "api-cap-two", {
     campaignExists: true,
@@ -362,11 +373,14 @@ test("Daily comment cap blocks API posting before native invoke", async ({
   await openComments(page);
   await createCommentThread(page, secondCleanComment());
   await page
-    .getByRole("button", { name: "Select", exact: true })
+    .getByRole("button", { name: "Use this version", exact: true })
     .first()
     .click();
-  await page.getByRole("button", { name: "Submit for review" }).first().click();
-  await page.getByRole("button", { name: "Approve" }).first().click();
+  await page.getByRole("button", { name: "Send for approval" }).first().click();
+  await page
+    .getByRole("button", { name: "Approve", exact: true })
+    .first()
+    .click();
   await resetCommentPublishInvokeCount(page);
 
   const message = await publishCommentViaLinkedInDataApi(page, {
@@ -388,18 +402,20 @@ test("Unresolvable target hides API posting and keeps manual fallback", async ({
   });
   await openComments(page);
   await createCommentThread(page, cleanComment());
-  await page.getByRole("button", { name: "Select", exact: true }).click();
-  await page.getByRole("button", { name: "Submit for review" }).click();
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page
+    .getByRole("button", { name: "Use this version", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
 
   await expect(
-    page.getByRole("button", { name: "Post via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
   await expect(
-    page.getByText("LinkedIn target URN could not be resolved"),
+    page.getByText("We couldn’t find this post on LinkedIn from its link"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Record posted manually" }),
+    page.getByRole("button", { name: "Mark as posted" }),
   ).toBeVisible();
 });
 
@@ -426,17 +442,17 @@ test("Failed comment attempt creates an open error queue item visible in Safety"
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "failed");
 
-  await page.getByRole("button", { name: "Record failure" }).click();
+  await page.getByRole("button", { name: "Mark as not posted" }).click();
   await page
-    .getByLabel("Error message")
+    .getByLabel("What went wrong")
     .fill("Manual LinkedIn tab was offline.");
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await openSafety(page);
   await expect(
     page.getByRole("heading", { name: "Comment attempt failed" }),
   ).toBeVisible();
-  await expect(getBadge(page, "open")).toBeVisible();
+  await expect(getBadge(page, "Needs attention")).toBeVisible();
 
   const items = await getErrorQueueItems(page);
   expect(items).toEqual(
@@ -469,14 +485,14 @@ test("Archived campaign blocks comment mutations while history remains visible",
   ).toBeVisible();
   await expect(
     page.getByText(
-      "Archived campaign history is visible, but comment mutations are blocked.",
+      "This campaign is archived. You can see its history, but you can’t change its comments.",
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create comment" }),
+    page.getByRole("button", { name: "Write a comment" }),
   ).toBeDisabled();
-  await expect(page.getByLabel("Operator notes")).toBeDisabled();
-  await expect(page.getByLabel("Reviewer notes")).toBeDisabled();
+  await expect(page.getByLabel("Your notes")).toBeDisabled();
+  await expect(page.getByLabel("Approver notes")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save notes" })).toBeDisabled();
 
   const message = await recordCommentAttemptViaDataApi(page, {
@@ -527,15 +543,17 @@ async function openCampaigns(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openComments(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Comments/ }).click();
-  await expect(page.getByRole("heading", { name: "Comments" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Comments", exact: true }),
+  ).toBeVisible();
 }
 
 async function openSafety(page: Page): Promise<void> {
@@ -574,8 +592,8 @@ async function createShortlistedCandidate(
 ): Promise<void> {
   if (!options.campaignExists) await createCampaign(page);
   await openQueue(page);
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
   await expect(dialog).toBeVisible();
   await page
     .getByLabel("LinkedIn post URL")
@@ -593,10 +611,10 @@ async function createShortlistedCandidate(
     .fill(`https://www.linkedin.com/in/jane-${suffix}/`);
   await page.getByLabel("Posted at").fill("2026-06-25");
   await page.getByLabel("Source keyword").fill("founder content");
-  await page.getByLabel("Relevance score").fill("87");
+  await page.getByLabel("Match score").fill("87");
   await page.getByLabel("Score reason").fill("Strong audience overlap.");
   await page.getByLabel("Notes").fill("Good comment opportunity.");
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole("button", { name: "Shortlist" }).first().click();
   await expect(
@@ -608,16 +626,16 @@ async function createCommentThread(
   page: Page,
   ...variants: string[]
 ): Promise<void> {
-  await page.getByRole("button", { name: "Create comment" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create comment" });
+  await page.getByRole("button", { name: "Write a comment" }).click();
+  const dialog = page.getByRole("dialog", { name: "Write a comment" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Operator notes").fill("Manual reply context.");
+  await dialog.getByLabel("Your notes").fill("Manual reply context.");
   for (const [index, variant] of variants.entries()) {
     if (index > 0)
-      await dialog.getByRole("button", { name: "Add variant" }).click();
-    await dialog.getByLabel(`Variant ${index + 1}`).fill(variant);
+      await dialog.getByRole("button", { name: "Add version" }).click();
+    await dialog.getByLabel(`Version ${index + 1}`).fill(variant);
   }
-  await dialog.getByRole("button", { name: "Create comment" }).click();
+  await dialog.getByRole("button", { name: "Save comment" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -629,15 +647,17 @@ async function createApprovedComment(
   await openComments(page);
   await createCommentThread(page, cleanComment());
   await expect(
-    page.getByRole("button", { name: "Submit for review" }),
+    page.getByRole("button", { name: "Send for approval" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Select", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Use this version", exact: true })
+    .click();
   await expect(
-    page.getByRole("button", { name: "Submit for review" }),
+    page.getByRole("button", { name: "Send for approval" }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "Submit for review" }).click();
-  await expect(getBadge(page, "Needs review")).toBeVisible();
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  await expect(getBadge(page, "Waiting for approval")).toBeVisible();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
 }
 
@@ -646,14 +666,17 @@ async function selectApproveAndRecordPosted(
   url: string,
 ): Promise<void> {
   await page
-    .getByRole("button", { name: "Select", exact: true })
+    .getByRole("button", { name: "Use this version", exact: true })
     .first()
     .click();
-  await page.getByRole("button", { name: "Submit for review" }).first().click();
-  await page.getByRole("button", { name: "Approve" }).first().click();
-  await page.getByRole("button", { name: "Record posted" }).first().click();
-  await page.getByLabel("Comment URL").fill(url);
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Send for approval" }).first().click();
+  await page
+    .getByRole("button", { name: "Approve", exact: true })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Mark as posted" }).first().click();
+  await page.getByLabel("Comment link").fill(url);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(getBadge(page, "Posted").first()).toBeVisible();
 }
 

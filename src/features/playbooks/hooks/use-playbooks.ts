@@ -4,6 +4,7 @@ import {
   listPlaybooks,
   updatePlaybookOverride,
 } from "@/features/playbooks/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   AgentPlaybookView,
   UpdatePlaybookOverrideInput,
@@ -19,7 +20,9 @@ interface UsePlaybooksState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected playbook error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your brand voice guides. Try again.";
 }
 
 export function usePlaybooks(): UsePlaybooksState {
@@ -50,9 +53,9 @@ export function usePlaybooks(): UsePlaybooksState {
       try {
         await updatePlaybookOverride(input);
         setPlaybooks(await listPlaybooks());
-        toast.success("Playbook saved");
+        toast.success("Guide saved");
       } catch (caught) {
-        toast.error("Playbook was not saved", {
+        toast.error("We couldn't save this guide", {
           description: getErrorMessage(caught),
         });
         throw caught;

@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { toPlainMessage } from "@/lib/plain-message";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkflowStepStatusBadge } from "@/features/workflows/components/workflow-status-badge";
@@ -61,31 +62,31 @@ function getStepActions(status: WorkflowStepStatus): StepAction[] {
   }
   if (status === "running") {
     return [
-      { label: "Complete", status: "completed" },
-      { label: "Wait approval", status: "waiting_approval" },
-      { label: "Block", status: "blocked" },
-      { label: "Fail", status: "failed" },
+      { label: "Mark done", status: "completed" },
+      { label: "Wait for approval", status: "waiting_approval" },
+      { label: "Mark stuck", status: "blocked" },
+      { label: "Mark failed", status: "failed" },
       { label: "Skip", status: "skipped" },
     ];
   }
   if (status === "waiting_approval") {
     return [
-      { label: "Complete", status: "completed" },
-      { label: "Block", status: "blocked" },
-      { label: "Fail", status: "failed" },
-      { label: "Resume", status: "running" },
+      { label: "Mark done", status: "completed" },
+      { label: "Mark stuck", status: "blocked" },
+      { label: "Mark failed", status: "failed" },
+      { label: "Continue", status: "running" },
     ];
   }
   if (status === "blocked") {
     return [
-      { label: "Resume", status: "running" },
-      { label: "Fail", status: "failed" },
+      { label: "Continue", status: "running" },
+      { label: "Mark failed", status: "failed" },
       { label: "Skip", status: "skipped" },
     ];
   }
   if (status === "failed") {
     return [
-      { label: "Resume", status: "running" },
+      { label: "Try again", status: "running" },
       { label: "Skip", status: "skipped" },
     ];
   }
@@ -200,7 +201,7 @@ export function WorkflowStepList({
                   )}
                   {step.error_message && (
                     <p className="text-destructive text-sm whitespace-pre-wrap">
-                      {step.error_message}
+                      {toPlainMessage(step.error_message)}
                     </p>
                   )}
                 </div>
@@ -247,13 +248,13 @@ export function WorkflowStepList({
                 Update {pendingAction?.step.title ?? "step"}
               </DialogTitle>
               <DialogDescription>
-                Store concise context with this manual step status change.
+                Add a short note about this change.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-2">
               <Label htmlFor="workflow-step-context">
-                {contextIsError ? "Error message" : "Output summary"}
+                {contextIsError ? "What went wrong" : "What happened"}
               </Label>
               <Textarea
                 id="workflow-step-context"
@@ -262,13 +263,13 @@ export function WorkflowStepList({
                 rows={4}
                 placeholder={
                   contextIsError
-                    ? "Why is this step blocked or failed?"
-                    : "What changed or what should the next resume use?"
+                    ? "Why is this step stuck or failed?"
+                    : "What changed, or what should happen next?"
                 }
                 onChange={(event) => setContextText(event.target.value)}
               />
               <p className="text-muted-foreground text-xs">
-                {contextText.length}/1000 characters
+                {contextText.length} of 1000 characters
               </p>
             </div>
 
@@ -282,9 +283,7 @@ export function WorkflowStepList({
                 Cancel
               </Button>
               <Button type="submit" disabled={savingContext}>
-                {savingContext
-                  ? "Saving…"
-                  : `Save ${pendingAction?.action.label.toLowerCase() ?? "status"}`}
+                {savingContext ? "Saving…" : "Save note"}
               </Button>
             </DialogFooter>
           </form>

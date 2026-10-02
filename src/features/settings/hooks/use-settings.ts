@@ -4,6 +4,7 @@ import {
   getLaunchOnLoginSettings,
   setLaunchOnLogin,
 } from "@/features/settings/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type { LaunchOnLoginSettings } from "@/features/settings/types";
 import { isBrowserPreview } from "@/lib/env";
 import { DESKTOP_REQUIRED_MESSAGE } from "@/lib/tauri";
@@ -20,7 +21,9 @@ interface UseSettingsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected settings error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your settings. Please try again.";
 }
 
 export function useSettings(): UseSettingsState {
@@ -60,23 +63,23 @@ export function useSettings(): UseSettingsState {
         const nextSettings = await setLaunchOnLogin({ enabled });
         setLaunchOnLoginState(nextSettings);
         if (nextSettings.enabled !== enabled) {
-          toast.warning("Launch-on-login setting synced differently", {
+          toast.warning("Your computer kept a different startup setting", {
             description: nextSettings.enabled
-              ? "The OS reports launch on login is enabled."
-              : "The OS reports launch on login is disabled.",
+              ? "Linkgo will still open when you sign in."
+              : "Linkgo won't open when you sign in.",
           });
           return;
         }
 
         toast.success(
           nextSettings.enabled
-            ? "Launch on login enabled"
-            : "Launch on login disabled",
+            ? "Linkgo will open when you sign in"
+            : "Linkgo won't open when you sign in",
         );
       } catch (caught) {
         const message = getErrorMessage(caught);
         setError(message);
-        toast.error("Launch-on-login setting was not changed", {
+        toast.error("We couldn't change your startup setting", {
           description: message,
         });
         await loadSettings();

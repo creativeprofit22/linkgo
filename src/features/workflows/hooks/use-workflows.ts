@@ -15,6 +15,7 @@ import {
   setWorkflowStepStatus,
   startWorkflowRun,
 } from "@/workflows/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   AddWorkflowNoteInput,
   CancelWorkflowRunInput,
@@ -46,7 +47,9 @@ interface UseWorkflowsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected workflow error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with this automation. Try again.";
 }
 
 function getDefaultCampaignId(
@@ -129,7 +132,7 @@ export function useWorkflows(): UseWorkflowsState {
         setSelectedCampaignId(input.campaignId);
         return id;
       } catch (caught) {
-        toast.error("Workflow run was not created", {
+        toast.error("We couldn't create this automation", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -144,7 +147,7 @@ export function useWorkflows(): UseWorkflowsState {
         await startWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Workflow run was not started", {
+        toast.error("We couldn't start this automation", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -156,7 +159,9 @@ export function useWorkflows(): UseWorkflowsState {
   const executeRun = useCallback(
     async (input: ExecuteWorkflowRunInput) => {
       if (activeActionRunIds.current.has(input.id)) {
-        throw new Error("Workflow action is already running");
+        throw new Error(
+          "This automation is already working. Wait for it to finish.",
+        );
       }
       activeActionRunIds.current.add(input.id);
       setActiveRunId(input.id);
@@ -168,18 +173,17 @@ export function useWorkflows(): UseWorkflowsState {
         await executeWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
         if (isPlannerAudit) {
-          toast.success("Saved variants audited", {
+          toast.success("Saved versions checked", {
             description:
-              "Every current revision was audited with its draft-generation provider and is ready for approval.",
+              "Every saved version was checked by the AI service that wrote it and is ready for approval.",
           });
         } else if (input.scoring !== undefined) {
-          toast.success("Workflow scoring updated", {
-            description:
-              "The attached batch and linked workflow state were refreshed.",
+          toast.success("Ideas scored", {
+            description: "Your ideas and this automation are up to date.",
           });
         }
       } catch (caught) {
-        toast.error("Workflow executor failed", {
+        toast.error("This step didn't finish", {
           description: getErrorMessage(caught),
         });
         await loadRunsForCampaign(selectedCampaignId).catch(() => undefined);
@@ -195,7 +199,9 @@ export function useWorkflows(): UseWorkflowsState {
   const resumeRun = useCallback(
     async (input: StartWorkflowRunInput) => {
       if (activeActionRunIds.current.has(input.id)) {
-        throw new Error("Workflow action is already running");
+        throw new Error(
+          "This automation is already working. Wait for it to finish.",
+        );
       }
       activeActionRunIds.current.add(input.id);
       setActiveRunId(input.id);
@@ -207,13 +213,13 @@ export function useWorkflows(): UseWorkflowsState {
         await resumeWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
         if (isPlannerAudit) {
-          toast.success("Variant audits resumed", {
+          toast.success("Checks continued", {
             description:
-              "Remaining current revisions were audited with the draft-generation provider.",
+              "The rest of your saved versions were checked by the AI service that wrote them.",
           });
         }
       } catch (caught) {
-        toast.error("Workflow executor was not resumed", {
+        toast.error("We couldn't continue this automation", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -231,7 +237,7 @@ export function useWorkflows(): UseWorkflowsState {
         await setWorkflowStepStatus(input);
         await loadRunsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Workflow step was not updated", {
+        toast.error("We couldn't update this step", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -246,7 +252,7 @@ export function useWorkflows(): UseWorkflowsState {
         await cancelWorkflowRun(input);
         await loadRunsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Workflow run was not cancelled", {
+        toast.error("We couldn't stop this automation", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -261,7 +267,7 @@ export function useWorkflows(): UseWorkflowsState {
         await addWorkflowNote(input);
         await loadRunsForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Workflow note was not added", {
+        toast.error("We couldn't add your note", {
           description: getErrorMessage(caught),
         });
         throw caught;

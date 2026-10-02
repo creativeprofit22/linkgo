@@ -223,10 +223,10 @@ for (const fixture of deterministicFixtures.cases) {
             renderErrors.length ? renderErrors.join("; ") : text,
           ),
       )
-      .toContain("Deterministic checks");
+      .toContain("Automatic checks");
     const checks = page
       .locator("#rewrite-fixture")
-      .getByRole("region", { name: /Deterministic checks/ });
+      .getByRole("region", { name: /Automatic checks/ });
     for (const finding of expected)
       await expect(
         checks.getByText(`: ${finding.message}`, { exact: true }),
@@ -441,18 +441,20 @@ for (const scenario of [
       );
     }, scenario);
     const panel = page.locator("#recovery-fixture");
-    const resume = panel.getByRole("button", { name: "Resume quality loop" });
+    const resume = panel.getByRole("button", { name: "Continue improving" });
     if (scenario.resume) {
       await expect(resume).toBeEnabled();
       await resume.click();
       await expect(panel).toHaveAttribute("data-resumed", "7");
     } else {
       await expect(resume).toHaveCount(0);
-      await expect(panel.getByText(/re-audit.*re-score/i)).toBeVisible();
+      await expect(
+        panel.getByText(/review.*with AI.*Improve with AI/i),
+      ).toBeVisible();
       await panel
-        .getByRole("button", { name: "Run quality loop", exact: true })
+        .getByRole("button", { name: "Improve with AI", exact: true })
         .click();
-      await panel.getByRole("button", { name: "Confirm and run" }).click();
+      await panel.getByRole("button", { name: "Yes, improve it" }).click();
       await expect(panel).toHaveAttribute("data-started", "true");
       await expect(panel).not.toHaveAttribute("data-resumed");
     }
@@ -508,16 +510,16 @@ test("scored attempt renders native-shaped category scores in the scorecard", as
 
   await page.getByRole("button", { name: "Campaigns" }).click();
   await page.getByRole("button", { name: "Drafts" }).click();
-  const panel = page.getByRole("region", { name: "Draft quality" }).filter({
+  const panel = page.getByRole("region", { name: "Quality score" }).filter({
     has: page.locator(`#quality-${variantId}-title`),
   });
   await expect(panel.getByText("Passed", { exact: true })).toBeVisible();
   const expected = [
-    ["Hook strength", "70", "The hook is concrete."],
-    ["Authenticity", "75", "The voice matches the supplied draft."],
-    ["LinkedIn fit", "80", "The format fits the audience."],
-    ["Specificity", "85", "The example is specific."],
-    ["Narrative structure", "90", "The argument has a clear progression."],
+    ["Strong opening", "70", "The hook is concrete."],
+    ["Sounds like you", "75", "The voice matches the supplied draft."],
+    ["Fits LinkedIn", "80", "The format fits the audience."],
+    ["Specific details", "85", "The example is specific."],
+    ["Story flow", "90", "The argument has a clear progression."],
   ] as const;
   const items = panel.getByRole("listitem");
   await expect(items).toHaveCount(expected.length);
@@ -527,7 +529,7 @@ test("scored attempt renders native-shaped category scores in the scorecard", as
     await expect(item).toContainText(feedback);
   }
   // Native ORDER BY category_key ASC: authenticity, hook_strength, ...
-  await expect(items.first()).toContainText("Authenticity");
+  await expect(items.first()).toContainText("Sounds like you");
 });
 
 for (const scenario of [
@@ -579,14 +581,14 @@ for (const scenario of [
 
     await page.getByRole("button", { name: "Campaigns" }).click();
     await page.getByRole("button", { name: "Drafts" }).click();
-    const panel = page.getByRole("region", { name: "Draft quality" }).filter({
+    const panel = page.getByRole("region", { name: "Quality score" }).filter({
       has: page.locator(`#quality-${variantId}-title`),
     });
-    await panel.getByRole("button", { name: "Resume quality loop" }).click();
+    await panel.getByRole("button", { name: "Continue improving" }).click();
 
     const toast = page
       .locator("[data-sonner-toast]")
-      .filter({ hasText: "Draft quality loop stopped" });
+      .filter({ hasText: "Improving your draft stopped" });
     await expect(toast).toBeVisible();
     await expect(toast).toContainText(scenario.description);
     await expect(toast).not.toContainText(scenario.settlementError);
@@ -632,10 +634,10 @@ test("oversized provider error is bounded before failure settlement", async ({
 
   await page.getByRole("button", { name: "Campaigns" }).click();
   await page.getByRole("button", { name: "Drafts" }).click();
-  const panel = page.getByRole("region", { name: "Draft quality" }).filter({
+  const panel = page.getByRole("region", { name: "Quality score" }).filter({
     has: page.locator(`#quality-${variantId}-title`),
   });
-  await panel.getByRole("button", { name: "Resume quality loop" }).click();
+  await panel.getByRole("button", { name: "Continue improving" }).click();
 
   await expect
     .poll(() =>
@@ -653,9 +655,9 @@ test("oversized provider error is bounded before failure settlement", async ({
   );
   expect([...(sent ?? "")].length).toBeLessThanOrEqual(1000);
   expect(sent).toMatch(/^x+…$/);
-  await expect(panel.getByText("Failed", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Didn't finish", { exact: true })).toBeVisible();
   await expect(
-    panel.getByRole("button", { name: "Resume quality loop" }),
+    panel.getByRole("button", { name: "Continue improving" }),
   ).toBeEnabled();
 });
 

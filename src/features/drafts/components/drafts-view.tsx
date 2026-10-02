@@ -59,8 +59,8 @@ export function DraftsView(): React.ReactNode {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">Drafts</h2>
               <p className="text-muted-foreground text-sm">
-                Manual or operator-triggered generated variants. Saving
-                generated text still runs deterministic audits before approval.
+                Write and compare post versions, with quality checks. Every
+                version gets automatic checks before it goes for approval.
               </p>
             </div>
           </div>
@@ -97,7 +97,7 @@ export function DraftsView(): React.ReactNode {
               size="sm"
               onClick={() => void loadDrafts()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -117,7 +117,7 @@ export function DraftsView(): React.ReactNode {
             <div>
               <p className="text-sm font-medium">Selected campaign</p>
               <p className="text-muted-foreground text-xs">
-                Draft workspaces are stored locally per candidate post.
+                Drafts are saved on this computer, one per idea.
               </p>
             </div>
             <select
@@ -140,19 +140,19 @@ export function DraftsView(): React.ReactNode {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard label="Total drafts" value={String(summary.total)} />
             <SummaryCard
-              label={`Ready for review${shownSuffix}`}
+              label={`Ready for approval${shownSuffix}`}
               value={String(summary.readyForReview)}
             />
             <SummaryCard
-              label={`Blocked variants${shownSuffix}`}
+              label={`Versions to fix${shownSuffix}`}
               value={String(summary.blockedVariants)}
             />
             <SummaryCard
-              label={`Selected variants${shownSuffix}`}
+              label={`Chosen versions${shownSuffix}`}
               value={String(summary.selectedVariants)}
             />
             <SummaryCard
-              label="Generated drafts pending"
+              label="AI drafts to review"
               value={String(activeGenerationRequests.length)}
             />
           </div>
@@ -165,9 +165,7 @@ export function DraftsView(): React.ReactNode {
 
           {activeGenerationRequests.length > 0 && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">
-                Generated drafts pending
-              </h3>
+              <h3 className="text-lg font-semibold">AI drafts to review</h3>
               {activeGenerationRequests.map((request) => (
                 <DraftGenerationRequestCard
                   key={request.id}
@@ -268,8 +266,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Drafts attach to
-            candidate posts inside a campaign.
+            Go to Campaigns and create a campaign first. Drafts are written from
+            ideas inside a campaign.
           </p>
         </div>
       </CardContent>
@@ -287,8 +285,8 @@ function EmptyDrafts(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No drafts yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Create a manual draft or generate local variants from a non-rejected
-            candidate. Linkgo audits saved variants before review.
+            Write a draft yourself or let the AI write versions from an idea.
+            Linkgo checks every version before it goes for approval.
           </p>
         </div>
       </CardContent>

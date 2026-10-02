@@ -161,7 +161,7 @@ export function localDateTimeToUtc(
 ): string {
   const parts = parseLocalDateTime(localDateTime);
   if (!parts || !isIanaTimeZone(timeZone)) {
-    throw new Error("Enter a valid date, time, and IANA time zone");
+    throw new Error("Enter a valid date, time, and time zone");
   }
 
   const localAsUtc = Date.UTC(
@@ -180,7 +180,7 @@ export function localDateTimeToUtc(
   const forwardGap = afterOffset - beforeOffset;
   if (forwardGap <= 0) {
     throw new Error(
-      "The selected local time cannot be resolved in this time zone",
+      "That time doesn't exist in this time zone (often because of a clock change). Pick a different time.",
     );
   }
 
@@ -200,7 +200,7 @@ export function localDateTimeToUtc(
   );
   if (shiftedMatches[0] === undefined) {
     throw new Error(
-      "The selected local time cannot be resolved in this time zone",
+      "That time doesn't exist in this time zone (often because of a clock change). Pick a different time.",
     );
   }
   return new Date(shiftedMatches[0]).toISOString();

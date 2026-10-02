@@ -2,21 +2,21 @@ import { Badge } from "@/components/ui/badge";
 import type { WorkflowRunStatus, WorkflowStepStatus } from "@/workflows/types";
 
 const runLabels: Record<WorkflowRunStatus, string> = {
-  queued: "Queued",
-  running: "Running",
-  waiting_approval: "Waiting approval",
-  blocked: "Blocked",
-  completed: "Completed",
+  queued: "Not started",
+  running: "In progress",
+  waiting_approval: "Waiting for approval",
+  blocked: "Stuck",
+  completed: "Done",
   failed: "Failed",
   cancelled: "Cancelled",
 };
 
 const stepLabels: Record<WorkflowStepStatus, string> = {
-  pending: "Pending",
-  running: "Running",
-  waiting_approval: "Waiting approval",
-  blocked: "Blocked",
-  completed: "Completed",
+  pending: "Not started",
+  running: "In progress",
+  waiting_approval: "Waiting for approval",
+  blocked: "Stuck",
+  completed: "Done",
   failed: "Failed",
   skipped: "Skipped",
 };

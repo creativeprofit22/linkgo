@@ -8,6 +8,7 @@ import {
   startAutopilotPlanner,
   stopAutopilotPlanner,
 } from "@/features/autopilot-planner/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   AutopilotPlannerDashboard,
   AutopilotPlannerStatusPayload,
@@ -35,18 +36,18 @@ interface UseAutopilotPlannerState {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
-    ? error.message
-    : "Unexpected autopilot planner error";
+    ? toPlainMessage(error.message)
+    : "Something went wrong with Autopilot. Please try again.";
 }
 
 function tickSummary(result: AutopilotPlannerTickResult): string {
   if (result.blocked > 0) {
     if (result.planned === 0 && result.skipped === 0 && result.failed === 0) {
-      return "Planner blocked. No local work was created.";
+      return "Autopilot is paused. No tasks were created.";
     }
-    return `Tick stopped: ${result.planned} planned, ${result.skipped} skipped, ${result.failed} failed, ${result.blocked} blocked.`;
+    return `Check stopped early: ${result.planned} planned, ${result.skipped} skipped, ${result.failed} failed, ${result.blocked} paused.`;
   }
-  return `Tick complete: ${result.planned} planned, ${result.skipped} skipped, ${result.failed} failed.`;
+  return `Check finished: ${result.planned} planned, ${result.skipped} skipped, ${result.failed} failed.`;
 }
 
 export function useAutopilotPlanner(): UseAutopilotPlannerState {
@@ -154,9 +155,9 @@ export function useAutopilotPlanner(): UseAutopilotPlannerState {
     );
     if (refreshError === null) return;
 
-    const message = `The planner action succeeded, but the dashboard could not be refreshed: ${refreshError}`;
+    const message = `That worked, but we couldn't refresh this page: ${refreshError}`;
     setError(message);
-    toast.error("Dashboard refresh failed", { description: message });
+    toast.error("We couldn't refresh this page", { description: message });
   }, [loadDashboard]);
 
   const start = useCallback(async () => {
@@ -171,8 +172,8 @@ export function useAutopilotPlanner(): UseAutopilotPlannerState {
       } catch (caught) {
         const message = getErrorMessage(caught);
         setError(message);
-        setResultSummary(`Planner was not started: ${message}`);
-        toast.error("Autopilot planner was not started", {
+        setResultSummary(`Autopilot didn't start: ${message}`);
+        toast.error("We couldn't start Autopilot", {
           description: message,
         });
         return;
@@ -180,9 +181,9 @@ export function useAutopilotPlanner(): UseAutopilotPlannerState {
 
       setStatus(nextStatus);
       setResultSummary(
-        "Autopilot planner started. It only creates local work.",
+        "Autopilot started. It only creates tasks. It never posts.",
       );
-      toast.success("Autopilot planner started");
+      toast.success("Autopilot started");
       await refreshAfterAction();
     } finally {
       actionInProgressRef.current = false;
@@ -202,16 +203,16 @@ export function useAutopilotPlanner(): UseAutopilotPlannerState {
       } catch (caught) {
         const message = getErrorMessage(caught);
         setError(message);
-        setResultSummary(`Planner was not stopped: ${message}`);
-        toast.error("Autopilot planner was not stopped", {
+        setResultSummary(`Autopilot didn't stop: ${message}`);
+        toast.error("We couldn't stop Autopilot", {
           description: message,
         });
         return;
       }
 
       setStatus(nextStatus);
-      setResultSummary("Autopilot planner stopped.");
-      toast.success("Autopilot planner stopped");
+      setResultSummary("Autopilot stopped.");
+      toast.success("Autopilot stopped");
       await refreshAfterAction();
     } finally {
       actionInProgressRef.current = false;
@@ -231,8 +232,8 @@ export function useAutopilotPlanner(): UseAutopilotPlannerState {
       } catch (caught) {
         const message = getErrorMessage(caught);
         setError(message);
-        setResultSummary(`Planner tick failed: ${message}`);
-        toast.error("Autopilot planner tick failed", {
+        setResultSummary(`Autopilot check failed: ${message}`);
+        toast.error("We couldn't finish the Autopilot check", {
           description: message,
         });
         return null;
@@ -240,7 +241,7 @@ export function useAutopilotPlanner(): UseAutopilotPlannerState {
 
       const summary = tickSummary(result);
       setResultSummary(summary);
-      toast.success("Autopilot planner tick completed", {
+      toast.success("Autopilot check finished", {
         description: summary,
       });
       await refreshAfterAction();

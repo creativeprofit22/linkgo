@@ -27,9 +27,9 @@ interface CandidatePolicyCardProps {
 }
 
 const fixedRules = [
-  "HTTPS LinkedIn only",
-  "Absolute timestamp required",
-  "Prior successful contacts blocked",
+  "Secure LinkedIn links only",
+  "Post date and time required",
+  "Skips people you've already contacted",
 ];
 
 export function CandidatePolicyCard({
@@ -45,7 +45,7 @@ export function CandidatePolicyCard({
     return (
       <Card className="bg-card/70" aria-busy="true">
         <CardContent className="text-muted-foreground p-5 text-sm">
-          Loading candidate intake policy…
+          Loading idea filters…
         </CardContent>
       </Card>
     );
@@ -58,11 +58,9 @@ export function CandidatePolicyCard({
           <div className="flex min-w-0 items-start gap-3">
             <AlertCircle className="text-destructive mt-0.5 size-5 shrink-0" />
             <div>
-              <p className="font-medium">
-                Candidate policy could not be loaded
-              </p>
+              <p className="font-medium">We couldn't load your idea filters</p>
               <p className="text-muted-foreground mt-1 text-sm break-words">
-                {error ?? "Retry to load the campaign policy."}
+                {error ?? "Select Try again to load them."}
               </p>
             </div>
           </div>
@@ -72,7 +70,7 @@ export function CandidatePolicyCard({
             size="sm"
             onClick={() => void onRetry()}
           >
-            Retry
+            Try again
           </Button>
         </CardContent>
       </Card>
@@ -85,9 +83,9 @@ export function CandidatePolicyCard({
         <div className="flex min-w-0 items-start gap-3">
           <ShieldCheck className="text-linkgo-green mt-0.5 size-5 shrink-0" />
           <div>
-            <CardTitle className="text-base">Candidate intake policy</CardTitle>
+            <CardTitle className="text-base">Idea filters</CardTitle>
             <CardDescription className="mt-1">
-              Enforced before bulk or unattended intake writes candidate data.
+              Imported ideas must pass these rules before Linkgo saves them.
             </CardDescription>
           </div>
         </div>
@@ -100,20 +98,24 @@ export function CandidatePolicyCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <PolicyFact label={`${policy.max_post_age_days}-day maximum`} />
+          <PolicyFact
+            label={`Posts up to ${policy.max_post_age_days} days old`}
+          />
           {fixedRules.map((rule) => (
             <PolicyFact key={rule} label={rule} />
           ))}
           <PolicyFact
-            label={`${policy.banned_topics.length} banned topic${
+            label={`${policy.banned_topics.length} blocked topic${
               policy.banned_topics.length === 1 ? "" : "s"
             }`}
           />
         </div>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Manual Add candidate entry is an attended override for historical or
-          exceptional material. The operator must review it deliberately.
-          {archived ? " This archived campaign is read-only." : ""}
+          Ideas you add yourself with Add idea skip these filters, so check them
+          carefully.
+          {archived
+            ? " This campaign is archived, so you can't change its filters."
+            : ""}
         </p>
       </CardContent>
     </Card>

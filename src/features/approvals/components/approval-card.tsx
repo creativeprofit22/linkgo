@@ -7,6 +7,7 @@ import {
   PublishAttemptStatusBadge,
   ScheduleJobStatusBadge,
 } from "@/features/approvals/components/approval-status-badge";
+import { toPlainMessage } from "@/lib/plain-message";
 import { PublishLinkedInDialog } from "@/features/approvals/components/publish-linkedin-dialog";
 import { RecordPublishAttemptDialog } from "@/features/approvals/components/record-publish-attempt-dialog";
 import { RejectApprovalDialog } from "@/features/approvals/components/reject-approval-dialog";
@@ -51,7 +52,7 @@ export function ApprovalCard({
   onRecordPublishAttempt,
   onPublished,
 }: ApprovalCardProps): React.ReactNode {
-  const authorName = approval.draft.target_author_name || "Unknown author";
+  const authorName = approval.draft.target_author_name || "Author not known";
   const rawCommentary = composeLinkedInCommentary(approval.variant);
   const escapedCommentary = escapeLinkedInLittleText(rawCommentary);
   const isArchivedCampaign = approval.draft.campaign_status === "archived";
@@ -103,15 +104,15 @@ export function ApprovalCard({
       ["cancelled", "failed"].includes(approval.scheduleJob.status));
   const linkedAgentRunConsequence =
     approval.linkedAgentRunCount === 1
-      ? "1 linked waiting run will be cancelled and its resumable checkpoint removed."
-      : `${approval.linkedAgentRunCount} linked waiting runs will be cancelled and their resumable checkpoints removed.`;
+      ? "1 waiting AI assistant task will be cancelled and can't be continued."
+      : `${approval.linkedAgentRunCount} waiting AI assistant tasks will be cancelled and can't be continued.`;
 
   function cancelScheduleJob(): void {
     const scheduleJob = approval.scheduleJob;
     if (!scheduleJob) return;
     if (
       window.confirm(
-        "Cancel this schedule job? The approval will return to approved.",
+        "Cancel this scheduled post? It will go back to Approved and won't post.",
       )
     ) {
       void onCancelSchedule({ id: scheduleJob.id });
@@ -131,7 +132,7 @@ export function ApprovalCard({
               )}
             </div>
             <p className="text-muted-foreground text-sm">
-              {approval.draft.campaign_name} · Variant{" "}
+              {approval.draft.campaign_name} · Version{" "}
               {approval.variant.variant_number}
             </p>
             <a
@@ -145,15 +146,15 @@ export function ApprovalCard({
             </a>
             {approval.linkedAgentRunCount > 0 && (
               <p className="text-destructive text-sm font-medium">
-                Rejection consequence: {linkedAgentRunConsequence}
+                If you reject this: {linkedAgentRunConsequence}
               </p>
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             {isArchivedCampaign && (
               <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                Archived campaigns cannot change approvals. Restore the campaign
-                first.
+                This campaign is archived, so its approvals can't change.
+                Restore the campaign first.
               </p>
             )}
             {canApprove && (
@@ -202,7 +203,7 @@ export function ApprovalCard({
             )}
             {scheduleBlockedByKillSwitch && (
               <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                Global kill switch is enabled.
+                Pause everything is on, so posts can't be scheduled.
                 {killSwitchReason ? ` ${killSwitchReason}` : ""}
               </p>
             )}
@@ -221,7 +222,7 @@ export function ApprovalCard({
                 approvalId={approval.id}
                 scheduleJobId={approval.scheduleJob?.id}
                 initialStatus="succeeded"
-                triggerLabel="Mark published"
+                triggerLabel="Mark as posted"
                 onRecord={onRecordPublishAttempt}
               />
             )}
@@ -241,7 +242,7 @@ export function ApprovalCard({
                 approvalId={approval.id}
                 scheduleJobId={approval.scheduleJob?.id}
                 initialStatus="failed"
-                triggerLabel="Record failure"
+                triggerLabel="Mark as not posted"
                 onRecord={onRecordPublishAttempt}
               />
             )}
@@ -253,33 +254,36 @@ export function ApprovalCard({
         {(!approval.readyForApproval || approval.contentChanged) && (
           <p role="status" className="text-muted-foreground text-sm">
             {approval.contentChanged
-              ? "Content changed or historical review revision is unknown. This content is not approved. "
-              : "This revision is not ready for approval. "}
+              ? "This post changed after it was reviewed, or we can't tell which version was reviewed. It is not approved. "
+              : "This version isn't ready for approval yet. "}
             {approval.readyForApproval
-              ? "Current checks pass. Review this revision and approve it again."
-              : "Run a current AI audit and quality check in Drafts before approving."}
+              ? "Its checks pass. Read it again and approve it if you're happy."
+              : "In Drafts, run an AI review and a quality check on this version before approving."}
           </p>
         )}
         <div className="grid gap-4 lg:grid-cols-2">
           <TextBlock
-            label="Selected variant"
+            label="Chosen version"
             value={
               approval.status === "published" && approval.contentChanged
-                ? "Reviewed content unavailable; the published record is historical."
+                ? "The reviewed text isn't available anymore. This post was already posted."
                 : rawCommentary
             }
           />
           <TextBlock
-            label="Escaped LinkedIn preview"
+            label="How it will look on LinkedIn"
             value={
               approval.status === "published" && approval.contentChanged
-                ? "Reviewed content unavailable."
+                ? "The reviewed text isn't available anymore."
                 : escapedCommentary
             }
           />
         </div>
 
-        <TextBlock label="Source post" value={approval.draft.target_content} />
+        <TextBlock
+          label="Original post"
+          value={approval.draft.target_content}
+        />
 
         {approval.reviewer_notes && (
           <TextBlock label="Reviewer notes" value={approval.reviewer_notes} />
@@ -288,7 +292,7 @@ export function ApprovalCard({
         {approval.scheduleJob && (
           <div className="bg-muted/30 rounded-xl border p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium">Schedule details</p>
+              <p className="font-medium">Schedule</p>
               <ScheduleJobStatusBadge status={approval.scheduleJob.status} />
             </div>
             <p className="text-muted-foreground mt-2 text-sm">
@@ -296,7 +300,7 @@ export function ApprovalCard({
               {approval.scheduleJob.timezone}
             </p>
             <p className="text-muted-foreground mt-1 text-xs break-all">
-              {approval.scheduleJob.idempotency_key}
+              Reference: {approval.scheduleJob.idempotency_key}
             </p>
           </div>
         )}
@@ -305,14 +309,15 @@ export function ApprovalCard({
 
         <div className="space-y-3">
           <div>
-            <h3 className="font-medium">Publish attempt history</h3>
+            <h3 className="font-medium">Posting history</h3>
             <p className="text-muted-foreground text-sm">
-              Manual outcomes only; no LinkedIn API publishing happens here.
+              Results of each posting attempt. Linkgo never posts without your
+              OK.
             </p>
           </div>
           {approval.publishAttempts.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No publish attempts recorded.
+              No posting attempts yet.
             </p>
           ) : (
             <div className="space-y-3">
@@ -342,12 +347,12 @@ export function ApprovalCard({
                   )}
                   {attempt.platform_post_id && (
                     <p className="text-muted-foreground break-all">
-                      Platform ID: {attempt.platform_post_id}
+                      LinkedIn reference: {attempt.platform_post_id}
                     </p>
                   )}
                   {attempt.error_message && (
                     <p className="text-destructive whitespace-pre-line">
-                      {attempt.error_message}
+                      {toPlainMessage(attempt.error_message)}
                     </p>
                   )}
                 </div>

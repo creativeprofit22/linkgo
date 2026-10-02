@@ -11,6 +11,7 @@ import {
   resumeAgentRun,
   startAgentRun,
 } from "@/features/agent-runtime/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import { getAuthStatus } from "@/features/integrations/data";
 import type { ConnectedAccount } from "@/features/integrations/types";
 import { listPlaybooks } from "@/features/playbooks/data";
@@ -51,37 +52,38 @@ interface UseAgentRuntimeState {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
-    ? error.message
-    : "Unexpected agent runtime error";
+    ? toPlainMessage(error.message)
+    : "Something went wrong with the AI assistant. Try again.";
 }
 
 function showResumeFeedback(result: ResumeAgentRunResult): void {
   if (result.status === "completed") {
-    toast.success("Agent continuation completed", {
+    toast.success("Assistant task finished", {
       description: result.outputSummary || undefined,
     });
     return;
   }
 
   if (result.status === "waiting_approval") {
-    toast.info("Agent continuation needs another approval", {
+    toast.info("The assistant needs your approval again", {
       description:
         result.outputSummary ||
-        "Review the new approval request before resuming again.",
+        "Review the new request in Approvals, then continue.",
     });
     return;
   }
 
   if (result.checkpointPhase === "continuation_ready") {
-    toast.error("Agent continuation failed; recovery is ready", {
+    toast.error("The assistant stopped. You can pick up where it left off.", {
       description:
-        result.errorMessage || "Recover the saved continuation to try again.",
+        result.errorMessage ||
+        "Choose “Pick up where it stopped” to try again.",
     });
     return;
   }
 
-  toast.error("Agent continuation failed", {
-    description: result.errorMessage || "The continuation could not complete.",
+  toast.error("The assistant couldn't finish", {
+    description: result.errorMessage || "Try again in a moment.",
   });
 }
 
@@ -186,7 +188,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
         setSelectedCampaignId(input.campaignId);
         return id;
       } catch (caught) {
-        toast.error("Agent run was not created", {
+        toast.error("We couldn't create this assistant task", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -204,7 +206,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
         void getSafetySettings()
           .then(setSafetySettings)
           .catch(() => undefined);
-        toast.error("Agent run was not started", {
+        toast.error("We couldn't start this assistant task", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -225,7 +227,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
           .then(setSafetySettings)
           .catch(() => undefined);
         await loadForCampaign(selectedCampaignId).catch(() => undefined);
-        toast.error("Agent run was not resumed", {
+        toast.error("We couldn't continue this assistant task", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -242,7 +244,7 @@ export function useAgentRuntime(): UseAgentRuntimeState {
         await cancelAgentRun(input);
         await loadForCampaign(selectedCampaignId);
       } catch (caught) {
-        toast.error("Agent run was not cancelled", {
+        toast.error("We couldn't cancel this assistant task", {
           description: getErrorMessage(caught),
         });
         throw caught;

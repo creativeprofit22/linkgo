@@ -58,12 +58,10 @@ export function CampaignBacklogView(): React.ReactNode {
             <ClipboardList aria-hidden="true" className="size-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              Campaign Backlog
-            </h2>
+            <h2 className="text-2xl font-semibold tracking-tight">Tasks</h2>
             <p className="text-muted-foreground mt-1 max-w-3xl text-sm">
-              See what is due, who owns it, and move planned work forward. No
-              backlog action runs agents, publishes, or performs LinkedIn work.
+              What's due, who owns it, and repeating tasks. Changing a task
+              never posts or does anything on LinkedIn.
             </p>
           </div>
         </div>
@@ -88,7 +86,7 @@ export function CampaignBacklogView(): React.ReactNode {
                 className="text-destructive mt-0.5 size-5 shrink-0"
               />
               <div>
-                <p className="font-medium">Backlog could not be loaded</p>
+                <p className="font-medium">We couldn't load your tasks</p>
                 <p className="text-muted-foreground text-sm break-words">
                   {error}
                 </p>
@@ -101,7 +99,7 @@ export function CampaignBacklogView(): React.ReactNode {
               disabled={loading}
               onClick={() => void loadBacklog()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -113,19 +111,19 @@ export function CampaignBacklogView(): React.ReactNode {
             className="text-muted-foreground p-8 text-center text-sm"
             role="status"
           >
-            Loading campaign backlog…
+            Loading tasks…
           </CardContent>
         </Card>
       ) : campaigns.length === 0 && !loading ? (
         <EmptyState
           icon={Target}
           title="Create a campaign first"
-          description="Open Campaigns and create one before planning backlog work. Every backlog item belongs to a campaign."
+          description="Every task belongs to a campaign. Open Campaigns and create one to get started."
         />
       ) : dashboard !== null ? (
         <>
           <section
-            aria-label="Backlog summary"
+            aria-label="Tasks summary"
             className="grid grid-cols-2 gap-3 xl:grid-cols-4"
           >
             <SummaryCard
@@ -139,12 +137,12 @@ export function CampaignBacklogView(): React.ReactNode {
               icon={ListRestart}
             />
             <SummaryCard
-              label="Blocked"
+              label="On hold"
               value={dashboard.summary.blocked}
               icon={AlertCircle}
             />
             <SummaryCard
-              label="Linkgo-owned"
+              label="Owned by Linkgo"
               value={dashboard.summary.linkgoOwned}
               icon={Link2}
             />
@@ -159,12 +157,12 @@ export function CampaignBacklogView(): React.ReactNode {
                 id="backlog-filters-heading"
                 className="text-sm font-semibold"
               >
-                Backlog scope
+                Filter tasks
               </h3>
               <p className="text-muted-foreground mt-1 text-xs">
-                Manually created Linkgo rows are responsibility labels.
-                Planner-linked rows identify their approved source batch and
-                queued workflow; neither runs external actions.
+                Tasks you assign to Linkgo are just labels. Tasks made by
+                Autopilot show the import and automation they came from. Neither
+                posts anything.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -212,7 +210,7 @@ export function CampaignBacklogView(): React.ReactNode {
                   }
                   className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full min-w-0 rounded-md border py-1 ps-3 pe-10 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2 forced-colors:border"
                 >
-                  <option value="open">Open work</option>
+                  <option value="open">To do</option>
                   <option value="history">History</option>
                 </select>
               </FilterField>
@@ -229,8 +227,8 @@ export function CampaignBacklogView(): React.ReactNode {
                 <div>
                   <p className="font-medium">Archived campaign history</p>
                   <p className="text-muted-foreground text-sm">
-                    Backlog history remains readable. Restore the campaign
-                    before creating, editing, or changing item status.
+                    You can still see past tasks. Restore the campaign to add,
+                    edit, or update tasks.
                   </p>
                 </div>
               </CardContent>
@@ -238,7 +236,7 @@ export function CampaignBacklogView(): React.ReactNode {
           ) : null}
 
           <p className="sr-only" role="status" aria-live="polite">
-            {dashboard.items.length} backlog item
+            {dashboard.items.length} task
             {dashboard.items.length === 1 ? "" : "s"} shown.
           </p>
 
@@ -246,14 +244,14 @@ export function CampaignBacklogView(): React.ReactNode {
             dashboard.totalItems === 0 ? (
               <EmptyState
                 icon={ClipboardList}
-                title="Plan the first backlog item"
-                description="Create due work for research, drafting, approval, scheduling, metrics, retries, or another operator task."
+                title="Add your first task"
+                description="Tasks keep track of research, drafts, approvals, scheduling, analytics, and anything else you need to do. Select New task to start."
               />
             ) : (
               <EmptyState
                 icon={filters.view === "history" ? Archive : ClipboardList}
-                title="No items match these filters"
-                description="Change the campaign, owner, or view filter to see other backlog work."
+                title="No tasks match these filters"
+                description="Change the campaign, owner, or view filter to see other tasks."
               />
             )
           ) : filters.view === "history" ? (

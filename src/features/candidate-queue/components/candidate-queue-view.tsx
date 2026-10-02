@@ -90,13 +90,11 @@ export function CandidateQueueView(): React.ReactNode {
               <ListChecks className="size-5" />
             </div>
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                Candidate Queue
-              </h2>
+              <h2 className="text-2xl font-semibold tracking-tight">Ideas</h2>
               <p className="text-muted-foreground text-sm">
-                Import approved source posts or run local-first discovery and
-                scoring. LinkedIn scraping and autonomous external actions stay
-                excluded.
+                Posts and topics worth writing about or replying to. Import
+                posts, find new topics, and score ideas. Linkgo never copies
+                LinkedIn pages or acts on LinkedIn by itself.
               </p>
             </div>
           </div>
@@ -141,7 +139,7 @@ export function CandidateQueueView(): React.ReactNode {
               size="sm"
               onClick={() => void loadQueue()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -150,7 +148,7 @@ export function CandidateQueueView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading candidate queue…
+            Loading ideas…
           </CardContent>
         </Card>
       ) : campaigns.length === 0 ? (
@@ -161,7 +159,8 @@ export function CandidateQueueView(): React.ReactNode {
             <div>
               <p className="text-sm font-medium">Selected campaign</p>
               <p className="text-muted-foreground text-xs">
-                Queue entries are deduped per campaign by URL and content hash.
+                Linkgo skips repeats: the same post is only added once per
+                campaign.
               </p>
             </div>
             <select
@@ -175,7 +174,7 @@ export function CandidateQueueView(): React.ReactNode {
               {campaigns.map((campaign) => (
                 <option key={campaign.id} value={campaign.id}>
                   {campaign.name}
-                  {campaign.status === "archived" ? " (archived)" : ""}
+                  {campaign.status === "archived" ? " (Archived)" : ""}
                 </option>
               ))}
             </select>
@@ -194,7 +193,7 @@ export function CandidateQueueView(): React.ReactNode {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard label="Total" value={String(summary.total)} />
             <SummaryCard
-              label="Suggestions"
+              label="Topic ideas"
               value={String(summary.suggestions)}
             />
             <SummaryCard
@@ -214,23 +213,23 @@ export function CandidateQueueView(): React.ReactNode {
           <ListTruncationNotice
             shownCount={candidates.length}
             totalCount={candidateTotalCount}
-            noun="candidates"
+            noun="ideas"
           />
 
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold tracking-wide uppercase">
-                Discovery suggestions
+                Topic ideas
               </h3>
               <span className="text-muted-foreground text-xs">
-                {discoveryItems.length} local suggestion
+                {discoveryItems.length} topic idea
                 {discoveryItems.length === 1 ? "" : "s"}
               </span>
             </div>
             {discoveryItems.length === 0 ? (
               <Card className="bg-card/70 border-dashed">
                 <CardContent className="text-muted-foreground p-6 text-sm">
-                  Run discovery to save keyword, trend, and source-prompt ideas.
+                  Select Find topics to get keyword, trend, and topic ideas.
                 </CardContent>
               </Card>
             ) : (
@@ -279,7 +278,7 @@ export function CandidateQueueView(): React.ReactNode {
                         {statusHeadings[status]}
                       </h3>
                       <span className="text-muted-foreground text-xs">
-                        {statusCandidates.length} candidate
+                        {statusCandidates.length} idea
                         {statusCandidates.length === 1 ? "" : "s"}
                         {summary.truncated ? " shown" : ""}
                       </span>
@@ -385,8 +384,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. The Queue uses that
-            context to dedupe candidates and track relevance triage.
+            Open Campaigns first and create a campaign. Ideas uses it to skip
+            repeats and sort ideas by how well they match.
           </p>
         </div>
       </CardContent>
@@ -402,10 +401,9 @@ function EmptyQueue(): React.ReactNode {
           <ListChecks className="size-7" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">No candidates yet</h3>
+          <h3 className="text-lg font-semibold">No ideas yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Add a LinkedIn post manually to begin queue triage for this
-            campaign.
+            Select Add idea to save a LinkedIn post for this campaign.
           </p>
         </div>
       </CardContent>

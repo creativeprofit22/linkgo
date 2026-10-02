@@ -42,10 +42,10 @@ export function ContentCalendarView(): React.ReactNode {
             </div>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                Content Calendar
+                Calendar
               </h2>
               <p className="text-muted-foreground text-sm">
-                Plan approved post slots before scheduler execution.
+                Plan when each approved post goes out.
               </p>
             </div>
           </div>
@@ -86,7 +86,7 @@ export function ContentCalendarView(): React.ReactNode {
               size="sm"
               onClick={() => void loadCalendar()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -95,7 +95,7 @@ export function ContentCalendarView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading content calendar…
+            Loading your calendar…
           </CardContent>
         </Card>
       ) : campaigns.length === 0 ? (
@@ -104,9 +104,9 @@ export function ContentCalendarView(): React.ReactNode {
         <>
           <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">Calendar scope</p>
+              <p className="text-sm font-medium">Show posts from</p>
               <p className="text-muted-foreground text-xs">
-                Plan across campaigns or focus on one active campaign.
+                See every campaign, or focus on one.
               </p>
             </div>
             <select
@@ -132,10 +132,10 @@ export function ContentCalendarView(): React.ReactNode {
               <CardContent className="flex items-start gap-3 p-4">
                 <AlertCircle className="text-destructive mt-0.5 size-5" />
                 <div>
-                  <p className="font-medium">Campaign is archived</p>
+                  <p className="font-medium">This campaign is archived</p>
                   <p className="text-muted-foreground text-sm">
-                    Restore the campaign before creating, editing, archiving, or
-                    scheduling calendar slots.
+                    Restore the campaign before you add, edit, archive, or
+                    schedule its posts.
                   </p>
                 </div>
               </CardContent>
@@ -145,15 +145,15 @@ export function ContentCalendarView(): React.ReactNode {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard label="Planned" value={String(summary.planned)} />
             <SummaryCard label="Scheduled" value={String(summary.scheduled)} />
-            <SummaryCard label="Published" value={String(summary.published)} />
+            <SummaryCard label="Posted" value={String(summary.published)} />
             <SummaryCard label="Archived" value={String(summary.archived)} />
           </div>
 
           {eligibleApprovals.length === 0 && (
             <Card className="bg-card/70 border-dashed">
               <CardContent className="text-muted-foreground p-4 text-sm">
-                No eligible approved posts are waiting for a calendar slot.
-                Approve a draft in Approvals first.
+                No approved posts are waiting to be planned. Approve a draft in
+                Approvals first.
               </CardContent>
             </Card>
           )}
@@ -221,8 +221,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Calendar slots attach to
-            approved posts inside campaigns.
+            Go to Campaigns and create a campaign first. Then you can plan its
+            approved posts here.
           </p>
         </div>
       </CardContent>
@@ -238,10 +238,10 @@ function EmptyNoSlots(): React.ReactNode {
           <CalendarDays className="size-7" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">No calendar slots yet</h3>
+          <h3 className="text-lg font-semibold">No posts planned yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Create a slot from an approved post to plan purpose, format, visual
-            direction, and CTA before scheduling.
+            Click Plan a post to pick an approved post and choose its goal,
+            format, look, and call to action before you schedule it.
           </p>
         </div>
       </CardContent>

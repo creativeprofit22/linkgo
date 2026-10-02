@@ -7,18 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentRole } from "@/agent";
+import { getAssistantActionLabel } from "@/lib/assistant-action-labels";
 import type {
   AgentPlaybookView,
   UpdatePlaybookOverrideInput,
 } from "@/features/playbooks/types";
 
 const roleLabels: Record<AgentRole, string> = {
-  researcher: "Researcher",
-  scorer: "Scorer",
-  drafter: "Drafter",
-  auditor: "Auditor",
-  scheduler: "Scheduler",
-  analyst: "Analyst",
+  researcher: "Find ideas",
+  scorer: "Score ideas",
+  drafter: "Write drafts",
+  auditor: "Check drafts",
+  scheduler: "Plan schedule",
+  analyst: "Review results",
 };
 
 interface PlaybookCardProps {
@@ -69,15 +70,15 @@ export function PlaybookCard({
           </div>
           <Badge variant={playbook.enabled ? "secondary" : "outline"}>
             {playbook.operatorGuidanceOnly
-              ? "Guidance only"
+              ? "Tips only"
               : playbook.enabled
-                ? "Enabled"
-                : "Disabled"}
+                ? "On"
+                : "Off"}
           </Badge>
         </div>
         <div className="flex flex-wrap gap-2">
           {playbook.compatibleRoles.length === 0 ? (
-            <Badge variant="outline">No runtime role</Badge>
+            <Badge variant="outline">Not used by the AI assistant</Badge>
           ) : (
             playbook.compatibleRoles.map((role) => (
               <Badge key={role} variant="outline">
@@ -86,23 +87,20 @@ export function PlaybookCard({
             ))
           )}
           {playbook.toolNames.length === 0 ? (
-            <Badge variant="outline">No tool contract</Badge>
+            <Badge variant="outline">No assistant actions</Badge>
           ) : (
             playbook.toolNames.map((toolName) => (
               <Badge key={toolName} variant="outline">
-                {toolName}
+                {getAssistantActionLabel(toolName)}
               </Badge>
             ))
           )}
-          <Badge variant="outline">
-            Roadmap {playbook.roadmapSections.join(", ")}
-          </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="bg-background/50 rounded-lg border p-3">
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Built-in instructions
+            Built-in writing tips
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
             {playbook.instructions.map((instruction) => (
@@ -116,11 +114,11 @@ export function PlaybookCard({
             <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <div>
                 <Label htmlFor={`${playbook.key}-enabled`}>
-                  Runtime enabled
+                  Use with the AI assistant
                 </Label>
                 <p className="text-muted-foreground text-xs">
-                  Disabled playbooks stay visible but are hidden from new agent
-                  runs.
+                  When this is off, the guide stays here but isn't used for new
+                  assistant tasks.
                 </p>
               </div>
               <Switch
@@ -132,18 +130,18 @@ export function PlaybookCard({
             </div>
             <div className="space-y-2">
               <Label htmlFor={`${playbook.key}-custom`}>
-                Custom runtime instructions
+                Your own instructions
               </Label>
               <Textarea
                 id={`${playbook.key}-custom`}
                 value={customInstructions}
                 maxLength={2000}
-                placeholder="Add operator-specific constraints for this playbook."
+                placeholder="Add your own rules for this guide."
                 onChange={(event) => setCustomInstructions(event.target.value)}
               />
               <p className="text-muted-foreground text-xs">
-                {customInstructions.length}/2000 characters. Locked safety lines
-                stay after custom text.
+                {customInstructions.length} of 2000 characters. Our built-in
+                safety rules always stay in place after your text.
               </p>
             </div>
             <Button
@@ -151,18 +149,17 @@ export function PlaybookCard({
               disabled={saving || !dirty}
               onClick={() => void handleSave()}
             >
-              {saving ? "Saving…" : "Save playbook"}
+              {saving ? "Saving…" : "Save guide"}
             </Button>
           </div>
         ) : (
           <div className="flex items-start gap-3 rounded-lg border border-dashed p-3 text-sm">
             <LockKeyhole className="mt-0.5 size-4" />
             <div>
-              <p className="font-medium">Operator guidance only</p>
+              <p className="font-medium">Tips for you only</p>
               <p className="text-muted-foreground mt-1">
-                This commenter playbook is visible for human workflow guidance
-                and is not connected to autonomous commenting or posting
-                actions.
+                These commenting tips are here to guide you. The AI assistant
+                can't use them to comment or post on its own.
               </p>
             </div>
           </div>

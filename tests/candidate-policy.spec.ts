@@ -12,18 +12,18 @@ test("shows the conservative default and fixed intake disclosures", async ({
   await openQueueWithCampaign(page);
 
   const card = page.getByTestId("candidate-policy-card");
-  await expect(card).toContainText("30-day maximum");
-  await expect(card).toContainText("HTTPS LinkedIn only");
-  await expect(card).toContainText("Absolute timestamp required");
-  await expect(card).toContainText("Prior successful contacts blocked");
-  await expect(card).toContainText("0 banned topics");
+  await expect(card).toContainText("Posts up to 30 days old");
+  await expect(card).toContainText("Secure LinkedIn links only");
+  await expect(card).toContainText("Post date and time required");
+  await expect(card).toContainText("Skips people you've already contacted");
+  await expect(card).toContainText("0 blocked topics");
   await expect(card).toContainText(
-    "Manual Add candidate entry is an attended override",
+    "Ideas you add yourself with Add idea skip these filters",
   );
 
   const dialog = await openPolicyDialog(page);
   await expect(dialog).toContainText(
-    "Values more than five minutes in the future are blocked.",
+    "Posts dated more than five minutes in the future are skipped.",
   );
   await dialog.getByRole("button", { name: "Cancel" }).click();
 });
@@ -34,38 +34,38 @@ test("validates, saves, and reloads normalized policy configuration", async ({
   await openQueueWithCampaign(page);
   await enableReloadPersistence(page);
   const dialog = await openPolicyDialog(page);
-  const age = dialog.getByLabel("Maximum post age in days");
-  const topics = dialog.getByLabel("Banned topics");
+  const age = dialog.getByLabel("Oldest post to keep (days)");
+  const topics = dialog.getByLabel("Blocked topics");
 
   await age.fill("0");
   await topics.fill("AI\n  ai  ");
-  await dialog.getByRole("button", { name: "Save policy" }).click();
-  await expect(dialog).toContainText("Maximum post age must be at least 1 day");
-  await expect(dialog).toContainText("Duplicate banned topic: ai");
+  await dialog.getByRole("button", { name: "Save filters" }).click();
+  await expect(dialog).toContainText("Choose at least 1 day");
+  await expect(dialog).toContainText("This topic is listed twice: ai");
   await expect(topics).toHaveValue("AI\n  ai  ");
 
   await age.fill("30");
   await topics.fill(
     Array.from({ length: 26 }, (_, index) => `topic ${index}`).join("\n"),
   );
-  await dialog.getByRole("button", { name: "Save policy" }).click();
-  await expect(dialog).toContainText("Use no more than 25 banned topics");
+  await dialog.getByRole("button", { name: "Save filters" }).click();
+  await expect(dialog).toContainText("Add no more than 25 blocked topics");
 
   await topics.fill("x".repeat(81));
-  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await dialog.getByRole("button", { name: "Save filters" }).click();
   await expect(dialog).toContainText(
-    "Banned topics must be 80 characters or fewer",
+    "Each blocked topic can be up to 80 characters",
   );
 
   await age.fill("45");
   await topics.fill("Artificial   Intelligence\nPolitical campaigning");
-  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await dialog.getByRole("button", { name: "Save filters" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "45-day maximum",
+    "Posts up to 45 days old",
   );
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "2 banned topics",
+    "2 blocked topics",
   );
 
   const policyState = await page.evaluate(() => {
@@ -89,10 +89,10 @@ test("validates, saves, and reloads normalized policy configuration", async ({
   await page.reload({ waitUntil: "domcontentloaded" });
   await openQueue(page);
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "45-day maximum",
+    "Posts up to 45 days old",
   );
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "2 banned topics",
+    "2 blocked topics",
   );
 });
 
@@ -101,8 +101,8 @@ test("returns the saved policy without a fallible post-commit reload", async ({
 }) => {
   await openQueueWithCampaign(page);
   const dialog = await openPolicyDialog(page);
-  await dialog.getByLabel("Maximum post age in days").fill("75");
-  await dialog.getByLabel("Banned topics").fill("post-commit safety");
+  await dialog.getByLabel("Oldest post to keep (days)").fill("75");
+  await dialog.getByLabel("Blocked topics").fill("post-commit safety");
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -111,14 +111,14 @@ test("returns the saved policy without a fallible post-commit reload", async ({
     ).__LINKGO_FAIL_CANDIDATE_POLICY_POST_COMMIT_LOAD__ = true;
   });
 
-  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await dialog.getByRole("button", { name: "Save filters" }).click();
 
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "75-day maximum",
+    "Posts up to 75 days old",
   );
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "1 banned topic",
+    "1 blocked topic",
   );
 });
 
@@ -128,17 +128,19 @@ test("preserves dialog values after storage failure and blocks archived mutation
   await openQueueWithCampaign(page);
   await enableReloadPersistence(page);
   const dialog = await openPolicyDialog(page);
-  await dialog.getByLabel("Maximum post age in days").fill("60");
-  await dialog.getByLabel("Banned topics").fill("regulated claims");
+  await dialog.getByLabel("Oldest post to keep (days)").fill("60");
+  await dialog.getByLabel("Blocked topics").fill("regulated claims");
   await page.evaluate(() => {
     (
       window as unknown as { __LINKGO_FAIL_CANDIDATE_POLICY_SAVE__?: boolean }
     ).__LINKGO_FAIL_CANDIDATE_POLICY_SAVE__ = true;
   });
-  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await dialog.getByRole("button", { name: "Save filters" }).click();
   await expect(dialog).toContainText("Injected candidate policy save failure");
-  await expect(dialog.getByLabel("Maximum post age in days")).toHaveValue("60");
-  await expect(dialog.getByLabel("Banned topics")).toHaveValue(
+  await expect(dialog.getByLabel("Oldest post to keep (days)")).toHaveValue(
+    "60",
+  );
+  await expect(dialog.getByLabel("Blocked topics")).toHaveValue(
     "regulated claims",
   );
 
@@ -148,17 +150,17 @@ test("preserves dialog values after storage failure and blocks archived mutation
     };
     state.__LINKGO_SQL_SET_CAMPAIGN_STATUS__?.(1, "archived");
   });
-  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await dialog.getByRole("button", { name: "Save filters" }).click();
   await expect(dialog).toContainText("Campaign is archived");
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await openQueue(page);
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "This archived campaign is read-only",
+    "This campaign is archived, so you can't change its filters",
   );
   await expect(
-    page.getByRole("button", { name: "Edit policy" }),
+    page.getByRole("button", { name: "Edit filters" }),
   ).toBeDisabled();
 });
 
@@ -191,7 +193,7 @@ test("campaign switching cannot display a stale candidate policy", async ({
   });
   await selector.selectOption({ label: "Policy Campaign B" });
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "90-day maximum",
+    "Posts up to 90 days old",
   );
 
   await page.evaluate(() => {
@@ -208,10 +210,10 @@ test("campaign switching cannot display a stale candidate policy", async ({
   });
   await expect(selector).toHaveValue("2");
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "90-day maximum",
+    "Posts up to 90 days old",
   );
   await expect(page.getByTestId("candidate-policy-card")).not.toContainText(
-    "15-day maximum",
+    "Posts up to 15 days old",
   );
 });
 
@@ -219,11 +221,11 @@ test("policy dialog completes by keyboard, returns focus, and reflows", async ({
   page,
 }, testInfo: TestInfo) => {
   await openQueueWithCampaign(page);
-  const trigger = page.getByRole("button", { name: "Edit policy" });
+  const trigger = page.getByRole("button", { name: "Edit filters" });
   await trigger.focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", {
-    name: "Edit candidate intake policy",
+    name: "Edit idea filters",
   });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
@@ -251,11 +253,11 @@ test("policy dialog completes by keyboard, returns focus, and reflows", async ({
     fullPage: true,
   });
 
-  await dialog.getByLabel("Maximum post age in days").fill("35");
+  await dialog.getByLabel("Oldest post to keep (days)").fill("35");
   await dialog
-    .getByLabel("Banned topics")
+    .getByLabel("Blocked topics")
     .fill("a very long but valid policy phrase for narrow reflow testing");
-  await dialog.getByRole("button", { name: "Save policy" }).focus();
+  await dialog.getByRole("button", { name: "Save filters" }).focus();
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
@@ -289,10 +291,10 @@ test("policy dialog completes by keyboard, returns focus, and reflows", async ({
   await expect(dialog).toHaveCSS("border-top-style", "solid");
   await expect(dialog).not.toHaveCSS("border-top-width", "0px");
   const forcedColorsControls = [
-    dialog.getByLabel("Maximum post age in days"),
-    dialog.getByLabel("Banned topics"),
+    dialog.getByLabel("Oldest post to keep (days)"),
+    dialog.getByLabel("Blocked topics"),
     dialog.getByRole("button", { name: "Cancel" }),
-    dialog.getByRole("button", { name: "Save policy" }),
+    dialog.getByRole("button", { name: "Save filters" }),
     dialog.getByRole("button", { name: "Close" }),
   ];
   for (const control of forcedColorsControls) {
@@ -310,8 +312,10 @@ test("policy dialog completes by keyboard, returns focus, and reflows", async ({
     expect(colors.foreground).not.toBe(colors.background);
   }
 
-  await dialog.getByLabel("Maximum post age in days").fill("36");
-  await expect(dialog.getByLabel("Maximum post age in days")).toHaveValue("36");
+  await dialog.getByLabel("Oldest post to keep (days)").fill("36");
+  await expect(dialog.getByLabel("Oldest post to keep (days)")).toHaveValue(
+    "36",
+  );
   await page.screenshot({
     path:
       captureDirectory === "true"
@@ -330,16 +334,16 @@ async function savePolicy(
   topics: string,
 ): Promise<void> {
   const dialog = await openPolicyDialog(page);
-  await dialog.getByLabel("Maximum post age in days").fill(age);
-  await dialog.getByLabel("Banned topics").fill(topics);
-  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await dialog.getByLabel("Oldest post to keep (days)").fill(age);
+  await dialog.getByLabel("Blocked topics").fill(topics);
+  await dialog.getByRole("button", { name: "Save filters" }).click();
   await expect(dialog).toBeHidden();
 }
 
 async function openPolicyDialog(page: Page) {
-  await page.getByRole("button", { name: "Edit policy" }).click();
+  await page.getByRole("button", { name: "Edit filters" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Edit candidate intake policy",
+    name: "Edit idea filters",
   });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -369,9 +373,9 @@ async function openQueueWithCampaign(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
   await expect(page.getByTestId("candidate-policy-card")).toBeVisible();
 }

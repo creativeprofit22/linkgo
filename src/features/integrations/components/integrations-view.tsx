@@ -5,20 +5,50 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProviderLoginDialog } from "@/features/integrations/components/provider-login-dialog";
 import { isAutoRenewingAiSignIn } from "@/features/integrations/account-renewal";
 import { useIntegrations } from "@/features/integrations/hooks/use-integrations";
+import { getAuthProvider } from "@/features/integrations/providers";
 import type {
   AuthProgressEvent,
   AuthProvider,
   ConnectedAccount,
   ConnectedAccountStatus,
 } from "@/features/integrations/types";
+import { toPlainMessage } from "@/lib/plain-message";
 
 const statusLabels: Record<ConnectedAccountStatus, string> = {
   disconnected: "Disconnected",
   connected: "Connected",
   expired: "Expired",
-  reauth_required: "Reauth required",
-  error: "Error",
+  reauth_required: "Sign in again",
+  error: "Problem connecting",
 };
+
+const methodLabels: Record<string, string> = {
+  api_key: "access key",
+  oauth: "account sign-in",
+};
+
+const progressStatusLabels: Record<string, string> = {
+  auth_url: "Sign-in page opened",
+  auth_status: "Signing in",
+  auth_need_code: "Waiting for your sign-in code",
+  auth_done: "Signed in",
+  auth_error: "Sign-in failed",
+};
+
+function providerName(key: string): string {
+  return getAuthProvider(key)?.label ?? key;
+}
+
+/**
+ * The desktop app may send older wording; show the plain on-screen name and
+ * key field label from the app's own catalog instead.
+ */
+function withPlainLabel(provider: AuthProvider): AuthProvider {
+  const known = getAuthProvider(provider.key);
+  return known === null
+    ? provider
+    : { ...provider, label: known.label, secretLabel: known.secretLabel };
+}
 
 export function IntegrationsView(): React.ReactNode {
   const {
@@ -47,11 +77,11 @@ export function IntegrationsView(): React.ReactNode {
             </div>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                Integrations
+                Connected accounts
               </h2>
               <p className="text-muted-foreground text-sm">
-                Native credential boundary for AI providers and LinkedIn OAuth
-                foundation.
+                Connect LinkedIn and your AI account. Your sign-in details stay
+                private on this computer.
               </p>
             </div>
           </div>
@@ -78,7 +108,7 @@ export function IntegrationsView(): React.ReactNode {
               size="sm"
               onClick={() => void loadIntegrations()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -98,7 +128,7 @@ export function IntegrationsView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading integrations…
+            Loading connected accounts…
           </CardContent>
         </Card>
       ) : (
@@ -107,7 +137,7 @@ export function IntegrationsView(): React.ReactNode {
             {providers.map((provider) => (
               <ProviderCard
                 key={provider.key}
-                provider={provider}
+                provider={withPlainLabel(provider)}
                 account={
                   accounts.find(
                     (candidate) => candidate.provider_key === provider.key,
@@ -131,13 +161,15 @@ export function IntegrationsView(): React.ReactNode {
 
           <Card className="bg-card/70">
             <CardHeader>
-              <CardTitle className="text-base">Recent auth progress</CardTitle>
+              <CardTitle className="text-base">
+                Recent sign-in activity
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {progressEvents.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  No auth progress events yet. Connect a provider to see native
-                  status updates.
+                  No sign-in activity yet. Connect an account to see updates
+                  here.
                 </p>
               ) : (
                 progressEvents.map((event, index) => (
@@ -145,9 +177,12 @@ export function IntegrationsView(): React.ReactNode {
                     key={`${event.providerKey}-${event.status}-${index}`}
                     className="rounded-lg border p-3 text-sm"
                   >
-                    <p className="font-medium">{event.summary}</p>
+                    <p className="font-medium">
+                      {toPlainMessage(event.summary)}
+                    </p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      {event.providerKey} · {event.status}
+                      {providerName(event.providerKey)} ·{" "}
+                      {progressStatusLabels[event.status] ?? event.status}
                     </p>
                   </div>
                 ))
@@ -202,19 +237,20 @@ function ProviderCard({
           <div>
             <h3 className="font-semibold">{provider.label}</h3>
             <p className="text-muted-foreground mt-1 text-sm">
-              {provider.description}
+              {getAuthProvider(provider.key)?.description ??
+                provider.description}
             </p>
           </div>
           <Badge variant={connected ? "secondary" : "outline"}>
             {connected && <ShieldCheck className="mr-1 size-3" />}
-            {renewing ? "Renews on next run" : statusLabels[status]}
+            {renewing ? "Renews next time it's used" : statusLabels[status]}
           </Badge>
         </div>
         <div className="text-muted-foreground text-xs">
-          Methods: {provider.methods.join(", ")}
-          {provider.scopes.length > 0
-            ? ` · Scopes: ${provider.scopes.join(" ")}`
-            : ""}
+          Connect with:{" "}
+          {provider.methods
+            .map((method) => methodLabels[method] ?? method)
+            .join(" or ")}
         </div>
         {account?.auth_method === "oauth" &&
           account.provider_key !== "linkedin" && (
@@ -225,12 +261,14 @@ function ProviderCard({
           )}
         {renewing && (
           <p className="text-muted-foreground text-xs">
-            Access token expired; it renews automatically when the next agent
-            run starts. No action needed.
+            Your sign-in expired. It renews automatically the next time the AI
+            assistant uses it. Nothing to do.
           </p>
         )}
         {account?.last_error && (
-          <p className="text-destructive text-sm">{account.last_error}</p>
+          <p className="text-destructive text-sm">
+            {toPlainMessage(account.last_error)}
+          </p>
         )}
         <div className="mt-auto flex justify-end">
           <ProviderLoginDialog

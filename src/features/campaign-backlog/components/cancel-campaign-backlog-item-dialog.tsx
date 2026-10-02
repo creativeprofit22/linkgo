@@ -45,7 +45,7 @@ export function CancelCampaignBacklogItemDialog({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Item could not be cancelled",
+          : "We couldn't cancel this task. Please try again.",
       );
     }
   };
@@ -66,16 +66,16 @@ export function CancelCampaignBacklogItemDialog({
         <DialogHeader>
           <DialogTitle>Cancel “{item.title}”?</DialogTitle>
           <DialogDescription>
-            Cancellation is final. This item stays in history and cannot be
-            edited or reopened.
+            You can't undo this. The task stays in your history, but you won't
+            be able to edit or reopen it.
           </DialogDescription>
         </DialogHeader>
         {item.recurrence === "none" ? (
-          <p className="text-sm">No new backlog item will be created.</p>
+          <p className="text-sm">No new task will be created.</p>
         ) : (
           <p className="rounded-lg border p-3 text-sm">
-            This also stops the {item.recurrence} recurrence chain. No successor
-            will be scheduled.
+            This also stops the {item.recurrence} repeat. No next task will be
+            scheduled.
           </p>
         )}
         {error === null ? null : (
@@ -90,7 +90,7 @@ export function CancelCampaignBacklogItemDialog({
             disabled={pending}
             onClick={() => setOpen(false)}
           >
-            Keep item
+            Keep task
           </Button>
           <Button
             type="button"
@@ -98,7 +98,7 @@ export function CancelCampaignBacklogItemDialog({
             disabled={pending}
             onClick={() => void handleCancel()}
           >
-            {pending ? "Cancelling…" : "Cancel item"}
+            {pending ? "Cancelling…" : "Cancel task"}
           </Button>
         </DialogFooter>
       </DialogContent>

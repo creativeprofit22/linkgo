@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { toPlainMessage } from "@/lib/plain-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { escapeLinkedInLittleText } from "@/features/approvals/linkedin-format";
@@ -40,8 +41,8 @@ const CONFIRMATION_TEXT = "Post comment";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
-    ? error.message
-    : "LinkedIn comment publish failed";
+    ? toPlainMessage(error.message)
+    : "We couldn't post this comment to LinkedIn. Try again later.";
 }
 
 function getIdempotencyKey(threadId: number): string {
@@ -90,14 +91,14 @@ export function PublishLinkedInCommentDialog({
         handleOpenChange(false);
         return;
       case "failed":
-        toast.error("LinkedIn comment failed", {
-          description: outcome.message,
+        toast.error("Your comment didn't post", {
+          description: toPlainMessage(outcome.message),
         });
         handleOpenChange(false);
         return;
       case "blocked":
-        toast.error("LinkedIn comment blocked", {
-          description: outcome.message,
+        toast.error("Linkgo held back this comment", {
+          description: toPlainMessage(outcome.message),
         });
         handleOpenChange(false);
         return;
@@ -110,7 +111,7 @@ export function PublishLinkedInCommentDialog({
         });
         toast.warning(OUTCOME_UNKNOWN_TITLE, {
           description:
-            "Do not post again. Check LinkedIn and reconcile in Safety.",
+            "Don't post it again. Check LinkedIn, then confirm what happened in Safety.",
         });
         return;
     }
@@ -132,7 +133,7 @@ export function PublishLinkedInCommentDialog({
     try {
       await assertCommentCanPublishViaLinkedIn(publishInput);
     } catch (caught) {
-      toast.error("LinkedIn comment blocked", {
+      toast.error("Linkgo held back this comment", {
         description: getErrorMessage(caught),
       });
       setSubmitting(false);
@@ -147,7 +148,7 @@ export function PublishLinkedInCommentDialog({
       });
       showOutcome(outcome);
     } catch (caught) {
-      toast.error("LinkedIn comment failed", {
+      toast.error("Your comment didn't post", {
         description: getErrorMessage(caught),
       });
     } finally {
@@ -160,7 +161,7 @@ export function PublishLinkedInCommentDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" disabled={disabled}>
-          <Send className="size-4" /> Post via LinkedIn
+          <Send className="size-4" /> Post to LinkedIn
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -168,24 +169,25 @@ export function PublishLinkedInCommentDialog({
           <DialogHeader>
             <DialogTitle>Post comment</DialogTitle>
             <DialogDescription>
-              This posts the approved comment using the connected LinkedIn
-              account.
+              This posts your approved comment from your connected LinkedIn
+              account. Linkgo never posts without your OK.
             </DialogDescription>
           </DialogHeader>
 
           <div className="bg-muted/40 rounded-xl border p-4 text-sm">
             <p>
-              <span className="font-medium">Target author:</span>{" "}
+              <span className="font-medium">Replying to:</span>{" "}
               {thread.target.target_author_name || "Unknown author"}
             </p>
             <p className="break-all">
-              <span className="font-medium">Target URN:</span> {targetUrn}
+              <span className="font-medium">LinkedIn reference:</span>{" "}
+              {targetUrn}
             </p>
           </div>
 
           <div className="bg-muted/40 max-h-72 overflow-auto rounded-xl border p-4">
             <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-              Exact escaped comment preview
+              Exactly what will post
             </p>
             <p className="text-sm leading-relaxed whitespace-pre-line">
               {commentary}
@@ -193,15 +195,15 @@ export function PublishLinkedInCommentDialog({
           </div>
 
           <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-3 text-sm">
-            Posting is irreversible. Confirm the connected account and text
-            before sending.
+            You can&rsquo;t undo a post. Check the account and the text before
+            you post.
           </div>
 
           {unknownOutcome !== null && (
             <OutcomeUnknownAlert
               itemLabel="comment"
               executionId={unknownOutcome.executionId}
-              message={unknownOutcome.message}
+              message={toPlainMessage(unknownOutcome.message)}
             />
           )}
 
@@ -222,7 +224,7 @@ export function PublishLinkedInCommentDialog({
               id={`publish-linkedin-comment-help-${thread.id}`}
               className="text-muted-foreground text-xs"
             >
-              The button unlocks only for this exact confirmation text.
+              The post button only turns on when you type these exact words.
             </p>
           </div>
 
@@ -241,7 +243,7 @@ export function PublishLinkedInCommentDialog({
                 submitting || !confirmationMatches || unknownOutcome !== null
               }
             >
-              {submitting ? "Posting…" : "Post via LinkedIn"}
+              {submitting ? "Posting…" : "Post to LinkedIn"}
             </Button>
           </DialogFooter>
         </form>

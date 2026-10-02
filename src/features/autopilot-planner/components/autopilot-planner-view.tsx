@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AutopilotPlanCard } from "@/features/autopilot-planner/components/autopilot-plan-card";
 import { AutopilotPlannerEventList } from "@/features/autopilot-planner/components/autopilot-planner-event-list";
 import { useAutopilotPlanner } from "@/features/autopilot-planner/hooks/use-autopilot-planner";
+import { CAMPAIGN_STATUS_LABELS } from "@/features/campaigns/types";
 
 export function AutopilotPlannerView(): React.ReactNode {
   const {
@@ -40,7 +41,7 @@ export function AutopilotPlannerView(): React.ReactNode {
   const statusLabel = status?.running
     ? "Running while Linkgo is open"
     : status?.enabled
-      ? "Enabled, not running"
+      ? "On, not running"
       : "Stopped";
   const controlsDisabled = loading || saving || ticking;
 
@@ -54,9 +55,9 @@ export function AutopilotPlannerView(): React.ReactNode {
           <div className="min-w-0">
             <h2 className="text-2xl font-semibold tracking-tight">Autopilot</h2>
             <p className="text-muted-foreground mt-1 max-w-3xl text-sm">
-              Converts approved local source batches into linked backlog and
-              queued workflow records. It never fetches externally, runs a
-              model, publishes, or comments.
+              Let Linkgo suggest what to work on next. Autopilot turns your
+              imported posts into tasks and automations. It never fetches from
+              the web, uses AI, posts, or comments.
             </p>
           </div>
         </div>
@@ -77,7 +78,7 @@ export function AutopilotPlannerView(): React.ReactNode {
             onClick={() => void tick()}
           >
             <ListChecks aria-hidden="true" className="size-4" />
-            {ticking ? "Planning…" : "Plan now"}
+            {ticking ? "Checking…" : "Check now"}
           </Button>
           {status?.running ? (
             <Button
@@ -88,7 +89,7 @@ export function AutopilotPlannerView(): React.ReactNode {
               onClick={() => void stop()}
             >
               <Square aria-hidden="true" className="size-4" />
-              {saving ? "Stopping…" : "Stop planner"}
+              {saving ? "Stopping…" : "Stop Autopilot"}
             </Button>
           ) : (
             <Button
@@ -98,7 +99,7 @@ export function AutopilotPlannerView(): React.ReactNode {
               onClick={() => void start()}
             >
               <Play aria-hidden="true" className="size-4" />
-              {saving ? "Starting…" : "Start planner"}
+              {saving ? "Starting…" : "Start Autopilot"}
             </Button>
           )}
         </div>
@@ -117,9 +118,7 @@ export function AutopilotPlannerView(): React.ReactNode {
                 className="text-destructive mt-0.5 size-5 shrink-0"
               />
               <div className="min-w-0">
-                <p className="font-medium">
-                  Autopilot planner could not be loaded
-                </p>
+                <p className="font-medium">We couldn't load Autopilot</p>
                 <p className="text-muted-foreground text-sm break-words">
                   {error}
                 </p>
@@ -132,7 +131,7 @@ export function AutopilotPlannerView(): React.ReactNode {
               disabled={loading}
               onClick={() => void refresh()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -144,7 +143,7 @@ export function AutopilotPlannerView(): React.ReactNode {
             className="text-muted-foreground p-8 text-center text-sm"
             role="status"
           >
-            Loading autopilot planner…
+            Loading Autopilot…
           </CardContent>
         </Card>
       ) : dashboard !== null ? (
@@ -152,14 +151,14 @@ export function AutopilotPlannerView(): React.ReactNode {
           <Card className="bg-card/70 forced-colors:border">
             <CardContent className="flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center">
               <div>
-                <p className="font-semibold">Planner status: {statusLabel}</p>
+                <p className="font-semibold">Autopilot status: {statusLabel}</p>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  Checks up to {status?.settings.maxBatchesPerTick ?? 3} source
-                  batches every {status?.settings.pollIntervalMinutes ?? 60}{" "}
-                  minutes after you start it.
+                  Once started, it checks up to{" "}
+                  {status?.settings.maxBatchesPerTick ?? 3} imports every{" "}
+                  {status?.settings.pollIntervalMinutes ?? 60} minutes.
                 </p>
               </div>
-              <p className="text-sm font-medium">Local records only</p>
+              <p className="text-sm font-medium">Nothing is posted</p>
             </CardContent>
           </Card>
 
@@ -171,10 +170,10 @@ export function AutopilotPlannerView(): React.ReactNode {
                   className="text-destructive mt-0.5 size-5 shrink-0"
                 />
                 <div>
-                  <p className="font-medium">Global kill switch is enabled</p>
+                  <p className="font-medium">Pause everything is on</p>
                   <p className="text-muted-foreground text-sm break-words">
-                    Planner starts and work creation are blocked. Existing
-                    backlog items and workflows stay unchanged.
+                    Autopilot can't start or create new tasks. Your existing
+                    tasks and automations stay as they are.
                     {dashboard.killSwitchReason
                       ? ` Reason: ${dashboard.killSwitchReason}`
                       : ""}
@@ -194,11 +193,10 @@ export function AutopilotPlannerView(): React.ReactNode {
                   id="autopilot-scope-heading"
                   className="text-sm font-semibold"
                 >
-                  Planner scope
+                  Show campaign
                 </h3>
                 <p className="text-muted-foreground mt-1 text-xs">
-                  Filter counts, source-to-work plans, and campaign-linked
-                  events.
+                  Filter the counts, plans, and activity below by campaign.
                 </p>
               </div>
               <div className="min-w-0">
@@ -220,7 +218,8 @@ export function AutopilotPlannerView(): React.ReactNode {
                   <option value="all">All campaigns</option>
                   {campaigns.map((campaign) => (
                     <option key={campaign.id} value={campaign.id}>
-                      {campaign.name} ({campaign.status})
+                      {campaign.name} ({CAMPAIGN_STATUS_LABELS[campaign.status]}
+                      )
                     </option>
                   ))}
                 </select>
@@ -236,12 +235,16 @@ export function AutopilotPlannerView(): React.ReactNode {
                   className="mt-0.5 size-5 shrink-0"
                 />
                 <div>
-                  <p className="font-medium capitalize">
-                    {selectedCampaign.status} campaign is not eligible
+                  <p className="font-medium">
+                    This campaign is{" "}
+                    {CAMPAIGN_STATUS_LABELS[
+                      selectedCampaign.status
+                    ].toLowerCase()}
+                    , so it isn't included in Autopilot
                   </p>
                   <p className="text-muted-foreground text-sm">
-                    Make the campaign active before the local planner can
-                    convert its completed source batches.
+                    Make the campaign active so Autopilot can turn its imports
+                    into tasks.
                   </p>
                 </div>
               </CardContent>
@@ -249,15 +252,15 @@ export function AutopilotPlannerView(): React.ReactNode {
           ) : null}
 
           <section
-            aria-label="Autopilot planner summary"
+            aria-label="Autopilot summary"
             className="grid grid-cols-2 gap-3 xl:grid-cols-4"
           >
             <SummaryCard
-              label="Eligible now"
+              label="Ready now"
               value={dashboard.summary.eligibleBatches}
             />
             <SummaryCard
-              label="Planned"
+              label="Tasks created"
               value={dashboard.summary.plannedBatches}
             />
             <SummaryCard
@@ -265,7 +268,7 @@ export function AutopilotPlannerView(): React.ReactNode {
               value={dashboard.summary.skippedBatches}
             />
             <SummaryCard
-              label="Failures · 7 days"
+              label="Problems · 7 days"
               value={dashboard.summary.recentFailures}
             />
           </section>
@@ -279,18 +282,18 @@ export function AutopilotPlannerView(): React.ReactNode {
                 id="recent-autopilot-plans-heading"
                 className="text-lg font-semibold"
               >
-                Recent source-to-work plans
+                Recent plans
               </h3>
               <p className="text-muted-foreground text-sm">
-                Each planned batch owns one Linkgo scoring item and one queued
-                content workflow.
+                Each import Autopilot plans becomes one scoring task and one
+                automation.
               </p>
             </div>
             {dashboard.recentPlans.length === 0 ? (
               selectedCampaignId !== null ? (
                 <EmptyState
                   title="No plans for this campaign"
-                  description="Run a manual planner tick after this campaign is active, opted in, and has a completed approved source batch."
+                  description="Make sure this campaign is active, included in Autopilot, and has a finished import. Then select Check now."
                 />
               ) : (
                 <FirstUseState
@@ -344,14 +347,14 @@ function FirstUseState({
     campaignCount === 0
       ? "Create a campaign first"
       : activeAutopilotCount === 0
-        ? "Enable planner eligibility"
-        : "Import an approved source batch";
+        ? "Include a campaign in Autopilot"
+        : "Import posts to get started";
   const description =
     campaignCount === 0
-      ? "Create a campaign, make it active, and enable Autopilot intent."
+      ? "Create a campaign, make it active, and include it in Autopilot."
       : activeAutopilotCount === 0
-        ? "Make a campaign active and enable Autopilot intent. This opts it into local planning only."
-        : "Open an eligible campaign and import approved local JSON. The planner only sees completed policy-enforced batches.";
+        ? "Make a campaign active and include it in Autopilot. Autopilot only creates tasks. It never posts."
+        : "Open a campaign that's included in Autopilot and import posts. Autopilot only uses finished imports that passed your idea filters.";
   return <EmptyState title={title} description={description} />;
 }
 

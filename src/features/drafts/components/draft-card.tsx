@@ -52,13 +52,13 @@ export function DraftCard({
   onRunQuality,
   onResumeQuality,
 }: DraftCardProps): React.ReactNode {
-  const authorName = draft.candidate.target.author_name || "Unknown author";
+  const authorName = draft.candidate.target.author_name || "Author not known";
   const highestSeverity = getHighestSeverity(draft);
 
   function confirmArchiveDraft(): void {
     if (
       window.confirm(
-        "Archive this draft? It can stay in local history but will be hidden from active work.",
+        "Archive this draft? It stays in your history but is hidden from your active drafts.",
       )
     ) {
       void onArchiveDraft(draft.id);
@@ -75,11 +75,11 @@ export function DraftCard({
               <DraftStatusBadge status={draft.status} />
               <DraftAuditSeverityBadge severity={highestSeverity} />
               <Badge variant="outline">
-                {DRAFT_PROMPT_ROUTES[draft.content_intent].label} intent
+                {DRAFT_PROMPT_ROUTES[draft.content_intent].label} post
               </Badge>
             </div>
             <p className="text-muted-foreground text-sm">
-              {draft.campaign_name} · {draft.variants.length} variants
+              {draft.campaign_name} · {draft.variants.length} versions
             </p>
             <a
               href={draft.candidate.target.url}
@@ -106,7 +106,7 @@ export function DraftCard({
       <CardContent className="space-y-5">
         <div className="space-y-3">
           <TextBlock
-            label="Source post"
+            label="Original post"
             value={draft.candidate.target.content}
           />
           {draft.angle && <TextBlock label="Angle" value={draft.angle} />}

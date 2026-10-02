@@ -23,7 +23,7 @@ test("imports two valid rows into candidates and a completed batch", async ({
 
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("one", "First imported source post", "Ada One"),
@@ -33,19 +33,17 @@ test("imports two valid rows into candidates and a completed batch", async ({
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
-    dialog.getByText("Import completed", { exact: true }),
+    dialog.getByText("Import finished", { exact: true }),
   ).toBeVisible();
   await expect(
-    dialog.getByText("2 accepted, 0 duplicate, 0 rejected."),
+    dialog.getByText("2 added, 0 already saved, 0 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
 
   await expect(page.getByRole("heading", { name: "Ada One" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ben Two" })).toBeVisible();
-  await expect(page.getByText("Batch 1", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Completed", { exact: true }).last(),
-  ).toBeVisible();
+  await expect(page.getByText("Import 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Done", { exact: true }).last()).toBeVisible();
 
   const state = await getSourceImportState(page);
   expect(state.candidates).toHaveLength(2);
@@ -69,7 +67,7 @@ test("reports duplicate URL and content rows without extra candidates", async ({
   const duplicateContent = "The same imported source text.";
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("duplicate", duplicateContent, "First Author"),
@@ -80,10 +78,10 @@ test("reports duplicate URL and content rows without extra candidates", async ({
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
-    dialog.getByText("Import completed with review items"),
+    dialog.getByText("Import finished. Some posts need a look"),
   ).toBeVisible();
   await expect(
-    dialog.getByText("1 accepted, 2 duplicate, 0 rejected."),
+    dialog.getByText("1 added, 2 already saved, 0 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(
@@ -104,7 +102,7 @@ test("preserves valid rows and field-specific reasons in a mixed batch", async (
 }, testInfo) => {
   await openQueueWithCampaign(page);
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       sourceRow("valid", "A valid source post", "Valid Author"),
       {
@@ -119,14 +117,14 @@ test("preserves valid rows and field-specific reasons in a mixed batch", async (
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 1 rejected."),
+    dialog.getByText("1 added, 0 already saved, 1 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(
     page.getByRole("heading", { name: "Valid Author" }),
   ).toBeVisible();
   await expect(
-    page.getByText("URL: LinkedIn post URL is required", { exact: false }),
+    page.getByText("Link: Add the LinkedIn post link", { exact: false }),
   ).toBeVisible();
 
   const state = await getSourceImportState(page);
@@ -152,7 +150,7 @@ test("bounds validation reasons while preserving valid neighboring rows", async 
       true,
     ]),
   );
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       sourceRow("reason-valid", "A valid neighboring row", "Valid Neighbor"),
       {
@@ -164,7 +162,7 @@ test("bounds validation reasons while preserving valid neighboring rows", async 
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 1 rejected."),
+    dialog.getByText("1 added, 0 already saved, 1 skipped."),
   ).toBeVisible();
   const state = await getSourceImportState(page);
   expect(state.candidates).toHaveLength(1);
@@ -183,7 +181,7 @@ test("preserves valid rows when an invalid scalar exceeds the audit limit", asyn
   await openQueueWithCampaign(page);
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("bounded", "A valid bounded source post", "Bounded Author"),
@@ -193,10 +191,10 @@ test("preserves valid rows when an invalid scalar exceeds the audit limit", asyn
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
-    dialog.getByText("Import completed with review items"),
+    dialog.getByText("Import finished. Some posts need a look"),
   ).toBeVisible();
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 1 rejected."),
+    dialog.getByText("1 added, 0 already saved, 1 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
 
@@ -240,7 +238,7 @@ test("policy rejects unsafe sources and timestamp failures without writing candi
     postedAt: new Date(Date.now() + 60 * 60_000).toISOString(),
   };
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       valid,
       {
@@ -265,11 +263,11 @@ test("policy rejects unsafe sources and timestamp failures without writing candi
   );
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 6 rejected."),
+    dialog.getByText("1 added, 0 already saved, 6 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByText("Policy: Source").first()).toBeVisible();
-  await expect(page.getByText("Policy: Age").first()).toBeVisible();
+  await expect(page.getByText("Filter: Link").first()).toBeVisible();
+  await expect(page.getByText("Filter: Post age").first()).toBeVisible();
 
   const state = await getSourceImportState(page);
   expect(state.items.map((item) => item.policy_rule_key)).toEqual([
@@ -299,7 +297,7 @@ test("age policy accepts a post inside the exact configured boundary", async ({
   await openQueueWithCampaign(page);
   await setPolicy(page, "1", "");
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       {
         ...sourceRow("boundary", "Boundary post", "Boundary"),
@@ -309,7 +307,7 @@ test("age policy accepts a post inside the exact configured boundary", async ({
   );
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 0 rejected."),
+    dialog.getByText("1 added, 0 already saved, 0 skipped."),
   ).toBeVisible();
 });
 
@@ -318,7 +316,7 @@ test("age policy allows five minutes of future clock skew", async ({
 }) => {
   await openQueueWithCampaign(page);
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       {
         ...sourceRow(
@@ -340,7 +338,7 @@ test("age policy allows five minutes of future clock skew", async ({
   );
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 1 rejected."),
+    dialog.getByText("1 added, 0 already saved, 1 skipped."),
   ).toBeVisible();
 
   const state = await getSourceImportState(page);
@@ -361,7 +359,7 @@ test("age policy rejects calendar dates normalized by Date", async ({
   const invalidYear =
     now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       {
         ...sourceRow("invalid-calendar", "Invalid calendar date", "Calendar"),
@@ -373,7 +371,7 @@ test("age policy rejects calendar dates normalized by Date", async ({
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
-    dialog.getByText("0 accepted, 0 duplicate, 1 rejected."),
+    dialog.getByText("0 added, 0 already saved, 1 skipped."),
   ).toBeVisible();
   const state = await getSourceImportState(page);
   expect(state.items[0]?.policy_rule_key).toBe("age");
@@ -386,7 +384,7 @@ test("banned topics use normalized whole-word and phrase matching", async ({
   await openQueueWithCampaign(page);
   await setPolicy(page, "30", "AI\nclimate change");
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       sourceRow(
         "substring",
@@ -402,10 +400,10 @@ test("banned topics use normalized whole-word and phrase matching", async ({
   );
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 2 rejected."),
+    dialog.getByText("1 added, 0 already saved, 2 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByText("Policy: Banned topic").first()).toBeVisible();
+  await expect(page.getByText("Filter: Blocked topic").first()).toBeVisible();
   const state = await getSourceImportState(page);
   expect(state.items.map((item) => item.policy_rule_key)).toEqual([
     "",
@@ -451,7 +449,7 @@ test("URL, URN, and normalized profile contacts block while failed and same-name
   });
   const before = await getSourceImportState(page);
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Source posts JSON").fill(
+  await dialog.getByLabel("Posts (JSON)").fill(
     sourceJson([
       {
         ...sourceRow("contact-url", "Same URL", "Different Name"),
@@ -480,11 +478,11 @@ test("URL, URN, and normalized profile contacts block while failed and same-name
   );
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
-    dialog.getByText("2 accepted, 0 duplicate, 3 rejected."),
+    dialog.getByText("2 added, 0 already saved, 3 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(
-    page.getByText("Policy: Already contacted").first(),
+    page.getByText("Filter: Already contacted").first(),
   ).toBeVisible();
   const after = await getSourceImportState(page);
   expect(after.items.map((item) => item.policy_rule_key)).toEqual([
@@ -495,9 +493,9 @@ test("URL, URN, and normalized profile contacts block while failed and same-name
     "",
   ]);
   expect(after.counts.candidatePosts - before.counts.candidatePosts).toBe(2);
-  expect(page.getByRole("button", { name: "Add candidate" })).toBeEnabled();
+  expect(page.getByRole("button", { name: "Add idea" })).toBeEnabled();
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
-    "attended override",
+    "skip these filters",
   );
 });
 
@@ -506,12 +504,12 @@ test("rejects invalid JSON and more than 50 rows while preserving input", async 
 }) => {
   await openQueueWithCampaign(page);
   const dialog = await openImportDialog(page);
-  const textarea = dialog.getByLabel("Source posts JSON");
+  const textarea = dialog.getByLabel("Posts (JSON)");
 
   await textarea.fill("[{invalid json]");
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(dialog.getByRole("alert")).toHaveText(
-    "Source text must be valid JSON",
+    "This doesn't look like a valid JSON list. Check it matches the example.",
   );
   await expect(textarea).toHaveValue("[{invalid json]");
 
@@ -522,7 +520,9 @@ test("rejects invalid JSON and more than 50 rows while preserving input", async 
   );
   await textarea.fill(tooManyRows);
   await dialog.getByRole("button", { name: "Import posts" }).click();
-  await expect(dialog.getByRole("alert")).toContainText("Import up to 50 rows");
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Import up to 50 posts at a time",
+  );
   await expect(textarea).toHaveValue(tooManyRows);
 
   const state = await getSourceImportState(page);
@@ -542,7 +542,7 @@ test("keeps the latest campaign import history when an earlier load resolves las
   await campaignSelector.selectOption({ label: "Import Campaign A" });
   let dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("campaign-a", "Campaign A source post", "Campaign A Author"),
@@ -554,7 +554,7 @@ test("keeps the latest campaign import history when an earlier load resolves las
   await campaignSelector.selectOption({ label: "Import Campaign B" });
   dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("campaign-b", "Campaign B source post", "Campaign B Author"),
@@ -587,7 +587,7 @@ test("keeps the latest campaign import history when an earlier load resolves las
   await expect(
     page.getByRole("heading", { name: "Campaign B Author" }),
   ).toBeVisible();
-  await expect(page.getByText("Batch 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("Import 2", { exact: true })).toBeVisible();
   await page.evaluate(() => {
     const releaseCampaignSelects = (
       window as unknown as {
@@ -614,8 +614,8 @@ test("keeps the latest campaign import history when an earlier load resolves las
   await expect(
     page.getByRole("heading", { name: "Campaign A Author" }),
   ).toBeHidden();
-  await expect(page.getByText("Batch 2", { exact: true })).toBeVisible();
-  await expect(page.getByText("Batch 1", { exact: true })).toBeHidden();
+  await expect(page.getByText("Import 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("Import 1", { exact: true })).toBeHidden();
 });
 
 test("archived campaigns block UI and data mutations while keeping history", async ({
@@ -630,7 +630,7 @@ test("archived campaigns block UI and data mutations while keeping history", asy
   });
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("history", "Archived history post", "History Author"),
@@ -653,7 +653,7 @@ test("archived campaigns block UI and data mutations while keeping history", asy
 
   const archivedDialog = await openImportDialog(page);
   await archivedDialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([sourceRow("blocked", "Blocked archived row", "Blocked")]),
     );
@@ -666,10 +666,10 @@ test("archived campaigns block UI and data mutations while keeping history", asy
   await page.reload({ waitUntil: "domcontentloaded" });
   await openQueue(page);
   const importButton = page.getByRole("button", {
-    name: "Import source posts",
+    name: "Import posts",
   });
   await expect(importButton).toBeDisabled();
-  await expect(page.getByText("Batch 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Import 1", { exact: true })).toBeVisible();
 
   const state = await getSourceImportState(page);
   expect(state.batches).toHaveLength(1);
@@ -688,7 +688,7 @@ test("a forced candidate failure rolls back only that row and records a safe fai
 
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("accepted", "Accepted before failure", "Accepted Author"),
@@ -701,7 +701,7 @@ test("a forced candidate failure rolls back only that row and records a safe fai
     dialog.getByText("Import stopped", { exact: true }),
   ).toBeVisible();
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 1 rejected."),
+    dialog.getByText("1 added, 0 already saved, 1 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(
@@ -743,7 +743,7 @@ test("terminalizes the batch when an item outcome write fails", async ({
 
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         { url: "https://www.linkedin.com/posts/outcome-failure", content: "" },
@@ -760,7 +760,7 @@ test("terminalizes the batch when an item outcome write fails", async ({
     dialog.getByText("Import stopped", { exact: true }),
   ).toBeVisible();
   await expect(
-    dialog.getByText("0 accepted, 0 duplicate, 2 rejected."),
+    dialog.getByText("0 added, 0 already saved, 2 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(
@@ -806,7 +806,7 @@ test("terminalizes the batch when the final batch outcome write fails", async ({
 
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("batch-outcome", "Accepted before batch write", "Accepted"),
@@ -818,7 +818,7 @@ test("terminalizes the batch when the final batch outcome write fails", async ({
     dialog.getByText("Import stopped", { exact: true }),
   ).toBeVisible();
   await expect(
-    dialog.getByText("1 accepted, 0 duplicate, 0 rejected."),
+    dialog.getByText("1 added, 0 already saved, 0 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
 
@@ -852,7 +852,7 @@ test("recovers a processing batch from a previous app session after reload", asy
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await openQueue(page);
-  await expect(page.getByText("Batch 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Import 1", { exact: true })).toBeVisible();
   await expect(page.getByText("Failed", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
@@ -866,8 +866,8 @@ test("recovers a processing batch from a previous app session after reload", asy
       )
       .first(),
   ).toBeVisible();
-  await expect(page.getByText("Processing", { exact: true })).toBeHidden();
-  await expect(page.getByText("Pending", { exact: true })).toBeHidden();
+  await expect(page.getByText("In progress", { exact: true })).toBeHidden();
+  await expect(page.getByText("Not checked yet", { exact: true })).toBeHidden();
 
   const state = await getSourceImportState(page);
   expect(state.batches[0]).toMatchObject({
@@ -895,7 +895,7 @@ test("batch outcomes and reasons survive reload", async ({ page }) => {
 
   const dialog = await openImportDialog(page);
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([
         sourceRow("reload", "Reload-safe valid row", "Reload Author"),
@@ -907,12 +907,12 @@ test("batch outcomes and reasons survive reload", async ({ page }) => {
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await openQueue(page);
-  await expect(page.getByText("Batch 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Import 1", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("1 accepted", { exact: true }).first(),
+    page.getByText("1 added", { exact: true }).first(),
   ).toBeVisible();
   await expect(
-    page.getByText("Post text: Post text is required", { exact: false }),
+    page.getByText("Post text: Add the post text", { exact: false }),
   ).toBeVisible();
 });
 
@@ -920,12 +920,12 @@ test("keyboard flow returns focus and announces completion", async ({
   page,
 }) => {
   await openQueueWithCampaign(page);
-  const trigger = page.getByRole("button", { name: "Import source posts" });
+  const trigger = page.getByRole("button", { name: "Import posts" });
   await trigger.focus();
   await page.keyboard.press("Enter");
 
-  const dialog = page.getByRole("dialog", { name: "Import source posts" });
-  const textarea = dialog.getByLabel("Source posts JSON");
+  const dialog = page.getByRole("dialog", { name: "Import posts" });
+  const textarea = dialog.getByLabel("Posts (JSON)");
   await expect(textarea).toBeVisible();
   await expect(textarea).toHaveAttribute(
     "aria-describedby",
@@ -948,7 +948,7 @@ test("keyboard flow returns focus and announces completion", async ({
 
   const status = dialog.getByTestId("source-import-result");
   await expect(status).toHaveAttribute("aria-live", "polite");
-  await expect(status).toContainText("1 accepted, 0 duplicate, 0 rejected.");
+  await expect(status).toContainText("1 added, 0 already saved, 0 skipped.");
   const done = dialog.getByRole("button", { name: "Done" });
   await done.focus();
   await page.keyboard.press("Enter");
@@ -962,9 +962,9 @@ test("keeps source-import controls operable with reduced motion and forced color
   await openQueueWithCampaign(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
 
-  const trigger = page.getByRole("button", { name: "Import source posts" });
+  const trigger = page.getByRole("button", { name: "Import posts" });
   const dialog = await openImportDialog(page);
-  const textarea = dialog.getByLabel("Source posts JSON");
+  const textarea = dialog.getByLabel("Posts (JSON)");
   const cancel = dialog.getByRole("button", { name: "Cancel" });
   const submit = dialog.getByRole("button", { name: "Import posts" });
   const close = dialog.getByRole("button", { name: "Close" });
@@ -985,13 +985,13 @@ test("keeps source-import controls operable with reduced motion and forced color
   );
   await submit.click();
   await expect(
-    dialog.getByText("0 accepted, 0 duplicate, 1 rejected."),
+    dialog.getByText("0 added, 0 already saved, 1 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
 
-  const policyLabel = page.getByText("Policy: Source").first();
+  const policyLabel = page.getByText("Filter: Link").first();
   await expect(policyLabel).toBeVisible();
 
   await page.emulateMedia({
@@ -1002,7 +1002,7 @@ test("keeps source-import controls operable with reduced motion and forced color
     await page.evaluate(() => matchMedia("(forced-colors: active)").matches),
   ).toBe(true);
 
-  const batchSummary = page.locator("summary").filter({ hasText: "Batch 1" });
+  const batchSummary = page.locator("summary").filter({ hasText: "Import 1" });
   await expect(batchSummary).toBeVisible();
   await expectForcedColorsFocusIndicator(batchSummary);
   await page.keyboard.press("Enter");
@@ -1036,19 +1036,19 @@ async function captureSourceImportVisualEvidence(
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(4_500);
   await page
-    .getByRole("heading", { name: "Recent source imports" })
+    .getByRole("heading", { name: "Recent imports" })
     .scrollIntoViewIfNeeded();
   await page.screenshot({
     path: testInfo.outputPath("source-import-desktop-1280x800.png"),
   });
 
   await page.setViewportSize({ width: 320, height: 800 });
-  const trigger = page.getByRole("button", { name: "Import source posts" });
+  const trigger = page.getByRole("button", { name: "Import posts" });
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
-  const dialog = page.getByRole("dialog", { name: "Import source posts" });
+  const dialog = page.getByRole("dialog", { name: "Import posts" });
   await dialog
-    .getByLabel("Source posts JSON")
+    .getByLabel("Posts (JSON)")
     .fill(
       sourceJson([sourceRow("narrow", "Narrow dialog input", "Narrow Author")]),
     );
@@ -1058,7 +1058,7 @@ async function captureSourceImportVisualEvidence(
   await expectPageToReflow(page);
   await page.keyboard.press("Escape");
   await page
-    .getByRole("heading", { name: "Recent source imports" })
+    .getByRole("heading", { name: "Recent imports" })
     .scrollIntoViewIfNeeded();
   await page.screenshot({
     path: testInfo.outputPath("source-import-narrow-history-320x800.png"),
@@ -1145,9 +1145,9 @@ async function openQueueWithCampaign(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -1156,19 +1156,19 @@ async function setPolicy(
   age: string,
   topics: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Edit policy" }).click();
+  await page.getByRole("button", { name: "Edit filters" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Edit candidate intake policy",
+    name: "Edit idea filters",
   });
-  await dialog.getByLabel("Maximum post age in days").fill(age);
-  await dialog.getByLabel("Banned topics").fill(topics);
-  await dialog.getByRole("button", { name: "Save policy" }).click();
+  await dialog.getByLabel("Oldest post to keep (days)").fill(age);
+  await dialog.getByLabel("Blocked topics").fill(topics);
+  await dialog.getByRole("button", { name: "Save filters" }).click();
   await expect(dialog).toBeHidden();
 }
 
 async function openImportDialog(page: Page) {
-  await page.getByRole("button", { name: "Import source posts" }).click();
-  const dialog = page.getByRole("dialog", { name: "Import source posts" });
+  await page.getByRole("button", { name: "Import posts" }).click();
+  const dialog = page.getByRole("dialog", { name: "Import posts" });
   await expect(dialog).toBeVisible();
   return dialog;
 }

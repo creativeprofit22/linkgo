@@ -253,9 +253,13 @@ async function assertProviderConnected(
   const authStatus = await getAuthStatus();
   if (isAgentProviderReady(providerKey, authStatus.accounts)) return;
   if (providerKey === "custom") {
-    throw new Error("Custom provider requires a Base URL override");
+    throw new Error(
+      "Your custom AI service needs a web address. Add it in Connected accounts, then try again.",
+    );
   }
-  throw new Error("Agent provider is not connected");
+  throw new Error(
+    "Your AI service isn't connected. Connect it in Connected accounts, then try again.",
+  );
 }
 
 /**
@@ -309,7 +313,9 @@ async function failAgentRunAfterPersistenceError(
   error: unknown,
 ): Promise<void> {
   const errorMessage =
-    error instanceof Error ? error.message : "Agent result persistence failed";
+    error instanceof Error
+      ? error.message
+      : "We couldn't save the assistant's result. Try again.";
   try {
     await invokeCommand("linkgo_agent_run_fail_after_persistence_error", {
       input: { agentRunId: runId, errorMessage },

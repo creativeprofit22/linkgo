@@ -11,8 +11,42 @@ function formatDate(value: string): string {
   return date.toLocaleString();
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Not started",
+  queued: "Waiting to start",
+  running: "In progress",
+  in_progress: "In progress",
+  waiting_approval: "Waiting for approval",
+  blocked: "On hold",
+  completed: "Done",
+  completed_with_errors: "Done, with some problems",
+  processing: "In progress",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  skipped: "Skipped",
+  draft: "Draft",
+  active: "Active",
+  paused: "Paused",
+  archived: "Archived",
+  unknown: "Unknown",
+};
+
+const STEP_LABELS: Record<string, string> = {
+  research: "Research",
+  score: "Score ideas",
+  draft: "Write drafts",
+  audit: "Check drafts",
+  approve: "Your approval",
+  schedule: "Schedule",
+  measure: "Track results",
+};
+
 function formatStatus(value: string): string {
-  return value.replace(/_/gu, " ");
+  return STATUS_LABELS[value] ?? value.replace(/_/gu, " ");
+}
+
+function formatStep(value: string): string {
+  return STEP_LABELS[value] ?? value.replace(/_/gu, " ");
 }
 
 export function AutopilotPlanCard({
@@ -25,25 +59,25 @@ export function AutopilotPlanCard({
     plan.campaign_backlog_item_id === null
       ? plan.status === "skipped"
         ? "Not created"
-        : "Linked item removed"
+        : "Task was deleted"
       : plan.backlog_status === null
-        ? `Item #${plan.campaign_backlog_item_id} removed`
-        : `Item #${plan.campaign_backlog_item_id} · ${formatStatus(plan.backlog_status)}`;
+        ? `Task #${plan.campaign_backlog_item_id} was deleted`
+        : `Task #${plan.campaign_backlog_item_id} · ${formatStatus(plan.backlog_status)}`;
   const workflowLink =
     plan.workflow_run_id === null
       ? plan.status === "skipped"
         ? "Not created"
-        : "Linked run removed"
+        : "Automation was deleted"
       : plan.workflow_status === null
-        ? `Run #${plan.workflow_run_id} removed`
-        : `Run #${plan.workflow_run_id} · ${formatStatus(plan.workflow_status)}`;
+        ? `Automation #${plan.workflow_run_id} was deleted`
+        : `Automation #${plan.workflow_run_id} · ${formatStatus(plan.workflow_status)}`;
   const scoringState =
     plan.score_step_status === null
-      ? "Scoring state unavailable"
-      : `Scoring is ${formatStatus(plan.score_step_status)} in Workflows`;
+      ? "Scoring status not available"
+      : `Scoring in Automations: ${formatStatus(plan.score_step_status)}`;
   const scorerState =
     plan.latest_scorer_provider_key === null
-      ? "No scorer run has started"
+      ? "The AI hasn't scored these ideas yet"
       : `${AGENT_PROVIDER_LABELS[plan.latest_scorer_provider_key]} · ${formatStatus(plan.latest_scorer_run_status ?? "unknown")}`;
 
   return (
@@ -55,33 +89,33 @@ export function AutopilotPlanCard({
               Plan #{plan.id} · {plan.campaign_name}
             </p>
             <p className="text-muted-foreground mt-1 text-sm break-words">
-              {connector.label} · source batch #{plan.source_import_batch_id}
+              {connector.label} · import #{plan.source_import_batch_id}
             </p>
           </div>
           <p className="shrink-0 text-sm font-medium">
-            Outcome: {plan.status === "planned" ? "Planned" : "Skipped"}
+            Result: {plan.status === "planned" ? "Tasks created" : "Skipped"}
           </p>
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:grid-cols-4">
           <PlanDetail
-            label="Batch outcome"
+            label="Import result"
             value={
               plan.source_batch_status === null
-                ? "Batch removed"
+                ? "Import was deleted"
                 : formatStatus(plan.source_batch_status)
             }
           />
           <PlanDetail
-            label="Imported accepted"
+            label="Posts imported"
             value={String(plan.source_accepted_count ?? 0)}
           />
           <PlanDetail
-            label="Current candidates"
+            label="Ideas now"
             value={String(plan.current_candidate_count)}
           />
           <PlanDetail
-            label="Planned candidates"
+            label="Ideas planned"
             value={String(plan.candidate_count)}
           />
         </dl>
@@ -94,7 +128,7 @@ export function AutopilotPlanCard({
           <div className="flex min-w-0 items-start gap-2">
             <Link2 aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <div className="min-w-0">
-              <p className="font-medium">Backlog</p>
+              <p className="font-medium">Task</p>
               <p className="text-muted-foreground break-words">{backlogLink}</p>
               {plan.backlog_title ? (
                 <p className="text-muted-foreground break-words">
@@ -106,7 +140,7 @@ export function AutopilotPlanCard({
           <div className="flex min-w-0 items-start gap-2">
             <Workflow aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <div className="min-w-0">
-              <p className="font-medium">Workflow</p>
+              <p className="font-medium">Automation</p>
               <p className="text-muted-foreground break-words">
                 {workflowLink}
               </p>
@@ -116,7 +150,7 @@ export function AutopilotPlanCard({
               <p className="text-muted-foreground break-words">{scorerState}</p>
               {plan.workflow_current_step_key ? (
                 <p className="text-muted-foreground break-words">
-                  Current step: {formatStatus(plan.workflow_current_step_key)}
+                  Current step: {formatStep(plan.workflow_current_step_key)}
                 </p>
               ) : null}
             </div>
@@ -125,7 +159,7 @@ export function AutopilotPlanCard({
 
         <p className="text-muted-foreground text-xs">
           Created {formatDate(plan.created_at)} · Campaign status:{" "}
-          {plan.campaign_status}
+          {formatStatus(plan.campaign_status)}
         </p>
       </CardContent>
     </Card>

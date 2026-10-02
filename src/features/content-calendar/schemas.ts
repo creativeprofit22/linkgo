@@ -27,7 +27,7 @@ const slotForSchema = z
   .trim()
   .max(80)
   .refine((value) => Number.isFinite(Date.parse(value)), {
-    message: "Slot time must be a valid date",
+    message: "Pick a date and time for this post.",
   });
 
 const requiredPlanningTextSchema = z.string().trim().min(1).max(500);

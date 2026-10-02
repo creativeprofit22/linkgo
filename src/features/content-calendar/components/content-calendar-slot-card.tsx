@@ -6,8 +6,12 @@ import { EditContentCalendarSlotDialog } from "@/features/content-calendar/compo
 import {
   ContentCalendarLifecycleBadge,
   ContentCalendarPurposeBadge,
+  formatLabels,
   getContentCalendarLifecycle,
+  publishStatusLabels,
+  scheduleStatusLabels,
 } from "@/features/content-calendar/components/content-calendar-status-badge";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   ArchiveContentCalendarSlotInput,
   ContentCalendarSlotWithDetails,
@@ -45,7 +49,9 @@ export function ContentCalendarSlotCard({
 
   function archiveSlot(): void {
     if (
-      window.confirm("Archive this calendar slot? The approval stays intact.")
+      window.confirm(
+        "Archive this planned post? It stays approved, so you can plan it again later.",
+      )
     ) {
       void onArchive({ id: slot.id });
     }
@@ -64,8 +70,8 @@ export function ContentCalendarSlotCard({
               <ContentCalendarLifecycleBadge lifecycle={lifecycle} />
             </div>
             <p className="text-muted-foreground text-sm">
-              {slot.approval.campaign_name} · Approval #{slot.approval_id} ·
-              Variant {slot.variant.variant_number}
+              {slot.approval.campaign_name} · Version{" "}
+              {slot.variant.variant_number}
             </p>
             <a
               href={slot.draft.target_url}
@@ -74,7 +80,7 @@ export function ContentCalendarSlotCard({
               className="text-linkgo-blue inline-flex max-w-full items-center gap-1 truncate text-sm hover:underline"
             >
               <span className="truncate">
-                Source: {slot.draft.target_author_name || "Unknown author"}
+                Inspired by: {slot.draft.target_author_name || "Unknown author"}
               </span>
               <ExternalLink className="size-3" />
             </a>
@@ -82,7 +88,7 @@ export function ContentCalendarSlotCard({
           <div className="flex flex-wrap justify-end gap-2">
             {campaignArchived && (
               <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                Archived campaigns block slot changes.
+                This campaign is archived, so its posts can't be changed.
               </p>
             )}
             <EditContentCalendarSlotDialog
@@ -96,7 +102,7 @@ export function ContentCalendarSlotCard({
                 size="sm"
                 onClick={() => void onSchedule({ id: slot.id })}
               >
-                <CalendarClock className="size-4" /> Schedule slot
+                <CalendarClock className="size-4" /> Schedule post
               </Button>
             )}
             <Button
@@ -114,32 +120,29 @@ export function ContentCalendarSlotCard({
 
       <CardContent className="space-y-5">
         <div className="grid gap-4 lg:grid-cols-2">
-          <TextBlock label="Variant hook" value={slot.variant.hook} />
+          <TextBlock label="Opening line" value={slot.variant.hook} />
           <TextBlock label="Angle" value={slot.angle} />
-          <TextBlock label="Format" value={slot.format} />
-          <TextBlock label="Visual direction" value={slot.visual_direction} />
-          <TextBlock label="CTA" value={slot.cta} />
-          <TextBlock
-            label="Draft hashtags"
-            value={slot.variant.hashtags || "None"}
-          />
+          <TextBlock label="Format" value={formatLabels[slot.format]} />
+          <TextBlock label="Look and feel" value={slot.visual_direction} />
+          <TextBlock label="Call to action" value={slot.cta} />
+          <TextBlock label="Hashtags" value={slot.variant.hashtags || "None"} />
         </div>
 
         {slot.notes && <TextBlock label="Notes" value={slot.notes} />}
-        <TextBlock label="Source post" value={slot.draft.target_content} />
+        <TextBlock label="Original post" value={slot.draft.target_content} />
 
         {(slot.scheduleJob || slot.publishAttempt) && <Separator />}
 
         {slot.scheduleJob && (
           <div className="bg-muted/30 rounded-xl border p-4">
-            <p className="font-medium">Schedule details</p>
+            <p className="font-medium">Schedule</p>
             <p className="text-muted-foreground mt-2 text-sm">
               {slot.scheduleJob.scheduled_for} · {slot.scheduleJob.timezone} ·{" "}
-              {slot.scheduleJob.status}
+              {scheduleStatusLabels[slot.scheduleJob.status]}
             </p>
             {slot.scheduleJob.last_error && (
               <p className="text-destructive mt-2 text-sm">
-                {slot.scheduleJob.last_error}
+                {toPlainMessage(slot.scheduleJob.last_error)}
               </p>
             )}
           </div>
@@ -147,9 +150,10 @@ export function ContentCalendarSlotCard({
 
         {slot.publishAttempt && (
           <div className="bg-muted/30 rounded-xl border p-4">
-            <p className="font-medium">Publish info</p>
+            <p className="font-medium">Posting result</p>
             <p className="text-muted-foreground mt-2 text-sm">
-              {slot.publishAttempt.created_at} · {slot.publishAttempt.status}
+              {slot.publishAttempt.created_at} ·{" "}
+              {publishStatusLabels[slot.publishAttempt.status]}
             </p>
             {(slot.publishAttempt.external_post_url ||
               slot.publishAttempt.platform_post_id) && (

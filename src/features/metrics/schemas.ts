@@ -130,7 +130,7 @@ export const recordPostMetricSchema = z.object({
     .trim()
     .max(80)
     .refine((value) => Number.isFinite(Date.parse(value)), {
-      message: "Measured time must be a valid date",
+      message: "Pick the date and time you checked these numbers.",
     }),
   impressions: metricCountSchema,
   reactions: metricCountSchema,
@@ -146,7 +146,11 @@ export const createCampaignMemorySchema = z.object({
   campaignId: positiveIdSchema,
   postMetricId: optionalPositiveIdSchema,
   signal: memorySignalSchema,
-  summary: z.string().trim().min(1, "Summary is required").max(500),
+  summary: z
+    .string()
+    .trim()
+    .min(1, "Write a short summary of the lesson.")
+    .max(500),
   evidence: z.string().trim().max(1000).default(""),
   confidence: z.number().int().min(0).max(100).default(50),
 });

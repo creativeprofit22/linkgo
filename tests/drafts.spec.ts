@@ -21,27 +21,27 @@ test("creates a draft with two variants and shows audit output", async ({
     page.getByRole("heading", { name: "Jane Operator" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Variant 1", exact: true }),
+    page.getByRole("heading", { name: "Version 1", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Variant 2", exact: true }),
+    page.getByRole("heading", { name: "Version 2", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("This variant has draft text to review.").first(),
   ).toBeVisible();
   await expect(
-    page.getByText("Warnings", { exact: true }).first(),
+    page.getByText("Worth a look", { exact: true }).first(),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: /Draft quality/ }).first(),
+    page.getByRole("heading", { name: /Quality score/ }).first(),
   ).toBeVisible();
   await expect(
     page
-      .getByText("Five-category score against the fixed 70 quality threshold.")
+      .getByText("Scores five things out of 100. A draft needs 70 to pass.")
       .first(),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Run quality loop" }).first(),
+    page.getByRole("button", { name: "Improve with AI" }).first(),
   ).toBeDisabled();
 });
 
@@ -56,7 +56,7 @@ test("generates distinct dry-run provider variants and saves their exact text", 
 
   await generateDraftVariants(page);
 
-  await expect(page.getByText("Generated request #1")).toBeVisible();
+  await expect(page.getByText("AI draft #1")).toBeVisible();
   await expect(
     page.getByText("Accepted 3 provider-authored draft variants."),
   ).toBeVisible();
@@ -109,9 +109,9 @@ test("generates distinct dry-run provider variants and saves their exact text", 
 
   await page.getByRole("button", { name: "Save as draft" }).click();
   await expect(
-    page.getByRole("heading", { name: "Generated drafts pending" }),
+    page.getByRole("heading", { name: "AI drafts to review" }),
   ).toBeHidden();
-  await expect(page.getByText("Generated request #1")).toBeHidden();
+  await expect(page.getByText("AI draft #1")).toBeHidden();
 
   const savedVariants = await getSavedDraftVariants(page);
   expect(
@@ -125,9 +125,9 @@ test("generates distinct dry-run provider variants and saves their exact text", 
   await expect(
     page.getByText("This variant has draft text to review.").first(),
   ).toBeVisible();
-  await expect(page.getByText("Idea intent").first()).toBeVisible();
+  await expect(page.getByText("Idea post").first()).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Generate variants" }),
+    page.getByRole("button", { name: "Write with AI" }),
   ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Create draft" }),
@@ -166,11 +166,11 @@ test("persists and saves distinct connected-provider authored variants", async (
   await openDrafts(page);
   await installAuthoredDraftProvider(page, authoredVariants);
 
-  await generateDraftVariants(page, "Custom API");
+  await generateDraftVariants(page, "Other AI service");
 
   expect(await getGeneratedVariants(page, 1)).toEqual(authoredVariants);
   await page.getByRole("button", { name: "Save as draft" }).click();
-  await expect(page.getByText("Generated request #1")).toBeHidden();
+  await expect(page.getByText("AI draft #1")).toBeHidden();
   const savedVariants = await getSavedDraftVariants(page);
   expect(
     savedVariants.map(({ hook, body, cta, hashtags }) => ({
@@ -194,18 +194,18 @@ test("rejects count-mismatched and malformed provider arrays atomically", async 
   await openDrafts(page);
   await installInvalidDraftProvider(page);
 
-  await generateDraftVariants(page, "Custom API", false);
+  await generateDraftVariants(page, "Other AI service", false);
   await expect(
-    page.getByText("Draft variants were not generated").last(),
+    page.getByText("The AI couldn't write versions").last(),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(
-    page.getByText("Draft variants were not generated").last(),
+    page.getByText("The AI couldn't write versions").last(),
   ).toBeHidden();
 
-  await generateDraftVariants(page, "Custom API", false);
+  await generateDraftVariants(page, "Other AI service", false);
   await expect(
-    page.getByText("Draft variants were not generated").last(),
+    page.getByText("The AI couldn't write versions").last(),
   ).toBeVisible();
   await page.keyboard.press("Escape");
 
@@ -253,14 +253,14 @@ test("dismisses generated variants from the pending work area", async ({
   await openDrafts(page);
 
   await generateDraftVariants(page);
-  await expect(page.getByText("Generated request #1")).toBeVisible();
+  await expect(page.getByText("AI draft #1")).toBeVisible();
 
   await page.getByRole("button", { name: "Dismiss" }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Generated drafts pending" }),
+    page.getByRole("heading", { name: "AI drafts to review" }),
   ).toBeHidden();
-  await expect(page.getByText("Generated request #1")).toBeHidden();
+  await expect(page.getByText("AI draft #1")).toBeHidden();
 });
 
 test("persists a failed generation request and dismisses it", async ({
@@ -272,35 +272,33 @@ test("persists a failed generation request and dismisses it", async ({
   await addCandidate(page);
   await openDrafts(page);
 
-  await page.getByRole("button", { name: "Generate variants" }).click();
-  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await page.getByRole("button", { name: "Write with AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Write versions with AI" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Provider").selectOption({ label: "OpenAI" });
+  await dialog.getByLabel("AI service").selectOption({ label: "OpenAI" });
   await dialog
     .getByLabel("Angle")
     .fill("Turn this into a concrete operator lesson");
-  await dialog.getByRole("button", { name: "Generate variants" }).click();
+  await dialog.getByRole("button", { name: "Write versions" }).click();
 
+  await expect(page.getByText("The AI couldn't write versions")).toBeVisible();
   await expect(
-    page.getByText("Draft variants were not generated"),
-  ).toBeVisible();
-  await expect(
-    page.locator("p").filter({ hasText: "Agent provider is not connected" }),
+    page.locator("p").filter({ hasText: "Your AI service isn't connected" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Generated request #1")).toBeVisible();
-  await expect(getBadge(page, "failed")).toBeVisible();
+  await expect(page.getByText("AI draft #1")).toBeVisible();
+  await expect(getBadge(page, "Didn't finish")).toBeVisible();
   await expect(
-    page.locator("p").filter({ hasText: "Agent provider is not connected" }),
+    page.locator("p").filter({ hasText: "Your AI service isn't connected" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Dismiss failed request" }).click();
+  await page.getByRole("button", { name: "Dismiss failed draft" }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Generated drafts pending" }),
+    page.getByRole("heading", { name: "AI drafts to review" }),
   ).toBeHidden();
-  await expect(page.getByText("Generated request #1")).toBeHidden();
+  await expect(page.getByText("AI draft #1")).toBeHidden();
 });
 
 for (const { authMethod, expectedModel } of [
@@ -328,14 +326,14 @@ for (const { authMethod, expectedModel } of [
     await addCandidate(page);
     await openDrafts(page);
 
-    await page.getByRole("button", { name: "Generate variants" }).click();
+    await page.getByRole("button", { name: "Write with AI" }).click();
     const dialog = page.getByRole("dialog", {
-      name: "Generate draft variants",
+      name: "Write versions with AI",
     });
     await expect(dialog).toBeVisible();
-    await dialog.getByLabel("Provider").selectOption({ label: "OpenAI" });
+    await dialog.getByLabel("AI service").selectOption({ label: "OpenAI" });
 
-    await expect(dialog.getByLabel("Model")).toHaveValue(expectedModel);
+    await expect(dialog.getByLabel("AI model")).toHaveValue(expectedModel);
   });
 }
 
@@ -353,7 +351,7 @@ test("creating a draft removes the drafted candidate from draft flows", async ({
     page.getByRole("button", { name: "Create draft" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Generate variants" }),
+    page.getByRole("button", { name: "Write with AI" }),
   ).toBeDisabled();
   await openQueue(page);
 
@@ -381,39 +379,37 @@ test("renders accessible AI audit states separately from deterministic checks", 
   await openQueue(page);
   await openDrafts(page);
 
-  const aiAuditPanels = page.getByRole("region", { name: "AI audit" });
+  const aiAuditPanels = page.getByRole("region", { name: "AI review" });
   await expect(aiAuditPanels).toHaveCount(4);
   await expect(
-    page.getByRole("region", { name: "Deterministic checks" }),
+    page.getByRole("region", { name: "Automatic checks" }),
   ).toHaveCount(4);
 
-  await expect(aiAuditPanels.nth(0)).toContainText("Not run");
+  await expect(aiAuditPanels.nth(0)).toContainText("Not checked");
   await expect(aiAuditPanels.nth(0)).toContainText(
-    "No AI audit has been run for this revision.",
+    "The AI hasn't reviewed this version yet.",
   );
-  await expect(aiAuditPanels.nth(1)).toContainText("Running");
-  await expect(aiAuditPanels.nth(1)).toContainText("Custom API");
+  await expect(aiAuditPanels.nth(1)).toContainText("In progress");
+  await expect(aiAuditPanels.nth(1)).toContainText("Other AI service");
   await expect(aiAuditPanels.nth(1)).toContainText("audit-model-2026");
-  await expect(aiAuditPanels.nth(2)).toContainText("Completed");
+  await expect(aiAuditPanels.nth(2)).toContainText("Done");
   await expect(aiAuditPanels.nth(2)).toContainText(
     "The draft is specific, useful, and ready for review.",
   );
   await expect(
-    aiAuditPanels.nth(2).getByRole("list", { name: "AI audit findings" }),
+    aiAuditPanels.nth(2).getByRole("list", { name: "AI review suggestions" }),
   ).toHaveCount(1);
   await expect(aiAuditPanels.nth(2).getByRole("listitem")).toHaveCount(6);
-  await expect(aiAuditPanels.nth(2)).toContainText("Hook");
-  await expect(aiAuditPanels.nth(2)).toContainText("Safety");
-  await expect(aiAuditPanels.nth(3)).toContainText("Failed");
+  await expect(aiAuditPanels.nth(2)).toContainText("Opening line");
+  await expect(aiAuditPanels.nth(2)).toContainText("Safe to post");
+  await expect(aiAuditPanels.nth(3)).toContainText("Didn't finish");
   await expect(aiAuditPanels.nth(3)).toContainText(
     "The provider returned an invalid audit response.",
   );
-  await expect(page.getByRole("button", { name: "Run AI audit" })).toHaveCount(
-    3,
-  );
   await expect(
-    page.getByRole("button", { name: /Running AI audit/ }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: "Review with AI" }),
+  ).toHaveCount(3);
+  await expect(page.getByRole("button", { name: /Reviewing/ })).toBeDisabled();
 
   const accessibilityScan = await new AxeBuilder({ page })
     .include('section[aria-labelledby*="-ai-audit-title"]')
@@ -473,7 +469,7 @@ test("audit blocks external links and too many hashtags", async ({ page }) => {
   await createDraft(page, [blockedVariant()]);
 
   await expect(
-    page.getByText("Blocked", { exact: true }).first(),
+    page.getByText("Must fix", { exact: true }).first(),
   ).toBeVisible();
   await expect(
     page.getByText(
@@ -491,15 +487,13 @@ test("blocked variant cannot be selected", async ({ page }) => {
   await openDrafts(page);
   await createDraft(page, [blockedVariant()]);
 
-  await page.getByRole("button", { name: "Select for review" }).click();
+  await page.getByRole("button", { name: "Choose this version" }).click();
 
-  await expect(
-    page.getByText("Draft variant status was not changed"),
-  ).toBeVisible();
+  await expect(page.getByText("We couldn't update this version")).toBeVisible();
   await expect(
     page.getByText("Blocked variants cannot be selected"),
   ).toBeVisible();
-  await expect(getBadge(page, "Ready for review")).toBeHidden();
+  await expect(getBadge(page, "Ready for approval")).toBeHidden();
 });
 
 test("clean variant can be selected and draft status becomes ready", async ({
@@ -512,10 +506,10 @@ test("clean variant can be selected and draft status becomes ready", async ({
   await openDrafts(page);
   await createDraft(page, [cleanVariant()]);
 
-  await page.getByRole("button", { name: "Select for review" }).click();
+  await page.getByRole("button", { name: "Choose this version" }).click();
 
-  await expect(getBadge(page, "Ready for review")).toBeVisible();
-  await expect(getBadge(page, "Selected")).toBeVisible();
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  await expect(getBadge(page, "Chosen")).toBeVisible();
 });
 
 test("editing a variant re-runs audit and clears an external link block", async ({
@@ -534,11 +528,11 @@ test("editing a variant re-runs audit and clears an external link block", async 
     ),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Edit variant" }).click();
+  await page.getByRole("button", { name: "Edit version" }).click();
   await page
     .locator('[id^="variant-"][id$="-body"]')
     .fill("We tested 12 replies and kept the useful lesson in the post body.");
-  await page.getByRole("button", { name: "Save and re-audit" }).click();
+  await page.getByRole("button", { name: "Save and check again" }).click();
 
   await expect(page.getByText("No external link was found")).toBeVisible();
   await expect(
@@ -566,7 +560,7 @@ test("rejected candidates are not available for draft flows", async ({
     page.getByRole("button", { name: "Create draft" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Generate variants" }),
+    page.getByRole("button", { name: "Write with AI" }),
   ).toBeDisabled();
 });
 
@@ -590,7 +584,7 @@ test("archived campaign candidates are not available for draft flows", async ({
     page.getByRole("button", { name: "Create draft" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Generate variants" }),
+    page.getByRole("button", { name: "Write with AI" }),
   ).toBeDisabled();
 });
 
@@ -628,7 +622,7 @@ test("an older campaign response cannot replace the newest draft workspace", asy
     mock.__LINKGO_SQL_DELAY_CAMPAIGN_SELECTS__(2);
   });
 
-  await page.getByRole("button", { name: "Select for review" }).click();
+  await page.getByRole("button", { name: "Choose this version" }).click();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -710,18 +704,16 @@ test("an older campaign response cannot replace the newest draft workspace", asy
   await expect(page.getByText("Beta generation request")).toBeVisible();
   await expect(page.getByText("Alpha generation request")).toBeHidden();
 
-  await page.getByRole("button", { name: "Generate variants" }).click();
-  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
-  await expect(dialog.getByLabel("Candidate")).toContainText(
+  await page.getByRole("button", { name: "Write with AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Write versions with AI" });
+  await expect(dialog.getByLabel("Idea", { exact: true })).toContainText(
     "Beta draft author",
   );
-  await expect(dialog.getByLabel("Candidate")).not.toContainText(
+  await expect(dialog.getByLabel("Idea", { exact: true })).not.toContainText(
     "Alpha draft author",
   );
-  await expect(dialog.getByLabel("Workflow scope")).toContainText(
-    "Beta workflow",
-  );
-  await expect(dialog.getByLabel("Workflow scope")).not.toContainText(
+  await expect(dialog.getByLabel("Automation")).toContainText("Beta workflow");
+  await expect(dialog.getByLabel("Automation")).not.toContainText(
     "Alpha workflow",
   );
 });
@@ -749,9 +741,9 @@ interface VariantFormInput {
 }
 
 function getBadge(page: Page, label: string): Locator {
-  return page
-    .locator("span")
-    .filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page.locator("span").filter({
+    hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
+  });
 }
 
 function cleanVariant(): VariantFormInput {
@@ -798,16 +790,16 @@ test("generation controls remain accessible and usable at 320 pixels", async ({
   await openQueue(page);
   await addCandidate(page);
   await openDrafts(page);
-  await page.getByRole("button", { name: "Generate variants" }).click();
-  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await page.getByRole("button", { name: "Write with AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Write versions with AI" });
   await expect(dialog).toBeVisible();
   await expectGenerationDialogToBeAccessible(page);
 
   await page.setViewportSize({ width: 320, height: 760 });
+  await expect(dialog.getByRole("group", { name: "Post type" })).toBeVisible();
   await expect(
-    dialog.getByRole("group", { name: "Content intent" }),
-  ).toBeVisible();
-  await expect(dialog.getByLabel("Variants").locator("option")).toHaveCount(3);
+    dialog.getByLabel("Number of versions").locator("option"),
+  ).toHaveCount(3);
   await dialog.getByLabel("Community").check();
   await expect(dialog.getByLabel("Community")).toBeChecked();
   await expectGenerationDialogToBeAccessible(page);
@@ -938,15 +930,17 @@ async function getSavedDraftVariants(
 }
 
 async function connectCustomProvider(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("test-custom-api-key");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("test-custom-api-key");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByText("Connected").first()).toBeVisible();
@@ -1061,9 +1055,9 @@ async function installInvalidDraftProvider(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -1112,10 +1106,8 @@ async function archiveCampaign(page: Page, name: string): Promise<void> {
 }
 
 async function addCandidate(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  await expect(
-    page.getByRole("dialog", { name: "Add candidate" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  await expect(page.getByRole("dialog", { name: "Add idea" })).toBeVisible();
 
   await page
     .getByLabel("LinkedIn post URL")
@@ -1129,11 +1121,11 @@ async function addCandidate(page: Page): Promise<void> {
     .fill("https://www.linkedin.com/in/jane-operator/");
   await page.getByLabel("Posted at").fill("2026-06-25");
   await page.getByLabel("Source keyword").fill("founder content");
-  await page.getByLabel("Relevance score").fill("87");
+  await page.getByLabel("Match score").fill("87");
   await page.getByLabel("Score reason").fill("Strong audience overlap.");
   await page.getByLabel("Notes").fill("Good comment opportunity.");
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -1142,16 +1134,18 @@ async function generateDraftVariants(
   providerLabel?: string,
   expectSuccess = true,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Generate variants" }).click();
-  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
+  await page.getByRole("button", { name: "Write with AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Write versions with AI" });
   await expect(dialog).toBeVisible();
   if (providerLabel !== undefined) {
-    await dialog.getByLabel("Provider").selectOption({ label: providerLabel });
+    await dialog
+      .getByLabel("AI service")
+      .selectOption({ label: providerLabel });
   }
   await dialog
     .getByLabel("Angle")
     .fill("Turn this into a concrete operator lesson");
-  await dialog.getByRole("button", { name: "Generate variants" }).click();
+  await dialog.getByRole("button", { name: "Write versions" }).click();
   if (expectSuccess) await expect(dialog).toBeHidden();
 }
 
@@ -1171,7 +1165,7 @@ async function createDraft(
 
   for (const [index, variant] of variants.entries()) {
     if (index > 0)
-      await page.getByRole("button", { name: "Add variant" }).click();
+      await page.getByRole("button", { name: "Add version" }).click();
     await page.locator(`#draft-variant-${index}-hook`).fill(variant.hook);
     await page.locator(`#draft-variant-${index}-body`).fill(variant.body);
     await page.locator(`#draft-variant-${index}-cta`).fill(variant.cta);

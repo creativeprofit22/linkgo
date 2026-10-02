@@ -10,18 +10,24 @@ import type {
   PublishExecutionRemoteOutcome,
   ReconcilePublishExecutionInput,
 } from "@/features/publish-reconciliation/types";
+import { toPlainMessage } from "@/lib/plain-message";
 
 const STATUS_LABELS: Record<OpenPublishExecutionStatus, string> = {
-  reserved: "Reserved",
-  in_flight: "In flight",
-  outcome_unknown: "Outcome unknown",
+  reserved: "Getting ready",
+  in_flight: "Posting…",
+  outcome_unknown: "Couldn't confirm",
 };
 
 const REMOTE_OUTCOME_LABELS: Record<PublishExecutionRemoteOutcome, string> = {
-  "": "No response",
-  created: "Created",
-  rejected: "Rejected",
-  ambiguous: "Ambiguous",
+  "": "No reply",
+  created: "Posted",
+  rejected: "Turned down",
+  ambiguous: "Unclear",
+};
+
+const CALLER_LABELS: Record<OpenPublishExecution["caller"], string> = {
+  manual: "You",
+  scheduler: "Auto-posting",
 };
 
 interface PublishReconciliationCardProps {
@@ -66,11 +72,11 @@ export function PublishReconciliationCard({
             className="text-linkgo-amber size-4"
             aria-hidden="true"
           />
-          Publishing needs reconciliation
+          Check what happened to these posts
         </CardTitle>
         <p className="text-muted-foreground text-sm">
-          LinkedIn may have created these items. Check LinkedIn, then record
-          what happened. They cannot be published again until reconciled.
+          These may already be on LinkedIn. Check LinkedIn, then tell us what
+          happened. You can't post them again until you do.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -85,17 +91,17 @@ export function PublishReconciliationCard({
               variant="outline"
               onClick={() => void loadExecutions()}
             >
-              Retry
+              Try again
             </Button>
           </div>
         )}
         {loading && executions.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            Loading open publishes…
+            Loading posts in progress…
           </p>
         ) : executions.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No publishes need reconciliation.
+            Nothing to check right now.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -124,25 +130,22 @@ function ExecutionRow({
   onReconcile: (input: ReconcilePublishExecutionInput) => Promise<void>;
 }): React.ReactNode {
   const kindLabel = execution.kind === "post" ? "Post" : "Comment";
-  const remote = `${REMOTE_OUTCOME_LABELS[execution.remoteOutcome]}${
-    execution.remoteStatusCode === null
-      ? ""
-      : ` (HTTP ${execution.remoteStatusCode})`
-  }`;
+  const remote = REMOTE_OUTCOME_LABELS[execution.remoteOutcome];
 
   return (
     <li
       className="bg-card/70 space-y-2 rounded-xl border p-3 text-sm"
-      aria-label={`${kindLabel} execution ${execution.id}`}
+      aria-label={`${kindLabel} attempt ${execution.id}`}
     >
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
         <div className="space-y-1">
           <p className="font-medium">
             {kindLabel} #{execution.subjectId} ·{" "}
-            {execution.campaignName || "Unknown campaign"}
+            {execution.campaignName || "Campaign not known"}
           </p>
           <p className="text-muted-foreground text-xs">
-            Execution #{execution.id} · {execution.caller} · remote: {remote}
+            Attempt #{execution.id} · Started by:{" "}
+            {CALLER_LABELS[execution.caller]} · LinkedIn reply: {remote}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -165,10 +168,10 @@ function ExecutionRow({
         </div>
       </div>
       {execution.errorMessage && (
-        <p className="break-words">{execution.errorMessage}</p>
+        <p className="break-words">{toPlainMessage(execution.errorMessage)}</p>
       )}
       <p className="text-muted-foreground text-xs">
-        Reserved {execution.reservedAt}
+        Started {execution.reservedAt}
         {execution.sentAt ? ` · Sent ${execution.sentAt}` : ""} · Updated{" "}
         {execution.updatedAt}
       </p>

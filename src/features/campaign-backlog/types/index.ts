@@ -50,8 +50,8 @@ export const CAMPAIGN_BACKLOG_WORK_TYPE_LABELS: Record<
   drafting: "Drafting",
   approval: "Approval",
   scheduling: "Scheduling",
-  metrics: "Metrics",
-  retry: "Retry",
+  metrics: "Analytics",
+  retry: "Try again",
   other: "Other",
 };
 
@@ -59,7 +59,7 @@ export const CAMPAIGN_BACKLOG_OWNER_LABELS: Record<
   CampaignBacklogOwnerType,
   string
 > = {
-  operator: "Operator",
+  operator: "You",
   linkgo: "Linkgo",
 };
 
@@ -67,10 +67,10 @@ export const CAMPAIGN_BACKLOG_STATUS_LABELS: Record<
   CampaignBacklogStatus,
   string
 > = {
-  pending: "Pending",
+  pending: "Not started",
   in_progress: "In progress",
-  blocked: "Blocked",
-  completed: "Completed",
+  blocked: "On hold",
+  completed: "Done",
   cancelled: "Cancelled",
 };
 
@@ -78,7 +78,7 @@ export const CAMPAIGN_BACKLOG_RECURRENCE_LABELS: Record<
   CampaignBacklogRecurrence,
   string
 > = {
-  none: "One-off",
+  none: "One time",
   daily: "Daily",
   weekly: "Weekly",
 };

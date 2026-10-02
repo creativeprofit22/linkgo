@@ -55,9 +55,8 @@ export function CommentsView(): React.ReactNode {
                 Comments
               </h2>
               <p className="text-muted-foreground text-sm">
-                Local, approval-gated LinkedIn replies. Linkgo drafts, audits,
-                and posts only after explicit confirmation when Community
-                Management access is available.
+                Draft replies to LinkedIn posts and approve them before they
+                post. Linkgo never posts without your OK.
               </p>
             </div>
           </div>
@@ -84,7 +83,7 @@ export function CommentsView(): React.ReactNode {
               size="sm"
               onClick={() => void loadComments()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -102,9 +101,10 @@ export function CommentsView(): React.ReactNode {
         <>
           <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">Selected campaign</p>
+              <p className="text-sm font-medium">Campaign</p>
               <p className="text-muted-foreground text-xs">
-                Comment workflows use shortlisted or drafted candidate targets.
+                You can reply to ideas you&rsquo;ve shortlisted or drafted in
+                this campaign.
               </p>
             </div>
             <select
@@ -127,7 +127,7 @@ export function CommentsView(): React.ReactNode {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard label="Total" value={String(summary.total)} />
             <SummaryCard
-              label={`Needs review${shownSuffix}`}
+              label={`Waiting for approval${shownSuffix}`}
               value={String(summary.needsReview)}
             />
             <SummaryCard
@@ -143,7 +143,7 @@ export function CommentsView(): React.ReactNode {
           <ListTruncationNotice
             shownCount={commentThreads.length}
             totalCount={commentThreadTotalCount}
-            noun="comment threads"
+            noun="comments"
           />
 
           {commentThreads.length === 0 ? (
@@ -151,7 +151,7 @@ export function CommentsView(): React.ReactNode {
           ) : (
             <div className="space-y-6">
               <ThreadGroup
-                label="Drafting and changes"
+                label="Drafts and changes"
                 threads={groupedThreads.drafting}
                 killSwitchEnabled={killSwitchEnabled}
                 killSwitchReason={killSwitchReason}
@@ -164,7 +164,7 @@ export function CommentsView(): React.ReactNode {
                 onPublished={refreshComments}
               />
               <ThreadGroup
-                label="Needs review"
+                label="Waiting for approval"
                 threads={groupedThreads.needsReview}
                 killSwitchEnabled={killSwitchEnabled}
                 killSwitchReason={killSwitchReason}
@@ -324,8 +324,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Comments attach to
-            candidate posts inside a campaign.
+            Go to Campaigns and create a campaign first. Then you can reply to
+            the ideas in it.
           </p>
         </div>
       </CardContent>
@@ -341,10 +341,10 @@ function EmptyComments(): React.ReactNode {
           <MessageCircle className="size-7" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">No comment threads yet</h3>
+          <h3 className="text-lg font-semibold">No comments yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Create a local comment from an eligible shortlisted or drafted
-            candidate. Linkgo audits each variant before human approval.
+            Click Write a comment to reply to an idea you&rsquo;ve shortlisted
+            or drafted. Linkgo checks each version before you approve it.
           </p>
         </div>
       </CardContent>

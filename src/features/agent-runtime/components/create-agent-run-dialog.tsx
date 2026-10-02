@@ -41,12 +41,12 @@ interface CreateAgentRunDialogProps {
 }
 
 const roleLabels: Record<AgentRole, string> = {
-  researcher: "Researcher",
-  scorer: "Scorer",
-  drafter: "Drafter",
-  auditor: "Auditor",
-  scheduler: "Scheduler",
-  analyst: "Analyst",
+  researcher: "Find ideas",
+  scorer: "Score ideas",
+  drafter: "Write drafts",
+  auditor: "Check drafts",
+  scheduler: "Plan schedule",
+  analyst: "Review results",
 };
 
 export function CreateAgentRunDialog({
@@ -68,7 +68,7 @@ export function CreateAgentRunDialog({
   const [providerKey, setProviderKey] = useState<AgentProviderKey>("dry_run");
   const [modelName, setModelName] = useState("dry-run-local");
   const [inputSummary, setInputSummary] = useState(
-    "Validate runtime contracts for this campaign.",
+    "Check this campaign is ready for the AI assistant.",
   );
   const [saving, setSaving] = useState(false);
 
@@ -143,7 +143,7 @@ export function CreateAgentRunDialog({
       setPlaybookKey("");
       setProviderKey("dry_run");
       setModelName("dry-run-local");
-      setInputSummary("Validate runtime contracts for this campaign.");
+      setInputSummary("Check this campaign is ready for the AI assistant.");
       setWorkflowRunId(null);
     } finally {
       setSaving(false);
@@ -154,16 +154,17 @@ export function CreateAgentRunDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" disabled={disabled}>
-          <Plus className="size-4" /> Create run
+          <Plus className="size-4" /> New assistant task
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Bot className="size-5" /> Create agent run
+            <Bot className="size-5" /> New assistant task
           </DialogTitle>
           <DialogDescription>
-            Queue a dry-run or connected provider-backed runtime pass.
+            Try a practice run (no AI used), or use one of your connected AI
+            services.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -191,7 +192,7 @@ export function CreateAgentRunDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="agent-role">Agent role</Label>
+            <Label htmlFor="agent-role">What should the assistant do?</Label>
             <select
               id="agent-role"
               value={agentRole}
@@ -210,7 +211,7 @@ export function CreateAgentRunDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="agent-playbook">Playbook</Label>
+            <Label htmlFor="agent-playbook">Brand voice guide</Label>
             <select
               id="agent-playbook"
               value={playbookKey}
@@ -219,7 +220,7 @@ export function CreateAgentRunDialog({
               }
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
-              <option value="">No playbook</option>
+              <option value="">No guide</option>
               {compatiblePlaybooks.map((playbook) => (
                 <option key={playbook.key} value={playbook.key}>
                   {playbook.label}
@@ -227,14 +228,14 @@ export function CreateAgentRunDialog({
               ))}
             </select>
             <p className="text-muted-foreground text-xs">
-              Only enabled runtime playbooks compatible with{" "}
-              {roleLabels[agentRole]} are shown.
+              Only guides that are on and fit “{roleLabels[agentRole]}” are
+              shown.
             </p>
           </div>
 
           {dialogWorkflowRuns.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="agent-workflow-run">Workflow run</Label>
+              <Label htmlFor="agent-workflow-run">Automation</Label>
               <select
                 id="agent-workflow-run"
                 value={workflowRunId ?? ""}
@@ -244,7 +245,7 @@ export function CreateAgentRunDialog({
                 }}
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
-                <option value="">No workflow link</option>
+                <option value="">Not linked to an automation</option>
                 {dialogWorkflowRuns.map((run) => (
                   <option key={run.id} value={run.id}>
                     {run.title}
@@ -255,7 +256,7 @@ export function CreateAgentRunDialog({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="agent-provider">Provider</Label>
+            <Label htmlFor="agent-provider">AI service</Label>
             <select
               id="agent-provider"
               value={providerKey}
@@ -276,14 +277,14 @@ export function CreateAgentRunDialog({
             </select>
             {!providerConnected && (
               <p className="text-destructive text-xs">
-                Connect {AGENT_PROVIDER_LABELS[providerKey]} in Integrations
-                before creating this run.
+                Connect {AGENT_PROVIDER_LABELS[providerKey]} in Connected
+                accounts before you start this task.
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="agent-model-name">Model name</Label>
+            <Label htmlFor="agent-model-name">AI model</Label>
             <Input
               id="agent-model-name"
               value={modelName}
@@ -293,7 +294,7 @@ export function CreateAgentRunDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="agent-input-summary">Input summary</Label>
+            <Label htmlFor="agent-input-summary">Instructions</Label>
             <Textarea
               id="agent-input-summary"
               value={inputSummary}
@@ -304,7 +305,7 @@ export function CreateAgentRunDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={submitDisabled}>
-              {saving ? "Creating…" : "Create run"}
+              {saving ? "Creating…" : "Create task"}
             </Button>
           </DialogFooter>
         </form>

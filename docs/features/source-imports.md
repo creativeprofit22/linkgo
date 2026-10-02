@@ -78,7 +78,7 @@ Migration 22 creates:
 
 Migration 23 adds `source_import_items.policy_rule_key` with `source`, `age`, `banned_topic`, and `already_contacted` classifications. Empty means the outcome was not a policy block.
 
-Campaign deletion cascades through batches to items. Candidate deletion uses `ON DELETE SET NULL`, preserving the import audit outcome while clearing its candidate link. Linkgo retains the ten most recent batches in the Queue view; the SQLite records remain local until their campaign is deleted.
+Campaign deletion cascades through batches to items. Candidate deletion uses `ON DELETE SET NULL`, preserving the import audit outcome while clearing its candidate link. Linkgo retains the ten most recent batches in the Ideas tab; the SQLite records remain local until their campaign is deleted.
 
 `input_json` is always valid JSON at or below 20,000 characters. Object audits contain only bounded documented source-post fields. Oversized object, array, or scalar audits use a deterministic envelope with the original JSON type, original serialized length, and the largest safe serialized prefix; `null` remains `null`. OAuth credentials, provider keys, unknown object fields, and remote response payloads are not accepted or retained.
 
@@ -97,15 +97,15 @@ See `docs/DATA_MODEL.md` for column constraints and indexes.
 
 ## UI
 
-The Candidate Queue adds:
+The Ideas tab adds:
 
-- `Import source posts` beside discovery, scoring, and manual add actions.
+- `Import posts` beside discovery, scoring, and manual add actions.
 - A labeled JSON textarea with format example and limits.
 - Local-only and no-scraping safety copy.
 - Preserved input after validation errors.
 - Pending protection against duplicate submission.
 - An `aria-live="polite"` completion summary.
-- Recent batch history with item status, plain-text policy classification, and wrapped exact reasons.
+- Recent batch history (`Recent imports`) with item status, plain-text policy classification, and wrapped exact reasons.
 - Disabled import mutation for archived campaigns while history remains visible.
 
 The existing Radix Dialog primitive manages modal focus, Escape, and trigger focus return. Actions use native buttons and the existing Linkgo Card, Button, Textarea, Badge, Sonner, and Lucide system.

@@ -1,6 +1,22 @@
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import type { CommentAuditFinding } from "@/features/comments/types";
 
+const ruleLabels: Record<string, string> = {
+  comment_length: "Length",
+  external_link: "Links",
+  generic_reply: "Too generic",
+  hashtag_limit: "Hashtags",
+  mention_limit: "Mentions",
+  required_text: "Missing text",
+};
+
+function ruleLabel(ruleKey: string): string {
+  const known = ruleLabels[ruleKey];
+  if (known) return known;
+  const words = ruleKey.split("_").join(" ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 interface CommentAuditFindingListProps {
   findings: CommentAuditFinding[];
 }
@@ -11,7 +27,7 @@ export function CommentAuditFindingList({
   if (findings.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        No audit findings have been stored yet.
+        No quality check results yet.
       </p>
     );
   }
@@ -25,9 +41,7 @@ export function CommentAuditFindingList({
         >
           <FindingIcon severity={finding.severity} />
           <div>
-            <p className="font-medium">
-              {finding.rule_key.split("_").join(" ")}
-            </p>
+            <p className="font-medium">{ruleLabel(finding.rule_key)}</p>
             <p className="text-muted-foreground">{finding.message}</p>
           </div>
         </div>

@@ -6,13 +6,13 @@ Partially implements Roadmaps 16 and 20 through the local-first Safety tab and c
 
 ## What it does
 
-- Provides a global kill switch for automation-like and external actions.
-- Blocks local schedule starts, agent run starts, native scheduled publishing, and approved LinkedIn comment posting while the kill switch is enabled.
+- Provides a global kill switch (on screen: "Emergency pause", turned on with "Pause everything") for automation-like and external actions.
+- Blocks local schedule starts, agent run starts (shown as "AI assistant task"), native scheduled publishing, and approved LinkedIn comment posting while the kill switch is enabled.
 - Enforces each campaign's `daily_post_limit` for same-day scheduling and publishing safety paths.
 - Enforces each campaign's `daily_comment_limit` before successful LinkedIn or manual comment posting records.
 - Records append-only safety audit events.
 - Records append-only rate-limit decisions for allowed and blocked schedule, publish, and comment attempts.
-- Creates operator-fixable error queue items for failed publish attempts, failed comment attempts, rejected approvals, failed agent runs, and terminal scheduler failures.
+- Creates operator-fixable error queue items (shown as "Problems to fix") for failed publish attempts, failed comment attempts, rejected approvals, failed agent runs, and terminal failures from the scheduler (shown as "Auto-posting").
 - Lets operators move error queue items through `open -> in_progress -> awaiting_review -> resolved`, plus failed and reopen paths.
 
 ## UI
@@ -20,11 +20,11 @@ Partially implements Roadmaps 16 and 20 through the local-first Safety tab and c
 The Safety tab includes:
 
 - Campaign filter with an all-campaigns view.
-- Global kill switch card with reason text.
-- Summary cards for open errors, blocked decisions today, allowed decisions today, and audit event count.
-- Error queue cards with status transition buttons.
-- Rate-limit decision history.
-- Safety audit event history.
+- Emergency pause card (global kill switch) with reason text.
+- Summary cards: "Problems to fix", "Stopped by limits today", "Allowed by limits today", and "Safety history".
+- Problems to fix (error queue) cards with status transition buttons.
+- Rate-limit decision history ("Posting limits").
+- Safety audit event history ("Safety history").
 
 Archived campaign history stays visible. Archived campaign error queue rows cannot be changed until the campaign is restored. The global kill switch remains editable because it is app-level.
 

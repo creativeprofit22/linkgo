@@ -54,7 +54,7 @@ The five mutations and the publish gate are native commands in `src-tauri/src/co
 
 Reads are native too (`src-tauri/src/comment_reads.rs`); the renderer has no direct SQL access to comment tables.
 
-- `linkgo_comment_thread_list` returns up to 500 threads, open ones first, with their variants, audits and attempts, plus `totalCount` (threads matching the filter before the cap), all read in one transaction. `listCommentThreadPage` returns `{ items, totalCount }`; `listCommentThreads` returns only the items. When truncated, the Comments screen shows "Showing the first 500 of N", uses `totalCount` for Total, and labels status counts as covering the shown rows.
+- `linkgo_comment_thread_list` returns up to 500 threads, open ones first, with their variants, audits and attempts, plus `totalCount` (threads matching the filter before the cap), all read in one transaction. `listCommentThreadPage` returns `{ items, totalCount }`; `listCommentThreads` returns only the items. When truncated, the Comments screen shows "Showing the first 500 of N comments", uses `totalCount` for Total, and labels status counts as covering the shown rows.
 - `linkgo_comment_eligible_candidates` returns up to 200 shortlisted or drafted candidates that have no thread yet.
 
 Response shapes are checked by strict schemas in `src/features/comments/record-schemas.ts`. Tests: `src-tauri/src/comment_reads_tests.rs`.
@@ -69,7 +69,7 @@ The local comment body cap is 1,250 characters. This is a Linkgo conservative ca
 4. A clean selected variant can move to `needs_review`.
 5. Reviewer approves, requests changes, rejects, cancels, or leaves it pending.
 6. Only `approved` comments can post via LinkedIn API or record manual posting attempts.
-7. API posting requires a resolvable LinkedIn target URN and exact `Post comment` confirmation.
+7. API posting requires a resolvable LinkedIn target URN and typing the exact `Post comment` confirmation.
 8. Successful attempts move the thread to `posted`.
 9. Failed attempts keep the thread approved/actionable and create an error queue item.
 
@@ -92,13 +92,13 @@ Specificity passes when a body includes a number, a quoted phrase, or a first-pe
 The Comments tab includes:
 
 - Campaign selector.
-- Create comment dialog with eligible candidate target context.
-- Summary cards for total, needs review, approved, and posted.
-- Thread cards grouped by actionable status first.
-- Variant cards with raw body, escaped LinkedIn LittleText preview, audit status, edit, select, reject, and reset actions.
-- Review actions for submit, approve, request changes, reject, and cancel.
-- `Post via LinkedIn` confirmation dialog for approved comments with resolvable target URNs.
-- Manual posted/failed attempt dialogs as fallback.
+- `Write a comment` dialog with eligible candidate target context.
+- Summary cards for Total, Waiting for approval, Approved, and Posted.
+- Thread cards grouped by actionable status first ("Drafts and changes", "Waiting for approval", "Approved", …).
+- Variant cards ("Reply version N") with the raw body ("Your text"), escaped LinkedIn LittleText preview ("How it will look on LinkedIn"), audit status, edit (`Save and check again`), `Use this version`, `Reject`, and `Reset` actions.
+- Review actions: `Send for approval`, `Approve`, `Request changes`, `Reject`, and `Cancel`.
+- `Post to LinkedIn` confirmation dialog ("Post comment") for approved comments with resolvable target URNs. When the URN cannot be resolved, the card asks the operator to post on LinkedIn themselves and mark it as posted.
+- Manual `Mark as posted` / `Mark as not posted` dialogs as fallback.
 - Archived-campaign history with mutation actions blocked.
 
 ## Safety integration
@@ -107,7 +107,7 @@ Successful API and manual posted records enforce `campaigns.daily_comment_limit`
 
 Allowed and blocked decisions are stored in `rate_limit_events` with `action = 'comment'`.
 
-The global kill switch hides the UI `Post via LinkedIn` action and the data API blocks successful API/manual successes.
+The global kill switch (on screen: "Emergency pause") hides the UI `Post to LinkedIn` action and the data API blocks successful API/manual successes.
 
 Kill-switch comment blocks are recorded as blocked comment rate-limit events because the existing safety audit enum has no comment-specific event type.
 
@@ -141,4 +141,4 @@ bun run test:rust
 
 ## Publishing execution
 
-"Post via LinkedIn" calls `linkgo_linkedin_publish_comment`. That command reserves, posts and records the comment attempt natively through the shared execution service ([publishing-execution.md](publishing-execution.md)) and returns a typed `ExecutionOutcome`. The daily comment limit counts succeeded attempts plus open comment executions. `linkgo_comment_record_attempt` remains for comments posted outside Linkgo and is refused while the thread has an open execution. Ambiguous outcomes are shown as "Outcome unknown — check LinkedIn" and reconciled in Safety. The Comments view also loads open executions with each campaign refresh. While a thread has one, its card disables "Post via LinkedIn" and shows "Awaiting reconciliation in Safety" (`outcome_unknown`) or "Publishing in progress" (`reserved`/`in_flight`). The native reservation gate stays authoritative.
+"Post to LinkedIn" calls `linkgo_linkedin_publish_comment`. That command reserves, posts and records the comment attempt natively through the shared execution service ([publishing-execution.md](publishing-execution.md)) and returns a typed `ExecutionOutcome`. The daily comment limit counts succeeded attempts plus open comment executions. `linkgo_comment_record_attempt` remains for comments posted outside Linkgo and is refused while the thread has an open execution. Ambiguous outcomes are shown as "We couldn't confirm it posted — check LinkedIn" and reconciled in Safety (on screen: "Check what happened to these posts"). The Comments view also loads open executions with each campaign refresh. While a thread has one, its card disables "Post to LinkedIn" and shows "We couldn't confirm it posted. Check it in Safety." (`outcome_unknown`) or "Posting…" (`reserved`/`in_flight`). The native reservation gate stays authoritative.

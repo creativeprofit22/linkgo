@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Workflows slice adds a durable local cockpit for resumable content pipeline runs.
+The Workflows slice (shown as **Automations**) adds a durable local cockpit for resumable content pipeline runs.
 
 It gives operators a visible state machine for the canonical Linkgo pipeline:
 
@@ -14,7 +14,7 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Seven canonical content pipeline steps for every run.
 - Manual start/resume controls.
 - Foreground executor controls for run/resume.
-- Manual step transitions for complete, wait approval, block, fail, resume, reopen, and skip.
+- Manual step transitions for complete, wait approval, block, fail, resume, reopen, and skip (on screen: **Mark done**, **Wait for approval**, **Mark stuck**, **Mark failed**, **Continue**/**Try again**, **Reopen**, and **Skip**).
 - Automatic next-step start after a step completes.
 - Append-only workflow events for run and step progress.
 - Operator notes in workflow history.
@@ -23,12 +23,12 @@ It gives operators a visible state machine for the canonical Linkgo pipeline:
 - Campaign filtering and archived-campaign mutation blocking.
 - Roadmap 3D origin projections for planner-created runs: `Autopilot plan #… · source batch #…`.
 - Planner-created runs start queued with research complete, score pending, and exact durable candidate artifacts; no executor starts automatically.
-- Attended connected-provider **Score batch** confirmation with exact scope, provider/model, threshold, and unchecked low-score rejection.
-- Race-safe score attempts, all-scored advance, all-removed block, provider retry, and linked Backlog reconciliation.
+- Attended connected-provider **Score ideas** confirmation with exact scope, provider/model, threshold, and unchecked low-score rejection.
+- Race-safe score attempts, all-scored advance, all-removed block, provider retry, and linked Tasks reconciliation.
 - Optional planner-linked draft generation from scored candidate artifacts, held at `draft` until explicit save.
 - Atomic save creates one draft artifact and advances the workflow to `audit`; failure/dismissal blocks and permits retry.
 - Human-triggered planner audit of every saved variant's current revision, executed serially in variant order with the generation provider/model and provider default model fallback.
-- Completed-current revision skipping, durable explicit Resume after failure, and transactional 15-minute stale linked-claim recovery.
+- Completed-current revision skipping, durable explicit **Continue checks** after failure, and transactional 15-minute stale linked-claim recovery.
 - Atomic final findings/audit settlement, `audit` completion, and transition to `approve` waiting; finding severity does not auto-approve or auto-block human review.
 - Local SQLite persistence through Tauri migrations, including Migration 32's optional unique audit-to-step-execution link.
 - Native ownership of run mutations (`src-tauri/src/workflows.rs`): `linkgo_workflow_create_run`, `_start_run`, `_resume_run`, `_set_step_status`, `_cancel_run`, `_add_note` and `_create_artifact` each re-read the run, step and campaign and write on one pinned `BEGIN IMMEDIATE` connection, including the step-transition matrix, run-status projection, planner scoring-backlog sync and the planner draft save-only rule. `_resume_run` reconciles a waiting step from its linked agent run and returns `{ linkedAgentIsActive }`; the renderer then decides whether to continue execution. Real-SQLite tests: `src-tauri/src/workflows_tests.rs`.
@@ -69,14 +69,14 @@ Links workflow steps to agent runs so executor work can be resumed and audited w
 
 ## Executor lifecycle
 
-1. Run executor starts or resumes the workflow run.
+1. **Do next step** (the executor) starts or resumes the workflow run.
 2. The executor creates a role-specific agent run for the active step.
 3. The executor auto-links that agent run into `workflow_artifacts`.
 4. Agent output completes, fails, blocks, or pauses the step.
 5. Research and score steps can populate discovery suggestions or candidate scores through the same dry-run tools when valid local inputs exist.
 6. For a planner-linked saved draft at `audit`, a human starts or explicitly resumes the dedicated serial variant auditor described below.
 7. The executor stops at `approve` and approval-gated `schedule_post` calls.
-8. Resume executor continues from other failed or blocked steps.
+8. **Continue automation** resumes the executor from other failed or blocked steps.
 
 The renderer has no SQL access to workflow tables. `src-tauri/src/workflow_store.rs` owns the reads and step-execution writes:
 
@@ -92,15 +92,15 @@ No provider call runs inside these transactions. Tests: `src-tauri/src/workflow_
 
 1. The local planner creates the run, seven steps, candidate artifacts, workflow events, backlog item, and plan linkage in one transaction.
 2. `research` is completed from the policy-enforced source batch; `score` stays pending.
-3. The operator opens **Score batch**, reviews exact scope/provider/context destination, and confirms policy.
+3. The operator opens **Score ideas** (dialog "Score these ideas"), reviews exact scope/provider/context destination, and confirms policy.
 4. A restricted native command claims the attempt, creates the scorer run/artifact, and projects workflow/backlog state in one pinned `BEGIN IMMEDIATE` transaction; the provider call starts only after commit.
 5. The model must return exactly one score/rationale per attached unscored candidate. A native immediate transaction commits the complete set or nothing.
 6. Native result reconciliation completes the execution/score step, starts `draft`, and completes the linked backlog atomically. Failure blocks linked work and exposes retry. All-scored advances and all-removed blocks through native no-work settlement without a provider call.
 7. At `draft`, the operator may launch a save-gated request for an eligible scored candidate. Generation leaves the step running; only explicit save atomically attaches the draft and starts `audit`.
-8. At `audit`, **Audit all saved variants** processes every variant's current revision serially in `variant_number` order. It inherits provider/model provenance from the saved generation request, using the provider's default model when the saved model is blank.
+8. At `audit`, **Check all saved versions** processes every variant's current revision serially in `variant_number` order. It inherits provider/model provenance from the saved generation request, using the provider's default model when the saved model is blank.
 9. Each transactional claim chooses the next current revision without a completed audit and links the workflow execution, audit run, and auditor agent before provider execution. Existing completed audits for current revisions are skipped; older revision evidence is retained.
-10. A failed provider, validation, stale-revision, or settlement attempt atomically fails the linked audit/agent/execution and workflow step. Processing stops without an automatic retry; **Resume variant audits** is an explicit durable operator action that continues at the failed or next unaudited current revision.
-11. Linked claims with no audit, agent, or execution activity for 15 minutes are transactionally recovered as failed. Reconciliation is bounded and idempotent, after which the operator uses the same explicit Resume action.
+10. A failed provider, validation, stale-revision, or settlement attempt atomically fails the linked audit/agent/execution and workflow step. Processing stops without an automatic retry; **Continue checks** is an explicit durable operator action that continues at the failed or next unaudited current revision.
+11. Linked claims with no audit, agent, or execution activity for 15 minutes are transactionally recovered as failed. Reconciliation is bounded and idempotent, after which the operator uses the same explicit **Continue checks** action.
 12. Every successful attempt atomically stores all six findings and completes its linked audit/execution. On the final current revision, that same settlement completes `audit` and moves `approve` plus the workflow to `waiting_approval`. `warning` and `block` findings remain review evidence and do not themselves auto-block approval.
 13. This audit slice creates no approval record and performs no approval, scheduling, publishing, or other external automation.
 
@@ -116,7 +116,7 @@ No provider call runs inside these transactions. Tests: `src-tauri/src/workflow_
 
 ## Safety and approval notes
 
-Workflow state is local-first and operator-driven. The Autopilot Planner creates resumable state only; it never invokes the executor or a model. Workflows owns attended planner-linked scoring and saved-draft auditing, excludes `dry_run` for connected planner execution, and requires a human trigger or explicit Resume.
+Workflow state is local-first and operator-driven. The Autopilot Planner creates resumable state only; it never invokes the executor or a model. Workflows owns attended planner-linked scoring and saved-draft auditing, excludes `dry_run` for connected planner execution, and requires a human trigger or explicit resume (**Continue checks** / **Continue automation**).
 
 The `approve` step is a visible human-review checkpoint. Planner audit findings, including `block`, do not grant approval or bypass that checkpoint, and this slice does not schedule or publish anything.
 
@@ -132,9 +132,9 @@ Playwright covers:
 - Waiting-for-approval state.
 - Archived-campaign mutation blocking.
 - Executor-created agent run artifact chips.
-- Workflows tab rendering in the app shell.
+- Automations tab rendering in the app shell.
 - Planner candidate artifact linkage, bounded provider context, exact/atomic scoring, optional rejection, stale/cross-campaign rollback, provider retry, duplicate actions, all-scored/all-removed paths, provider/archive/kill-switch gates, cross-surface reconciliation, and dialog accessibility.
 - Planner-linked draft scope, trusted prompt boundaries, exact counts/intents, save-only advancement, atomic rollback, draft artifacts, ad-hoc behavior, and narrow dialog reflow.
-- Planner-linked saved-draft audit ordering, inherited provider/model defaults, completed-current skipping, explicit Resume, revision updates, 15-minute linked stale recovery, non-blocking finding severity, provenance rejection, and transactional claim/fail/final settlement.
+- Planner-linked saved-draft audit ordering, inherited provider/model defaults, completed-current skipping, explicit **Continue checks**, revision updates, 15-minute linked stale recovery, non-blocking finding severity, provenance rejection, and transactional claim/fail/final settlement.
 
 Rust tests assert migrations, including Migration 32, plus two-connection claim exclusion, complete score rollback, stale/cross-campaign zero-write behavior, workflow/execution/backlog reconciliation, and planner-audit transaction boundaries and recovery.

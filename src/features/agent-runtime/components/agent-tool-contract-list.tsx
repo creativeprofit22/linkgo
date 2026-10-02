@@ -3,6 +3,16 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AgentToolMetadata } from "@/agent";
 
+const stepLabels: Record<string, string> = {
+  research: "Find ideas",
+  score: "Score ideas",
+  draft: "Write drafts",
+  audit: "Check drafts",
+  approve: "Approve",
+  schedule: "Schedule",
+  measure: "Check results",
+};
+
 export function AgentToolContractList({
   toolContracts,
 }: {
@@ -12,14 +22,15 @@ export function AgentToolContractList({
     <Card className="bg-card/70">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Wrench className="text-linkgo-blue size-5" /> Tool contracts
+          <Wrench className="text-linkgo-blue size-5" /> What the AI assistant
+          can do
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-muted-foreground text-sm">
-          Tool contracts are stable typed capabilities. Playbooks are modular
-          prompt guidance layered on top and never add autonomous publishing or
-          commenting.
+          These are the actions the AI assistant can take. Your brand voice
+          guides shape how it writes, but they can never let it post or comment
+          on its own.
         </p>
         <div className="grid gap-3 lg:grid-cols-2">
           {toolContracts.map((tool) => (
@@ -37,10 +48,9 @@ export function AgentToolContractList({
                 {tool.description}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge variant="outline">Roadmap {tool.roadmapSection}</Badge>
                 {tool.stepKeys.map((stepKey) => (
                   <Badge key={stepKey} variant="outline">
-                    {stepKey}
+                    {stepLabels[stepKey] ?? stepKey}
                   </Badge>
                 ))}
               </div>

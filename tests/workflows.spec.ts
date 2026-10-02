@@ -29,11 +29,11 @@ test("creates and starts a workflow run", async ({ page }) => {
   await expect(getStepCard(page, "Schedule")).toBeVisible();
   await expect(getStepCard(page, "Measure")).toBeVisible();
 
-  await page.getByRole("button", { name: "Start run" }).click();
+  await page.getByRole("button", { name: "Start automation" }).click();
 
-  await expect(getBadge(page, "Running").first()).toBeVisible();
+  await expect(getBadge(page, "In progress").first()).toBeVisible();
   await expect(
-    getStepCard(page, "Research").getByText("Running"),
+    getStepCard(page, "Research").getByText("In progress", { exact: true }),
   ).toBeVisible();
 });
 
@@ -43,13 +43,13 @@ test("shows executor-created agent run artifact chips", async ({ page }) => {
   await openWorkflows(page);
   await createWorkflowRun(page);
 
-  await page.getByRole("button", { name: "Run executor" }).click();
+  await page.getByRole("button", { name: "Do next step" }).click();
 
-  await expect(page.getByLabel("Workflow artifacts")).toContainText(
-    /Agent run #\d+ · researcher · completed/u,
+  await expect(page.getByLabel("Linked items")).toContainText(
+    /AI assistant task #\d+ · Finding ideas · Done/u,
   );
   await expect(page.getByText("Research completed")).toBeVisible();
-  await expect(page.getByText("Workflow scoring updated")).toHaveCount(0);
+  await expect(page.getByText("Ideas scored")).toHaveCount(0);
 });
 
 test("updates duplicate executor-created agent run artifacts in place", async ({
@@ -60,12 +60,12 @@ test("updates duplicate executor-created agent run artifacts in place", async ({
   await openWorkflows(page);
   await createWorkflowRun(page);
 
-  await page.getByRole("button", { name: "Run executor" }).click();
+  await page.getByRole("button", { name: "Do next step" }).click();
 
   const artifactChip = page
-    .getByLabel("Workflow artifacts")
+    .getByLabel("Linked items")
     .locator("span")
-    .filter({ hasText: /Agent run #\d+/u });
+    .filter({ hasText: /AI assistant task #\d+/u });
   await expect(artifactChip).toHaveCount(1);
   await page.waitForFunction(
     () =>
@@ -155,7 +155,7 @@ test("updates duplicate executor-created agent run artifacts in place", async ({
 
   await expect(artifactChip).toHaveCount(1);
   await expect(artifactChip).toContainText(
-    /Agent run #\d+ · researcher · completed/u,
+    /AI assistant task #\d+ · Finding ideas · Done/u,
   );
 });
 
@@ -165,17 +165,19 @@ test("scores an exact planner scope through a connected provider and reconciles 
   await preparePlannerScoringWorkflow(page);
   await configureScoringProvider(page);
 
-  await expect(page.getByLabel("Workflow artifacts")).toContainText(
-    "Candidate scope: 1 current, 1 unscored, 0 removed",
+  await expect(page.getByLabel("Linked items")).toContainText(
+    "Ideas: 1 attached, 1 not scored yet, 0 removed",
   );
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
-  await expect(dialog.getByText("Current").locator("..")).toContainText("1");
-  await expect(dialog.getByLabel("Model provider")).toHaveValue("openai");
   await expect(
-    dialog.getByLabel("Reject new candidates below minimum"),
+    dialog.getByText("Ideas", { exact: true }).locator(".."),
+  ).toContainText("1");
+  await expect(dialog.getByLabel("AI service")).toHaveValue("openai");
+  await expect(
+    dialog.getByLabel("Reject new ideas below the minimum"),
   ).not.toBeChecked();
   if (process.env.LINKGO_CAPTURE_SCREENSHOTS === "true") {
     await page.screenshot({
@@ -183,14 +185,14 @@ test("scores an exact planner scope through a connected provider and reconciles 
       fullPage: true,
     });
   }
-  await dialog.getByLabel("Reject new candidates below minimum").check();
+  await dialog.getByLabel("Reject new ideas below the minimum").check();
   await dialog.getByRole("button", { name: "Confirm and score" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Workflow scoring updated")).toBeVisible();
+  await expect(page.getByText("Ideas scored")).toBeVisible();
 
   await expect(page.getByText("Current step: Draft variants")).toBeVisible();
-  await expect(page.getByLabel("Workflow artifacts")).toContainText(
-    /Agent run #\d+ · scorer · completed/u,
+  await expect(page.getByLabel("Linked items")).toContainText(
+    /AI assistant task #\d+ · Scoring ideas · Done/u,
   );
 
   const result = await page.evaluate(() => {
@@ -229,10 +231,8 @@ test("scores an exact planner scope through a connected provider and reconciles 
     "Trusted campaign and scoring metadata (JSON):",
   );
   await page.getByRole("button", { name: /Autopilot/u }).click();
-  await expect(
-    page.getByText("Scoring is completed in Workflows"),
-  ).toBeVisible();
-  await expect(page.getByText("OpenAI · completed")).toBeVisible();
+  await expect(page.getByText("Scoring in Automations: Done")).toBeVisible();
+  await expect(page.getByText("OpenAI · Done")).toBeVisible();
 });
 
 test("linked draft advances to audit only after operator save", async ({
@@ -240,22 +240,20 @@ test("linked draft advances to audit only after operator save", async ({
 }) => {
   await preparePlannerScoringWorkflow(page);
   await configureScoringProvider(page);
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const scoringDialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
   await scoringDialog
     .getByRole("button", { name: "Confirm and score" })
     .click();
   await expect(page.getByText("Current step: Draft variants")).toBeVisible();
-  await expect(
-    page.getByText(/planner-linked draft step is save-only/u),
-  ).toBeVisible();
+  await expect(page.getByText(/Finish this step in Drafts/u)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Continue in Drafts" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Run executor", exact: true }),
+    page.getByRole("button", { name: "Do next step", exact: true }),
   ).toHaveCount(0);
 
   const guardedExecution = await page.evaluate(async () => {
@@ -355,31 +353,31 @@ test("linked draft advances to audit only after operator save", async ({
   await openWorkflows(page);
   await expect(page.getByText("Current step: Draft variants")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Resume executor", exact: true }),
+    page.getByRole("button", { name: "Continue automation", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Start run", exact: true }),
+    page.getByRole("button", { name: "Start automation", exact: true }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+  await page.getByRole("button", { name: /^Drafts Write/u }).click();
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Generate variants" }).click();
+  await page.getByRole("button", { name: "Write with AI" }).click();
   const generationDialog = page.getByRole("dialog", {
-    name: "Generate draft variants",
+    name: "Write versions with AI",
   });
-  await generationDialog.getByLabel("Provider").selectOption("dry_run");
-  await generationDialog.getByLabel("Variants").selectOption("4");
+  await generationDialog.getByLabel("AI service").selectOption("dry_run");
+  await generationDialog.getByLabel("Number of versions").selectOption("4");
   await generationDialog.getByLabel("Launch").check();
-  await expect(generationDialog.getByLabel("Workflow scope")).not.toHaveValue(
+  await expect(generationDialog.getByLabel("Automation")).not.toHaveValue(
     "adhoc",
   );
   await generationDialog
-    .getByRole("button", { name: "Generate variants" })
+    .getByRole("button", { name: "Write versions" })
     .click();
   await expect(generationDialog).toBeHidden();
-  await expect(page.getByText("Linked workflow #1")).toBeVisible();
+  await expect(page.getByText("From automation #1")).toBeVisible();
 
   const beforeSave = await page.evaluate(() => {
     const testWindow = window as unknown as {
@@ -430,7 +428,7 @@ test("linked draft advances to audit only after operator save", async ({
   expect(rolledBack.request?.status).toBe("generated");
 
   await page.getByRole("button", { name: "Save as draft" }).click();
-  await expect(page.getByText("Generated request #1")).toBeHidden();
+  await expect(page.getByText("AI draft #1")).toBeHidden();
   const afterSave = await page.evaluate(() => {
     const testWindow = window as unknown as {
       __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{ current_step_key: string }>;
@@ -454,8 +452,8 @@ test("linked draft advances to audit only after operator save", async ({
   ).toHaveLength(1);
 
   await openWorkflows(page);
-  await expect(page.getByLabel("Workflow artifacts")).toContainText(
-    /Draft #\d+ · launch · drafting/u,
+  await expect(page.getByLabel("Linked items")).toContainText(
+    /Draft · Launch post · Draft/u,
   );
 });
 
@@ -463,7 +461,7 @@ test("audits every current planner-saved draft revision before approval", async 
   page,
 }) => {
   await preparePlannerSavedDraftAudit(page, 3);
-  await page.getByRole("button", { name: "Audit all saved variants" }).click();
+  await page.getByRole("button", { name: "Check all saved versions" }).click();
   await expect(page.getByText("Current step: Approve")).toBeVisible();
 
   const state = await page.evaluate(() => {
@@ -563,9 +561,9 @@ test("resumes planner audits at the failed variant without re-auditing completed
 }) => {
   await preparePlannerSavedDraftAudit(page, 3);
   await configurePlannerAuditProvider(page, "fail_second");
-  await page.getByRole("button", { name: "Audit all saved variants" }).click();
+  await page.getByRole("button", { name: "Check all saved versions" }).click();
   await expect(
-    page.getByRole("button", { name: "Resume variant audits" }),
+    page.getByRole("button", { name: "Continue checks" }),
   ).toBeVisible();
   const failed = await readPlannerAuditState(page);
   expect(failed.audits.map((row) => row.status)).toEqual([
@@ -580,7 +578,7 @@ test("resumes planner audits at the failed variant without re-auditing completed
   expect(failed.calls).toHaveLength(4);
 
   await configurePlannerAuditProvider(page, "success");
-  await page.getByRole("button", { name: "Resume variant audits" }).click();
+  await page.getByRole("button", { name: "Continue checks" }).click();
   await expect(page.getByText("Current step: Approve")).toBeVisible();
   const resumed = await readPlannerAuditState(page);
   expect(resumed.audits.map((row) => row.draft_variant_id)).toEqual([
@@ -613,7 +611,7 @@ test("re-audits only an edited revision and retains historical findings", async 
   page,
 }) => {
   await preparePlannerSavedDraftAudit(page, 3);
-  await page.getByRole("button", { name: "Audit all saved variants" }).click();
+  await page.getByRole("button", { name: "Check all saved versions" }).click();
   await expect(page.getByText("Current step: Approve")).toBeVisible();
   await page.evaluate(async () => {
     const w = window as any;
@@ -645,7 +643,7 @@ test("re-audits only an edited revision and retains historical findings", async 
   });
   await openCampaigns(page);
   await openWorkflows(page);
-  await page.getByRole("button", { name: "Resume variant audits" }).click();
+  await page.getByRole("button", { name: "Continue checks" }).click();
   await expect(page.getByText("Current step: Approve")).toBeVisible();
   const state = await readPlannerAuditState(page);
   expect(state.audits).toHaveLength(4);
@@ -709,7 +707,7 @@ test("reconciles stale linked claims idempotently and resume creates one replace
   ).toBe("failed");
   await openCampaigns(page);
   await openWorkflows(page);
-  await page.getByRole("button", { name: "Resume variant audits" }).click();
+  await page.getByRole("button", { name: "Continue checks" }).click();
   await expect(page.getByText("Current step: Approve")).toBeVisible();
   const resumed = await readPlannerAuditState(page);
   expect(
@@ -906,20 +904,20 @@ test("blocks archived generated draft saves without mutating linked work", async
   page,
 }) => {
   await preparePlannerDraftWorkflow(page);
-  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
-  await page.getByRole("button", { name: "Generate variants" }).click();
+  await page.getByRole("button", { name: /^Drafts Write/u }).click();
+  await page.getByRole("button", { name: "Write with AI" }).click();
   const generationDialog = page.getByRole("dialog", {
-    name: "Generate draft variants",
+    name: "Write versions with AI",
   });
-  await generationDialog.getByLabel("Provider").selectOption("dry_run");
+  await generationDialog.getByLabel("AI service").selectOption("dry_run");
   await generationDialog
-    .getByRole("button", { name: "Generate variants" })
+    .getByRole("button", { name: "Write versions" })
     .click();
   await expect(generationDialog).toBeHidden();
-  await expect(page.getByText("Linked workflow #1")).toBeVisible();
+  await expect(page.getByText("From automation #1")).toBeVisible();
 
   await archiveSelectedCampaign(page);
-  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+  await page.getByRole("button", { name: /^Drafts Write/u }).click();
   await page.getByRole("combobox").selectOption("1");
   const saveButton = page.getByRole("button", { name: "Save as draft" });
   const dismissButton = page.getByRole("button", {
@@ -993,7 +991,7 @@ test("blocks archived generated draft saves without mutating linked work", async
   );
 
   await dismissButton.click();
-  await expect(page.getByText("Generated request #1")).toBeHidden();
+  await expect(page.getByText("AI draft #1")).toBeHidden();
 });
 
 for (const withAgentRun of [false, true]) {
@@ -1020,20 +1018,18 @@ for (const withAgentRun of [false, true]) {
     }, withAgentRun);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /^Drafts Manual/u }).click();
+    await page.getByRole("button", { name: /^Drafts Write/u }).click();
     await expect(
       page.getByRole("heading", { name: "Drafts", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(`Generated request #${fixture.requestId}`),
+      page.getByText(`AI draft #${fixture.requestId}`),
     ).toBeVisible();
 
     await page
-      .getByRole("button", { name: "Dismiss interrupted request" })
+      .getByRole("button", { name: "Dismiss unfinished draft" })
       .click();
-    await expect(
-      page.getByText(`Generated request #${fixture.requestId}`),
-    ).toBeHidden();
+    await expect(page.getByText(`AI draft #${fixture.requestId}`)).toBeHidden();
 
     const recovered = await page.evaluate((seeded) => {
       const testWindow = window as unknown as {
@@ -1124,16 +1120,16 @@ for (const withAgentRun of [false, true]) {
       expect(recovered.agentEvents).toHaveLength(0);
     }
 
-    await page.getByRole("button", { name: "Generate variants" }).click();
+    await page.getByRole("button", { name: "Write with AI" }).click();
     const generationDialog = page.getByRole("dialog", {
-      name: "Generate draft variants",
+      name: "Write versions with AI",
     });
-    await generationDialog.getByLabel("Provider").selectOption("dry_run");
-    await expect(generationDialog.getByLabel("Workflow scope")).not.toHaveValue(
+    await generationDialog.getByLabel("AI service").selectOption("dry_run");
+    await expect(generationDialog.getByLabel("Automation")).not.toHaveValue(
       "adhoc",
     );
     await generationDialog
-      .getByRole("button", { name: "Generate variants" })
+      .getByRole("button", { name: "Write versions" })
       .click();
     await expect(generationDialog).toBeHidden();
 
@@ -1163,9 +1159,9 @@ test("delimits instruction-like candidate content at the provider boundary", asy
   });
   await configureScoringProvider(page);
 
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
   await dialog.getByRole("button", { name: "Confirm and score" }).click();
   await expect(page.getByText("Current step: Draft variants")).toBeVisible();
@@ -1218,9 +1214,9 @@ test("duplicate scoring submission creates one attempt and one scorer run", asyn
 }) => {
   await preparePlannerScoringWorkflow(page);
   await configureScoringProvider(page);
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const submit = page
-    .getByRole("dialog", { name: "Score attached candidate batch" })
+    .getByRole("dialog", { name: "Score these ideas" })
     .getByRole("button", { name: "Confirm and score" });
   await submit.click({ clickCount: 2 });
   await expect(page.getByText("Current step: Draft variants")).toBeVisible();
@@ -1245,16 +1241,16 @@ test("planner scoring fails closed without a connected provider", async ({
   page,
 }) => {
   await preparePlannerScoringWorkflow(page, { connectProvider: false });
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
-  await expect(dialog.getByLabel("Model provider")).toHaveValue("");
+  await expect(dialog.getByLabel("AI service")).toHaveValue("");
   await expect(
     dialog.getByRole("button", { name: "Confirm and score" }),
   ).toBeDisabled();
   await expect(
-    dialog.getByText(/Open Integrations and connect a model provider/u),
+    dialog.getByText(/Open Connected accounts and connect an AI service/u),
   ).toBeVisible();
 });
 
@@ -1264,9 +1260,9 @@ for (const mode of ["mismatch", "missing", "duplicate"] as const) {
   }) => {
     await preparePlannerScoringWorkflow(page);
     await configureScoringProvider(page, mode);
-    await page.getByRole("button", { name: "Score batch" }).click();
+    await page.getByRole("button", { name: "Score ideas" }).click();
     const dialog = page.getByRole("dialog", {
-      name: "Score attached candidate batch",
+      name: "Score these ideas",
     });
     await dialog.getByRole("button", { name: "Confirm and score" }).click();
     await expect(dialog.getByRole("alert")).toBeVisible();
@@ -1294,9 +1290,9 @@ for (const mode of ["stale", "cross_campaign"] as const) {
   }) => {
     await preparePlannerScoringWorkflow(page);
     await configureScoringProvider(page, mode);
-    await page.getByRole("button", { name: "Score batch" }).click();
+    await page.getByRole("button", { name: "Score ideas" }).click();
     const dialog = page.getByRole("dialog", {
-      name: "Score attached candidate batch",
+      name: "Score these ideas",
     });
     await dialog.getByRole("button", { name: "Confirm and score" }).click();
     await expect(dialog.getByRole("alert")).toBeVisible();
@@ -1323,16 +1319,16 @@ test("retries provider failure with one new attempt and preserved scoring form v
 }) => {
   await preparePlannerScoringWorkflow(page);
   await configureScoringProvider(page, "failure");
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
-  await dialog.getByLabel("Minimum score").fill("72");
+  await dialog.getByLabel("Minimum match score").fill("72");
   await dialog.getByRole("button", { name: "Confirm and score" }).click();
   await expect(dialog.getByRole("alert")).toContainText(
     "Injected scorer provider failure",
   );
-  await expect(dialog.getByLabel("Minimum score")).toHaveValue("72");
+  await expect(dialog.getByLabel("Minimum match score")).toHaveValue("72");
 
   await configureScoringProvider(page, "success");
   await dialog.getByRole("button", { name: "Confirm and score" }).click();
@@ -1360,12 +1356,12 @@ test("advances an already-scored planner scope without any provider call", async
   });
   await openCampaigns(page);
   await openWorkflows(page);
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
-  await expect(dialog.getByText(/No model call is needed/u)).toBeVisible();
-  await dialog.getByRole("button", { name: "Continue without model" }).click();
+  await expect(dialog.getByText(/No AI is needed/u)).toBeVisible();
+  await dialog.getByRole("button", { name: "Continue without AI" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Current step: Draft variants")).toBeVisible();
   const providerCallCount = await page.evaluate(
@@ -1386,27 +1382,25 @@ test("blocks an all-removed planner scope without any provider call", async ({
   });
   await openCampaigns(page);
   await openWorkflows(page);
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
-  await expect(
-    dialog.getByText(/all attached candidates were removed/u),
-  ).toBeVisible();
-  await dialog.getByRole("button", { name: "Continue without model" }).click();
+  await expect(dialog.getByText(/all the ideas were removed/u)).toBeVisible();
+  await dialog.getByRole("button", { name: "Continue without AI" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Current step: Score relevance")).toBeVisible();
-  await expect(getBadge(page, "Blocked").first()).toBeVisible();
+  await expect(getBadge(page, "Stuck").first()).toBeVisible();
 });
 
 test("auto-rejects only a below-threshold new candidate", async ({ page }) => {
   await preparePlannerScoringWorkflow(page);
   await configureScoringProvider(page, "low");
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
-  await dialog.getByLabel("Reject new candidates below minimum").check();
+  await dialog.getByLabel("Reject new ideas below the minimum").check();
   await dialog.getByRole("button", { name: "Confirm and score" }).click();
   await expect(dialog).toBeHidden();
   const candidate = await page.evaluate(
@@ -1449,9 +1443,9 @@ test("planner-linked backlog is workflow-controlled while ordinary work remains 
       },
     });
   });
-  await page.getByRole("button", { name: /Backlog/u }).click();
+  await page.getByRole("button", { name: /^Tasks/u }).click();
   await expect(
-    page.getByText("Open Workflows to manage scoring."),
+    page.getByText("Open Automations to manage scoring."),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Start", exact: true }),
@@ -1468,21 +1462,23 @@ test("score dialog returns focus and reflows at 320 pixels with accessibility me
   await configureScoringProvider(page);
   await page.setViewportSize({ width: 320, height: 720 });
   await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
-  const trigger = page.getByRole("button", { name: "Score batch" });
+  const trigger = page.getByRole("button", { name: "Score ideas" });
   await trigger.focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Model provider")).toBeFocused();
+  await expect(dialog.getByLabel("AI service")).toBeFocused();
   if (process.env.LINKGO_CAPTURE_SCREENSHOTS === "true") {
     await page.screenshot({
       path: ".gg/screenshots/relevance-scoring-320.png",
       fullPage: true,
     });
   }
-  await dialog.getByLabel("Model", { exact: true }).fill("model-".repeat(20));
+  await dialog
+    .getByLabel("AI model", { exact: true })
+    .fill("model-".repeat(20));
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
@@ -1502,9 +1498,11 @@ test("archived campaign keeps planner scoring read-only", async ({ page }) => {
   await archiveSelectedCampaign(page);
   await openWorkflows(page);
   await expect(
-    page.getByText(/Archived campaigns keep workflow history visible/u),
+    page.getByText(
+      /This campaign is archived. You can still see its automations/u,
+    ),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Score batch" })).toHaveCount(
+  await expect(page.getByRole("button", { name: "Score ideas" })).toHaveCount(
     0,
   );
 });
@@ -1525,12 +1523,12 @@ test("global kill switch blocks planner scoring confirmation", async ({
   });
   await openCampaigns(page);
   await openWorkflows(page);
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
   await expect(dialog.getByRole("alert")).toContainText(
-    "Global kill switch is enabled",
+    "Emergency pause is on",
   );
   await expect(
     dialog.getByRole("button", { name: "Confirm and score" }),
@@ -1543,13 +1541,13 @@ test("kill switch enabled after scorer claim blocks the final score transaction"
   await preparePlannerScoringWorkflow(page);
   await configureScoringProvider(page, "kill_switch_after_claim");
 
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
   await dialog.getByRole("button", { name: "Confirm and score" }).click();
   await expect(dialog.getByRole("alert")).toContainText(
-    "Global kill switch is enabled; candidate score application was blocked: Operator pause during provider latency",
+    "Everything is paused; the idea scores weren't saved: Operator pause during provider latency",
   );
 
   const result = await page.evaluate(() => {
@@ -1632,7 +1630,7 @@ test("reconciles workflow-linked schedule approval continuation and stale resume
   await prepareWorkflowLinkedScheduleAgent(page);
 
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await resumeAgentRun(page, 1);
 
   let trace = await getWorkflowTraceState(page);
@@ -1696,7 +1694,7 @@ test("recovers a failed workflow-linked approval continuation", async ({
   await markWorkflowLinkedAgentFailed(page);
 
   await openApprovals(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await resumeAgentRun(page, 1);
 
   const trace = await getWorkflowTraceState(page);
@@ -1725,7 +1723,7 @@ test("reconciles workflow-linked schedule rejection", async ({ page }) => {
   await openApprovals(page);
   await page.getByRole("button", { name: "Reject", exact: true }).click();
   await page
-    .getByRole("dialog", { name: "Reject this approval?" })
+    .getByRole("dialog", { name: "Reject this post?" })
     .getByRole("button", { name: "Reject approval" })
     .click();
   await expect(page.getByRole("dialog")).toBeHidden();
@@ -1761,7 +1759,7 @@ test("records the reviewer's rejection reason on linked workflow runs", async ({
   await openApprovals(page);
   await page.getByRole("button", { name: "Reject", exact: true }).click();
   const confirmation = page.getByRole("dialog", {
-    name: "Reject this approval?",
+    name: "Reject this post?",
   });
   await confirmation.getByLabel("Reason (optional)").fill(reason);
   await expect(confirmation).toContainText(`${reason.length}/1000`);
@@ -1838,17 +1836,14 @@ test("keeps whitespace-only workflow titles client-side disabled", async ({
   await createCampaign(page);
   await openWorkflows(page);
 
-  await page
-    .getByRole("button", { name: "Create workflow run" })
-    .first()
-    .click();
-  const dialog = page.getByRole("dialog", { name: "Create workflow run" });
+  await page.getByRole("button", { name: "New automation" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New automation" });
   await expect(dialog).toBeVisible();
 
   await dialog.getByLabel("Title").fill("   ");
 
   await expect(
-    dialog.getByRole("button", { name: "Create workflow run" }),
+    dialog.getByRole("button", { name: "Create automation" }),
   ).toBeDisabled();
   await expect(dialog).toBeVisible();
   await expect(page.getByText(/Run created:/u)).toBeHidden();
@@ -1859,17 +1854,17 @@ test("advances steps and records progress events", async ({ page }) => {
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
-  await page.getByRole("button", { name: "Start run" }).click();
+  await page.getByRole("button", { name: "Start automation" }).click();
 
   await updateStepStatus(
     page,
     "Research",
-    "Complete",
+    "Mark done",
     "Research sources captured for drafting.",
   );
 
   await expect(
-    getStepCard(page, "Research").getByText("Completed"),
+    getStepCard(page, "Research").getByText("Done", { exact: true }),
   ).toBeVisible();
   await expect(
     getStepCard(page, "Research").getByText(
@@ -1877,16 +1872,18 @@ test("advances steps and records progress events", async ({ page }) => {
     ),
   ).toBeVisible();
   await expect(
-    getStepCard(page, "Score relevance").getByText("Running"),
+    getStepCard(page, "Score relevance").getByText("In progress", {
+      exact: true,
+    }),
   ).toBeVisible();
-  await expect(page.getByText("1/7 steps complete")).toBeVisible();
+  await expect(page.getByText("1 of 7 steps done")).toBeVisible();
   await expect(page.getByText("Research completed")).toBeVisible();
 
   await getStepCard(page, "Score relevance")
-    .getByRole("button", { name: "Wait approval" })
+    .getByRole("button", { name: "Wait for approval" })
     .click();
 
-  await expect(getBadge(page, "Waiting approval").first()).toBeVisible();
+  await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
   await expect(
     page.getByText("Score relevance waiting for approval"),
   ).toBeVisible();
@@ -1897,13 +1894,13 @@ test("persists manual step error context after refetch", async ({ page }) => {
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
-  await page.getByRole("button", { name: "Start run" }).click();
+  await page.getByRole("button", { name: "Start automation" }).click();
 
   const reason = "Research source quota blocked the manual workflow.";
-  await updateStepStatus(page, "Research", "Block", reason);
+  await updateStepStatus(page, "Research", "Mark stuck", reason);
 
   await expect(
-    getStepCard(page, "Research").getByText("Blocked", { exact: true }),
+    getStepCard(page, "Research").getByText("Stuck", { exact: true }),
   ).toBeVisible();
   await expect(getStepCard(page, "Research").getByText(reason)).toBeVisible();
 
@@ -1920,25 +1917,27 @@ test("hides step mutations after cancelling a workflow run", async ({
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
-  await page.getByRole("button", { name: "Start run" }).click();
+  await page.getByRole("button", { name: "Start automation" }).click();
 
   const researchCard = getStepCard(page, "Research");
   const scoreCard = getStepCard(page, "Score relevance");
   await expect(
-    researchCard.getByRole("button", { name: "Complete" }),
+    researchCard.getByRole("button", { name: "Mark done" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Cancel run" }).click();
+  await page.getByRole("button", { name: "Stop automation" }).click();
 
   await expect(getBadge(page, "Cancelled").first()).toBeVisible();
   await expect(page.getByText("Workflow run cancelled")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Cancel run" })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Stop automation" }),
+  ).toBeHidden();
 
   for (const label of [
-    "Complete",
-    "Wait approval",
-    "Block",
-    "Fail",
+    "Mark done",
+    "Wait for approval",
+    "Mark stuck",
+    "Mark failed",
     "Skip",
   ] as const) {
     await expect(
@@ -1961,12 +1960,16 @@ test("blocks archived campaign mutations", async ({ page }) => {
   await openWorkflows(page);
 
   await expect(
-    page.getByText("Archived campaigns keep workflow history visible"),
+    page.getByText(
+      "This campaign is archived. You can still see its automations",
+    ),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create workflow run" }).first(),
+    page.getByRole("button", { name: "New automation" }).first(),
   ).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Start run" })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Start automation" }),
+  ).toBeHidden();
   await expect(
     getStepCard(page, "Research").getByRole("button", { name: "Start" }),
   ).toBeHidden();
@@ -2098,7 +2101,7 @@ async function prepareWorkflowLinkedScheduleAgent(page: Page): Promise<void> {
     values: ["running", "schedule", 1],
   });
 
-  await page.getByRole("button", { name: "Run executor" }).click();
+  await page.getByRole("button", { name: "Do next step" }).click();
   await expect
     .poll(async () => (await getWorkflowTraceState(page)).runs[0]?.status)
     .toBe("waiting_approval");
@@ -2290,9 +2293,9 @@ async function readArchivedDraftMutationState(page: Page) {
 }
 
 function getBadge(page: Page, label: string): Locator {
-  return page
-    .locator("span")
-    .filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page.locator("span").filter({
+    hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
+  });
 }
 
 function getStepCard(page: Page, title: string): Locator {
@@ -2315,14 +2318,12 @@ async function updateStepStatus(
   await expect(dialog).toBeVisible();
   await dialog
     .getByLabel(
-      actionLabel === "Block" || actionLabel === "Fail"
-        ? "Error message"
-        : "Output summary",
+      actionLabel === "Mark stuck" || actionLabel === "Mark failed"
+        ? "What went wrong"
+        : "What happened",
     )
     .fill(contextText);
-  await dialog
-    .getByRole("button", { name: `Save ${actionLabel.toLowerCase()}` })
-    .click();
+  await dialog.getByRole("button", { name: "Save note" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -2368,7 +2369,7 @@ async function preparePlannerScoringWorkflow(
     });
   }
   await page.getByRole("button", { name: /Autopilot/u }).click();
-  await page.getByRole("button", { name: "Plan now" }).click();
+  await page.getByRole("button", { name: "Check now" }).click();
   await expect(page.getByText("Plan #1 · Founder-led growth")).toBeVisible();
   await openWorkflows(page);
 }
@@ -2519,12 +2520,12 @@ async function preparePlannerSavedDraftAudit(
   variants = 3,
 ): Promise<void> {
   await preparePlannerDraftWorkflow(page);
-  await page.getByRole("button", { name: /^Drafts Manual/u }).click();
-  await page.getByRole("button", { name: "Generate variants" }).click();
-  const dialog = page.getByRole("dialog", { name: "Generate draft variants" });
-  await dialog.getByLabel("Provider").selectOption("dry_run");
-  await dialog.getByLabel("Variants").selectOption(String(variants));
-  await dialog.getByRole("button", { name: "Generate variants" }).click();
+  await page.getByRole("button", { name: /^Drafts Write/u }).click();
+  await page.getByRole("button", { name: "Write with AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Write versions with AI" });
+  await dialog.getByLabel("AI service").selectOption("dry_run");
+  await dialog.getByLabel("Number of versions").selectOption(String(variants));
+  await dialog.getByRole("button", { name: "Write versions" }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole("button", { name: "Save as draft" }).click();
   await openWorkflows(page);
@@ -2534,9 +2535,9 @@ async function preparePlannerSavedDraftAudit(
 async function preparePlannerDraftWorkflow(page: Page): Promise<void> {
   await preparePlannerScoringWorkflow(page);
   await configureScoringProvider(page);
-  await page.getByRole("button", { name: "Score batch" }).click();
+  await page.getByRole("button", { name: "Score ideas" }).click();
   const scoringDialog = page.getByRole("dialog", {
-    name: "Score attached candidate batch",
+    name: "Score these ideas",
   });
   await scoringDialog
     .getByRole("button", { name: "Confirm and score" })
@@ -2665,9 +2666,9 @@ async function configureScoringProvider(
 }
 
 async function openWorkflows(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Workflows/ }).click();
+  await page.getByRole("button", { name: /^Automations/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Workflows", exact: true }),
+    page.getByRole("heading", { name: "Automations", exact: true }),
   ).toBeVisible();
 }
 
@@ -2693,23 +2694,20 @@ async function createCampaign(page: Page, autopilot = false): Promise<void> {
   await dialog
     .getByLabel("Manual keywords")
     .fill("LinkedIn growth, founder content");
-  if (autopilot) await dialog.getByLabel("Local autopilot planner").click();
+  if (autopilot) await dialog.getByLabel("Include in Autopilot").click();
   await dialog.getByRole("button", { name: "Create campaign" }).click();
   await expect(dialog).toBeHidden();
 }
 
 async function createWorkflowRun(page: Page): Promise<void> {
-  await page
-    .getByRole("button", { name: "Create workflow run" })
-    .first()
-    .click();
-  const dialog = page.getByRole("dialog", { name: "Create workflow run" });
+  await page.getByRole("button", { name: "New automation" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New automation" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Title").fill("Weekly founder content pipeline");
   await dialog
-    .getByLabel("Context summary")
+    .getByLabel("Notes (optional)")
     .fill("Manual durable workflow test context.");
-  await dialog.getByRole("button", { name: "Create workflow run" }).click();
+  await dialog.getByRole("button", { name: "Create automation" }).click();
   await expect(dialog).toBeHidden();
 }
 

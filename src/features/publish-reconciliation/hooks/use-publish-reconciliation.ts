@@ -4,6 +4,7 @@ import {
   listOpenPublishExecutions,
   reconcilePublishExecution,
 } from "@/features/publish-reconciliation/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   OpenPublishExecution,
   ReconcilePublishExecutionInput,
@@ -21,8 +22,8 @@ interface UsePublishReconciliationState {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
-    ? error.message
-    : "Unexpected publish reconciliation error";
+    ? toPlainMessage(error.message)
+    : "Something went wrong while checking these posts. Try again.";
 }
 
 export function usePublishReconciliation(): UsePublishReconciliationState {
@@ -62,7 +63,7 @@ export function usePublishReconciliation(): UsePublishReconciliationState {
             : "Marked as not posted",
         );
       } catch (caught) {
-        toast.error("Publishing was not reconciled", {
+        toast.error("We couldn't save what happened", {
           description: getErrorMessage(caught),
         });
         throw caught;

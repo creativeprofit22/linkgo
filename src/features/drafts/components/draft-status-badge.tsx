@@ -6,9 +6,9 @@ import type {
 } from "@/features/drafts/types";
 
 const draftStatusLabels: Record<DraftStatus, string> = {
-  drafting: "Drafting",
-  needs_revision: "Needs revision",
-  ready_for_review: "Ready for review",
+  drafting: "Draft",
+  needs_revision: "Needs changes",
+  ready_for_review: "Ready for approval",
   archived: "Archived",
 };
 
@@ -24,7 +24,7 @@ const draftStatusVariants: Record<
 
 const variantStatusLabels: Record<DraftVariantStatus, string> = {
   draft: "Draft",
-  selected: "Selected",
+  selected: "Chosen",
   rejected: "Rejected",
 };
 
@@ -38,9 +38,9 @@ const variantStatusVariants: Record<
 };
 
 const auditSeverityLabels: Record<DraftAuditSeverity, string> = {
-  block: "Blocked",
-  warning: "Warnings",
-  pass: "Passed",
+  block: "Must fix",
+  warning: "Worth a look",
+  pass: "Looks good",
 };
 
 const auditSeverityVariants: Record<

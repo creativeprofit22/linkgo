@@ -101,7 +101,9 @@ export function EditCandidatePolicyDialog({
       setOpen(false);
     } catch (caught) {
       setSubmitError(
-        caught instanceof Error ? caught.message : "Policy could not be saved",
+        caught instanceof Error
+          ? caught.message
+          : "We couldn't save your idea filters. Please try again.",
       );
     }
   };
@@ -110,22 +112,21 @@ export function EditCandidatePolicyDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" variant="outline" size="sm" disabled={disabled}>
-          <Pencil className="size-4" /> Edit policy
+          <Pencil className="size-4" /> Edit filters
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           <DialogHeader>
-            <DialogTitle>Edit candidate intake policy</DialogTitle>
+            <DialogTitle>Edit idea filters</DialogTitle>
             <DialogDescription>
-              Bulk and unattended intake must pass every rule before Linkgo
-              stores candidate records.
+              Imported ideas must pass every rule before Linkgo saves them.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
             <Label htmlFor="policy-max-post-age">
-              Maximum post age in days
+              Oldest post to keep (days)
             </Label>
             <Input
               id="policy-max-post-age"
@@ -147,8 +148,7 @@ export function EditCandidatePolicyDialog({
               id="policy-max-post-age-help"
               className="text-muted-foreground text-xs"
             >
-              Allowed range: 1 to 365 days. The timestamp must include a
-              timezone.
+              Choose 1 to 365 days. Each post needs a date, time, and time zone.
             </p>
             {fieldErrors.maxPostAgeDays && (
               <p
@@ -161,7 +161,7 @@ export function EditCandidatePolicyDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="policy-banned-topics">Banned topics</Label>
+            <Label htmlFor="policy-banned-topics">Blocked topics</Label>
             <Textarea
               id="policy-banned-topics"
               rows={7}
@@ -180,9 +180,9 @@ export function EditCandidatePolicyDialog({
               id="policy-banned-topics-help"
               className="text-muted-foreground text-xs"
             >
-              One phrase per line. Up to {MAX_BANNED_TOPICS} phrases, each up to{" "}
-              {MAX_BANNED_TOPIC_LENGTH} characters. Matching uses whole words
-              and phrases.
+              One word or phrase per line. Up to {MAX_BANNED_TOPICS}, each up to{" "}
+              {MAX_BANNED_TOPIC_LENGTH} characters. We match whole words and
+              phrases.
             </p>
             {fieldErrors.bannedTopics && (
               <p
@@ -199,18 +199,16 @@ export function EditCandidatePolicyDialog({
             className="rounded-lg border p-4"
           >
             <h3 id="policy-fixed-rules" className="text-sm font-semibold">
-              Fixed safety rules
+              Rules you can't change
             </h3>
             <ul className="text-muted-foreground mt-2 list-disc space-y-1 pl-5 text-sm">
+              <li>The link must be a secure (https) LinkedIn link.</li>
               <li>
-                Source must use HTTPS on linkedin.com or a LinkedIn subdomain.
+                Each post needs a full date, time, and time zone. Posts dated
+                more than five minutes in the future are skipped.
               </li>
               <li>
-                Timestamp must be absolute and timezone-bearing. Values more
-                than five minutes in the future are blocked.
-              </li>
-              <li>
-                Successful prior contact by target, URN, or profile is blocked.
+                People, posts, or profiles you've already contacted are skipped.
               </li>
             </ul>
           </section>
@@ -231,7 +229,7 @@ export function EditCandidatePolicyDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save policy"}
+              {pending ? "Saving…" : "Save filters"}
             </Button>
           </DialogFooter>
         </form>

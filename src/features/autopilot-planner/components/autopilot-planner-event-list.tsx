@@ -3,6 +3,7 @@ import type {
   AutopilotPlannerEvent,
   AutopilotPlannerEventType,
 } from "@/features/autopilot-planner/types";
+import { toPlainMessage } from "@/lib/plain-message";
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -11,15 +12,21 @@ function formatDate(value: string): string {
 }
 
 const EVENT_TYPE_LABELS: Record<AutopilotPlannerEventType, string> = {
-  planner_started: "planner started",
-  planner_stopped: "planner stopped",
-  tick_started: "tick started",
-  tick_completed: "tick completed",
-  tick_failed: "tick failed",
-  batch_planned: "batch planned",
-  batch_skipped: "batch skipped",
-  batch_failed: "batch failed",
-  planner_blocked: "planner blocked",
+  planner_started: "Autopilot started",
+  planner_stopped: "Autopilot stopped",
+  tick_started: "Check started",
+  tick_completed: "Check finished",
+  tick_failed: "Check failed",
+  batch_planned: "Import planned",
+  batch_skipped: "Import skipped",
+  batch_failed: "Import failed",
+  planner_blocked: "Autopilot paused",
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  info: "Info",
+  warning: "Warning",
+  error: "Problem",
 };
 
 function formatEventType(value: AutopilotPlannerEventType): string {
@@ -34,16 +41,16 @@ export function AutopilotPlannerEventList({
   return (
     <Card className="bg-card/70 forced-colors:border">
       <CardHeader>
-        <CardTitle className="text-base">Recent planner events</CardTitle>
+        <CardTitle className="text-base">Recent Autopilot activity</CardTitle>
         <p className="text-muted-foreground text-sm">
-          Local lifecycle, tick, plan, skip, block, batch failure, and worker
-          failure history.
+          When Autopilot started, stopped, checked your imports, and anything
+          that went wrong.
         </p>
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
           <p className="text-muted-foreground py-6 text-center text-sm">
-            No planner events for this scope yet.
+            No Autopilot activity here yet.
           </p>
         ) : (
           <ol className="space-y-3">
@@ -55,7 +62,7 @@ export function AutopilotPlannerEventList({
                 <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
                   <div className="min-w-0">
                     <p className="text-sm font-medium break-words">
-                      {event.summary}
+                      {toPlainMessage(event.summary)}
                     </p>
                     <p className="text-muted-foreground mt-1 text-xs break-words">
                       {event.campaign_name ?? "All campaigns"} ·{" "}
@@ -63,14 +70,14 @@ export function AutopilotPlannerEventList({
                     </p>
                   </div>
                   <p className="shrink-0 text-xs font-medium capitalize">
-                    Severity: {event.severity}
+                    Type: {SEVERITY_LABELS[event.severity] ?? event.severity}
                   </p>
                 </div>
                 <p className="text-muted-foreground mt-2 text-xs capitalize">
-                  Event: {formatEventType(event.event_type)}
+                  {formatEventType(event.event_type)}
                   {event.source_import_batch_id === null
                     ? ""
-                    : ` · source batch #${event.source_import_batch_id}`}
+                    : ` · import #${event.source_import_batch_id}`}
                   {event.autopilot_plan_id === null
                     ? ""
                     : ` · plan #${event.autopilot_plan_id}`}

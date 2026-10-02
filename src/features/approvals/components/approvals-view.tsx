@@ -52,8 +52,8 @@ export function ApprovalsView(): React.ReactNode {
                 Approvals
               </h2>
               <p className="text-muted-foreground text-sm">
-                Human review, conservative scheduling, and manual publish
-                tracking. No LinkedIn API publishing happens here.
+                Review posts before anything goes live. Linkgo never posts
+                without your OK.
               </p>
             </div>
           </div>
@@ -84,7 +84,7 @@ export function ApprovalsView(): React.ReactNode {
               size="sm"
               onClick={() => void loadApprovals()}
             >
-              Retry
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -104,7 +104,7 @@ export function ApprovalsView(): React.ReactNode {
             <div>
               <p className="text-sm font-medium">Selected campaign</p>
               <p className="text-muted-foreground text-xs">
-                Reviews, schedule records, and publish attempts stay local.
+                Reviews, schedules, and posting history stay on this computer.
               </p>
             </div>
             <select
@@ -127,7 +127,7 @@ export function ApprovalsView(): React.ReactNode {
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              label={`Needs review${summarySuffix}`}
+              label={`Waiting for approval${summarySuffix}`}
               value={String(summary.needsReview)}
             />
             <SummaryCard
@@ -139,7 +139,7 @@ export function ApprovalsView(): React.ReactNode {
               value={String(summary.scheduled)}
             />
             <SummaryCard
-              label={`Published${summarySuffix}`}
+              label={`Posted${summarySuffix}`}
               value={String(summary.published)}
             />
           </div>
@@ -155,8 +155,8 @@ export function ApprovalsView(): React.ReactNode {
               {eligibleDrafts.length === 0 && (
                 <Card className="bg-card/70 border-dashed">
                   <CardContent className="text-muted-foreground p-4 text-sm">
-                    No eligible ready-for-review drafts are waiting. Select a
-                    clean draft variant in Drafts first.
+                    No drafts are ready to send for approval. In Drafts, pick a
+                    version that passed its checks first.
                   </CardContent>
                 </Card>
               )}
@@ -247,8 +247,8 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Approvals attach to
-            reviewed draft variants inside a campaign.
+            Go to Campaigns and create a campaign first. Approvals are for draft
+            posts inside a campaign.
           </p>
         </div>
       </CardContent>
@@ -266,8 +266,8 @@ function EmptyApprovals(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No approvals yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Create a review from a ready draft after selecting a clean variant
-            in Drafts.
+            Pick a version that passed its checks in Drafts, then send it for
+            approval here.
           </p>
         </div>
       </CardContent>

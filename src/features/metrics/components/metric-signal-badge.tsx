@@ -8,8 +8,8 @@ type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
 
 const signalLabels: Record<MemorySignal, string> = {
   winner: "Winner",
-  underperformer: "Underperformer",
-  insight: "Insight",
+  underperformer: "Didn't land",
+  insight: "Lesson",
   avoid: "Avoid",
 };
 

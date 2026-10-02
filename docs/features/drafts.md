@@ -13,9 +13,9 @@ The feature stores:
 - Variant status: `draft`, `selected`, or `rejected`.
 - Draft status: `drafting`, `needs_revision`, `ready_for_review`, or `archived`.
 
-Creating a draft marks the source candidate as `drafted` in the Candidate Queue.
+Creating a draft marks the source candidate as `drafted` in the candidate queue (shown as **Ideas**).
 
-AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. AI audit remains explicit. After a canonical non-blocking current-revision audit, the operator may confirm **Run quality loop**: five categories are scored against 70, with at most two automatic evidence-grounded rewrites. Every rewrite increments `content_revision`, regenerates deterministic findings, and is AI-audited before automatic re-scoring. Interrupted/failed work is durable and only continues through **Resume quality loop**. The loop never approves, schedules, publishes, scrapes, or comments.
+AI draft generation is operator-triggered and save-gated: generated text stays in request history until the operator clicks `Save as draft`. AI audit remains explicit. After a canonical non-blocking current-revision audit, the operator may confirm the quality loop (**Improve with AI**): five categories are scored against 70, with at most two automatic evidence-grounded rewrites. Every rewrite increments `content_revision`, regenerates deterministic findings, and is AI-audited before automatic re-scoring. Interrupted/failed work is durable and only continues through **Continue improving**. The loop never approves, schedules, publishes, scrapes, or comments.
 
 Native quality settlement replaces the rewritten variant's deterministic findings in the same transaction as its text and revision update. It records the four required rules (`required_text`, `total_length`, `external_link`, `hashtag_limit`) plus applicable `weak_hook` and `specificity` warnings, bound to the persisted revision. A passing AI audit or quality score cannot override a deterministic block. Audit insertion failure rolls back the whole settlement; other variants' findings remain untouched.
 
@@ -40,7 +40,7 @@ Late results from an earlier loop are rejected without writes:
 - **Agent start/re-claim** of a quality-linked agent requires it to be the active agent of a `running` quality run.
 - **Score settlement** requires the exact run, attempt, active agent and completed evidence.
 
-**Operator behavior.** A failed or reconciled run shows **Resume quality loop**. Resume appends exactly one attempt, even when two windows click it at once. It is refused if the draft changed since the run started, or if the latest AI audit for the current revision is not completed and non-blocking (run **AI audit** again first). It is also refused once three attempts exist. The two-rewrite budget carries over. Nothing in recovery approves, schedules or publishes. Real-SQLite tests: `src-tauri/src/draft_quality_lifecycle_tests.rs`. Findings: `docs/verification/draft-quality-lifecycle-recovery.md`.
+**Operator behavior.** A failed or reconciled run shows **Continue improving**. Resume appends exactly one attempt, even when two windows click it at once. It is refused if the draft changed since the run started, or if the latest AI audit for the current revision is not completed and non-blocking (run the AI audit, **Review with AI**, again first). It is also refused once three attempts exist. The two-rewrite budget carries over. Nothing in recovery approves, schedules or publishes. Real-SQLite tests: `src-tauri/src/draft_quality_lifecycle_tests.rs`. Findings: `docs/verification/draft-quality-lifecycle-recovery.md`.
 
 `tests/fixtures/draft-deterministic-audits.json` is exercised against the TypeScript checker, Rust settlement/checker, and browser mock. Its boundary cases cover ECMAScript trimming, UTF-16 character counts, Unicode hashtags, and warning semantics. No new schema is required for this regeneration fix.
 
@@ -110,13 +110,13 @@ The lifecycle is five native commands, each one pinned `BEGIN IMMEDIATE` transac
 
 `saveGeneratedDraft` requires a `generated` request and runs one immediate transaction. It revalidates candidate/workflow scope, creates the draft, variants, and audits, marks the request saved, adds one `draft` workflow artifact, completes `draft`, starts `audit`, and appends lifecycle events. Any failure rolls back every write.
 
-For a planner-linked saved draft, **Audit all saved variants** starts attended serial execution. The workflow audits every variant's current `content_revision` in ascending `variant_number` order. Each audit inherits the saved generation request's provider and model; a blank saved model resolves through that provider's default model. A completed audit for the same current revision is skipped, while historical findings and audits for older revisions remain evidence.
+For a planner-linked saved draft, **Check all saved versions** starts attended serial execution. The workflow audits every variant's current `content_revision` in ascending `variant_number` order. Each audit inherits the saved generation request's provider and model; a blank saved model resolves through that provider's default model. A completed audit for the same current revision is skipped, while historical findings and audits for older revisions remain evidence.
 
 Each variant claim transaction validates saved request, campaign, draft, artifact, and workflow provenance; creates and links the workflow execution, AI audit, and auditor agent; and reserves only the next unaudited current revision before provider work begins. Success transactionally settles that execution. For the final variant, its six findings, audit and execution completion, `audit` step completion, and transition of `approve` and the workflow to `waiting_approval` commit atomically.
 
-Failure transactionally fails the audit, agent, execution, audit step, and workflow, clears any agent approval checkpoint, and records failure history. Execution stops at that variant. The operator must explicitly choose **Resume variant audits**; resume skips current revisions already completed and retries from the failed/next unaudited variant rather than automatically retrying.
+Failure transactionally fails the audit, agent, execution, audit step, and workflow, clears any agent approval checkpoint, and records failure history. Execution stops at that variant. The operator must explicitly choose **Continue checks**; resume skips current revisions already completed and retries from the failed/next unaudited variant rather than automatically retrying.
 
-Planner-linked claims with no lifecycle activity for 15 minutes are reconciled transactionally as failed and expose the same explicit Resume path. This linked recovery is separate from the general manual-audit reconciliation described below. Warning and `block` AI findings are retained for human review but do not automatically block the transition to `approve`; approval itself remains a human waiting checkpoint.
+Planner-linked claims with no lifecycle activity for 15 minutes are reconciled transactionally as failed and expose the same explicit **Continue checks** path. This linked recovery is separate from the general manual-audit reconciliation described below. Warning and `block` AI findings are retained for human review but do not automatically block the transition to `approve`; approval itself remains a human waiting checkpoint.
 
 `createDraft` validates the candidate, rejects archived campaigns, rejected candidates, and candidates that already have a draft, inserts the draft and variants in a transaction, writes audit rows, and updates `candidate_posts.status` to `drafted`.
 
@@ -126,7 +126,7 @@ These manual mutations are native commands in `src-tauri/src/drafts_core.rs`, ea
 
 Reads and the plain draft-field update are native too (`src-tauri/src/drafts_reads.rs`); the renderer has no direct SQL access to draft tables.
 
-- `linkgo_draft_list` returns up to 500 drafts with their variants and audits, plus current-revision AI audit runs and findings and current quality runs with attempts and category scores, and `totalCount` (drafts matching the filter before the cap). Everything is read in one transaction. `listDraftPage` returns `{ items, totalCount }`; `listDrafts` returns only the items. When truncated, the Drafts screen shows "Showing the first 500 of N", uses `totalCount` for Total drafts, and labels the other counts as covering the shown rows.
+- `linkgo_draft_list` returns up to 500 drafts with their variants and audits, plus current-revision AI audit runs and findings and current quality runs with attempts and category scores, and `totalCount` (drafts matching the filter before the cap). Everything is read in one transaction. `listDraftPage` returns `{ items, totalCount }`; `listDrafts` returns only the items. When truncated, the Drafts screen shows "Showing the first 500 of N", uses `totalCount` for "Total drafts", and labels the other counts as covering the shown rows.
 - `linkgo_draft_generation_request_list` returns up to 500 generation requests.
 - `linkgo_draft_workflow_options` returns up to 200 blocked workflow draft steps.
 - `linkgo_draft_update` (`updateDraft`) sets only the fields provided (angle ≤ 240 and notes ≤ 1000 characters, trimmed; status must be a known draft status). It rejects an explicit `null` and writes in one transaction; a missing id is a silent no-op, as before.
@@ -166,15 +166,15 @@ The UI shows passing findings for hard blockers so operators can see why a varia
 
 - Header explaining generation is operator-triggered and save-gated.
 - Campaign selector.
-- `Generate variants` action.
+- `Write with AI` action (dialog "Write versions with AI").
 - `Create draft` action.
-- Loading, retry, no-campaign, and empty-draft states.
-- Summary cards for total drafts, ready-for-review drafts, blocked variants, selected variants, and generated drafts pending.
+- Loading, error (with `Try again`), no-campaign, and empty-draft states.
+- Summary cards: "Total drafts", "Ready for approval", "Versions to fix", "Chosen versions", and "AI drafts to review".
 - Draft cards with candidate source context and variant cards.
 
 `GenerateDraftDialog` captures candidate, provider, model, playbook, a 3/4/5 count, one of four fixed content intents, optional eligible workflow scope, angle, and voice notes. A single eligible workflow defaults selected; multiple matches require an explicit workflow or ad-hoc choice. Linked scope explains that advancement happens only on save.
 
-`DraftGenerationRequestCard` shows generated, failed, dismissed, and saved request states. Generated requests expose `Save as draft` and `Dismiss`; failed requests show the error and can be dismissed.
+`DraftGenerationRequestCard` shows generated, failed, dismissed, and saved request states. Generated requests expose `Save as draft` and `Dismiss`; failed requests show the error and can be dismissed (`Dismiss failed draft`).
 
 `AddDraftDialog` captures candidate, content intent, angle, notes, and one to five manual variants. It excludes rejected and already-drafted candidates, and disables draft creation for archived campaigns so the UI matches the `createDraft` data guard.
 
@@ -182,9 +182,9 @@ The UI shows passing findings for hard blockers so operators can see why a varia
 
 - Reviewing hook, body, CTA, and hashtags.
 - Seeing audit severity and finding messages.
-- Editing a variant and re-running audit.
-- Selecting one clean variant for review.
-- Rejecting or resetting a variant.
+- Editing a variant (`Edit version`) and re-running audit.
+- Selecting one clean variant for review (`Choose this version`).
+- Rejecting (`Reject version`) or resetting (`Undo choice`) a variant.
 
 Selecting a blocked variant is rejected by the data API with `Blocked variants cannot be selected`.
 

@@ -80,7 +80,7 @@ export function RecordPublishAttemptDialog({
     if (
       form.status === "succeeded" &&
       !window.confirm(
-        "Record this post as published? This does not call LinkedIn.",
+        "Mark this post as posted? Linkgo won't post anything to LinkedIn.",
       )
     ) {
       return;
@@ -113,14 +113,14 @@ export function RecordPublishAttemptDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Record publish attempt</DialogTitle>
+            <DialogTitle>Record posting result</DialogTitle>
             <DialogDescription>
-              Store the manual LinkedIn outcome locally. This does not call
-              LinkedIn or publish anything.
+              Note what happened when you posted on LinkedIn yourself. Linkgo
+              won't post anything.
             </DialogDescription>
           </DialogHeader>
 
-          <Field label="Status" htmlFor="publish-attempt-status">
+          <Field label="Result" htmlFor="publish-attempt-status">
             <select
               id="publish-attempt-status"
               value={form.status}
@@ -132,8 +132,8 @@ export function RecordPublishAttemptDialog({
               }
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
-              <option value="succeeded">succeeded</option>
-              <option value="failed">failed</option>
+              <option value="succeeded">Posted</option>
+              <option value="failed">Didn't post</option>
             </select>
           </Field>
 
@@ -161,7 +161,7 @@ export function RecordPublishAttemptDialog({
           </Field>
 
           <Field
-            label="Platform post ID"
+            label="LinkedIn post reference"
             htmlFor="publish-attempt-platform-id"
             required={isSuccessEvidenceRequired}
           >
@@ -183,7 +183,7 @@ export function RecordPublishAttemptDialog({
           </Field>
 
           <Field
-            label="Failure reason"
+            label="What went wrong"
             htmlFor="publish-attempt-error"
             required={isFailureReasonRequired}
           >
@@ -224,7 +224,7 @@ export function RecordPublishAttemptDialog({
               type="submit"
               disabled={submitting || validationMessage !== ""}
             >
-              {submitting ? "Recording…" : "Record attempt"}
+              {submitting ? "Saving…" : "Save result"}
             </Button>
           </DialogFooter>
         </form>

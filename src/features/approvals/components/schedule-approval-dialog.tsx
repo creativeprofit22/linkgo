@@ -65,14 +65,14 @@ export function ScheduleApprovalDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Schedule approval</DialogTitle>
+            <DialogTitle>Schedule post</DialogTitle>
             <DialogDescription>
-              Create a local schedule record only. Linkgo will not publish or
-              run a background scheduler.
+              Choose when this approved post should go out. Linkgo never posts
+              without your OK.
             </DialogDescription>
           </DialogHeader>
 
-          <Field label="Scheduled for" htmlFor="approval-scheduled-for">
+          <Field label="Date and time" htmlFor="approval-scheduled-for">
             <Input
               id="approval-scheduled-for"
               type="datetime-local"
@@ -88,7 +88,7 @@ export function ScheduleApprovalDialog({
             />
           </Field>
 
-          <Field label="Timezone label" htmlFor="approval-timezone">
+          <Field label="Time zone" htmlFor="approval-timezone">
             <Input
               id="approval-timezone"
               value={form.timezone}
@@ -111,7 +111,7 @@ export function ScheduleApprovalDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || !form.scheduledFor}>
-              {submitting ? "Scheduling…" : "Schedule approval"}
+              {submitting ? "Scheduling…" : "Schedule post"}
             </Button>
           </DialogFooter>
         </form>

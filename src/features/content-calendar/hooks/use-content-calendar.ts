@@ -10,6 +10,7 @@ import {
   scheduleContentCalendarSlot,
   updateContentCalendarSlot,
 } from "@/features/content-calendar/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   ArchiveContentCalendarSlotInput,
   ContentCalendarEligibleApproval,
@@ -36,7 +37,9 @@ interface UseContentCalendarState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected calendar error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with your calendar. Try again.";
 }
 
 export function useContentCalendar(): UseContentCalendarState {
@@ -101,9 +104,9 @@ export function useContentCalendar(): UseContentCalendarState {
       try {
         await createContentCalendarSlot(input);
         await loadCalendarForCampaign(selectedCampaignId);
-        toast.success("Calendar slot created");
+        toast.success("Post planned");
       } catch (caught) {
-        toast.error("Calendar slot was not created", {
+        toast.error("We couldn't plan this post", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -120,9 +123,9 @@ export function useContentCalendar(): UseContentCalendarState {
       try {
         await updateContentCalendarSlot(input);
         await loadCalendarForCampaign(selectedCampaignId);
-        toast.success("Calendar slot updated");
+        toast.success("Plan updated");
       } catch (caught) {
-        toast.error("Calendar slot was not updated", {
+        toast.error("We couldn't save your changes", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -139,9 +142,9 @@ export function useContentCalendar(): UseContentCalendarState {
       try {
         await archiveContentCalendarSlot(input);
         await loadCalendarForCampaign(selectedCampaignId);
-        toast.success("Calendar slot archived");
+        toast.success("Planned post archived");
       } catch (caught) {
-        toast.error("Calendar slot was not archived", {
+        toast.error("We couldn't archive this post", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -158,9 +161,9 @@ export function useContentCalendar(): UseContentCalendarState {
       try {
         await scheduleContentCalendarSlot(input);
         await loadCalendarForCampaign(selectedCampaignId);
-        toast.success("Calendar slot scheduled");
+        toast.success("Post scheduled");
       } catch (caught) {
-        toast.error("Calendar slot was not scheduled", {
+        toast.error("We couldn't schedule this post", {
           description: getErrorMessage(caught),
         });
         throw caught;

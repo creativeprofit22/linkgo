@@ -80,11 +80,11 @@ for (const state of ["running", "failed"] as const) {
     expect(blocked.created).toBe(false);
     await openDrafts(page);
     const panel = page.getByRole("region", {
-      name: "Draft quality",
+      name: "Quality score",
       exact: true,
     });
     await expect(
-      panel.getByText(state === "running" ? "Running" : "Failed", {
+      panel.getByText(state === "running" ? "In progress" : "Didn't finish", {
         exact: true,
       }),
     ).toBeVisible();
@@ -198,17 +198,13 @@ for (const initiallyApproved of [false, true]) {
       page.getByRole("button", { name: "Approve", exact: true }),
     ).toBeDisabled();
     await expect(
-      page.getByText(
-        /Content changed or historical review revision is unknown/,
-      ),
+      page.getByText(/This post changed after it was reviewed/),
     ).toBeVisible();
 
     await openDrafts(page);
-    const auditPanel = page.getByRole("region", { name: /AI audit/ });
-    await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
-    await expect(
-      auditPanel.getByText("Completed", { exact: true }),
-    ).toBeVisible();
+    const auditPanel = page.getByRole("region", { name: /AI review/ });
+    await auditPanel.getByRole("button", { name: "Review with AI" }).click();
+    await expect(auditPanel.getByText("Done", { exact: true })).toBeVisible();
     await openApprovals(page);
     await expect(
       page.getByRole("button", { name: "Approve", exact: true }),
@@ -261,42 +257,42 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   await createReview(page);
 
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
-  await expect(getBadge(page, "Needs review")).toBeVisible();
+  await expect(getBadge(page, "Waiting for approval")).toBeVisible();
   await expect(
     page.getByText(reservedCharacterVariant().hook).first(),
   ).toBeVisible();
-  await expect(page.getByText("Variant 1")).toBeVisible();
+  await expect(page.getByText("Version 1")).toBeVisible();
   await expect(page.getByText("\\@founder")).toBeVisible();
   await expect(page.getByText("\\#Growth")).toBeVisible();
   await expect(page.getByText("\\*useful\\*")).toBeVisible();
   await expect(page.getByText("\\_notes\\_")).toBeVisible();
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await countSchedulingInvokes(page);
   await countLinkedInPublishInvokes(page);
 
   await page.getByRole("button", { name: "Schedule", exact: true }).click();
-  await page.getByLabel("Scheduled for").fill("2026-06-25T14:30");
-  await page.getByLabel("Timezone label").fill("local");
-  await page.getByRole("button", { name: "Schedule approval" }).click();
+  await page.getByLabel("Date and time").fill("2026-06-25T14:30");
+  await page.getByLabel("Time zone").fill("local");
+  await page.getByRole("button", { name: "Schedule post" }).click();
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
   await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
   expect(await getSchedulingInvokeCount(page)).toBe(1);
   expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
 
-  await page.getByRole("button", { name: "Mark published" }).click();
+  await page.getByRole("button", { name: "Mark as posted" }).click();
   await page
     .getByLabel("LinkedIn post URL")
     .fill("https://www.linkedin.com/posts/manual-success/");
   page.once("dialog", async (dialog) => {
     await dialog.accept();
   });
-  await page.getByRole("button", { name: "Record attempt" }).click();
-  await expect(getBadge(page, "Published")).toBeVisible();
-  await expect(getBadge(page, "Succeeded")).toBeVisible();
+  await page.getByRole("button", { name: "Save result" }).click();
+  await expect(getBadge(page, "Posted")).toBeVisible();
+  await expect(getBadge(page, "Went live")).toBeVisible();
   await expect(
     page.getByText("https://www.linkedin.com/posts/manual-success/"),
   ).toBeVisible();
@@ -311,30 +307,30 @@ test("publishes an approved approval through mocked LinkedIn OAuth action", asyn
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Post to LinkedIn" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
+  const dialog = page.getByRole("dialog", { name: "Post to LinkedIn now" });
   await expect(
     dialog.getByText(
-      "This will publish to LinkedIn using the connected account.",
+      "This posts to LinkedIn from your connected account. Linkgo never posts without your OK.",
     ),
   ).toBeVisible();
   await expect(dialog.getByText("\\@founder")).toBeVisible();
   await expect(
-    dialog.getByRole("button", { name: "Publish via LinkedIn" }),
+    dialog.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeDisabled();
 
-  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
-  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  await dialog.getByLabel("Type “Post now” to confirm").fill("Post now");
+  await dialog.getByRole("button", { name: "Post to LinkedIn" }).click();
 
-  await expect(getBadge(page, "Published")).toBeVisible();
-  await expect(getBadge(page, "Succeeded")).toBeVisible();
+  await expect(getBadge(page, "Posted")).toBeVisible();
+  await expect(getBadge(page, "Went live")).toBeVisible();
   await expect(
-    page.getByText("Platform ID: urn:li:ugcPost:test-1"),
+    page.getByText("LinkedIn reference: urn:li:ugcPost:test-1"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
 });
 
@@ -352,14 +348,14 @@ test("records a failed LinkedIn OAuth publish attempt and error queue item", asy
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
-  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
-  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Post to LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Post to LinkedIn now" });
+  await dialog.getByLabel("Type “Post now” to confirm").fill("Post now");
+  await dialog.getByRole("button", { name: "Post to LinkedIn" }).click();
 
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(getBadge(page, "Failed")).toBeVisible();
+  await expect(getBadge(page, "Didn't post")).toBeVisible();
   await expect(
     page
       .getByRole("paragraph")
@@ -387,14 +383,16 @@ test("unreadable LinkedIn publish result shows outcome unknown and needs reconci
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
-  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
-  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Post to LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Post to LinkedIn now" });
+  await dialog.getByLabel("Type “Post now” to confirm").fill("Post now");
+  await dialog.getByRole("button", { name: "Post to LinkedIn" }).click();
 
   await expect(
-    dialog.getByRole("alert").filter({ hasText: "Outcome unknown" }),
+    dialog
+      .getByRole("alert")
+      .filter({ hasText: "We couldn't confirm it posted" }),
   ).toBeVisible();
   const counts = await getStateCounts(page);
   expect(counts.publishAttempts).toBe(0);
@@ -408,16 +406,16 @@ test("unreadable LinkedIn publish result shows outcome unknown and needs reconci
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeDisabled();
   await expect(
-    page.getByText("Awaiting reconciliation in Safety"),
+    page.getByText("We couldn't confirm it posted. Check it in Safety."),
   ).toBeVisible();
 });
 
 for (const [status, label] of [
-  ["outcome_unknown", "Awaiting reconciliation in Safety"],
-  ["in_flight", "Publishing in progress"],
+  ["outcome_unknown", "We couldn't confirm it posted. Check it in Safety."],
+  ["in_flight", "Posting…"],
 ] as const) {
   test(`open ${status} publish execution locks the approval publish action`, async ({
     page,
@@ -451,10 +449,10 @@ for (const [status, label] of [
     await makeDraftApprovalEligible(page);
     await openApprovals(page);
     await createReview(page);
-    await page.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
 
     await expect(
-      page.getByRole("button", { name: "Publish via LinkedIn" }),
+      page.getByRole("button", { name: "Post to LinkedIn" }),
     ).toBeDisabled();
     await expect(page.getByText(label)).toBeVisible();
   });
@@ -469,21 +467,23 @@ test("global kill switch hides LinkedIn OAuth publish action", async ({
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeVisible();
 
   await openSafety(page);
   await page
-    .getByLabel("Kill switch reason")
+    .getByLabel("Reason for pausing")
     .fill("Pause LinkedIn publishing during review.");
-  await page.getByRole("button", { name: "Enable kill switch" }).click();
-  await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Pause everything" }).click();
+  await expect(
+    page.getByText("On — everything is paused", { exact: true }),
+  ).toBeVisible();
 
   await openApprovals(page);
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
 });
 
@@ -497,15 +497,15 @@ test("LinkedIn OAuth publish rechecks approval state before submitting", async (
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
-  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Post to LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Post to LinkedIn now" });
+  await dialog.getByLabel("Type “Post now” to confirm").fill("Post now");
 
   await setApprovalStatusThroughMockSql(page, 1, "changes_requested");
-  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  await dialog.getByRole("button", { name: "Post to LinkedIn" }).click();
 
-  await expect(page.getByText("LinkedIn publish blocked")).toBeVisible();
+  await expect(page.getByText("Linkgo stopped this post")).toBeVisible();
   await expect(
     page.getByText(
       "Only approved or scheduled approvals can publish via LinkedIn",
@@ -524,9 +524,9 @@ test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness"
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeVisible();
 
   // A new AI audit on the same revision leaves the approval `approved`.
@@ -548,26 +548,30 @@ test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness"
   await openSafety(page);
   await openApprovals(page);
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Schedule", exact: true }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Mark published" }),
+    page.getByRole("button", { name: "Mark as posted" }),
   ).toBeHidden();
   await expect(
-    page.getByText("This revision is not ready for approval."),
+    page.getByText("This version isn't ready for approval yet."),
   ).toBeVisible();
 
   // A real failed outcome is still recordable and revokes the approval.
-  await page.getByRole("button", { name: "Record failure" }).click();
-  await page.getByLabel("Failure reason").fill("Posted manually, then failed.");
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Mark as not posted" }).click();
+  await page
+    .getByLabel("What went wrong")
+    .fill("Posted manually, then failed.");
+  await page.getByRole("button", { name: "Save result" }).click();
   await expect.poll(() => getPublishAttemptCount(page)).toBe(1);
-  await expect(getBadge(page, "Failed").first()).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Record failure" }),
+    getBadge(page, "Didn't post").filter({ visible: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Mark as not posted" }),
   ).toBeHidden();
 });
 
@@ -581,7 +585,7 @@ test("LinkedIn OAuth publish preflight blocks duplicate successes and stale sche
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await scheduleApproval(page, "2026-06-25T14:30", "local");
 
   const staleScheduleResult = await publishViaTestApi(page, {
@@ -597,15 +601,15 @@ test("LinkedIn OAuth publish preflight blocks duplicate successes and stale sche
   expect(await getPublishAttemptCount(page)).toBe(0);
   expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
 
-  await page.getByRole("button", { name: "Mark published" }).click();
+  await page.getByRole("button", { name: "Mark as posted" }).click();
   await page
     .getByLabel("LinkedIn post URL")
     .fill("https://www.linkedin.com/posts/first-success/");
   page.once("dialog", async (dialog) => {
     await dialog.accept();
   });
-  await page.getByRole("button", { name: "Record attempt" }).click();
-  await expect(getBadge(page, "Published")).toBeVisible();
+  await page.getByRole("button", { name: "Save result" }).click();
+  await expect(getBadge(page, "Posted")).toBeVisible();
 
   await setApprovalStatusThroughMockSql(page, 1, "approved");
   const duplicateResult = await publishViaTestApi(page, {
@@ -631,25 +635,25 @@ test("LinkedIn OAuth publish rechecks kill switch before submitting", async ({
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Publish via LinkedIn" }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish to LinkedIn" });
-  await dialog.getByLabel("Type “Publish now” to confirm").fill("Publish now");
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Post to LinkedIn" }).click();
+  const dialog = page.getByRole("dialog", { name: "Post to LinkedIn now" });
+  await dialog.getByLabel("Type “Post now” to confirm").fill("Post now");
 
   await enableKillSwitchThroughMockSql(
     page,
     "Emergency stop before LinkedIn submission.",
   );
-  await dialog.getByRole("button", { name: "Publish via LinkedIn" }).click();
+  await dialog.getByRole("button", { name: "Post to LinkedIn" }).click();
 
-  await expect(page.getByText("LinkedIn publish blocked")).toBeVisible();
+  await expect(page.getByText("Linkgo stopped this post")).toBeVisible();
   await expect(
     page.getByText(
-      "Global kill switch is enabled: Emergency stop before LinkedIn submission.",
+      "Everything is paused: Emergency stop before LinkedIn submission.",
     ),
   ).toBeVisible();
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(getBadge(page, "Succeeded")).toBeHidden();
+  await expect(getBadge(page, "Went live")).toBeHidden();
   expect(await getPublishAttemptCount(page)).toBe(0);
   expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
 
@@ -702,11 +706,11 @@ test("successful publish attempts require a LinkedIn URL or platform ID", async 
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Mark published" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Mark as posted" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Record publish attempt" });
-  const recordButton = dialog.getByRole("button", { name: "Record attempt" });
+  const dialog = page.getByRole("dialog", { name: "Record posting result" });
+  const recordButton = dialog.getByRole("button", { name: "Save result" });
   await expect(recordButton).toBeDisabled();
   await expect(
     dialog.getByText(
@@ -714,10 +718,10 @@ test("successful publish attempts require a LinkedIn URL or platform ID", async 
     ),
   ).toBeVisible();
 
-  await dialog.getByLabel("Platform post ID").fill("manual-success-id");
+  await dialog.getByLabel("LinkedIn post reference").fill("manual-success-id");
   await expect(recordButton).toBeEnabled();
 
-  await dialog.getByLabel("Platform post ID").fill("");
+  await dialog.getByLabel("LinkedIn post reference").fill("");
   await expect(recordButton).toBeDisabled();
 
   await dialog
@@ -758,11 +762,11 @@ test("mark published rejects a non-LinkedIn URL and records nothing", async ({
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Mark published" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Mark as posted" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Record publish attempt" });
-  const recordButton = dialog.getByRole("button", { name: "Record attempt" });
+  const dialog = page.getByRole("dialog", { name: "Record posting result" });
+  const recordButton = dialog.getByRole("button", { name: "Save result" });
   await dialog.getByLabel("LinkedIn post URL").fill("https://example.com/x");
   await expect(
     dialog.getByText(
@@ -808,17 +812,17 @@ test("failed publish attempts require a failure reason", async ({ page }) => {
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Record failure" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Mark as not posted" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Record publish attempt" });
-  const recordButton = dialog.getByRole("button", { name: "Record attempt" });
+  const dialog = page.getByRole("dialog", { name: "Record posting result" });
+  const recordButton = dialog.getByRole("button", { name: "Save result" });
   await expect(recordButton).toBeDisabled();
   await expect(
     dialog.getByText("Failure reason is required for failed attempts"),
   ).toBeVisible();
 
-  await dialog.getByLabel("Failure reason").fill("Local browser was offline.");
+  await dialog.getByLabel("What went wrong").fill("Local browser was offline.");
   await expect(recordButton).toBeEnabled();
 });
 
@@ -831,16 +835,16 @@ test("published approvals reject duplicate successful publish attempts", async (
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("button", { name: "Mark published" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Mark as posted" }).click();
   await page
     .getByLabel("LinkedIn post URL")
     .fill("https://www.linkedin.com/posts/first-success/");
   page.once("dialog", async (dialog) => {
     await dialog.accept();
   });
-  await page.getByRole("button", { name: "Record attempt" }).click();
-  await expect(getBadge(page, "Published")).toBeVisible();
+  await page.getByRole("button", { name: "Save result" }).click();
+  await expect(getBadge(page, "Posted")).toBeVisible();
 
   const beforeAttemptCount = await getPublishAttemptCount(page);
   const invokesBeforeDuplicate = await page.evaluate(() =>
@@ -965,7 +969,7 @@ test("cancelled schedules can be rescheduled with new details", async ({
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await scheduleApproval(page, "2026-06-25T14:30", "local");
   await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
@@ -997,16 +1001,18 @@ test("failed scheduled publish attempts can be rescheduled with new details", as
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await scheduleApproval(page, "2026-06-25T14:30", "local");
   await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
 
-  await page.getByRole("button", { name: "Record failure" }).click();
-  await page.getByLabel("Failure reason").fill("Local browser was offline.");
-  await page.getByRole("button", { name: "Record attempt" }).click();
+  await page.getByRole("button", { name: "Mark as not posted" }).click();
+  await page.getByLabel("What went wrong").fill("Local browser was offline.");
+  await page.getByRole("button", { name: "Save result" }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(getBadge(page, "Failed").first()).toBeVisible();
+  await expect(
+    getBadge(page, "Didn't post").filter({ visible: true }).first(),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Schedule", exact: true }),
   ).toBeVisible();
@@ -1052,10 +1058,10 @@ test("blocked variant is not listed as an approval candidate", async ({
   await openApprovals(page);
 
   await expect(
-    page.getByRole("button", { name: "Create review" }),
+    page.getByRole("button", { name: "Send for approval" }),
   ).toBeDisabled();
   await expect(
-    page.getByText("No eligible ready-for-review drafts"),
+    page.getByText("No drafts are ready to send for approval"),
   ).toBeVisible();
 });
 
@@ -1073,24 +1079,22 @@ test("flags capped approval and eligible-draft lists with the uncapped total", a
   });
   await openApprovals(page);
 
-  await page.getByRole("button", { name: "Create review" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create review" });
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  const dialog = page.getByRole("dialog", { name: "Send for approval" });
   await expect(dialog.getByTestId("list-truncation-notice")).toHaveText(
     /Showing the first 1 of 205 ready drafts/u,
   );
   await page.getByLabel("Reviewer notes").fill("Human pass.");
-  await dialog.getByRole("button", { name: "Create review" }).click();
+  await dialog.getByRole("button", { name: "Send for approval" }).click();
   await expect(dialog).toBeHidden();
 
   await expect(page.getByTestId("list-truncation-notice")).toHaveText(
     /Showing the first 1 of 503 approvals/u,
   );
   await expect(
-    page.getByText("Needs review (shown)", { exact: true }),
+    page.getByText("Waiting for approval (shown)", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Published (shown)", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("Posted (shown)", { exact: true })).toBeVisible();
 });
 
 test("request changes moves the linked draft back to needs revision", async ({
@@ -1106,7 +1110,7 @@ test("request changes moves the linked draft back to needs revision", async ({
   await expect(getBadge(page, "Changes requested")).toBeVisible();
   await openDrafts(page);
 
-  await expect(getBadge(page, "Needs revision")).toBeVisible();
+  await expect(getBadge(page, "Needs changes")).toBeVisible();
 });
 
 test("archived campaign approvals hide mutation controls with restore guidance", async ({
@@ -1118,19 +1122,19 @@ test("archived campaign approvals hide mutation controls with restore guidance",
   await openApprovals(page);
   await createReview(page);
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Schedule", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Mark published" }),
+    page.getByRole("button", { name: "Mark as posted" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Record failure" }),
+    page.getByRole("button", { name: "Mark as not posted" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeVisible();
 
   await archiveSelectedCampaign(page);
@@ -1138,10 +1142,12 @@ test("archived campaign approvals hide mutation controls with restore guidance",
 
   await expect(
     page.getByText(
-      "Archived campaigns cannot change approvals. Restore the campaign first.",
+      "This campaign is archived, so its approvals can't change. Restore the campaign first.",
     ),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Approve" })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Request changes" }),
   ).toBeHidden();
@@ -1149,13 +1155,13 @@ test("archived campaign approvals hide mutation controls with restore guidance",
     page.getByRole("button", { name: "Schedule", exact: true }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Mark published" }),
+    page.getByRole("button", { name: "Mark as posted" }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Record failure" }),
+    page.getByRole("button", { name: "Mark as not posted" }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Publish via LinkedIn" }),
+    page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
 });
 
@@ -1176,7 +1182,9 @@ test.describe("approval campaign selection ownership", () => {
 
     await expect(selector).toHaveValue(String(second));
     await expect(page.getByText("No approvals yet")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toHaveCount(0);
   });
 
   test("a failed campaign load shows an alert without stale actions and Retry recovers", async ({
@@ -1196,15 +1204,19 @@ test.describe("approval campaign selection ownership", () => {
       hasText: "Injected approval list failure",
     });
     await expect(alert).toBeVisible();
-    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Create review" }),
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Send for approval" }),
     ).toBeDisabled();
 
-    await alert.getByRole("button", { name: "Retry" }).click();
+    await alert.getByRole("button", { name: "Try again" }).click();
     await expect(alert).toBeHidden();
     await expect(getCampaignSelector(page)).toHaveValue(String(first));
-    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeVisible();
   });
 
   test("a mutation refresh finishing after a selection change keeps the new campaign", async ({
@@ -1213,9 +1225,11 @@ test.describe("approval campaign selection ownership", () => {
     const { first, second } = await setupTwoCampaigns(page);
 
     await selectApprovalCampaign(page, first);
-    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeVisible();
     await delayCampaign(page, first);
-    await page.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
     await expect.poll(() => getDelayedCount(page, first)).toBeGreaterThan(0);
 
     await selectApprovalCampaign(page, second);
@@ -1236,27 +1250,31 @@ test.describe("approval campaign selection ownership", () => {
     const { first } = await setupTwoCampaigns(page);
 
     await selectApprovalCampaign(page, first);
-    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeVisible();
     await page.evaluate(() => {
       (
         window as unknown as { __LINKGO_FAIL_APPROVAL_LIST__?: boolean }
       ).__LINKGO_FAIL_APPROVAL_LIST__ = true;
     });
-    await page.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
 
     const alert = page.getByRole("alert").filter({
       hasText: "Injected approval list failure",
     });
     await expect(alert).toBeVisible();
     await expect(
-      page.getByText("Saved, but approvals could not be refreshed"),
+      page.getByText("Saved, but we couldn't refresh your approvals"),
     ).toBeVisible();
-    await expect(page.getByText("Approval status was not changed")).toHaveCount(
-      0,
-    );
-    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await expect(
+      page.getByText("We couldn't update this approval"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toHaveCount(0);
 
-    await alert.getByRole("button", { name: "Retry" }).click();
+    await alert.getByRole("button", { name: "Try again" }).click();
     await expect(alert).toBeHidden();
     await expect(getCampaignSelector(page)).toHaveValue(String(first));
     await expect(getBadge(page, "Approved")).toBeVisible();
@@ -1271,7 +1289,9 @@ test.describe("approval campaign selection ownership", () => {
     await flushRenders(page);
     await resetApprovalListCalls(page);
     await selectApprovalCampaign(page, first);
-    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeVisible();
     await flushRenders(page);
 
     expect(await getApprovalListCalls(page)).toEqual([first]);
@@ -1406,9 +1426,9 @@ interface VariantFormInput {
 }
 
 function getBadge(page: Page, label: string): Locator {
-  return page
-    .locator("span")
-    .filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page.locator("span").filter({
+    hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
+  });
 }
 
 async function countSchedulingInvokes(page: Page): Promise<void> {
@@ -1717,13 +1737,11 @@ async function createReadyDraft(
   await addCandidate(page);
   await openDrafts(page);
   await createDraft(page, variant);
-  await page.getByRole("button", { name: "Select for review" }).click();
-  await expect(getBadge(page, "Ready for review")).toBeVisible();
-  const auditPanel = page.getByRole("region", { name: /AI audit/ });
-  await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
-  await expect(
-    auditPanel.getByText("Completed", { exact: true }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Choose this version" }).click();
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  const auditPanel = page.getByRole("region", { name: /AI review/ });
+  await auditPanel.getByRole("button", { name: "Review with AI" }).click();
+  await expect(auditPanel.getByText("Done", { exact: true })).toBeVisible();
 }
 
 async function makeDraftApprovalEligible(page: Page): Promise<void> {
@@ -1751,9 +1769,9 @@ async function makeDraftApprovalEligible(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -1816,10 +1834,8 @@ async function createCampaign(
 }
 
 async function addCandidate(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  await expect(
-    page.getByRole("dialog", { name: "Add candidate" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  await expect(page.getByRole("dialog", { name: "Add idea" })).toBeVisible();
 
   await page
     .getByLabel("LinkedIn post URL")
@@ -1833,11 +1849,11 @@ async function addCandidate(page: Page): Promise<void> {
     .fill("https://www.linkedin.com/in/jane-operator/");
   await page.getByLabel("Posted at").fill("2026-06-25");
   await page.getByLabel("Source keyword").fill("founder content");
-  await page.getByLabel("Relevance score").fill("87");
+  await page.getByLabel("Match score").fill("87");
   await page.getByLabel("Score reason").fill("Strong audience overlap.");
   await page.getByLabel("Notes").fill("Good approval candidate.");
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -1865,13 +1881,13 @@ async function createDraft(
 }
 
 async function createReview(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create review" }).click();
+  await page.getByRole("button", { name: "Send for approval" }).click();
   await expect(
-    page.getByRole("dialog", { name: "Create review" }),
+    page.getByRole("dialog", { name: "Send for approval" }),
   ).toBeVisible();
   await page.getByLabel("Reviewer notes").fill("Human pass before scheduling.");
-  const dialog = page.getByRole("dialog", { name: "Create review" });
-  await dialog.getByRole("button", { name: "Create review" }).click();
+  const dialog = page.getByRole("dialog", { name: "Send for approval" });
+  await dialog.getByRole("button", { name: "Send for approval" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -1881,9 +1897,9 @@ async function scheduleApproval(
   timezone: string,
 ): Promise<void> {
   await page.getByRole("button", { name: "Schedule", exact: true }).click();
-  await page.getByLabel("Scheduled for").fill(scheduledFor);
-  await page.getByLabel("Timezone label").fill(timezone);
-  const dialog = page.getByRole("dialog", { name: "Schedule approval" });
-  await dialog.getByRole("button", { name: "Schedule approval" }).click();
+  await page.getByLabel("Date and time").fill(scheduledFor);
+  await page.getByLabel("Time zone").fill(timezone);
+  const dialog = page.getByRole("dialog", { name: "Schedule post" });
+  await dialog.getByRole("button", { name: "Schedule post" }).click();
   await expect(dialog).toBeHidden();
 }

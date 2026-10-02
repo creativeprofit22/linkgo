@@ -1,6 +1,22 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { SchedulerEvent } from "@/features/scheduler/types";
+import type {
+  SchedulerEvent,
+  SchedulerEventType,
+} from "@/features/scheduler/types";
+import { toPlainMessage } from "@/lib/plain-message";
+
+const eventTypeLabels: Record<SchedulerEventType, string> = {
+  scheduler_started: "Turned on",
+  scheduler_stopped: "Turned off",
+  tick_started: "Check started",
+  tick_completed: "Check done",
+  job_claimed: "Posting…",
+  job_blocked: "Held back",
+  job_published: "Posted",
+  job_retry_scheduled: "Will try again",
+  job_failed: "Didn't post",
+};
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -24,12 +40,13 @@ export function SchedulerEventList({
   return (
     <Card className="bg-card/70">
       <CardHeader>
-        <CardTitle className="text-base">Recent scheduler events</CardTitle>
+        <CardTitle className="text-base">Recent activity</CardTitle>
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
           <p className="text-muted-foreground py-6 text-center text-sm">
-            No scheduler events yet.
+            Nothing has happened yet. Activity shows here once auto-posting is
+            on.
           </p>
         ) : (
           <div className="space-y-3">
@@ -37,14 +54,16 @@ export function SchedulerEventList({
               <div key={event.id} className="rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium">{event.summary}</p>
+                    <p className="text-sm font-medium">
+                      {toPlainMessage(event.summary)}
+                    </p>
                     <p className="text-muted-foreground mt-1 text-xs">
                       {event.campaign_name ?? "All campaigns"} ·{" "}
                       {formatDate(event.created_at)}
                     </p>
                   </div>
                   <Badge variant={severityVariant(event.severity)}>
-                    {event.event_type.replace(/_/gu, " ")}
+                    {eventTypeLabels[event.event_type]}
                   </Badge>
                 </div>
               </div>

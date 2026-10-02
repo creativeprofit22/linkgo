@@ -59,7 +59,9 @@ test("new campaign dialog opens and creates a campaign", async ({ page }) => {
   await expect(
     page.getByText("Solo founders and technical operators"),
   ).toBeVisible();
-  await expect(page.getByText("Local planner eligible")).toBeVisible();
+  await expect(
+    page.getByText("Included in Autopilot", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText("LinkedIn growth", { exact: true }),
   ).toBeVisible();
@@ -117,7 +119,9 @@ test("creating a campaign with an existing name shows the duplicate-name error",
 
   const dialog = await submitNewCampaign(page, "Founder-led growth");
 
-  await expect(page.getByText("Campaign was not created")).toBeVisible();
+  await expect(
+    page.getByText("We couldn't create this campaign"),
+  ).toBeVisible();
   await expect(
     page.getByText("A campaign with this name already exists"),
   ).toBeVisible();
@@ -146,7 +150,9 @@ test("renaming a campaign to an existing name shows the duplicate-name error", a
   await dialog.getByLabel("Name").fill("Founder-led growth");
   await dialog.getByRole("button", { name: "Save changes" }).click();
 
-  await expect(page.getByText("Campaign was not updated")).toBeVisible();
+  await expect(
+    page.getByText("We couldn't save your campaign changes"),
+  ).toBeVisible();
   await expect(
     page.getByText("A campaign with this name already exists"),
   ).toBeVisible();
@@ -211,7 +217,7 @@ test("campaign card status actions activate pause archive and restore", async ({
   await page.getByRole("button", { name: "Activate" }).click();
   await expectCampaignStatus(page, "Active");
 
-  await page.getByRole("button", { name: "Pause" }).click();
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
   await expectCampaignStatus(page, "Paused");
 
   await page.getByRole("button", { name: "Archive" }).click();
@@ -276,7 +282,7 @@ async function submitNewCampaign(page: Page, name: string): Promise<Locator> {
     .fill("LinkedIn growth, founder content, outbound");
   await page.getByLabel("Daily post limit").fill("2");
   await page.getByLabel("Daily comment limit").fill("7");
-  await page.getByLabel("Local autopilot planner").click();
+  await page.getByLabel("Include in Autopilot").click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await dialog.getByRole("button", { name: "Create campaign" }).click();
   return dialog;

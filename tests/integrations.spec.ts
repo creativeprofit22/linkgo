@@ -32,10 +32,10 @@ test("connects API-key provider without rendering secrets", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Integrations" }),
+    page.getByRole("heading", { name: "Connected accounts" }),
   ).toBeVisible();
   for (const provider of [
     "Anthropic",
@@ -48,7 +48,7 @@ test("connects API-key provider without rendering secrets", async ({
     "OpenRouter",
     "Sakana",
     "MiniMax",
-    "Custom API",
+    "Other AI service",
   ]) {
     await expect(page.getByText(provider, { exact: true })).toBeVisible();
   }
@@ -60,7 +60,7 @@ test("connects API-key provider without rendering secrets", async ({
 
   const dialog = page.getByRole("dialog", { name: "DeepSeek connection" });
   await dialog.getByLabel("DeepSeek API key").fill("sk-test-deepseek-key");
-  await dialog.getByLabel("Base URL override").fill("https://api.deepseek.com");
+  await dialog.getByLabel("Web address").fill("https://api.deepseek.com");
   await dialog.getByLabel("Account label").fill("Test DeepSeek");
   await dialog.getByRole("button", { name: "Save API key" }).click();
 
@@ -68,31 +68,35 @@ test("connects API-key provider without rendering secrets", async ({
   await expect(page.getByText("sk-test-deepseek-key")).toBeHidden();
 });
 
-test("requires Base URL before saving Custom API key", async ({ page }) => {
+test("requires Base URL before saving Other AI service key", async ({
+  page,
+}) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await expect(dialog.getByLabel("Base URL override (required)")).toBeVisible();
-  await dialog.getByLabel("Provider API key").fill("sk-test-custom-key");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await expect(dialog.getByLabel("Web address (required)")).toBeVisible();
+  await dialog.getByLabel("Access key").fill("sk-test-custom-key");
   await expect(
     dialog.getByRole("button", { name: "Save API key" }),
   ).toBeDisabled();
 
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
   await expect(
     dialog.getByRole("button", { name: "Save API key" }),
   ).toBeEnabled();
 });
 
-test("rejects direct Custom API key save without Base URL", async ({
+test("rejects direct Other AI service key save without Base URL", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -142,22 +146,24 @@ test("starts LinkedIn OAuth manual code flow and disconnects", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const linkedinCard = page
     .getByText("LinkedIn", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await linkedinCard.getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: "LinkedIn connection" });
-  await dialog.getByRole("button", { name: "Continue with OAuth" }).click();
+  await dialog
+    .getByRole("button", { name: "Connect LinkedIn account" })
+    .click();
   await expect(dialog.getByRole("status")).toHaveText(
-    "Couldn't open your browser. Copy the authorization URL instead.",
+    "Couldn't open your browser. Copy the sign-in link instead.",
   );
   await expect(
-    dialog.getByRole("button", { name: "Copy authorization URL" }),
+    dialog.getByRole("button", { name: "Copy sign-in link" }),
   ).toBeVisible();
-  await dialog.getByLabel("Authorization code").fill("manual-code");
-  await dialog.getByRole("button", { name: "Submit code" }).click();
+  await dialog.getByLabel("Sign-in code").fill("manual-code");
+  await dialog.getByRole("button", { name: "Finish connecting" }).click();
 
   await expect(page.getByText("Connected").first()).toBeVisible();
   await page.getByRole("button", { name: "Disconnect" }).click();
@@ -176,18 +182,20 @@ test("shows a failed-copy message when OAuth URL copy is unavailable", async ({
   });
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const linkedinCard = page
     .getByText("LinkedIn", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await linkedinCard.getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: "LinkedIn connection" });
-  await dialog.getByRole("button", { name: "Continue with OAuth" }).click();
-  await dialog.getByRole("button", { name: "Copy authorization URL" }).click();
+  await dialog
+    .getByRole("button", { name: "Connect LinkedIn account" })
+    .click();
+  await dialog.getByRole("button", { name: "Copy sign-in link" }).click();
 
   await expect(dialog.getByRole("alert")).toHaveText(
-    "Could not copy automatically. Open the authorization URL and copy it from your browser address bar.",
+    "We couldn't copy the link. Open the sign-in link and copy it from your browser's address bar.",
   );
 });
 
@@ -195,17 +203,19 @@ test("rejects plain-HTTP public Base URL even with local consent", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("test-key-00000000");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("http://api.example.com/v1");
   const consent = dialog.getByLabel(
     "Allow this local/private endpoint (this computer or network only)",
@@ -216,29 +226,31 @@ test("rejects plain-HTTP public Base URL even with local consent", async ({
 
   await expect(
     page.getByText(
-      "Base URL must use https:// unless it is an allowed local endpoint",
+      "The web address must start with https:// unless it's an allowed local address",
     ),
   ).toBeVisible();
-  await expect(dialog.getByLabel("Provider API key")).toHaveValue(
+  await expect(dialog.getByLabel("Access key")).toHaveValue(
     "test-key-00000000",
   );
-  await expect(page.getByText("Provider connected")).toBeHidden();
+  await expect(page.getByText("Account connected")).toBeHidden();
 });
 
 test("requires explicit consent before saving a localhost Base URL", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
-  const baseUrl = dialog.getByLabel("Base URL override (required)");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("test-key-00000000");
+  const baseUrl = dialog.getByLabel("Web address (required)");
   const consent = dialog.getByLabel(
     "Allow this local/private endpoint (this computer or network only)",
   );
@@ -251,12 +263,12 @@ test("requires explicit consent before saving a localhost Base URL", async ({
   await expect(consent).not.toBeChecked();
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(
-    page.getByText(/allow the local endpoint to use it/).first(),
+    page.getByText(/allow the local address to use it/).first(),
   ).toBeVisible();
 
   await consent.check();
   await dialog.getByRole("button", { name: "Save API key" }).click();
-  await expect(page.getByText("Provider connected")).toBeVisible();
+  await expect(page.getByText("Account connected")).toBeVisible();
 });
 
 test("shows reauth status and a reconnect path for a disallowed saved Base URL", async ({
@@ -265,19 +277,21 @@ test("shows reauth status and a reconnect path for a disallowed saved Base URL",
   const reauthMessage =
     "Base URL points to this computer or a private network. Reconnect the provider and allow the local endpoint to use it";
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("test-key-00000000");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://custom.example.com/v1");
   await dialog.getByRole("button", { name: "Save API key" }).click();
-  await expect(page.getByText("Provider connected")).toBeVisible();
+  await expect(page.getByText("Account connected")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
@@ -290,27 +304,35 @@ test("shows reauth status and a reconnect path for a disallowed saved Base URL",
   }, reauthMessage);
   await page.getByRole("button", { name: "Refresh" }).click();
 
-  await expect(customCard.getByText("Reauth required")).toBeVisible();
-  await expect(customCard.getByText(reauthMessage)).toBeVisible();
+  await expect(
+    customCard.getByText("Sign in again", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    customCard.getByText(
+      "This web address points to this computer or a private network. Connect again and allow the local address to use it",
+    ),
+  ).toBeVisible();
   await customCard.getByRole("button", { name: "Connect" }).click();
-  await expect(dialog.getByLabel("Provider API key")).toBeVisible();
+  await expect(dialog.getByLabel("Access key")).toBeVisible();
 });
 
 test("offers local consent when the native policy flags a Base URL the renderer hint missed", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
-    .getByText("Custom API", { exact: true })
+    .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
   await customCard.getByRole("button", { name: "Connect" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Custom API connection" });
-  await dialog.getByLabel("Provider API key").fill("test-key-00000000");
+  const dialog = page.getByRole("dialog", {
+    name: "Other AI service connection",
+  });
+  await dialog.getByLabel("Access key").fill("test-key-00000000");
   await dialog
-    .getByLabel("Base URL override (required)")
+    .getByLabel("Web address (required)")
     .fill("https://198.18.0.1/v1");
   const consent = dialog.getByLabel(
     "Allow this local/private endpoint (this computer or network only)",
@@ -319,14 +341,14 @@ test("offers local consent when the native policy flags a Base URL the renderer 
 
   await dialog.getByRole("button", { name: "Save API key" }).click();
   await expect(
-    page.getByText(/allow the local endpoint to use it/).first(),
+    page.getByText(/allow the local address to use it/).first(),
   ).toBeVisible();
   await expect(consent).toBeVisible();
   await expect(consent).not.toBeChecked();
 
   await consent.check();
   await dialog.getByRole("button", { name: "Save API key" }).click();
-  await expect(page.getByText("Provider connected")).toBeVisible();
+  await expect(page.getByText("Account connected")).toBeVisible();
 });
 
 function aiCard(
@@ -343,7 +365,7 @@ async function openAccountSignIn(
   label: "OpenAI" | "Anthropic",
 ): Promise<import("@playwright/test").Locator> {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   await aiCard(page, label).getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: `${label} connection` });
   await dialog.getByRole("button", { name: "Account sign-in" }).click();
@@ -530,7 +552,7 @@ test("shows reconnect-needed state for a revoked AI sign-in", async ({
   );
   await page.getByRole("button", { name: "Refresh" }).click();
   const card = aiCard(page, "OpenAI");
-  await expect(card.getByText("Reauth required")).toBeVisible();
+  await expect(card.getByText("Sign in again", { exact: true })).toBeVisible();
   await expect(
     card.getByText("Sign-in expired or was revoked; reconnect this provider"),
   ).toBeVisible();
@@ -567,7 +589,7 @@ test("expired AI sign-in access token shows automatic renewal, not reconnect", a
   );
   await page.getByRole("button", { name: "Refresh" }).click();
   const card = aiCard(page, "OpenAI");
-  await expect(card.getByText("Renews on next run")).toBeVisible();
+  await expect(card.getByText("Renews next time it's used")).toBeVisible();
   await expect(card.getByText(/renews automatically/)).toBeVisible();
   await expect(card.getByText(/reconnect/i)).toHaveCount(0);
   await expect(card.getByRole("button", { name: "Connect" })).toHaveCount(0);
@@ -575,7 +597,9 @@ test("expired AI sign-in access token shows automatic renewal, not reconnect", a
   await card.getByRole("button", { name: "Manage" }).click();
   const manage = page.getByRole("dialog", { name: "OpenAI connection" });
   await expect(
-    manage.getByText(/access renews automatically on the next agent run/),
+    manage.getByText(
+      /access renews automatically the next time the AI assistant uses it/,
+    ),
   ).toBeVisible();
   await expect(manage.getByText(/Reconnect needed/)).toHaveCount(0);
 });
@@ -584,7 +608,7 @@ test("confirms before sign-in replaces a saved API key and vice versa", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Integrations/ }).click();
+  await page.getByRole("button", { name: /^Connected accounts/ }).click();
   await aiCard(page, "OpenAI").getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: "OpenAI connection" });
 

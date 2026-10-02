@@ -7,6 +7,7 @@ import {
   setErrorQueueItemStatus,
   setGlobalKillSwitch,
 } from "@/features/safety/data";
+import { toPlainMessage } from "@/lib/plain-message";
 import type {
   SafetyDashboard,
   SetErrorQueueItemStatusInput,
@@ -27,7 +28,9 @@ interface UseSafetyState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected safety error";
+  return error instanceof Error
+    ? toPlainMessage(error.message)
+    : "Something went wrong with safety settings. Try again.";
 }
 
 export function useSafety(): UseSafetyState {
@@ -87,10 +90,12 @@ export function useSafety(): UseSafetyState {
         await setGlobalKillSwitch(input);
         await loadDashboard(selectedCampaignId);
         toast.success(
-          input.enabled ? "Kill switch enabled" : "Kill switch disabled",
+          input.enabled
+            ? "Emergency pause is on. Everything is paused."
+            : "Emergency pause is off",
         );
       } catch (caught) {
-        toast.error("Kill switch was not updated", {
+        toast.error("We couldn't change the emergency pause", {
           description: getErrorMessage(caught),
         });
         throw caught;
@@ -108,7 +113,7 @@ export function useSafety(): UseSafetyState {
         await setErrorQueueItemStatus(input);
         await loadDashboard(selectedCampaignId);
       } catch (caught) {
-        toast.error("Error item was not updated", {
+        toast.error("We couldn't update this problem", {
           description: getErrorMessage(caught),
         });
         throw caught;

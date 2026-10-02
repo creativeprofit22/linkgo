@@ -14,12 +14,14 @@ test("records manual metrics for a published approval", async ({ page }) => {
 
   await recordMetrics(page);
 
-  await expectSummaryValue(page, "Measured posts", "1");
+  await expectSummaryValue(page, "Posts tracked", "1");
   await expectSummaryValue(page, "Total impressions", "1,200");
-  await expectSummaryValue(page, "Avg engagement", "7.5%");
+  await expectSummaryValue(page, "Average engagement", "7.5%");
   await expect(page.getByText("Jane Operator").first()).toBeVisible();
   await expect(page.getByText("Engagement rate")).toBeVisible();
-  await expect(page.getByText("CTR", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Click-through rate", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("4.2%")).toBeVisible();
   await expect(
     page.getByText("Metric snapshot recorded for approval #1"),
@@ -34,11 +36,11 @@ test("starts and stops metric refresh from Metrics tab", async ({ page }) => {
   );
   await openMetrics(page);
 
-  await page.getByRole("button", { name: /Start metric refresh/ }).click();
-  await expectSummaryValue(page, "API refresh", "Running");
+  await page.getByRole("button", { name: /Turn on auto-update/ }).click();
+  await expectSummaryValue(page, "Auto-update", "On");
 
-  await page.getByRole("button", { name: /Stop metric refresh/ }).click();
-  await expectSummaryValue(page, "API refresh", "Stopped");
+  await page.getByRole("button", { name: /Turn off auto-update: On$/ }).click();
+  await expectSummaryValue(page, "Auto-update", "Off");
 });
 
 test("shows enabled metric refresh when worker is not running", async ({
@@ -52,9 +54,9 @@ test("shows enabled metric refresh when worker is not running", async ({
   await setMetricRefreshEnabled(page, true);
   await openMetrics(page);
 
-  await expectSummaryValue(page, "API refresh", "Enabled (not running)");
+  await expectSummaryValue(page, "Auto-update", "On (paused)");
   await expect(
-    page.getByRole("button", { name: /Disable metric refresh/ }),
+    page.getByRole("button", { name: /Turn off auto-update: On \(paused\)/ }),
   ).toBeVisible();
 });
 
@@ -68,16 +70,12 @@ test("runs LinkedIn metric refresh and records API-sourced reactions and comment
   );
   await openMetrics(page);
 
-  await page
-    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
-    .click();
+  await page.getByRole("button", { name: "Update from LinkedIn now" }).click();
 
-  await expectSummaryValue(page, "Measured posts", "1");
-  await expectSummaryValue(page, "Last API snapshots", "1");
-  await expect(
-    page.getByText("LinkedIn social metadata", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Zero impressions, reposts")).toBeVisible();
+  await expectSummaryValue(page, "Posts tracked", "1");
+  await expectSummaryValue(page, "Updates from LinkedIn", "1");
+  await expect(page.getByText("From LinkedIn", { exact: true })).toBeVisible();
+  await expect(page.getByText("A zero for impressions, reposts")).toBeVisible();
   await expect(
     page.getByText("LinkedIn social metadata refresh completed."),
   ).toBeVisible();
@@ -99,9 +97,7 @@ test("shows backend string error when metric refresh tick rejects", async ({
   );
   await openMetrics(page);
 
-  await page
-    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
-    .click();
+  await page.getByRole("button", { name: "Update from LinkedIn now" }).click();
 
   await expect(
     page.getByText("LinkedIn credentials are missing."),
@@ -118,11 +114,9 @@ test("marks metric refresh unavailable when LinkedIn target URN is missing", asy
   );
   await openMetrics(page);
 
-  await page
-    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
-    .click();
+  await page.getByRole("button", { name: "Update from LinkedIn now" }).click();
 
-  await expectSummaryValue(page, "Unavailable", "1");
+  await expectSummaryValue(page, "Not available", "1");
   await expect(
     page.getByText("LinkedIn target URN could not be resolved"),
   ).toBeVisible();
@@ -144,13 +138,11 @@ test("global kill switch blocks metric refresh without inserting API snapshot", 
   await setGlobalKillSwitch(page, true);
   await openMetrics(page);
 
-  await page
-    .getByRole("button", { name: "Refresh LinkedIn metrics now" })
-    .click();
+  await page.getByRole("button", { name: "Update from LinkedIn now" }).click();
 
-  await expectSummaryValue(page, "Last API snapshots", "0");
+  await expectSummaryValue(page, "Updates from LinkedIn", "0");
   await expect(
-    page.getByText("Metric refresh skipped: Global kill switch is enabled"),
+    page.getByText("Analytics update skipped: Everything is paused"),
   ).toBeVisible();
 });
 
@@ -160,22 +152,22 @@ test("saves campaign memory from a metric", async ({ page }) => {
   await openMetrics(page);
   await recordMetrics(page);
 
-  await page.getByRole("button", { name: "Save memory" }).click();
-  const dialog = page.getByRole("dialog", { name: "Save campaign memory" });
-  await dialog.getByLabel("Signal").selectOption("winner");
+  await page.getByRole("button", { name: "Save lesson" }).click();
+  const dialog = page.getByRole("dialog", { name: "Save a lesson" });
+  await dialog.getByLabel("Type of lesson").selectOption("winner");
   await dialog
     .getByLabel("Summary")
     .fill("High-engagement tactical post worth reusing.");
   await dialog
-    .getByLabel("Evidence")
+    .getByLabel("What you saw")
     .fill("90 engagements from 1,200 impressions with strong CTR.");
-  await dialog.getByLabel("Confidence").fill("82");
-  await dialog.getByRole("button", { name: "Save memory" }).click();
+  await dialog.getByLabel("How sure are you? (%)").fill("82");
+  await dialog.getByRole("button", { name: "Save lesson" }).click();
   await expect(dialog).toBeHidden();
 
-  await expectSummaryValue(page, "Active memories", "1");
+  await expectSummaryValue(page, "Active notes", "1");
   await expect(getBadge(page, "Winner")).toBeVisible();
-  await expect(page.getByText("82% confidence")).toBeVisible();
+  await expect(page.getByText("82% sure")).toBeVisible();
   await expect(
     page.getByText("High-engagement tactical post worth reusing.", {
       exact: true,
@@ -193,12 +185,12 @@ test("archives and restores campaign memory", async ({ page }) => {
 
   await page.getByRole("button", { name: "Archive" }).click();
   await expect(getBadge(page, "Archived")).toBeVisible();
-  await expectSummaryValue(page, "Active memories", "0");
+  await expectSummaryValue(page, "Active notes", "0");
   await expect(page.getByText("Campaign memory archived")).toBeVisible();
 
   await page.getByRole("button", { name: "Restore" }).click();
   await expect(getBadge(page, "Active").first()).toBeVisible();
-  await expectSummaryValue(page, "Active memories", "1");
+  await expectSummaryValue(page, "Active notes", "1");
   await expect(page.getByText("Campaign memory restored")).toBeVisible();
 });
 
@@ -210,12 +202,12 @@ test("shows empty published-post state before anything is published", async ({
   await openMetrics(page);
 
   await expect(
-    page.getByText("No published posts are ready for metrics"),
+    page.getByText("None of your posts have gone out yet"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "No published posts" }),
+    page.getByRole("button", { name: "No posts yet" }),
   ).toBeDisabled();
-  await expect(page.getByText("No metrics yet")).toBeVisible();
+  await expect(page.getByText("No results yet")).toBeVisible();
 });
 
 test("archived campaign hides mutation controls and rejects metric data mutations", async ({
@@ -230,10 +222,8 @@ test("archived campaign hides mutation controls and rejects metric data mutation
   await archiveSelectedCampaign(page);
   await openMetrics(page);
 
-  await expect(
-    page.getByText("Archived campaigns keep metric history visible"),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save memory" })).toBeHidden();
+  await expect(page.getByText("You can see its past results")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save lesson" })).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Archive", exact: true }),
   ).toBeHidden();
@@ -275,9 +265,9 @@ test("archived campaign hides mutation controls and rejects metric data mutation
 });
 
 function getBadge(page: Page, label: string): Locator {
-  return page
-    .locator("span")
-    .filter({ hasText: new RegExp(`^${label}$`, "u") });
+  return page.locator("span").filter({
+    hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
+  });
 }
 
 async function expectSummaryValue(
@@ -303,9 +293,9 @@ async function openCampaigns(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Queue/ }).click();
+  await page.getByRole("button", { name: /^Ideas/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Candidate Queue" }),
+    page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
@@ -324,9 +314,9 @@ async function openApprovals(page: Page): Promise<void> {
 }
 
 async function openMetrics(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Metrics/ }).click();
+  await page.getByRole("button", { name: /^Analytics/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Metrics", exact: true }),
+    page.getByRole("heading", { name: "Analytics", exact: true }),
   ).toBeVisible();
 }
 
@@ -338,15 +328,15 @@ async function createPublishedApproval(
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
   await createReview(page);
-  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await page.getByRole("button", { name: "Mark published" }).click();
+  await page.getByRole("button", { name: "Mark as posted" }).click();
   await page.getByLabel("LinkedIn post URL").fill(linkedInPostUrl);
   page.once("dialog", async (dialog) => {
     await dialog.accept();
   });
-  await page.getByRole("button", { name: "Record attempt" }).click();
-  await expect(getBadge(page, "Published")).toBeVisible();
+  await page.getByRole("button", { name: "Save result" }).click();
+  await expect(getBadge(page, "Posted")).toBeVisible();
 }
 
 async function createReadyDraft(page: Page): Promise<void> {
@@ -355,13 +345,11 @@ async function createReadyDraft(page: Page): Promise<void> {
   await addCandidate(page);
   await openDrafts(page);
   await createDraft(page);
-  await page.getByRole("button", { name: "Select for review" }).click();
-  await expect(getBadge(page, "Ready for review")).toBeVisible();
-  const auditPanel = page.getByRole("region", { name: /AI audit/ });
-  await auditPanel.getByRole("button", { name: "Run AI audit" }).click();
-  await expect(
-    auditPanel.getByText("Completed", { exact: true }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Choose this version" }).click();
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  const auditPanel = page.getByRole("region", { name: /AI review/ });
+  await auditPanel.getByRole("button", { name: "Review with AI" }).click();
+  await expect(auditPanel.getByText("Done", { exact: true })).toBeVisible();
 }
 
 async function makeDraftApprovalEligible(page: Page): Promise<void> {
@@ -408,8 +396,8 @@ async function createCampaign(page: Page): Promise<void> {
 }
 
 async function addCandidate(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Add candidate" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Add candidate" });
+  await page.getByRole("button", { name: "Add idea" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add idea" });
   await expect(dialog).toBeVisible();
 
   await dialog
@@ -424,10 +412,10 @@ async function addCandidate(page: Page): Promise<void> {
     .fill("https://www.linkedin.com/in/jane-operator/");
   await dialog.getByLabel("Posted at").fill("2026-06-25");
   await dialog.getByLabel("Source keyword").fill("founder content");
-  await dialog.getByLabel("Relevance score").fill("87");
+  await dialog.getByLabel("Match score").fill("87");
   await dialog.getByLabel("Score reason").fill("Strong audience overlap.");
   await dialog.getByLabel("Notes").fill("Good approval candidate.");
-  await dialog.getByRole("button", { name: "Add candidate" }).click();
+  await dialog.getByRole("button", { name: "Add idea" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -459,28 +447,28 @@ async function createDraft(page: Page): Promise<void> {
 }
 
 async function createReview(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create review" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create review" });
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  const dialog = page.getByRole("dialog", { name: "Send for approval" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Reviewer notes").fill("Human pass before metrics.");
-  await dialog.getByRole("button", { name: "Create review" }).click();
+  await dialog.getByRole("button", { name: "Send for approval" }).click();
   await expect(dialog).toBeHidden();
 }
 
 async function recordMetrics(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Record metrics" }).click();
-  const dialog = page.getByRole("dialog", { name: "Record metrics" });
+  await page.getByRole("button", { name: "Add results" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add results" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Measured at").fill("2026-06-25T15:30");
+  await dialog.getByLabel("Checked on").fill("2026-06-25T15:30");
   await dialog.getByLabel("Impressions").fill("1200");
   await dialog.getByLabel("Reactions").fill("60");
   await dialog.getByLabel("Comments").fill("20");
   await dialog.getByLabel("Reposts").fill("10");
   await dialog.getByLabel("Profile visits").fill("25");
   await dialog.getByLabel("Link clicks").fill("48");
-  await dialog.getByLabel("CTR percent optional").fill("4.2");
+  await dialog.getByLabel("Click-through rate % (optional)").fill("4.2");
   await dialog.getByLabel("Notes").fill("Strong manual snapshot.");
-  await dialog.getByRole("button", { name: "Record metrics" }).click();
+  await dialog.getByRole("button", { name: "Save results" }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -528,13 +516,13 @@ async function setGlobalKillSwitch(
 }
 
 async function saveDefaultMemory(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Save memory" }).click();
-  const dialog = page.getByRole("dialog", { name: "Save campaign memory" });
+  await page.getByRole("button", { name: "Save lesson" }).click();
+  const dialog = page.getByRole("dialog", { name: "Save a lesson" });
   await dialog
     .getByLabel("Summary")
     .fill("Reuse concrete customer interview posts.");
-  await dialog.getByLabel("Confidence").fill("75");
-  await dialog.getByRole("button", { name: "Save memory" }).click();
+  await dialog.getByLabel("How sure are you? (%)").fill("75");
+  await dialog.getByRole("button", { name: "Save lesson" }).click();
   await expect(dialog).toBeHidden();
 }
 

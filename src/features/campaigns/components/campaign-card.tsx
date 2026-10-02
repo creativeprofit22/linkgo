@@ -56,11 +56,11 @@ export function CampaignCard({
               <CardTitle className="truncate">{campaign.name}</CardTitle>
               <CampaignStatusBadge status={campaign.status} />
               <span className="border-border text-muted-foreground rounded-md border px-2 py-0.5 text-xs">
-                {isAutoPilot ? "Local planner eligible" : "Manual planning"}
+                {isAutoPilot ? "Included in Autopilot" : "Not in Autopilot"}
               </span>
             </div>
             <p className="text-muted-foreground line-clamp-2 text-sm">
-              {campaign.product || "No product context yet."}
+              {campaign.product || "No product added yet."}
             </p>
           </div>
 
@@ -126,14 +126,14 @@ export function CampaignCard({
           />
           <InfoBlock
             label="Voice"
-            value={campaign.voice || "No voice guidance yet."}
+            value={campaign.voice || "No voice notes yet."}
           />
           <InfoBlock
             label="Tone"
-            value={campaign.tone || "No tone guidance yet."}
+            value={campaign.tone || "No tone notes yet."}
           />
           <InfoBlock
-            label="Limits"
+            label="Daily limits"
             value={`${campaign.daily_post_limit} posts/day · ${campaign.daily_comment_limit} comments/day`}
           />
         </div>
@@ -156,9 +156,7 @@ export function CampaignCard({
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground text-sm">
-              No keywords attached.
-            </p>
+            <p className="text-muted-foreground text-sm">No keywords yet.</p>
           )}
         </div>
       </CardContent>

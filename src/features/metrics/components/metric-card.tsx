@@ -38,13 +38,13 @@ export function MetricCard({
             <CardTitle className="truncate">{authorName}</CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-muted-foreground text-sm">
-                {metric.campaign.name} · Variant {metric.variant.variant_number}{" "}
-                · measured {metric.measured_at}
+                {metric.campaign.name} · Version {metric.variant.variant_number}{" "}
+                · checked {metric.measured_at}
               </p>
               <span className="bg-muted text-muted-foreground rounded-full border px-2 py-0.5 text-xs font-medium">
                 {metric.collection_source === "linkedin_social_metadata"
-                  ? "LinkedIn social metadata"
-                  : "Manual"}
+                  ? "From LinkedIn"
+                  : "Added by you"}
               </span>
             </div>
             <a
@@ -70,13 +70,13 @@ export function MetricCard({
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid gap-4 lg:grid-cols-2">
-          <TextBlock label="Selected variant" value={variantPreview} />
-          <TextBlock label="Source post" value={metric.source.content} />
+          <TextBlock label="Your post" value={variantPreview} />
+          <TextBlock label="Original post" value={metric.source.content} />
         </div>
 
         {metric.latestPublishAttempt && (
           <div className="bg-muted/30 rounded-xl border p-4">
-            <p className="font-medium">Latest publish evidence</p>
+            <p className="font-medium">Where it was posted</p>
             <div className="text-muted-foreground mt-2 space-y-1 text-sm">
               {metric.latestPublishAttempt.external_post_url && (
                 <a
@@ -93,7 +93,8 @@ export function MetricCard({
               )}
               {metric.latestPublishAttempt.platform_post_id && (
                 <p>
-                  Platform ID: {metric.latestPublishAttempt.platform_post_id}
+                  LinkedIn reference:{" "}
+                  {metric.latestPublishAttempt.platform_post_id}
                 </p>
               )}
               <p>{metric.latestPublishAttempt.created_at}</p>
@@ -112,14 +113,18 @@ export function MetricCard({
             label="Engagement rate"
             value={formatPercent(metric.engagementRate)}
           />
-          <MetricValue label="CTR" value={formatPercent(metric.displayCtr)} />
+          <MetricValue
+            label="Click-through rate"
+            value={formatPercent(metric.displayCtr)}
+          />
         </div>
 
         {metric.collection_source === "linkedin_social_metadata" && (
           <div className="border-linkgo-blue/30 bg-linkgo-blue/5 text-muted-foreground rounded-xl border p-4 text-sm">
-            LinkedIn API snapshots include reactions and comments only for
-            member posts. Zero impressions, reposts, profile visits, link
-            clicks, and CTR mean unavailable here—not zero reach.
+            LinkedIn only shares reactions and comments here. A zero for
+            impressions, reposts, profile visits, link clicks, or click-through
+            rate means LinkedIn didn&rsquo;t share it, not that nobody saw your
+            post.
           </div>
         )}
 

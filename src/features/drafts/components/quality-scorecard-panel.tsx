@@ -3,13 +3,14 @@ import { CheckCircle2, CircleAlert, Gauge, LoaderCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DraftVariantWithAudits } from "@/features/drafts/types";
+import { toPlainMessage } from "@/lib/plain-message";
 
 const LABELS = {
-  hook_strength: "Hook strength",
-  authenticity: "Authenticity",
-  linkedin_fit: "LinkedIn fit",
-  specificity: "Specificity",
-  narrative_structure: "Narrative structure",
+  hook_strength: "Strong opening",
+  authenticity: "Sounds like you",
+  linkedin_fit: "Fits LinkedIn",
+  specificity: "Specific details",
+  narrative_structure: "Story flow",
 } as const;
 
 export function QualityScorecardPanel({
@@ -49,13 +50,13 @@ export function QualityScorecardPanel({
       (run.status === "failed" && !recoverable));
   const label =
     pending || run?.status === "running"
-      ? "Running"
+      ? "In progress"
       : run?.status === "passed"
         ? "Passed"
         : run?.status === "needs_revision"
-          ? "Needs revision"
+          ? "Needs changes"
           : run?.status === "failed"
-            ? "Failed"
+            ? "Didn't finish"
             : "Not scored";
 
   return (
@@ -69,10 +70,10 @@ export function QualityScorecardPanel({
             id={`quality-${variant.id}-title`}
             className="flex items-center gap-2 text-sm font-semibold"
           >
-            <Gauge className="size-4" /> Draft quality
+            <Gauge className="size-4" /> Quality score
           </h3>
           <p className="text-muted-foreground mt-1 text-sm">
-            Five-category score against the fixed 70 quality threshold.
+            Scores five things out of 100. A draft needs 70 to pass.
           </p>
         </div>
         <Badge variant="outline">{label}</Badge>
@@ -84,9 +85,9 @@ export function QualityScorecardPanel({
               <strong>{run.final_score ?? latest?.overall_score ?? "—"}</strong>
               /100
             </p>
-            <p>Attempt {latest?.attempt_number ?? 1}</p>
-            <p>{run.applied_rewrite_count}/2 rewrites</p>
-            <p>Revision {run.current_content_revision}</p>
+            <p>Round {latest?.attempt_number ?? 1}</p>
+            <p>{run.applied_rewrite_count}/2 AI rewrites</p>
+            <p>Edit {run.current_content_revision}</p>
           </div>
           {latest !== undefined && latest.categoryScores.length > 0 && (
             <ul className="grid gap-2 sm:grid-cols-2">
@@ -109,7 +110,9 @@ export function QualityScorecardPanel({
               role={run.status === "failed" ? "alert" : undefined}
               className="text-muted-foreground text-sm"
             >
-              {run.error_message || run.summary}
+              {run.error_message
+                ? toPlainMessage(run.error_message)
+                : run.summary}
             </p>
           )}
         </div>
@@ -118,26 +121,26 @@ export function QualityScorecardPanel({
         {terminal && (
           <p className="text-muted-foreground mb-3 text-sm">
             {currentRun
-              ? "This quality run cannot resume. Edit the draft, re-audit the current revision, then re-score with Run quality loop."
-              : "This quality run belongs to an older revision. Re-audit the current draft, then re-score with Run quality loop."}
+              ? "This quality check can't continue. Edit the draft, review it with AI again, then choose Improve with AI."
+              : "This quality check is for an older version of the draft. Review the current draft with AI, then choose Improve with AI."}
           </p>
         )}
         {!ready && (run === undefined || recoverable || terminal) && (
           <p className="text-muted-foreground mb-3 text-sm">
-            Complete the current revision’s canonical AI audit with no blocking
-            findings first.
+            First, review this version with AI and fix anything marked “Must
+            fix”.
           </p>
         )}
         {confirming ? (
           <div
             role="alertdialog"
             aria-modal="true"
-            aria-label="Confirm quality loop"
+            aria-label="Confirm improve with AI"
             className="bg-muted/40 rounded-lg border p-3"
           >
             <p className="text-sm">
-              Run quality loop? It may automatically rewrite this draft up to
-              two times, with an AI re-audit after each change.
+              Improve this draft with AI? The AI may rewrite it up to two times
+              and review it again after each change.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
@@ -149,7 +152,7 @@ export function QualityScorecardPanel({
                   })
                 }
               >
-                Confirm and run
+                Yes, improve it
               </Button>
               <Button
                 size="sm"
@@ -172,11 +175,11 @@ export function QualityScorecardPanel({
           >
             {pending ? (
               <>
-                <LoaderCircle className="size-4 animate-spin" /> Resuming…
+                <LoaderCircle className="size-4 animate-spin" /> Continuing…
               </>
             ) : (
               <>
-                <CircleAlert className="size-4" /> Resume quality loop
+                <CircleAlert className="size-4" /> Continue improving
               </>
             )}
           </Button>
@@ -194,7 +197,7 @@ export function QualityScorecardPanel({
               ) : (
                 <CheckCircle2 className="size-4" />
               )}{" "}
-              Run quality loop
+              Improve with AI
             </Button>
           )
         )}

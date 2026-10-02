@@ -13,6 +13,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  formatLabels,
+  purposeLabels,
+} from "@/features/content-calendar/components/content-calendar-status-badge";
 import type {
   ContentCalendarFormat,
   ContentCalendarPurpose,
@@ -125,14 +129,17 @@ export function EditContentCalendarSlotDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Edit calendar slot</DialogTitle>
+            <DialogTitle>Edit planned post</DialogTitle>
             <DialogDescription>
-              Adjust the planning metadata without changing the approval record.
+              Change the plan for this post. Its approval stays the same.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Slot for" htmlFor={`calendar-slot-for-${slot.id}`}>
+            <Field
+              label="Date and time"
+              htmlFor={`calendar-slot-for-${slot.id}`}
+            >
               <Input
                 id={`calendar-slot-for-${slot.id}`}
                 type="datetime-local"
@@ -147,10 +154,7 @@ export function EditContentCalendarSlotDialog({
                 }
               />
             </Field>
-            <Field
-              label="Timezone label"
-              htmlFor={`calendar-timezone-${slot.id}`}
-            >
+            <Field label="Time zone" htmlFor={`calendar-timezone-${slot.id}`}>
               <Input
                 id={`calendar-timezone-${slot.id}`}
                 value={form.timezone}
@@ -163,11 +167,12 @@ export function EditContentCalendarSlotDialog({
                 }
               />
             </Field>
-            <Field label="Purpose" htmlFor={`calendar-purpose-${slot.id}`}>
+            <Field label="Goal" htmlFor={`calendar-purpose-${slot.id}`}>
               <OptionSelect
                 id={`calendar-purpose-${slot.id}`}
                 value={form.purpose}
                 options={purposeOptions}
+                labels={purposeLabels}
                 onChange={(purpose) =>
                   setForm((current) => ({ ...current, purpose }))
                 }
@@ -178,6 +183,7 @@ export function EditContentCalendarSlotDialog({
                 id={`calendar-format-${slot.id}`}
                 value={form.format}
                 options={formatOptions}
+                labels={formatLabels}
                 onChange={(format) =>
                   setForm((current) => ({ ...current, format }))
                 }
@@ -201,7 +207,7 @@ export function EditContentCalendarSlotDialog({
               />
             </Field>
             <Field
-              label="Visual direction"
+              label="Look and feel"
               htmlFor={`calendar-visual-direction-${slot.id}`}
             >
               <Textarea
@@ -217,7 +223,7 @@ export function EditContentCalendarSlotDialog({
                 }
               />
             </Field>
-            <Field label="CTA" htmlFor={`calendar-cta-${slot.id}`}>
+            <Field label="Call to action" htmlFor={`calendar-cta-${slot.id}`}>
               <Textarea
                 id={`calendar-cta-${slot.id}`}
                 value={form.cta}
@@ -255,7 +261,7 @@ export function EditContentCalendarSlotDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || !canSubmit}>
-              {submitting ? "Saving…" : "Save slot"}
+              {submitting ? "Saving…" : "Save changes"}
             </Button>
           </DialogFooter>
         </form>
@@ -268,11 +274,13 @@ function OptionSelect<T extends string>({
   id,
   value,
   options,
+  labels,
   onChange,
 }: {
   id: string;
   value: T;
   options: T[];
+  labels: Record<T, string>;
   onChange: (value: T) => void;
 }): React.ReactNode {
   return (
@@ -284,7 +292,7 @@ function OptionSelect<T extends string>({
     >
       {options.map((option) => (
         <option key={option} value={option}>
-          {option}
+          {labels[option]}
         </option>
       ))}
     </select>
