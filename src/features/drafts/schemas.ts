@@ -10,6 +10,7 @@ import {
 import type { DraftsRouteParams } from "@/features/drafts/types";
 import {
   defineRoute,
+  optionalRouteFlag,
   optionalRouteId,
   routeId,
 } from "@/lib/navigation/route-contract";
@@ -17,17 +18,20 @@ import { z } from "zod";
 
 /**
  * Link params for Drafts (`#/drafts?campaignId=1&candidateId=2`). An idea
- * filter needs its campaign, so `candidateId` alone is an invalid link. The
- * union mirrors `DraftsRouteParams`.
+ * filter needs its campaign, so `candidateId` alone is an invalid link.
+ * `write=1` opens Write with AI for that idea and needs both ids. The union
+ * mirrors `DraftsRouteParams`.
  */
 export const draftsRouteSearchSchema = z.union([
   z.object({
     campaignId: optionalRouteId(),
     candidateId: z.undefined().optional(),
+    write: z.undefined().optional(),
   }),
   z.object({
     campaignId: routeId(),
     candidateId: routeId(),
+    write: optionalRouteFlag(),
   }),
 ]);
 

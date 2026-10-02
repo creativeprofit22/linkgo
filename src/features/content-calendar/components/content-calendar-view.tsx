@@ -1,16 +1,33 @@
-import { AlertCircle, CalendarDays, RefreshCw, Target } from "lucide-react";
+import {
+  AlertCircle,
+  CalendarDays,
+  CalendarPlus,
+  Info,
+  RefreshCw,
+  Target,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreateContentCalendarSlotDialog } from "@/features/content-calendar/components/create-content-calendar-slot-dialog";
 import { ContentCalendarSlotCard } from "@/features/content-calendar/components/content-calendar-slot-card";
 import { getContentCalendarLifecycle } from "@/features/content-calendar/components/content-calendar-status-badge";
 import { useContentCalendar } from "@/features/content-calendar/hooks/use-content-calendar";
+import { contentCalendarRoute } from "@/features/content-calendar/schemas";
 import type {
+  ContentCalendarEligibleApproval,
+  ContentCalendarRouteParams,
   ContentCalendarSlotWithDetails,
   ContentCalendarSummary,
 } from "@/features/content-calendar/types";
+import {
+  navigateTo,
+  useRouteParams,
+} from "@/lib/navigation/use-hash-navigation";
 
 export function ContentCalendarView(): React.ReactNode {
+  const { params: linkParams, linkIssue } =
+    useRouteParams(contentCalendarRoute);
   const {
     campaigns,
     selectedCampaignId,
@@ -25,12 +42,41 @@ export function ContentCalendarView(): React.ReactNode {
     updateSlot,
     archiveSlot,
     scheduleSlot,
-  } = useContentCalendar();
+  } = useContentCalendar({ initialCampaignId: linkParams?.campaignId });
 
   const summary = getCalendarSummary(slots);
   const selectedCampaign =
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
+  const link = resolveCalendarLink({
+    linkParams,
+    linkIssue,
+    ready: !loading && error === null,
+    campaignExists: campaigns.some(
+      (campaign) => campaign.id === linkParams?.campaignId,
+    ),
+    selectedCampaignId,
+    slots,
+    eligibleApprovals,
+  });
+  const highlightedSlotId = link.kind === "slot" ? link.slotId : null;
+  // "Add to plan" opens Plan a post for the linked approval; nothing is
+  // saved until the operator submits it.
+  const [planOpen, setPlanOpen] = useState(false);
+  const presetApprovalId = link.kind === "unplanned" ? link.approval.id : null;
+  const dismissLink = (): void =>
+    navigateTo(
+      contentCalendarRoute,
+      selectedCampaignId === null ? {} : { campaignId: selectedCampaignId },
+      { replace: true },
+    );
+
+  useEffect(() => {
+    if (highlightedSlotId === null) return;
+    document
+      .getElementById(`calendar-slot-${highlightedSlotId}`)
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [highlightedSlotId]);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -69,9 +115,65 @@ export function ContentCalendarView(): React.ReactNode {
               selectedCampaignArchived
             }
             onCreate={createSlot}
+            open={planOpen}
+            onOpenChange={setPlanOpen}
+            presetApprovalId={presetApprovalId}
           />
         </div>
       </div>
+
+      {link.kind === "unplanned" && (
+        <div
+          role="status"
+          data-testid="calendar-link-unplanned"
+          className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+        >
+          <span className="flex items-center gap-2">
+            <Info aria-hidden="true" className="size-4 shrink-0" />
+            {getUnplannedMessage(link.approval)}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving || selectedCampaignArchived}
+              onClick={() => setPlanOpen(true)}
+            >
+              <CalendarPlus aria-hidden="true" className="size-4" />
+              Add to plan
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={dismissLink}
+            >
+              Not now
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {link.kind === "notice" && (
+        <div
+          role="status"
+          data-testid="calendar-link-notice"
+          className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+        >
+          <span className="flex items-center gap-2">
+            <Info aria-hidden="true" className="size-4 shrink-0" />
+            {link.message}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={dismissLink}
+          >
+            OK
+          </Button>
+        </div>
+      )}
 
       {error && (
         <Card className="border-destructive/50 bg-destructive/5">
@@ -114,6 +216,15 @@ export function ContentCalendarView(): React.ReactNode {
               onChange={(event) => {
                 const nextValue = event.target.value;
                 selectCampaign(nextValue === "all" ? null : Number(nextValue));
+                // Keep the address in step so Back returns to this campaign.
+                if (linkParams?.campaignId !== undefined)
+                  navigateTo(
+                    contentCalendarRoute,
+                    nextValue === "all"
+                      ? {}
+                      : { campaignId: Number(nextValue) },
+                    { replace: true },
+                  );
               }}
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 min-w-60 rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
@@ -166,6 +277,7 @@ export function ContentCalendarView(): React.ReactNode {
                 <ContentCalendarSlotCard
                   key={slot.id}
                   slot={slot}
+                  highlighted={slot.id === highlightedSlotId}
                   saving={saving}
                   onUpdate={updateSlot}
                   onArchive={archiveSlot}
@@ -178,6 +290,66 @@ export function ContentCalendarView(): React.ReactNode {
       )}
     </div>
   );
+}
+
+type CalendarLinkState =
+  | { kind: "none" }
+  | { kind: "slot"; slotId: number }
+  | { kind: "unplanned"; approval: ContentCalendarEligibleApproval }
+  | { kind: "notice"; message: string };
+
+/**
+ * Link params are untrusted: the approval must belong to the linked campaign
+ * and be on the calendar (or eligible to plan) before anything is shown.
+ */
+function resolveCalendarLink(input: {
+  linkParams: ContentCalendarRouteParams | null;
+  linkIssue: boolean;
+  ready: boolean;
+  campaignExists: boolean;
+  selectedCampaignId: number | null;
+  slots: ContentCalendarSlotWithDetails[];
+  eligibleApprovals: ContentCalendarEligibleApproval[];
+}): CalendarLinkState {
+  if (input.linkIssue)
+    return {
+      kind: "notice",
+      message: "That link doesn't point to a valid post. Showing your plan.",
+    };
+  const { linkParams } = input;
+  if (!linkParams || linkParams.campaignId === undefined || !input.ready)
+    return { kind: "none" };
+  if (!input.campaignExists)
+    return {
+      kind: "notice",
+      message: "We couldn't find that campaign. Showing all campaigns.",
+    };
+  if (input.selectedCampaignId !== linkParams.campaignId)
+    return { kind: "none" };
+  if (linkParams.approvalId === undefined) return { kind: "none" };
+  const approvalId = linkParams.approvalId;
+  const slots = input.slots.filter((slot) => slot.approval_id === approvalId);
+  const slot =
+    slots.find((candidate) => candidate.status !== "archived") ?? slots[0];
+  if (slot) return { kind: "slot", slotId: slot.id };
+  const approval = input.eligibleApprovals.find(
+    (candidate) => candidate.id === approvalId,
+  );
+  if (approval) return { kind: "unplanned", approval };
+  return {
+    kind: "notice",
+    message:
+      "That post isn't approved yet, so it can't go on the calendar. Approve it in Approvals first.",
+  };
+}
+
+function getUnplannedMessage(
+  approval: ContentCalendarEligibleApproval,
+): string {
+  const author = approval.draft.target_author_name || "This post";
+  return approval.scheduleJob?.status === "scheduled"
+    ? `${author}'s post is scheduled for ${approval.scheduleJob.scheduled_for} but isn't on your plan yet.`
+    : `${author}'s post is approved but isn't on your plan yet.`;
 }
 
 function getCalendarSummary(

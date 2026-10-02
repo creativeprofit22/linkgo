@@ -1,4 +1,9 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import type { ContentCalendarRouteParams } from "@/features/content-calendar/types";
+import {
+  defineRoute,
+  optionalRouteId,
+  routeId,
+} from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const contentCalendarPurposeSchema = z.enum([
@@ -67,5 +72,23 @@ export const scheduleContentCalendarSlotSchema = z.object({
   id: idSchema,
 });
 
+/**
+ * Link params for Calendar. `approvalId` highlights that post's plan slot and
+ * needs its campaign. Mirrors `ContentCalendarRouteParams`.
+ */
+export const contentCalendarRouteSearchSchema = z.union([
+  z.object({
+    campaignId: optionalRouteId(),
+    approvalId: z.undefined().optional(),
+  }),
+  z.object({
+    campaignId: routeId(),
+    approvalId: routeId(),
+  }),
+]);
+
 /** Address of the Calendar screen (`#/calendar`). See docs/features/navigation.md. */
-export const contentCalendarRoute = defineRoute("calendar", emptyRouteSearch());
+export const contentCalendarRoute = defineRoute<
+  "calendar",
+  ContentCalendarRouteParams
+>("calendar", contentCalendarRouteSearchSchema);

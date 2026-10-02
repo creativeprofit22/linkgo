@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
 
+import { approvalsRoute } from "../src/features/approvals/schemas";
+import { contentCalendarRoute } from "../src/features/content-calendar/schemas";
 import { draftsRoute } from "../src/features/drafts/schemas";
 import {
   defineRoute,
@@ -99,6 +101,68 @@ test.describe("route contract", () => {
       "#/drafts?campaignId=3",
     );
     expect(formatRouteHash(draftsRoute, {})).toBe("#/drafts");
+    // `write=1` opens Write with AI for one idea; it needs both ids.
+    expect(parse({ campaignId: "3", candidateId: "12", write: "1" })).toEqual({
+      success: true,
+      data: { campaignId: 3, candidateId: 12, write: "1" },
+    });
+    expect(parse({ campaignId: "3", write: "1" }).success).toBe(false);
+    expect(
+      parse({ campaignId: "3", candidateId: "12", write: "true" }).success,
+    ).toBe(false);
+    expect(
+      formatRouteHash(draftsRoute, {
+        campaignId: 3,
+        candidateId: 12,
+        write: "1",
+      }),
+    ).toBe("#/drafts?campaignId=3&candidateId=12&write=1");
+  });
+
+  test("validates Approvals link params", () => {
+    const parse = (search: Record<string, string>) =>
+      approvalsRoute.search.safeParse(search);
+    expect(parse({}).success).toBe(true);
+    expect(parse({ campaignId: "3" })).toEqual({
+      success: true,
+      data: { campaignId: 3 },
+    });
+    expect(parse({ campaignId: "3", approvalId: "9" })).toEqual({
+      success: true,
+      data: { campaignId: 3, approvalId: 9 },
+    });
+    expect(parse({ campaignId: "3", draftId: "5", send: "1" })).toEqual({
+      success: true,
+      data: { campaignId: 3, draftId: 5, send: "1" },
+    });
+    // Ids need their campaign; `send` needs a draft; one target at a time.
+    expect(parse({ approvalId: "9" }).success).toBe(false);
+    expect(parse({ draftId: "5", send: "1" }).success).toBe(false);
+    expect(parse({ campaignId: "3", send: "1" }).success).toBe(false);
+    expect(parse({ campaignId: "3", approvalId: "9", send: "1" }).success).toBe(
+      false,
+    );
+    expect(
+      parse({ campaignId: "3", approvalId: "9", draftId: "5" }).success,
+    ).toBe(false);
+    expect(
+      formatRouteHash(approvalsRoute, { campaignId: 3, draftId: 5, send: "1" }),
+    ).toBe("#/approvals?campaignId=3&draftId=5&send=1");
+  });
+
+  test("validates Calendar link params", () => {
+    const parse = (search: Record<string, string>) =>
+      contentCalendarRoute.search.safeParse(search);
+    expect(parse({}).success).toBe(true);
+    expect(parse({ campaignId: "3", approvalId: "9" })).toEqual({
+      success: true,
+      data: { campaignId: 3, approvalId: 9 },
+    });
+    expect(parse({ approvalId: "9" }).success).toBe(false);
+    expect(parse({ campaignId: "3", approvalId: "0" }).success).toBe(false);
+    expect(
+      formatRouteHash(contentCalendarRoute, { campaignId: 3, approvalId: 9 }),
+    ).toBe("#/calendar?approvalId=9&campaignId=3");
   });
 
   test("refuses to format links the destination would reject", () => {
@@ -204,7 +268,9 @@ test.describe("screen links", () => {
     const janeCard = page
       .locator(".linkgo-card")
       .filter({ has: page.getByText("Jane Operator", { exact: true }) });
-    await janeCard.getByRole("button", { name: "Open drafts" }).click();
+    await janeCard
+      .getByRole("button", { name: "Open draft", exact: true })
+      .click();
 
     await expect(page).toHaveURL(/#\/drafts\?campaignId=\d+&candidateId=\d+$/);
     await expect(page.getByTestId("drafts-idea-filter")).toContainText(
@@ -267,7 +333,9 @@ test.describe("screen links", () => {
     const janeCard = page
       .locator(".linkgo-card")
       .filter({ has: page.getByText("Jane Operator", { exact: true }) });
-    await janeCard.getByRole("button", { name: "Open drafts" }).click();
+    await janeCard
+      .getByRole("button", { name: "Open draft", exact: true })
+      .click();
     await expect(page.getByTestId("drafts-idea-filter")).toBeVisible();
     const ideaHash = await page.evaluate(() => window.location.hash);
     const match = /^#\/drafts\?campaignId=(\d+)&candidateId=(\d+)$/.exec(

@@ -680,8 +680,13 @@ async function selectApproveAndRecordPosted(
   await expect(getBadge(page, "Posted").first()).toBeVisible();
 }
 
+// Status badges only: the post-stage tracker repeats labels like "Posted".
+const BADGE_SPAN_SELECTOR = 'span:not([data-testid="post-stage-tracker"] *)';
+
 function getBadge(page: Page, name: string) {
-  return page.locator("span").filter({ hasText: new RegExp(`^${name}$`) });
+  return page
+    .locator(BADGE_SPAN_SELECTOR)
+    .filter({ hasText: new RegExp(`^${name}$`) });
 }
 
 async function getStateCounts(page: Page): Promise<StateCounts> {

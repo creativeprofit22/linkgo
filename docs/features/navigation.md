@@ -62,8 +62,9 @@ const { params, linkIssue } = useRouteParams(draftsRoute);
   `{ campaignId: 0 }` for Drafts). This is a programmer bug, so it fails
   loudly in tests instead of producing a broken link.
 - Link values arrive as strings. Use `routeId()` / `optionalRouteId()` for
-  numeric ids (positive integers only) and `emptyRouteSearch()` for screens
-  without params.
+  numeric ids (positive integers only), `optionalRouteFlag()` for one-shot
+  action flags (only the literal `1` is accepted) and `emptyRouteSearch()` for
+  screens without params.
   Unknown keys are dropped; for repeated keys the first value wins.
 - Opening the screen that is already showing is a no-op. "Already showing"
   compares validated params, so a non-canonical link to the same screen
@@ -94,8 +95,43 @@ const { params, linkIssue } = useRouteParams(draftsRoute);
 - Missing campaign or idea, or invalid params: all drafts with "We couldn't
   find what that link pointed to, so here are all drafts."
 - Changing the campaign picker replaces the link with the new `campaignId`.
+- `write=1` (needs both ids) opens **Write with AI** with that idea shown
+  read-only instead of a dropdown, if the idea can still get a first draft.
+  Otherwise a notice explains why (already drafted, rejected, archived
+  campaign). Closing the dialog replaces the link without `write`.
 
-Ideas cards have an **Open drafts** button that opens this link.
+Ideas cards open this link through **Write post** (`write=1`) or **Open
+draft** / **Open drafts**.
+
+### Approvals links
+
+`#/approvals?campaignId=C&approvalId=A` or
+`#/approvals?campaignId=C&draftId=D&send=1`
+
+- `campaignId` selects that campaign when it exists (also when a new link
+  arrives while Approvals stays open).
+- `approvalId` (needs `campaignId`) scrolls to and highlights that approval.
+- `draftId` + `send=1` (needs `campaignId`) opens **Send for approval** with
+  that draft shown read-only. If the draft already has a live approval, that
+  approval is highlighted instead; if it isn't ready, a notice says to choose
+  a version and pass checks in Drafts. `approvalId` and `draftId` can't be
+  combined. After sending, the link is replaced with the new `approvalId`.
+- No link can approve, schedule or post: `send` only opens the dialog, and
+  the human still submits it and then clicks Approve.
+
+### Calendar links
+
+`#/calendar?campaignId=C&approvalId=A`
+
+- Selects the campaign and highlights that approval's plan slot.
+- If the approved post has no slot yet: "isn't on your plan yet" with
+  **Add to plan**, which opens **Plan a post** with the post picked and the
+  time and time zone prefilled from its schedule. Nothing is saved until the
+  operator submits.
+- Not approved, or not found: a plain notice; nothing opens.
+
+See `docs/features/post-flow.md` for how these links chain one post from idea
+to calendar.
 
 ## Adding a linkable screen or param
 
@@ -110,7 +146,9 @@ Ideas cards have an **Open drafts** button that opens this link.
 ## Verification
 
 - `tests/navigation.spec.ts` — pure format/parse round-trips, unknown screens,
-  bad params and Drafts param rules; browser tests for every screen's address,
-  Back/Forward, Ideas → Open drafts → filtered Drafts → Back, broken-link
-  fallbacks and last-screen restore.
+  bad params and Drafts/Approvals/Calendar param rules; browser tests for
+  every screen's address, Back/Forward, Ideas → Open draft → filtered Drafts
+  → Back, broken-link fallbacks and last-screen restore.
+- `tests/post-flow.spec.ts` — the full idea → calendar chain through these
+  links, plus untrusted-link fallbacks.
 - `bun run check:architecture`.

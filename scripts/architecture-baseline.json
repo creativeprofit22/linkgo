@@ -332,7 +332,6 @@
         "form": "import",
         "bindings": {
           "AGENT_PROVIDER_KEYS": 1,
-          "DEFAULT_AGENT_MODELS": 1,
           "PROVIDER_LABELS": 1
         },
         "rule": "ui-runtime"
@@ -340,21 +339,6 @@
       "owner": "drafts UI",
       "rationale": "Provider options use the mixed agent barrel.",
       "removeWhen": "Use the declared provider catalog contract without changing options."
-    },
-    {
-      "identity": {
-        "from": "src/features/drafts/components/generate-draft-dialog.tsx",
-        "to": "src/agent/playbooks.ts",
-        "kind": "type",
-        "form": "import",
-        "bindings": {
-          "AgentPlaybookKey": 1
-        },
-        "rule": "ui-runtime"
-      },
-      "owner": "drafts / playbooks",
-      "rationale": "Dialog type comes from executable playbook lookup.",
-      "removeWhen": "Expose and consume a pure playbook key contract."
     },
     {
       "identity": {

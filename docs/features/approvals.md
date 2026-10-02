@@ -139,9 +139,11 @@ The Approvals tab includes:
 
 - Campaign filter.
 - Summary cards for Waiting for approval, Approved, Scheduled, and Posted records.
-- Send for approval dialog for eligible drafts.
-- Review cards with source context, selected variant, escaped preview, notes, schedule details, and publish history.
-- Buttons for Approve, Request changes, Reject, Schedule, Cancel schedule, Mark as posted, Post to LinkedIn, and Mark as not posted. Mark as posted, Schedule and Post to LinkedIn require current readiness; Mark as not posted does not.
+- Send for approval dialog for eligible drafts. With none eligible the button is disabled with "No checked drafts to send yet." and a `Go to Drafts` link. Reviewer notes are remembered per draft in `sessionStorage` (`linkgo.form.send.<draftId>`) until sent, so Cancel and Back keep them.
+- Links (see [navigation](navigation.md)): `approvalId` highlights and scrolls to one card; `draftId` + `send=1` opens Send for approval with the draft locked (no dropdown). After sending, the link is replaced with the new `approvalId`, so the new card is highlighted at **Waiting for your OK**.
+- Review cards with the post-stage tracker, source context, selected variant, escaped preview, notes, schedule details, and publish history.
+- Buttons for Approve, Request changes, Reject, Pick a time (schedule), See on calendar, Cancel schedule, Mark as posted, Post to LinkedIn, and Mark as not posted. Mark as posted, Pick a time and Post to LinkedIn require current readiness; Mark as not posted does not.
+- One primary next step: `Pick a time` only once the approval is `approved` (Post to LinkedIn then shows as a secondary outline button), `See on calendar` once a schedule job is `scheduled`. Neither exists before a human clicks Approve. Schedule-dialog values are remembered per approval (`linkgo.form.schedule.<approvalId>`) until scheduled.
 
 Confirmation prompts guard rejection, schedule cancellation, manual published recording, and OAuth-backed LinkedIn publishing. `Post to LinkedIn` is hidden for archived campaigns, non-approved/non-scheduled approvals, kill-switch-enabled state, and approvals with an existing successful publish attempt.
 

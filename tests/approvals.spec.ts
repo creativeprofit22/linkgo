@@ -274,7 +274,7 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   await countSchedulingInvokes(page);
   await countLinkedInPublishInvokes(page);
 
-  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
   await page.getByLabel("Date and time").fill("2026-06-25T14:30");
   await page.getByLabel("Time zone").fill("local");
   await page.getByRole("button", { name: "Schedule post" }).click();
@@ -551,7 +551,7 @@ test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness"
     page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Schedule", exact: true }),
+    page.getByRole("button", { name: "Pick a time", exact: true }),
   ).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Mark as posted" }),
@@ -981,7 +981,7 @@ test("cancelled schedules can be rescheduled with new details", async ({
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(getBadge(page, "Cancelled").first()).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Schedule", exact: true }),
+    page.getByRole("button", { name: "Pick a time", exact: true }),
   ).toBeVisible();
 
   await scheduleApproval(page, "2026-06-26T09:15", "America/New_York");
@@ -1014,7 +1014,7 @@ test("failed scheduled publish attempts can be rescheduled with new details", as
     getBadge(page, "Didn't post").filter({ visible: true }).first(),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Schedule", exact: true }),
+    page.getByRole("button", { name: "Pick a time", exact: true }),
   ).toBeVisible();
 
   await scheduleApproval(page, "2026-06-27T10:45", "Europe/London");
@@ -1125,7 +1125,7 @@ test("archived campaign approvals hide mutation controls with restore guidance",
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Schedule", exact: true }),
+    page.getByRole("button", { name: "Pick a time", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Mark as posted" }),
@@ -1152,7 +1152,7 @@ test("archived campaign approvals hide mutation controls with restore guidance",
     page.getByRole("button", { name: "Request changes" }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Schedule", exact: true }),
+    page.getByRole("button", { name: "Pick a time", exact: true }),
   ).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Mark as posted" }),
@@ -1425,8 +1425,11 @@ interface VariantFormInput {
   hashtags: string;
 }
 
+// Status badges only: the post-stage tracker repeats labels like "Posted".
+const BADGE_SPAN_SELECTOR = 'span:not([data-testid="post-stage-tracker"] *)';
+
 function getBadge(page: Page, label: string): Locator {
-  return page.locator("span").filter({
+  return page.locator(BADGE_SPAN_SELECTOR).filter({
     hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
   });
 }
@@ -1896,7 +1899,7 @@ async function scheduleApproval(
   scheduledFor: string,
   timezone: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
   await page.getByLabel("Date and time").fill(scheduledFor);
   await page.getByLabel("Time zone").fill(timezone);
   const dialog = page.getByRole("dialog", { name: "Schedule post" });

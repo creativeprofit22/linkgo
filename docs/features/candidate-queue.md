@@ -106,14 +106,23 @@ Tests: `src-tauri/src/candidate_queue_store_tests.rs`.
 
 `AddCandidateDialog` captures URL, content, author metadata, posted-at text, source keyword, score, reason, and notes. It remains an explicitly attended override for historical or exceptional material.
 
-`CandidateCard` shows candidate source details and status actions:
+`CandidateCard` shows candidate source details, the post-stage tracker (see [post flow](post-flow.md)) and one primary next step chosen from the stage:
+
+- `Write post` (stage Idea, idea not rejected, campaign not archived) — opens Write with AI with this idea locked in (`#/drafts?campaignId=C&candidateId=X&write=1`).
+- `Open draft` (stage Draft) — Drafts filtered to this idea.
+- `Open approval` (waiting, approved without a time, posted, results, or a failed post) — Approvals with the approval highlighted.
+- `See on calendar` (scheduled) — Calendar with the post highlighted.
+
+The status actions are secondary (outline):
 
 - `Shortlist`
 - `Reject`
 - `Mark drafted`
 - `Reset to new`
-- `Open drafts` — opens Drafts filtered to this idea (`#/drafts?campaignId=C&candidateId=X`; see [navigation](navigation.md))
+- `Open drafts` — opens Drafts filtered to this idea (`#/drafts?campaignId=C&candidateId=X`; see [navigation](navigation.md)); hidden when `Open draft` is already the primary step
 - `Delete`
+
+`useCandidateQueue` loads the stage index with `usePostStageIndex` and reloads it whenever the idea list reloads. If the stage read fails the tracker and primary step hide; the rest of the screen keeps working.
 
 ## Verification
 

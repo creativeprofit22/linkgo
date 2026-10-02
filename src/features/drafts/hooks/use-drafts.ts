@@ -39,6 +39,7 @@ import type {
   UpdateDraftInput,
   UpdateDraftVariantInput,
 } from "@/features/drafts/types";
+import { usePostStageIndex, type PostStageIndex } from "@/features/post-stages";
 
 interface UseDraftsState {
   drafts: DraftWithDetails[];
@@ -53,6 +54,8 @@ interface UseDraftsState {
   loadedCampaignId: number | null;
   /** The linked idea's drafts (`candidateId` option), or null without one. */
   ideaDraftPage: DraftIdeaPage | null;
+  /** Post stage per draft; `null` while loading or if the read failed. */
+  stageIndex: PostStageIndex | null;
   loading: boolean;
   error: string | null;
   loadDrafts: () => Promise<void>;
@@ -134,6 +137,8 @@ export function useDrafts(options: UseDraftsOptions = {}): UseDraftsState {
     null,
   );
   const latestIdeaLoadRequest = useRef(0);
+  // Reloads whenever the draft list reloads, i.e. after every mutation.
+  const stageIndex = usePostStageIndex(loadedCampaignId, drafts);
   // Read inside loadDrafts without making a link change reload everything.
   const requestedCampaignIdRef = useRef(initialCampaignId);
   const requestedCandidateIdRef = useRef(candidateId);
@@ -481,6 +486,7 @@ export function useDrafts(options: UseDraftsOptions = {}): UseDraftsState {
       selectedCampaignId,
       loadedCampaignId,
       ideaDraftPage,
+      stageIndex,
       loading,
       error,
       loadDrafts,
@@ -499,6 +505,7 @@ export function useDrafts(options: UseDraftsOptions = {}): UseDraftsState {
       dismissGenerationRequest,
     }),
     [
+      stageIndex,
       drafts,
       draftTotalCount,
       generationRequests,

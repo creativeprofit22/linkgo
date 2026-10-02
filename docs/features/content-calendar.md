@@ -72,6 +72,8 @@ Operators can:
 
 The create dialog prefills `angle` from the draft and `cta` from the selected variant.
 
+A `#/calendar?campaignId=C&approvalId=A` link (from `See on calendar` on an approval or idea) selects the campaign and highlights that post's slot. If the approved post has no slot yet, a notice says it "isn't on your plan yet" with `Add to plan`, which opens Plan a post with that approval picked and its schedule time and time zone prefilled. Every stored schedule format is prefilled: `YYYY-MM-DDTHH:MM` or `YYYY-MM-DD HH:MM`, with optional seconds (dropped). A time ending in `Z` or `±HH:MM` is converted to the wall-clock time in the schedule's time zone (`local` means the device zone); if that zone isn't recognized, the time is left blank for the operator rather than shown shifted. Nothing is created until the operator submits. Posts that aren't approved, or ids that don't exist, get a plain notice. See [navigation](navigation.md) and [post flow](post-flow.md).
+
 Schedule actions are hidden when a slot is archived, the campaign is archived, the approval is not `approved`, or a schedule job is already active.
 
 ## Explicit exclusions

@@ -20,6 +20,11 @@ import {
   type CreateSourceImportBatchInput,
   type SourceImportBatchResult,
 } from "@/features/source-imports";
+import {
+  ideaStage,
+  type PostStage,
+  type PostStageIndex,
+} from "@/features/post-stages";
 import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +50,7 @@ export function CandidateQueueView(): React.ReactNode {
     discoveryItems,
     campaigns,
     selectedCampaignId,
+    stageIndex,
     loading,
     error,
     loadQueue,
@@ -295,6 +301,8 @@ export function CandidateQueueView(): React.ReactNode {
                         <CandidateCard
                           key={candidate.id}
                           candidate={candidate}
+                          stage={getCandidateStage(stageIndex, candidate.id)}
+                          canWrite={!selectedCampaignArchived}
                           onSetStatus={setStatus}
                           onDelete={removeCandidate}
                         />
@@ -309,6 +317,15 @@ export function CandidateQueueView(): React.ReactNode {
       )}
     </div>
   );
+}
+
+/** Ideas missing from a loaded index have no draft yet. */
+function getCandidateStage(
+  stageIndex: PostStageIndex | null,
+  candidateId: number,
+): PostStage | null {
+  if (stageIndex === null) return null;
+  return stageIndex.byCandidateId.get(candidateId) ?? ideaStage();
 }
 
 function getCandidateSummary(

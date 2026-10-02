@@ -1,4 +1,11 @@
-import { ExternalLink, FileText, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarDays,
+  ExternalLink,
+  FileText,
+  PenLine,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,20 +20,78 @@ import type {
   CandidateStatus,
   CandidateWithTarget,
 } from "@/features/candidate-queue/types";
+import { approvalsRoute } from "@/features/approvals/schemas";
+import { contentCalendarRoute } from "@/features/content-calendar/schemas";
 import { draftsRoute } from "@/features/drafts/schemas";
+import { PostStageTracker, type PostStage } from "@/features/post-stages";
 import { navigateTo } from "@/lib/navigation/use-hash-navigation";
 
 interface CandidateCardProps {
   candidate: CandidateWithTarget;
+  /** Where this idea's post stands; `null` hides the tracker. */
+  stage?: PostStage | null;
+  /** False for archived campaigns, where nothing new can be written. */
+  canWrite?: boolean;
   onSetStatus: (id: number, status: CandidateStatus) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }
 
+interface NextAction {
+  label: string;
+  icon: React.ReactNode;
+  go: () => void;
+}
+
+/** The one primary next step for this idea, chosen from its post stage. */
+function getNextAction(
+  candidate: CandidateWithTarget,
+  stage: PostStage | null,
+  canWrite: boolean,
+): NextAction | null {
+  if (stage === null) return null;
+  const campaignId = candidate.campaign_id;
+  if (stage.key === "idea") {
+    if (!canWrite || candidate.status === "rejected") return null;
+    return {
+      label: "Write post",
+      icon: <PenLine aria-hidden="true" className="size-4" />,
+      go: () =>
+        navigateTo(draftsRoute, {
+          campaignId,
+          candidateId: candidate.id,
+          write: "1",
+        }),
+    };
+  }
+  if (stage.key === "draft" || stage.approvalId === null)
+    return {
+      label: "Open draft",
+      icon: <FileText aria-hidden="true" className="size-4" />,
+      go: () =>
+        navigateTo(draftsRoute, { campaignId, candidateId: candidate.id }),
+    };
+  const approvalId = stage.approvalId;
+  if (stage.key === "scheduled" && stage.state === "current")
+    return {
+      label: "See on calendar",
+      icon: <CalendarDays aria-hidden="true" className="size-4" />,
+      go: () => navigateTo(contentCalendarRoute, { campaignId, approvalId }),
+    };
+  return {
+    label: "Open approval",
+    icon: <ArrowRight aria-hidden="true" className="size-4" />,
+    go: () => navigateTo(approvalsRoute, { campaignId, approvalId }),
+  };
+}
+
 export function CandidateCard({
   candidate,
+  stage = null,
+  canWrite = true,
   onSetStatus,
   onDelete,
 }: CandidateCardProps): React.ReactNode {
+  const next = getNextAction(candidate, stage, canWrite);
   const authorName = candidate.target.author_name || "Unknown author";
   const scoreLabel =
     candidate.relevance_score === null
@@ -112,13 +177,21 @@ export function CandidateCard({
           <TextBlock label="Score reason" value={candidate.score_reason} />
         )}
         {candidate.notes && <TextBlock label="Notes" value={candidate.notes} />}
+
+        {stage !== null && <PostStageTracker stage={stage} />}
       </CardContent>
 
       <CardFooter className="flex flex-wrap gap-2">
+        {next !== null && (
+          <Button type="button" size="sm" onClick={next.go}>
+            {next.icon}
+            {next.label}
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"
-          variant={candidate.status === "shortlisted" ? "secondary" : "default"}
+          variant="outline"
           disabled={candidate.status === "shortlisted"}
           onClick={() => void onSetStatus(candidate.id, "shortlisted")}
         >
@@ -151,20 +224,22 @@ export function CandidateCard({
         >
           Reset to new
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            navigateTo(draftsRoute, {
-              campaignId: candidate.campaign_id,
-              candidateId: candidate.id,
-            })
-          }
-        >
-          <FileText aria-hidden="true" className="size-4" />
-          Open drafts
-        </Button>
+        {next?.label !== "Open draft" && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigateTo(draftsRoute, {
+                campaignId: candidate.campaign_id,
+                candidateId: candidate.id,
+              })
+            }
+          >
+            <FileText aria-hidden="true" className="size-4" />
+            Open drafts
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"

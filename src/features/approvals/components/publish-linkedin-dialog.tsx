@@ -30,6 +30,8 @@ interface PublishLinkedInDialogProps {
   onPublished: () => Promise<void> | void;
   /** Locks the trigger, e.g. while a publish execution is still open. */
   disabled?: boolean;
+  /** Outline trigger when another action is the card's primary next step. */
+  secondary?: boolean;
 }
 
 interface UnknownOutcomeState {
@@ -62,6 +64,7 @@ export function PublishLinkedInDialog({
   commentary,
   onPublished,
   disabled = false,
+  secondary = false,
 }: PublishLinkedInDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [confirmationText, setConfirmationText] = useState("");
@@ -166,7 +169,12 @@ export function PublishLinkedInDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" disabled={disabled}>
+        <Button
+          type="button"
+          size="sm"
+          variant={secondary ? "outline" : "default"}
+          disabled={disabled}
+        >
           <Send className="size-4" /> Post to LinkedIn
         </Button>
       </DialogTrigger>

@@ -1,4 +1,5 @@
-import { Archive, ExternalLink } from "lucide-react";
+import { Archive, ArrowRight, ExternalLink, Send } from "lucide-react";
+import { DisabledReason } from "@/components/disabled-reason";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,9 +17,14 @@ import type {
   SetDraftVariantStatusInput,
   UpdateDraftVariantInput,
 } from "@/features/drafts/types";
+import { approvalsRoute } from "@/features/approvals/schemas";
+import { PostStageTracker, type PostStage } from "@/features/post-stages";
+import { navigateTo } from "@/lib/navigation/use-hash-navigation";
 
 interface DraftCardProps {
   draft: DraftWithDetails;
+  /** Where this draft's post stands; `null` hides the tracker and next step. */
+  stage?: PostStage | null;
   onUpdateVariant: (input: UpdateDraftVariantInput) => Promise<void>;
   onSetVariantStatus: (input: SetDraftVariantStatusInput) => Promise<void>;
   onArchiveDraft: (id: number) => Promise<void>;
@@ -42,8 +48,85 @@ function getHighestSeverity(draft: DraftWithDetails): DraftAuditSeverity {
   }, "pass");
 }
 
+/**
+ * Why Send for approval is unavailable, or `null` when the draft looks ready.
+ * Mirrors the native create gate using its `approvalReady` read; the Approvals
+ * screen still re-checks eligibility natively, so this only guides.
+ */
+function getSendBlocker(draft: DraftWithDetails): string | null {
+  if (draft.status === "archived")
+    return "This draft is archived, so it can't be sent.";
+  const chosen = draft.variants.filter(
+    (variant) => variant.status === "selected",
+  );
+  const [selected] = chosen;
+  if (
+    chosen.length !== 1 ||
+    selected === undefined ||
+    draft.status !== "ready_for_review"
+  )
+    return "Choose a version and pass checks first.";
+  if (!selected.approvalReady)
+    return selected.auditSeverity === "block" ||
+      selected.aiAudit.findings.some((finding) => finding.severity === "block")
+      ? "This version has a blocking issue — fix it first."
+      : "Run the checks on this version's latest text first.";
+  return null;
+}
+
+function DraftNextStep({
+  draft,
+  stage,
+}: {
+  draft: DraftWithDetails;
+  stage: PostStage;
+}): React.ReactNode {
+  if (stage.approvalId !== null) {
+    const approvalId = stage.approvalId;
+    return (
+      <Button
+        type="button"
+        size="sm"
+        onClick={() =>
+          navigateTo(approvalsRoute, {
+            campaignId: draft.campaign_id,
+            approvalId,
+          })
+        }
+      >
+        <ArrowRight aria-hidden="true" className="size-4" />
+        Open approval
+      </Button>
+    );
+  }
+  const blocker = getSendBlocker(draft);
+  const reasonId = `draft-${draft.id}-send-reason`;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <Button
+        type="button"
+        size="sm"
+        disabled={blocker !== null}
+        aria-describedby={blocker === null ? undefined : reasonId}
+        onClick={() =>
+          navigateTo(approvalsRoute, {
+            campaignId: draft.campaign_id,
+            draftId: draft.id,
+            send: "1",
+          })
+        }
+      >
+        <Send aria-hidden="true" className="size-4" />
+        Send for approval
+      </Button>
+      {blocker !== null && <DisabledReason id={reasonId} reason={blocker} />}
+    </div>
+  );
+}
+
 export function DraftCard({
   draft,
+  stage = null,
   onUpdateVariant,
   onSetVariantStatus,
   onArchiveDraft,
@@ -112,6 +195,13 @@ export function DraftCard({
           {draft.angle && <TextBlock label="Angle" value={draft.angle} />}
           {draft.notes && <TextBlock label="Notes" value={draft.notes} />}
         </div>
+
+        {stage !== null && (
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <PostStageTracker stage={stage} />
+            <DraftNextStep draft={draft} stage={stage} />
+          </div>
+        )}
 
         <Separator />
 

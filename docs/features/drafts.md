@@ -169,13 +169,21 @@ The UI shows passing findings for hard blockers so operators can see why a varia
 - Header explaining generation is operator-triggered and save-gated.
 - Campaign selector (changing it replaces the screen link's `campaignId`).
 - Link notices: "Showing drafts for one idea." with `Show all drafts` for an idea link, and "We couldn't find what that link pointed to, so here are all drafts." for a missing campaign/idea or bad params.
-- `Write with AI` action (dialog "Write versions with AI").
+- `Write with AI` action (dialog "Write versions with AI"). When it is disabled, a visible reason with a fix link sits under it: no campaign → Campaigns, archived campaign → Campaigns, no ideas left to write → Ideas.
+- A `write=1` link (from an idea's `Write post`) opens the dialog with the idea locked; when the idea can't be written a notice explains why (see [navigation](navigation.md)).
 - `Create draft` action.
 - Loading, error (with `Try again`), no-campaign, and empty-draft states.
 - Summary cards: "Total drafts", "Ready for approval", "Versions to fix", "Chosen versions", and "AI drafts to review".
-- Draft cards with candidate source context and variant cards.
+- Draft cards with candidate source context, variant cards, the post-stage tracker and one next step: `Send for approval` (opens `#/approvals?campaignId=C&draftId=D&send=1`) or `Open approval` once a live approval exists. Send for approval is enabled only when the draft is not archived, is `ready_for_review`, has exactly one chosen version, and that version's `approvalReady` is true (a readiness row in `approval_ready_variants` at its current revision and no `block` deterministic finding at any revision — the same variant gate `create_approval` enforces). Otherwise it is disabled with one reason: "This draft is archived, so it can't be sent.", "Choose a version and pass checks first.", "This version has a blocking issue — fix it first." (a deterministic or current AI block finding), or "Run the checks on this version's latest text first." (checks missing, unfinished or stale after an edit). Existing-approval and archived-campaign rules are not mirrored here; Approvals re-checks eligibility natively and stays authoritative.
 
 `GenerateDraftDialog` captures candidate, provider, model, playbook, a 3/4/5 count, one of four fixed content intents, optional eligible workflow scope, angle, and voice notes. A single eligible workflow defaults selected; multiple matches require an explicit workflow or ad-hoc choice. Linked scope explains that advancement happens only on save.
+
+Practice mode is never a silent default:
+
+- The AI service defaults to the first AI account with status `connected` (catalog order, then "Other AI service"); Practice mode is the default only when none is connected (`useAgentAccounts`).
+- Whenever Practice mode is selected the dialog shows "Practice mode — no AI used. Versions are sample text." With no AI account connected it adds a `Connect an AI account` link to Accounts.
+
+Typed values are remembered per idea in `sessionStorage` (`linkgo.form.write.<candidateId>`, Zod-validated on read) until the versions are written, so Cancel, closing the dialog and browser Back keep them. Provider and model are remembered only when changed by hand, so a newly connected account still becomes the default. A remembered automation is dropped once it is no longer eligible for that idea (finished, cancelled or past its Draft step), and the form falls back to the default automation choice.
 
 `DraftGenerationRequestCard` shows generated, failed, dismissed, and saved request states. Generated requests expose `Save as draft` and `Dismiss`; failed requests show the error and can be dismissed (`Dismiss failed draft`).
 

@@ -512,6 +512,70 @@ test("clean variant can be selected and draft status becomes ready", async ({
   await expect(getBadge(page, "Chosen")).toBeVisible();
 });
 
+test("Send for approval stays disabled with the reason when native readiness blocks it", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+  await createDraft(page, [cleanVariant()]);
+
+  const draftCard = page
+    .locator(".linkgo-card", { hasText: "Jane Operator" })
+    .first();
+  const send = draftCard.getByRole("button", { name: "Send for approval" });
+  await page.getByRole("button", { name: "Choose this version" }).click();
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  // Chosen and ready_for_review, but checks have not passed on this text yet.
+  await expect(send).toBeDisabled();
+  await expect(send).toHaveAccessibleDescription(
+    "Run the checks on this version's latest text first.",
+  );
+
+  const audit = page.getByRole("region", { name: "AI review for version 1" });
+  await audit.getByRole("button", { name: "Review with AI" }).click();
+  await expect(audit.getByText("Done", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Improve with AI" }).first().click();
+  await page.getByRole("button", { name: "Yes, improve it" }).click();
+  await expect(page.getByText("Done improving your draft")).toBeVisible();
+  await expect(send).toBeEnabled();
+
+  // A block finding (any revision) closes the native create gate.
+  await page.evaluate(async () => {
+    const w = window as unknown as {
+      __TAURI_INTERNALS__: {
+        invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+      };
+      __LINKGO_DRAFTS_TEST_API__: {
+        listDrafts: () => Promise<
+          Array<{ variants: Array<{ id: number; status: string }> }>
+        >;
+      };
+    };
+    const drafts = await w.__LINKGO_DRAFTS_TEST_API__.listDrafts();
+    const variantId = drafts[0]?.variants.find(
+      (variant) => variant.status === "selected",
+    )?.id;
+    if (variantId === undefined) throw new Error("No selected version");
+    await w.__TAURI_INTERNALS__.invoke("__linkgo_test_sql|execute", {
+      query:
+        "INSERT INTO draft_audits (draft_variant_id, rule_key, severity, message) VALUES (?, ?, ?, ?)",
+      values: [variantId, "total_length", "block", "Seeded blocking issue."],
+    });
+  });
+  await openCampaigns(page);
+  await openDrafts(page);
+
+  await expect(getBadge(page, "Ready for approval")).toBeVisible();
+  await expect(send).toBeDisabled();
+  await expect(send).toHaveAccessibleDescription(
+    "This version has a blocking issue — fix it first.",
+  );
+  await expect(page).toHaveURL(/#\/drafts/);
+});
+
 test("editing a variant re-runs audit and clears an external link block", async ({
   page,
 }) => {
@@ -718,6 +782,75 @@ test("an older campaign response cannot replace the newest draft workspace", asy
   );
 });
 
+test("drops a remembered automation that is no longer eligible", async ({
+  page,
+}) => {
+  // Cancel/Back remembered an automation that has since finished.
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem(
+      "linkgo.form.write.1",
+      JSON.stringify({
+        providerKey: null,
+        modelName: null,
+        playbookKey: "linkedin_writer",
+        variantCount: "3",
+        contentIntent: "idea",
+        workflowRunId: "999",
+        angle: "Remembered operator angle",
+        voiceNotes: "",
+      }),
+    );
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+  await openDrafts(page);
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __TAURI_INTERNALS__?: {
+        invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+      };
+      __LINKGO_DRAFT_CLAIM_INPUTS__?: unknown[];
+    };
+    const internals = target.__TAURI_INTERNALS__;
+    if (internals === undefined) return;
+    const originalInvoke = internals.invoke.bind(internals);
+    target.__LINKGO_DRAFT_CLAIM_INPUTS__ = [];
+    internals.invoke = (cmd: string, args?: unknown) => {
+      if (cmd === "linkgo_draft_generation_claim") {
+        target.__LINKGO_DRAFT_CLAIM_INPUTS__?.push(
+          (args as { input?: unknown } | undefined)?.input,
+        );
+      }
+      return originalInvoke(cmd, args);
+    };
+  });
+
+  await page.getByRole("button", { name: "Write with AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Write versions with AI" });
+  // The remembered form was loaded for this idea.
+  await expect(dialog.getByLabel("Angle")).toHaveValue(
+    "Remembered operator angle",
+  );
+  await expect(dialog.getByLabel("Automation")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Write versions" }).click();
+  await expect(dialog).toBeHidden();
+
+  const claimInputs = await page.evaluate(
+    () =>
+      (window as unknown as { __LINKGO_DRAFT_CLAIM_INPUTS__?: unknown[] })
+        .__LINKGO_DRAFT_CLAIM_INPUTS__ ?? [],
+  );
+  expect(claimInputs).toHaveLength(1);
+  expect(claimInputs[0]).toMatchObject({
+    candidateId: 1,
+    workflowRunId: null,
+    angle: "Remembered operator angle",
+  });
+  await expect(page.getByText("AI draft #1")).toBeVisible();
+});
+
 interface GeneratedVariantRecord {
   hook: string;
   body: string;
@@ -740,8 +873,11 @@ interface VariantFormInput {
   hashtags: string;
 }
 
+// Status badges only: the post-stage tracker repeats labels like "Posted".
+const BADGE_SPAN_SELECTOR = 'span:not([data-testid="post-stage-tracker"] *)';
+
 function getBadge(page: Page, label: string): Locator {
-  return page.locator("span").filter({
+  return page.locator(BADGE_SPAN_SELECTOR).filter({
     hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
   });
 }

@@ -1,5 +1,6 @@
 import { CalendarClock } from "lucide-react";
 import { useState, type SyntheticEvent } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,21 +14,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ScheduleApprovalInput } from "@/features/approvals/types";
+import { useSessionFormState } from "@/hooks/use-session-form-state";
 
 interface ScheduleApprovalDialogProps {
   approvalId: number;
   onSchedule: (input: ScheduleApprovalInput) => Promise<void>;
 }
 
-interface ScheduleApprovalFormState {
-  scheduledFor: string;
-  timezone: string;
-}
+const scheduleApprovalFormSchema = z.object({
+  scheduledFor: z.string().max(80),
+  timezone: z.string().max(80),
+});
 
-const initialFormState: ScheduleApprovalFormState = {
-  scheduledFor: "",
-  timezone: "local",
-};
+type ScheduleApprovalFormState = z.infer<typeof scheduleApprovalFormSchema>;
+
+function getInitialFormState(): ScheduleApprovalFormState {
+  return { scheduledFor: "", timezone: "local" };
+}
 
 export function ScheduleApprovalDialog({
   approvalId,
@@ -35,7 +38,16 @@ export function ScheduleApprovalDialog({
 }: ScheduleApprovalDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState<ScheduleApprovalFormState>(initialFormState);
+  // Typed values survive Cancel and Back until the post is scheduled.
+  const {
+    value: form,
+    setValue: setForm,
+    clear: clearForm,
+  } = useSessionFormState(
+    `schedule.${approvalId}`,
+    scheduleApprovalFormSchema,
+    getInitialFormState,
+  );
 
   const handleSubmit = async (
     event: SyntheticEvent<HTMLFormElement>,
@@ -48,7 +60,7 @@ export function ScheduleApprovalDialog({
         scheduledFor: form.scheduledFor,
         timezone: form.timezone,
       });
-      setForm(initialFormState);
+      clearForm();
       setOpen(false);
     } finally {
       setSubmitting(false);
@@ -59,7 +71,7 @@ export function ScheduleApprovalDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" size="sm">
-          <CalendarClock className="size-4" /> Schedule
+          <CalendarClock aria-hidden="true" className="size-4" /> Pick a time
         </Button>
       </DialogTrigger>
       <DialogContent>

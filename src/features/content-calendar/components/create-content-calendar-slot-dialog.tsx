@@ -46,6 +46,14 @@ interface CreateContentCalendarSlotDialogProps {
   eligibleApprovals: ContentCalendarEligibleApproval[];
   disabled: boolean;
   onCreate: (input: CreateContentCalendarSlotInput) => Promise<void>;
+  /** Controlled open state, used by "Add to plan" from a link. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Approved post chosen by a link. Preselected (and its schedule time
+   * prefilled) each time the dialog opens for it.
+   */
+  presetApprovalId?: number | null;
 }
 
 interface CalendarSlotFormState {
@@ -72,14 +80,112 @@ const initialFormState: CalendarSlotFormState = {
   notes: "",
 };
 
+/**
+ * Stored schedule formats accepted natively (`is_supported_timestamp`):
+ * `YYYY-MM-DD[T ]HH:MM[:SS[.fff]]` with an optional `Z` or `±HH:MM` suffix.
+ */
+const scheduleTimestampPattern =
+  /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/;
+
+/** Wall-clock `YYYY-MM-DDTHH:mm` of an instant in a zone; "" if unknown. */
+function toZonedWallClock(instant: Date, timezone: string): string {
+  const zone = timezone.trim();
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone:
+        zone === "" || zone.toLowerCase() === "local" ? undefined : zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(instant);
+    const part = (type: Intl.DateTimeFormatPartTypes): string =>
+      parts.find((entry) => entry.type === type)?.value ?? "";
+    const value = `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? value : "";
+  } catch {
+    // RangeError: the stored time zone isn't one Intl knows.
+    return "";
+  }
+}
+
+/**
+ * `datetime-local` value (`YYYY-MM-DDTHH:mm`) from a stored schedule time.
+ * `T` or space separators are accepted; seconds are dropped. A `Z` or
+ * `±HH:MM` suffix is converted to the wall clock in `timezone` ("local"
+ * means the device zone), or "" when the zone is unknown, so the shown
+ * time never silently shifts to a different moment.
+ */
+export function toDateTimeLocalValue(
+  value: string,
+  timezone = "local",
+): string {
+  const match = scheduleTimestampPattern.exec(value.trim());
+  if (!match) return "";
+  const [, date, time, seconds, offset] = match;
+  if (date === undefined || time === undefined) return "";
+  const wallClock = `${date}T${time}`;
+  if (offset === undefined) return wallClock;
+  const instant = new Date(`${wallClock}:${seconds ?? "00"}${offset}`);
+  if (Number.isNaN(instant.getTime())) return "";
+  return toZonedWallClock(instant, timezone);
+}
+
+function getPresetFormState(
+  approval: ContentCalendarEligibleApproval,
+): CalendarSlotFormState {
+  return {
+    ...initialFormState,
+    approvalId: String(approval.id),
+    angle: approval.draft.angle,
+    cta: approval.variant.cta,
+    slotFor: approval.scheduleJob
+      ? toDateTimeLocalValue(
+          approval.scheduleJob.scheduled_for,
+          approval.scheduleJob.timezone,
+        )
+      : "",
+    timezone: approval.scheduleJob?.timezone ?? initialFormState.timezone,
+  };
+}
+
 export function CreateContentCalendarSlotDialog({
   eligibleApprovals,
   disabled,
   onCreate,
+  open: controlledOpen,
+  onOpenChange,
+  presetApprovalId = null,
 }: CreateContentCalendarSlotDialogProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (next: boolean): void => {
+    setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<CalendarSlotFormState>(initialFormState);
+  const presetApproval =
+    presetApprovalId === null
+      ? null
+      : (eligibleApprovals.find(
+          (approval) => approval.id === presetApprovalId,
+        ) ?? null);
+
+  // A link-chosen post is applied once per opening, so later edits stick.
+  const [appliedPresetId, setAppliedPresetId] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setAppliedPresetId(null);
+      return;
+    }
+    if (presetApproval === null || appliedPresetId === presetApproval.id)
+      return;
+    setAppliedPresetId(presetApproval.id);
+    setForm(getPresetFormState(presetApproval));
+  }, [appliedPresetId, open, presetApproval]);
 
   const selectedApproval = useMemo(
     () =>
@@ -90,7 +196,7 @@ export function CreateContentCalendarSlotDialog({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || presetApproval !== null) return;
     if (form.approvalId || eligibleApprovals.length === 0) return;
     const firstApproval = eligibleApprovals[0];
     if (!firstApproval) return;
@@ -100,7 +206,7 @@ export function CreateContentCalendarSlotDialog({
       angle: firstApproval.draft.angle,
       cta: firstApproval.variant.cta,
     }));
-  }, [eligibleApprovals, form.approvalId, open]);
+  }, [eligibleApprovals, form.approvalId, open, presetApproval]);
 
   function setSelectedApproval(approvalId: string): void {
     const approval = eligibleApprovals.find(

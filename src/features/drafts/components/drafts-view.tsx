@@ -5,7 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AddDraftDialog } from "@/features/drafts/components/add-draft-dialog";
 import { DraftGenerationRequestCard } from "@/features/drafts/components/draft-generation-request-card";
 import { DraftCard } from "@/features/drafts/components/draft-card";
-import { GenerateDraftDialog } from "@/features/drafts/components/generate-draft-dialog";
+import {
+  GenerateDraftDialog,
+  getWritableCandidates,
+} from "@/features/drafts/components/generate-draft-dialog";
 import { useDrafts } from "@/features/drafts/hooks/use-drafts";
 import { draftsRoute } from "@/features/drafts/schemas";
 import type {
@@ -48,6 +51,7 @@ export function DraftsView(): React.ReactNode {
     qualityPendingVariantIds,
     runQualityLoop,
     resumeQualityLoop,
+    stageIndex,
   } = useDrafts({
     initialCampaignId: linkParams?.campaignId,
     candidateId: linkParams?.candidateId,
@@ -79,6 +83,23 @@ export function DraftsView(): React.ReactNode {
   const selectedCampaign =
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
+  const writeLink = resolveWriteLink({
+    link,
+    linkParams,
+    candidates,
+    selectedCampaignId,
+    selectedCampaignArchived,
+  });
+  // Closing a dialog a link opened drops `write` from the address (replace),
+  // so refresh doesn't reopen it while Back/Forward still work.
+  const closeWriteLink = (): void => {
+    if (link.kind !== "idea") return;
+    navigateTo(
+      draftsRoute,
+      { campaignId: link.campaignId, candidateId: link.candidateId },
+      { replace: true },
+    );
+  };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -102,9 +123,18 @@ export function DraftsView(): React.ReactNode {
             candidates={candidates}
             selectedCampaignId={selectedCampaignId}
             selectedCampaignArchived={selectedCampaignArchived}
+            hasCampaigns={campaigns.length > 0}
             eligibleWorkflowOptions={eligibleWorkflowOptions}
             onGenerate={generateDraft}
-            disabled={campaigns.length === 0}
+            {...(writeLink.kind === "open"
+              ? {
+                  open: true,
+                  lockedCandidateId: writeLink.candidateId,
+                  onOpenChange: (next: boolean) => {
+                    if (!next) closeWriteLink();
+                  },
+                }
+              : {})}
           />
           <AddDraftDialog
             candidates={candidates}
@@ -147,6 +177,27 @@ export function DraftsView(): React.ReactNode {
             drafts.
           </span>
         </p>
+      )}
+
+      {writeLink.kind === "not-ready" && (
+        <div
+          role="status"
+          data-testid="drafts-write-link-not-ready"
+          className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+        >
+          <span className="flex items-center gap-2">
+            <Info aria-hidden="true" className="size-4 shrink-0" />
+            {writeLink.reason}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={closeWriteLink}
+          >
+            OK
+          </Button>
+        </div>
       )}
 
       {loading ? (
@@ -267,6 +318,7 @@ export function DraftsView(): React.ReactNode {
                 <DraftCard
                   key={draft.id}
                   draft={draft}
+                  stage={stageIndex?.byDraftId.get(draft.id) ?? null}
                   onUpdateVariant={updateVariant}
                   onSetVariantStatus={setVariantStatus}
                   onArchiveDraft={archiveDraft}
@@ -340,6 +392,50 @@ function resolveDraftsLink(input: {
   return ideaExists
     ? { kind: "idea", campaignId, candidateId }
     : { kind: "not-found" };
+}
+
+type WriteLinkState =
+  | { kind: "none" }
+  | { kind: "open"; candidateId: number }
+  | { kind: "not-ready"; reason: string };
+
+/**
+ * `write=1` opens Write with AI for the linked idea only when that idea can
+ * still get a first draft; otherwise it explains why.
+ */
+function resolveWriteLink(input: {
+  link: DraftsLinkState;
+  linkParams: DraftsRouteParams | null;
+  candidates: CandidateWithTarget[];
+  selectedCampaignId: number | null;
+  selectedCampaignArchived: boolean;
+}): WriteLinkState {
+  if (input.linkParams?.write !== "1" || input.link.kind !== "idea")
+    return { kind: "none" };
+  const { candidateId } = input.link;
+  const writable = getWritableCandidates(
+    input.candidates,
+    input.selectedCampaignId,
+    input.selectedCampaignArchived,
+  ).some((candidate) => candidate.id === candidateId);
+  if (writable) return { kind: "open", candidateId };
+  if (input.selectedCampaignArchived)
+    return {
+      kind: "not-ready",
+      reason:
+        "This campaign is archived, so you can't write posts for that idea.",
+    };
+  const candidate = input.candidates.find((item) => item.id === candidateId);
+  if (candidate?.status === "rejected")
+    return {
+      kind: "not-ready",
+      reason: "That idea was rejected, so there's nothing to write.",
+    };
+  return {
+    kind: "not-ready",
+    reason:
+      "That idea already has a draft. Here it is — keep working on it below.",
+  };
 }
 
 function isActiveGenerationRequest(request: DraftGenerationRequest): boolean {

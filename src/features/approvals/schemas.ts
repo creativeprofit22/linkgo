@@ -1,4 +1,10 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import type { ApprovalsRouteParams } from "@/features/approvals/types";
+import {
+  defineRoute,
+  optionalRouteFlag,
+  optionalRouteId,
+  routeId,
+} from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const approvalStatusSchema = z.enum([
@@ -146,5 +152,35 @@ export const recordPublishAttemptSchema = z
     }
   });
 
+/**
+ * Link params for Approvals. `approvalId` highlights one approval;
+ * `draftId` + `send=1` opens Send for approval with that draft picked. Both
+ * ids need their campaign, and `send` needs `draftId`. Mirrors
+ * `ApprovalsRouteParams`.
+ */
+export const approvalsRouteSearchSchema = z.union([
+  z.object({
+    campaignId: optionalRouteId(),
+    draftId: z.undefined().optional(),
+    approvalId: z.undefined().optional(),
+    send: z.undefined().optional(),
+  }),
+  z.object({
+    campaignId: routeId(),
+    draftId: z.undefined().optional(),
+    approvalId: routeId(),
+    send: z.undefined().optional(),
+  }),
+  z.object({
+    campaignId: routeId(),
+    draftId: routeId(),
+    approvalId: z.undefined().optional(),
+    send: optionalRouteFlag(),
+  }),
+]);
+
 /** Address of the Approvals screen (`#/approvals`). See docs/features/navigation.md. */
-export const approvalsRoute = defineRoute("approvals", emptyRouteSearch());
+export const approvalsRoute = defineRoute<"approvals", ApprovalsRouteParams>(
+  "approvals",
+  approvalsRouteSearchSchema,
+);

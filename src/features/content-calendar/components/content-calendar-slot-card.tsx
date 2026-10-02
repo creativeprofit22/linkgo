@@ -12,6 +12,7 @@ import {
   scheduleStatusLabels,
 } from "@/features/content-calendar/components/content-calendar-status-badge";
 import { toPlainMessage } from "@/lib/plain-message";
+import { cn } from "@/lib/utils";
 import type {
   ArchiveContentCalendarSlotInput,
   ContentCalendarSlotWithDetails,
@@ -21,6 +22,8 @@ import type {
 
 interface ContentCalendarSlotCardProps {
   slot: ContentCalendarSlotWithDetails;
+  /** True when a link pointed at this post; it scrolls into view. */
+  highlighted?: boolean;
   saving: boolean;
   onUpdate: (input: UpdateContentCalendarSlotInput) => Promise<void>;
   onArchive: (input: ArchiveContentCalendarSlotInput) => Promise<void>;
@@ -29,6 +32,7 @@ interface ContentCalendarSlotCardProps {
 
 export function ContentCalendarSlotCard({
   slot,
+  highlighted = false,
   saving,
   onUpdate,
   onArchive,
@@ -58,7 +62,15 @@ export function ContentCalendarSlotCard({
   }
 
   return (
-    <Card className="linkgo-card bg-card/82 overflow-hidden">
+    <Card
+      id={`calendar-slot-${slot.id}`}
+      data-highlighted={highlighted ? "true" : undefined}
+      aria-current={highlighted ? "true" : undefined}
+      className={cn(
+        "linkgo-card bg-card/82 scroll-mt-6 overflow-hidden",
+        highlighted && "ring-primary ring-2 ring-offset-2",
+      )}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">

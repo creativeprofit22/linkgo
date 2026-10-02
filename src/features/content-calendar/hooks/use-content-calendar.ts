@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
@@ -42,11 +42,24 @@ function getErrorMessage(error: unknown): string {
     : "Something went wrong with your calendar. Try again.";
 }
 
-export function useContentCalendar(): UseContentCalendarState {
+export interface UseContentCalendarOptions {
+  /**
+   * Campaign requested by a link. Selected on first load (when it exists)
+   * and whenever a new link arrives while Calendar stays open.
+   */
+  initialCampaignId?: number | undefined;
+}
+
+export function useContentCalendar(
+  options: UseContentCalendarOptions = {},
+): UseContentCalendarState {
+  const { initialCampaignId } = options;
   const [campaigns, setCampaigns] = useState<CampaignWithKeywords[]>([]);
+  // A missing linked campaign falls back to "All campaigns" in loadCalendar.
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(
-    null,
+    initialCampaignId ?? null,
   );
+  const requestedCampaignIdRef = useRef(initialCampaignId);
   const [slots, setSlots] = useState<ContentCalendarSlotWithDetails[]>([]);
   const [eligibleApprovals, setEligibleApprovals] = useState<
     ContentCalendarEligibleApproval[]
@@ -97,6 +110,15 @@ export function useContentCalendar(): UseContentCalendarState {
     },
     [loadCalendarForCampaign],
   );
+
+  // A new link while Calendar stays open selects its campaign; loadCalendar
+  // re-runs for the new selection and drops it if the campaign is gone.
+  useEffect(() => {
+    if (requestedCampaignIdRef.current === initialCampaignId) return;
+    requestedCampaignIdRef.current = initialCampaignId;
+    if (initialCampaignId !== undefined)
+      setSelectedCampaignId(initialCampaignId);
+  }, [initialCampaignId]);
 
   const createSlot = useCallback(
     async (input: CreateContentCalendarSlotInput) => {

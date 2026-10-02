@@ -13,12 +13,17 @@ export type DraftContentIntent = (typeof DRAFT_CONTENT_INTENTS)[number];
 
 /**
  * Validated params of a Drafts link. An idea filter (`candidateId`) needs its
- * campaign, so the union rules out `candidateId` alone. A type alias (not an
- * interface) so it stays assignable to the generic route params record.
+ * campaign, so the union rules out `candidateId` alone. `write: "1"` opens
+ * Write with AI for that idea. A type alias (not an interface) so it stays
+ * assignable to the generic route params record.
  */
 export type DraftsRouteParams =
-  | { campaignId?: number | undefined; candidateId?: undefined }
-  | { campaignId: number; candidateId: number };
+  | {
+      campaignId?: number | undefined;
+      candidateId?: undefined;
+      write?: undefined;
+    }
+  | { campaignId: number; candidateId: number; write?: "1" | undefined };
 
 export type DraftStatus =
   | "drafting"

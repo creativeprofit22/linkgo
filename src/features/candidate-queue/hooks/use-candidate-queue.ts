@@ -14,6 +14,7 @@ import {
   setCandidateStatus,
   updateCandidate as updateCandidateRecord,
 } from "@/features/candidate-queue/data";
+import { usePostStageIndex, type PostStageIndex } from "@/features/post-stages";
 import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CandidateDiscoveryItem,
@@ -34,6 +35,8 @@ interface UseCandidateQueueState {
   discoveryItems: CandidateDiscoveryItem[];
   campaigns: CampaignWithKeywords[];
   selectedCampaignId: number | null;
+  /** Post stage per idea; `null` while loading or if the read failed. */
+  stageIndex: PostStageIndex | null;
   loading: boolean;
   error: string | null;
   loadQueue: () => Promise<void>;
@@ -78,6 +81,8 @@ export function useCandidateQueue(): UseCandidateQueueState {
   const [error, setError] = useState<string | null>(null);
   const selectedCampaignIdRef = useRef<number | null>(null);
   const campaignRequestIdRef = useRef(0);
+  // Reloads whenever the idea list reloads, i.e. after every mutation.
+  const stageIndex = usePostStageIndex(selectedCampaignId, candidates);
 
   const loadCandidatesForCampaign = useCallback(
     async (campaignId: number | null, requestId: number): Promise<void> => {
@@ -314,6 +319,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
       discoveryItems,
       campaigns,
       selectedCampaignId,
+      stageIndex,
       loading,
       error,
       loadQueue,
@@ -328,6 +334,7 @@ export function useCandidateQueue(): UseCandidateQueueState {
       dismissDiscoveryItem,
     }),
     [
+      stageIndex,
       candidates,
       candidateTotalCount,
       discoveryItems,

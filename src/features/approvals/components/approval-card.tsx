@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { CalendarDays, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -27,9 +27,17 @@ import {
   PublishLockNotice,
   type PublishLock,
 } from "@/features/publish-reconciliation";
+import { contentCalendarRoute } from "@/features/content-calendar/schemas";
+import { PostStageTracker, type PostStage } from "@/features/post-stages";
+import { navigateTo } from "@/lib/navigation/use-hash-navigation";
+import { cn } from "@/lib/utils";
 
 interface ApprovalCardProps {
   approval: ApprovalWithDetails;
+  /** Where this post stands; `null` hides the tracker. */
+  stage?: PostStage | null;
+  /** True when a link pointed at this approval; it scrolls into view. */
+  highlighted?: boolean;
   killSwitchEnabled: boolean;
   killSwitchReason: string;
   /** Open native publish execution for this approval; the native gate decides. */
@@ -43,6 +51,8 @@ interface ApprovalCardProps {
 
 export function ApprovalCard({
   approval,
+  stage = null,
+  highlighted = false,
   killSwitchEnabled,
   killSwitchReason,
   publishLock,
@@ -102,6 +112,10 @@ export function ApprovalCard({
     approval.status === "approved" &&
     (!approval.scheduleJob ||
       ["cancelled", "failed"].includes(approval.scheduleJob.status));
+  // Calendar only lists approved, scheduled and posted approvals.
+  const canSeeOnCalendar =
+    approval.status === "scheduled" &&
+    approval.scheduleJob?.status === "scheduled";
   const linkedAgentRunConsequence =
     approval.linkedAgentRunCount === 1
       ? "1 waiting AI assistant task will be cancelled and can't be continued."
@@ -120,7 +134,15 @@ export function ApprovalCard({
   }
 
   return (
-    <Card className="linkgo-card bg-card/82 overflow-hidden">
+    <Card
+      id={`approval-${approval.id}`}
+      data-highlighted={highlighted ? "true" : undefined}
+      aria-current={highlighted ? "true" : undefined}
+      className={cn(
+        "linkgo-card bg-card/82 scroll-mt-6 overflow-hidden",
+        highlighted && "ring-primary ring-2 ring-offset-2",
+      )}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-2">
@@ -201,6 +223,21 @@ export function ApprovalCard({
                 onSchedule={onSchedule}
               />
             )}
+            {canSeeOnCalendar && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  navigateTo(contentCalendarRoute, {
+                    campaignId: approval.draft.campaign_id,
+                    approvalId: approval.id,
+                  })
+                }
+              >
+                <CalendarDays aria-hidden="true" className="size-4" />
+                See on calendar
+              </Button>
+            )}
             {scheduleBlockedByKillSwitch && (
               <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
                 Pause everything is on, so posts can't be scheduled.
@@ -232,6 +269,7 @@ export function ApprovalCard({
                 commentary={escapedCommentary}
                 onPublished={onPublished}
                 disabled={publishLock !== null}
+                secondary={canSchedule || canSeeOnCalendar}
               />
             )}
             {canPublishViaLinkedIn && publishLock !== null && (
@@ -251,6 +289,7 @@ export function ApprovalCard({
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {stage !== null && <PostStageTracker stage={stage} />}
         {(!approval.readyForApproval || approval.contentChanged) && (
           <p role="status" className="text-muted-foreground text-sm">
             {approval.contentChanged

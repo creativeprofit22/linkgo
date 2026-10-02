@@ -145,3 +145,12 @@ export interface ArchiveContentCalendarSlotInput {
 export interface ScheduleContentCalendarSlotInput {
   id: number;
 }
+
+/**
+ * Validated params of a Calendar link. `approvalId` highlights that post's
+ * plan slot (or offers to add one) and needs its campaign. A type alias so it
+ * stays assignable to the generic route params record.
+ */
+export type ContentCalendarRouteParams =
+  | { campaignId?: number | undefined; approvalId?: undefined }
+  | { campaignId: number; approvalId: number };

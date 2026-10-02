@@ -1,5 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
-import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { useMemo, useState, type SyntheticEvent } from "react";
+import { z } from "zod";
 import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,10 @@ import type {
   ApprovalEligibleDraft,
   CreateApprovalInput,
 } from "@/features/approvals/types";
+import { DisabledReason } from "@/components/disabled-reason";
+import { draftsRoute } from "@/features/drafts/schemas";
+import { useSessionFormState } from "@/hooks/use-session-form-state";
+import { formatRouteHash } from "@/lib/navigation/route-contract";
 
 interface CreateApprovalDialogProps {
   eligibleDrafts: ApprovalEligibleDraft[];
@@ -26,28 +31,34 @@ interface CreateApprovalDialogProps {
   selectedCampaignId: number | null;
   selectedCampaignArchived: boolean;
   disabled?: boolean;
-  onCreate: (input: CreateApprovalInput) => Promise<void>;
+  /** Resolves with the new approval's id. */
+  onCreate: (input: CreateApprovalInput) => Promise<number>;
+  /** Runs after a successful send, with the new approval's id. */
+  onCreated?: (approvalId: number) => void;
+  /** Controlled open state, used when a link opens the dialog. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Draft chosen by a link. Shown read-only (no draft dropdown) while it is
+   * eligible; ignored otherwise.
+   */
+  lockedDraftId?: number | null;
 }
 
-interface CreateApprovalFormState {
-  draftId: string;
-  reviewerNotes: string;
+const createApprovalNotesSchema = z.object({
+  reviewerNotes: z.string().max(1000),
+});
+
+type CreateApprovalNotesState = z.infer<typeof createApprovalNotesSchema>;
+
+function getInitialNotesState(): CreateApprovalNotesState {
+  return { reviewerNotes: "" };
 }
 
 function getDraftLabel(draft: ApprovalEligibleDraft): string {
   const author = draft.target_author_name || "Author not known";
   const excerpt = draft.target_content.trim().slice(0, 70);
   return excerpt ? `${author} — ${excerpt}` : author;
-}
-
-function getInitialFormState(
-  eligibleDrafts: ApprovalEligibleDraft[],
-): CreateApprovalFormState {
-  return {
-    draftId:
-      eligibleDrafts[0] === undefined ? "" : String(eligibleDrafts[0].id),
-    reviewerNotes: "",
-  };
 }
 
 export function CreateApprovalDialog({
@@ -57,8 +68,17 @@ export function CreateApprovalDialog({
   selectedCampaignArchived,
   disabled = false,
   onCreate,
+  onCreated,
+  open: controlledOpen,
+  onOpenChange,
+  lockedDraftId = null,
 }: CreateApprovalDialogProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (next: boolean): void => {
+    setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [submitting, setSubmitting] = useState(false);
 
   const draftOptions = useMemo(
@@ -73,19 +93,47 @@ export function CreateApprovalDialog({
     [eligibleDrafts, selectedCampaignArchived, selectedCampaignId],
   );
 
-  const [form, setForm] = useState<CreateApprovalFormState>(() =>
-    getInitialFormState(draftOptions),
-  );
+  // An explicit pick wins while it is still eligible; otherwise the first
+  // ready draft is used, so a stale pick never submits a missing draft.
+  const [pickedDraftId, setPickedDraftId] = useState("");
+  const lockedDraft =
+    lockedDraftId === null
+      ? null
+      : (draftOptions.find((draft) => draft.id === lockedDraftId) ?? null);
   const selectedDraft =
-    draftOptions.find((draft) => String(draft.id) === form.draftId) ?? null;
+    lockedDraft ??
+    draftOptions.find((draft) => String(draft.id) === pickedDraftId) ??
+    draftOptions[0] ??
+    null;
+  const draftId = selectedDraft === null ? "" : String(selectedDraft.id);
+  // Notes are remembered per draft until they are sent, so Cancel or Back
+  // keeps them.
+  const {
+    value: notes,
+    setValue: setNotes,
+    clear: clearNotes,
+  } = useSessionFormState(
+    selectedDraft === null ? null : `send.${selectedDraft.id}`,
+    createApprovalNotesSchema,
+    getInitialNotesState,
+  );
   const createDisabled = disabled || draftOptions.length === 0;
   const archivedDisabledReason = selectedCampaignArchived
     ? "This campaign is archived, so you can't send posts for approval. Restore the campaign first."
     : null;
-
-  useEffect(() => {
-    if (!open) setForm(getInitialFormState(draftOptions));
-  }, [draftOptions, open]);
+  // Shown under the disabled button with a way to fix it.
+  const noReadyDraftsReason =
+    !archivedDisabledReason &&
+    !disabled &&
+    selectedCampaignId !== null &&
+    draftOptions.length === 0
+      ? "No checked drafts to send yet."
+      : null;
+  const disabledReasonId = archivedDisabledReason
+    ? "approval-archived-disabled-reason"
+    : noReadyDraftsReason
+      ? "approval-no-drafts-disabled-reason"
+      : undefined;
 
   const handleSubmit = async (
     event: SyntheticEvent<HTMLFormElement>,
@@ -93,12 +141,14 @@ export function CreateApprovalDialog({
     event.preventDefault();
     setSubmitting(true);
     try {
-      await onCreate({
-        draftId: Number(form.draftId),
-        reviewerNotes: form.reviewerNotes,
+      const approvalId = await onCreate({
+        draftId: Number(draftId),
+        reviewerNotes: notes.reviewerNotes,
       });
-      setForm(getInitialFormState(draftOptions));
+      clearNotes();
+      setPickedDraftId("");
       setOpen(false);
+      onCreated?.(approvalId);
     } finally {
       setSubmitting(false);
     }
@@ -111,11 +161,7 @@ export function CreateApprovalDialog({
           <Button
             type="button"
             disabled={createDisabled}
-            aria-describedby={
-              archivedDisabledReason
-                ? "approval-archived-disabled-reason"
-                : undefined
-            }
+            aria-describedby={disabledReasonId}
             title={archivedDisabledReason ?? undefined}
           >
             <CheckCircle2 className="size-4" /> Send for approval
@@ -139,46 +185,50 @@ export function CreateApprovalDialog({
               />
             )}
 
-            <Field label="Ready draft" htmlFor="approval-draft">
-              <select
-                id="approval-draft"
-                value={form.draftId}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    draftId: event.target.value,
-                  }))
-                }
-                required
-                className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-              >
-                <option value="" disabled>
-                  Choose a ready draft
-                </option>
-                {draftOptions.map((draft) => (
-                  <option key={draft.id} value={draft.id}>
-                    {getDraftLabel(draft)}
+            {lockedDraft !== null ? (
+              <dl className="space-y-2">
+                <dt className="text-sm font-medium">Ready draft</dt>
+                <dd
+                  data-testid="approval-locked-draft"
+                  className="bg-muted/30 rounded-md border px-3 py-2 text-sm"
+                >
+                  {getDraftLabel(lockedDraft)}
+                </dd>
+              </dl>
+            ) : (
+              <Field label="Ready draft" htmlFor="approval-draft">
+                <select
+                  id="approval-draft"
+                  value={draftId}
+                  onChange={(event) => setPickedDraftId(event.target.value)}
+                  required
+                  className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                >
+                  <option value="" disabled>
+                    Choose a ready draft
                   </option>
-                ))}
-              </select>
-            </Field>
+                  {draftOptions.map((draft) => (
+                    <option key={draft.id} value={draft.id}>
+                      {getDraftLabel(draft)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
 
             <Field label="Reviewer notes" htmlFor="approval-notes">
               <Textarea
                 id="approval-notes"
-                value={form.reviewerNotes}
+                value={notes.reviewerNotes}
                 maxLength={1000}
                 rows={4}
                 onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    reviewerNotes: event.target.value,
-                  }))
+                  setNotes({ reviewerNotes: event.target.value })
                 }
                 placeholder="What should you check before approving?"
               />
               <p className="text-muted-foreground text-xs">
-                {form.reviewerNotes.length}/1000
+                {notes.reviewerNotes.length}/1000
               </p>
             </Field>
 
@@ -201,7 +251,7 @@ export function CreateApprovalDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting || !form.draftId}>
+              <Button type="submit" disabled={submitting || !draftId}>
                 {submitting ? "Sending…" : "Send for approval"}
               </Button>
             </DialogFooter>
@@ -215,6 +265,22 @@ export function CreateApprovalDialog({
         >
           {archivedDisabledReason}
         </p>
+      )}
+      {noReadyDraftsReason && (
+        <DisabledReason
+          id="approval-no-drafts-disabled-reason"
+          reason={noReadyDraftsReason}
+          fix={{
+            href: formatRouteHash(
+              draftsRoute,
+              selectedCampaignId === null
+                ? {}
+                : { campaignId: selectedCampaignId },
+            ),
+            label: "Go to Drafts",
+          }}
+          className="text-right"
+        />
       )}
     </div>
   );

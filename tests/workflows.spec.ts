@@ -2292,8 +2292,11 @@ async function readArchivedDraftMutationState(page: Page) {
   });
 }
 
+// Status badges only: the post-stage tracker repeats labels like "Posted".
+const BADGE_SPAN_SELECTOR = 'span:not([data-testid="post-stage-tracker"] *)';
+
 function getBadge(page: Page, label: string): Locator {
-  return page.locator("span").filter({
+  return page.locator(BADGE_SPAN_SELECTOR).filter({
     hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
   });
 }

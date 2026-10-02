@@ -194,8 +194,11 @@ interface PublishAttemptRow {
   status: "succeeded" | "failed";
 }
 
+// Status badges only: the post-stage tracker repeats labels like "Posted".
+const BADGE_SPAN_SELECTOR = 'span:not([data-testid="post-stage-tracker"] *)';
+
 function getBadge(page: Page, label: string): Locator {
-  return page.locator("span").filter({
+  return page.locator(BADGE_SPAN_SELECTOR).filter({
     hasText: new RegExp(`^${label.replaceAll("'", "\\u0027")}$`, "u"),
   });
 }
@@ -230,7 +233,7 @@ async function createApprovedScheduledPost(
   await createReview(page);
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
   await page.getByLabel("Date and time").fill(scheduledFor);
   await page.getByLabel("Time zone").fill("local");
   const dialog = page.getByRole("dialog", { name: "Schedule post" });

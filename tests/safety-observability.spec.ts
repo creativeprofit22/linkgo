@@ -58,7 +58,7 @@ test("Global kill switch hides approval scheduling and agent dry-run start actio
 
   await openApprovals(page);
   await expect(
-    page.getByRole("button", { name: "Schedule", exact: true }),
+    page.getByRole("button", { name: "Pick a time", exact: true }),
   ).toBeHidden();
   await expect(
     page.getByText("Pause everything is on, so posts can't be scheduled."),
@@ -130,7 +130,7 @@ test("Daily post scheduling cap blocks a second same-day schedule", async ({
   await openApprovals(page);
   await createReview(page);
   await page.getByRole("button", { name: "Approve", exact: true }).click();
-  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
   await page.getByLabel("Date and time").fill("2026-06-25T18:00");
   await page.getByLabel("Time zone").fill("local");
   await page.getByRole("button", { name: "Schedule post" }).click();
@@ -247,9 +247,12 @@ interface ErrorQueueItemRow {
   title: string;
 }
 
+// Status badges only: the post-stage tracker repeats labels like "Posted".
+const BADGE_SPAN_SELECTOR = 'span:not([data-testid="post-stage-tracker"] *)';
+
 function getBadge(page: Page, label: string): Locator {
   return page
-    .locator("span")
+    .locator(BADGE_SPAN_SELECTOR)
     .filter({ hasText: new RegExp(`^${label}$`, "iu") })
     .first();
 }
@@ -564,7 +567,7 @@ async function scheduleApproval(
   scheduledFor: string,
   timezone: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Schedule post" });
   await dialog.getByLabel("Date and time").fill(scheduledFor);
   await dialog.getByLabel("Time zone").fill(timezone);

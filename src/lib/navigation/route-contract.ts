@@ -69,6 +69,14 @@ export function optionalRouteId(): z.ZodOptional<z.ZodCoercedNumber> {
 }
 
 /**
+ * Optional one-shot action flag (`?write=1`). Only the literal "1" is valid,
+ * so `true`, `yes` or `0` are rejected rather than guessed at.
+ */
+export function optionalRouteFlag(): z.ZodOptional<z.ZodLiteral<"1">> {
+  return z.literal("1").optional();
+}
+
+/**
  * Builds the link for a screen. Outgoing params are checked against the
  * route's own schema (as the strings the link will carry), so a link the
  * destination would reject throws here instead of shipping broken. Invalid

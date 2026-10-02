@@ -171,3 +171,29 @@ export interface RecordPublishAttemptInput {
   platformPostId?: string;
   errorMessage?: string;
 }
+
+/**
+ * Validated params of an Approvals link. `approvalId` highlights one approval;
+ * `draftId` with `send: "1"` opens Send for approval for that draft. Both ids
+ * need their campaign. A type alias so it stays assignable to the generic
+ * route params record.
+ */
+export type ApprovalsRouteParams =
+  | {
+      campaignId?: number | undefined;
+      draftId?: undefined;
+      approvalId?: undefined;
+      send?: undefined;
+    }
+  | {
+      campaignId: number;
+      draftId?: undefined;
+      approvalId: number;
+      send?: undefined;
+    }
+  | {
+      campaignId: number;
+      draftId: number;
+      approvalId?: undefined;
+      send?: "1" | undefined;
+    };

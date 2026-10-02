@@ -28,6 +28,15 @@ import {
 } from "@/features/publish-reconciliation";
 import type { SafetySettings } from "@/features/safety/types";
 import { isDesktopRequiredError } from "@/lib/tauri";
+import { usePostStageIndex, type PostStageIndex } from "@/features/post-stages";
+
+export interface UseApprovalsOptions {
+  /**
+   * Campaign requested by a link. Selected when it exists, on first load and
+   * whenever a new link arrives while Approvals stays open.
+   */
+  initialCampaignId?: number | undefined;
+}
 
 interface UseApprovalsState {
   approvals: ApprovalWithDetails[];
@@ -46,9 +55,12 @@ interface UseApprovalsState {
   killSwitchReason: string;
   /** Native publish executions still blocking a new publish. */
   openPublishExecutions: OpenPublishExecution[];
+  /** Post stage per approval; `null` while loading or if the read failed. */
+  stageIndex: PostStageIndex | null;
   loadApprovals: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
-  createReview: (input: CreateApprovalInput) => Promise<void>;
+  /** Resolves with the new approval's id. */
+  createReview: (input: CreateApprovalInput) => Promise<number>;
   setReviewStatus: (input: SetApprovalStatusInput) => Promise<void>;
   scheduleReview: (input: ScheduleApprovalInput) => Promise<void>;
   cancelScheduleJob: (input: CancelScheduleInput) => Promise<void>;
@@ -83,7 +95,10 @@ function getDefaultCampaignId(
   );
 }
 
-export function useApprovals(): UseApprovalsState {
+export function useApprovals(
+  options: UseApprovalsOptions = {},
+): UseApprovalsState {
+  const { initialCampaignId } = options;
   const [approvals, setApprovals] = useState<ApprovalWithDetails[]>([]);
   const [approvalTotal, setApprovalTotal] = useState(0);
   const [eligibleDrafts, setEligibleDrafts] = useState<ApprovalEligibleDraft[]>(
@@ -108,6 +123,16 @@ export function useApprovals(): UseApprovalsState {
   // write campaign-scoped approval data. Everything else is discarded.
   const selectedCampaignIdRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
+  // Read inside loadApprovals without making a link change reload everything.
+  const requestedCampaignIdRef = useRef(initialCampaignId);
+  const campaignsRef = useRef<CampaignWithKeywords[]>([]);
+  // Reloads whenever the approval list reloads (after every mutation) and
+  // reuses that list, so approvals are read once per load.
+  const stageIndex = usePostStageIndex(
+    selectedCampaignId,
+    approvals,
+    approvals,
+  );
 
   const isCurrentRequest = useCallback(
     (requestId: number, campaignId: number | null) =>
@@ -209,6 +234,7 @@ export function useApprovals(): UseApprovalsState {
         getSafetySettings(),
       ]);
       setCampaigns(loadedCampaigns);
+      campaignsRef.current = loadedCampaigns;
       setSafetySettings(loadedSafetySettings);
       // A selection made while campaigns loaded owns the approval data now.
       if (requestId !== requestIdRef.current) return;
@@ -216,9 +242,15 @@ export function useApprovals(): UseApprovalsState {
       const campaignStillExists = loadedCampaigns.some(
         (campaign) => campaign.id === currentCampaignId,
       );
+      const requestedCampaignId = requestedCampaignIdRef.current;
+      const requestedCampaignExists = loadedCampaigns.some(
+        (campaign) => campaign.id === requestedCampaignId,
+      );
       const nextCampaignId = campaignStillExists
         ? currentCampaignId
-        : getDefaultCampaignId(loadedCampaigns);
+        : requestedCampaignExists && requestedCampaignId !== undefined
+          ? requestedCampaignId
+          : getDefaultCampaignId(loadedCampaigns);
       selectedCampaignIdRef.current = nextCampaignId;
       setSelectedCampaignId(nextCampaignId);
       await loadApprovalsForCampaign(nextCampaignId, requestId);
@@ -269,10 +301,24 @@ export function useApprovals(): UseApprovalsState {
     [isCurrentRequest, loadApprovalsForCampaign],
   );
 
+  // A new link while Approvals stays open selects its campaign when it exists.
+  useEffect(() => {
+    if (requestedCampaignIdRef.current === initialCampaignId) return;
+    requestedCampaignIdRef.current = initialCampaignId;
+    if (
+      initialCampaignId === undefined ||
+      initialCampaignId === selectedCampaignIdRef.current
+    )
+      return;
+    if (!campaignsRef.current.some((c) => c.id === initialCampaignId)) return;
+    selectCampaign(initialCampaignId);
+  }, [initialCampaignId, selectCampaign]);
+
   const createReview = useCallback(
-    async (input: CreateApprovalInput) => {
+    async (input: CreateApprovalInput): Promise<number> => {
+      let approvalId: number;
       try {
-        await createApproval(input);
+        approvalId = await createApproval(input);
       } catch (caught) {
         const message = getErrorMessage(caught);
         toast.error(
@@ -284,6 +330,7 @@ export function useApprovals(): UseApprovalsState {
         throw caught;
       }
       await reloadAfterMutation();
+      return approvalId;
     },
     [reloadAfterMutation],
   );
@@ -406,6 +453,7 @@ export function useApprovals(): UseApprovalsState {
       killSwitchEnabled: safetySettings?.global_kill_switch === 1,
       killSwitchReason: safetySettings?.kill_switch_reason ?? "",
       openPublishExecutions,
+      stageIndex,
       loadApprovals,
       selectCampaign,
       createReview,
@@ -416,6 +464,7 @@ export function useApprovals(): UseApprovalsState {
       refreshApprovals,
     }),
     [
+      stageIndex,
       approvals,
       approvalTotal,
       eligibleDrafts,
