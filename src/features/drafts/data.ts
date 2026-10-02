@@ -232,6 +232,7 @@ function createFinding(
 }
 
 const optionalCampaignIdSchema = z.number().int().positive().optional();
+const optionalCandidateIdSchema = z.number().int().positive().optional();
 
 function campaignInput(campaignId?: number): { campaignId?: number } {
   const parsed = optionalCampaignIdSchema.parse(campaignId);
@@ -763,12 +764,18 @@ export async function listDrafts(
  */
 export async function listDraftPage(
   campaignId?: number,
+  options: { candidateId?: number | undefined } = {},
 ): Promise<DraftListPage> {
   // One native snapshot (`drafts_reads.rs`): capped at 500 drafts, with
-  // current-revision AI audits and quality scorecards only.
+  // current-revision AI audits and quality scorecards only. `candidateId`
+  // filters natively, so one idea's drafts are never cut by the cap.
+  const candidatePostId = optionalCandidateIdSchema.parse(options.candidateId);
   const snapshot = draftListSnapshotSchema.parse(
     await invokeCommand("linkgo_draft_list", {
-      input: campaignInput(campaignId),
+      input: {
+        ...campaignInput(campaignId),
+        ...(candidatePostId === undefined ? {} : { candidatePostId }),
+      },
     }),
   );
   return {

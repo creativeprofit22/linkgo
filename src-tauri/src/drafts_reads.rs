@@ -3,7 +3,8 @@
 //! - `linkgo_draft_list`: drafts with variants, audits, current-revision AI
 //!   audit runs and findings, and current quality runs with attempts and
 //!   category scores, read from one transaction snapshot, plus `totalCount`
-//!   (drafts matching the filter before the cap).
+//!   (drafts matching the filter before the cap). Optional filters: campaign
+//!   and one idea (`candidatePostId`).
 //! - `linkgo_draft_generation_request_list` and
 //!   `linkgo_draft_workflow_options`: bounded lists.
 //! - `linkgo_draft_update`: angle/notes/status in one transaction.
@@ -42,9 +43,26 @@ fn optional_campaign(campaign_id: Option<i64>) -> Result<Option<i64>, String> {
     Ok(campaign_id)
 }
 
+fn optional_candidate(candidate_post_id: Option<i64>) -> Result<Option<i64>, String> {
+    if candidate_post_id.is_some_and(|id| id <= 0) {
+        return Err("Idea id must be a positive integer".to_string());
+    }
+    Ok(candidate_post_id)
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DraftListInput {
+    #[serde(default)]
+    pub campaign_id: Option<i64>,
+    /// Only drafts for this idea; `totalCount` counts the same filter.
+    #[serde(default)]
+    pub candidate_post_id: Option<i64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DraftGenerationRequestListInput {
     #[serde(default)]
     pub campaign_id: Option<i64>,
 }
@@ -149,6 +167,7 @@ pub(crate) async fn list_drafts(
     input: DraftListInput,
 ) -> Result<DraftListSnapshot, String> {
     let campaign_id = optional_campaign(input.campaign_id)?;
+    let candidate_post_id = optional_candidate(input.candidate_post_id)?;
     let mut tx = pool.begin().await.map_err(read_error)?;
     let sql = format!(
         "SELECT d.id, d.campaign_id, d.candidate_post_id, d.angle, d.notes,
@@ -159,12 +178,14 @@ pub(crate) async fn list_drafts(
          INNER JOIN candidate_posts cp ON cp.id = d.candidate_post_id
          INNER JOIN target_posts tp ON tp.id = cp.target_post_id
          WHERE (?1 IS NULL OR d.campaign_id = ?1)
+           AND (?3 IS NULL OR d.candidate_post_id = ?3)
          ORDER BY d.status = 'archived', datetime(d.updated_at) DESC, d.id DESC
          LIMIT ?2"
     );
     let rows = sqlx::query(&sql)
         .bind(campaign_id)
         .bind(DRAFT_LIST_LIMIT)
+        .bind(candidate_post_id)
         .fetch_all(&mut *tx)
         .await
         .map_err(read_error)?;
@@ -175,9 +196,11 @@ pub(crate) async fn list_drafts(
          INNER JOIN campaigns c ON c.id = d.campaign_id
          INNER JOIN candidate_posts cp ON cp.id = d.candidate_post_id
          INNER JOIN target_posts tp ON tp.id = cp.target_post_id
-         WHERE (?1 IS NULL OR d.campaign_id = ?1)",
+         WHERE (?1 IS NULL OR d.campaign_id = ?1)
+           AND (?2 IS NULL OR d.candidate_post_id = ?2)",
     )
     .bind(campaign_id)
+    .bind(candidate_post_id)
     .fetch_one(&mut *tx)
     .await
     .map_err(read_error)?;
@@ -281,7 +304,7 @@ pub(crate) async fn list_drafts(
 
 pub(crate) async fn list_generation_requests(
     pool: &SqlitePool,
-    input: DraftListInput,
+    input: DraftGenerationRequestListInput,
 ) -> Result<Vec<Value>, String> {
     let campaign_id = optional_campaign(input.campaign_id)?;
     let sql = format!(
@@ -431,7 +454,7 @@ pub async fn linkgo_draft_list(
 #[tauri::command]
 pub async fn linkgo_draft_generation_request_list(
     pool: State<'_, SqlitePool>,
-    input: DraftListInput,
+    input: DraftGenerationRequestListInput,
 ) -> Result<Vec<Value>, String> {
     list_generation_requests(pool.inner(), input).await
 }

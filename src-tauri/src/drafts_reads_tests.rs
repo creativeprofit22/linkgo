@@ -63,6 +63,16 @@ fn inputs_reject_unknown_fields_and_null_values() {
         serde_json::json!({ "campaignId": 1, "x": 1 })
     )
     .is_err());
+    let parsed = serde_json::from_value::<DraftListInput>(
+        serde_json::json!({ "campaignId": 1, "candidatePostId": 2 }),
+    )
+    .unwrap();
+    assert_eq!(parsed.candidate_post_id, Some(2));
+    // The idea filter belongs to the draft list only.
+    assert!(serde_json::from_value::<DraftGenerationRequestListInput>(
+        serde_json::json!({ "campaignId": 1, "candidatePostId": 2 })
+    )
+    .is_err());
     assert!(serde_json::from_value::<DraftWorkflowOptionsInput>(serde_json::json!({})).is_err());
 }
 
@@ -71,8 +81,17 @@ async fn invalid_ids_are_rejected() {
     let f = migrated().await;
     let bad = DraftListInput {
         campaign_id: Some(0),
+        candidate_post_id: None,
     };
     assert!(list_drafts(&f.pool, bad).await.is_err());
+    let bad_idea = DraftListInput {
+        campaign_id: Some(1),
+        candidate_post_id: Some(-1),
+    };
+    assert_eq!(
+        list_drafts(&f.pool, bad_idea).await.unwrap_err(),
+        "Idea id must be a positive integer"
+    );
     assert!(
         list_workflow_options(&f.pool, DraftWorkflowOptionsInput { campaign_id: 0 })
             .await
@@ -87,6 +106,7 @@ async fn draft_list_returns_current_related_rows() {
         &f.pool,
         DraftListInput {
             campaign_id: Some(1),
+            candidate_post_id: None,
         },
     )
     .await
@@ -130,6 +150,7 @@ async fn draft_list_is_capped_and_reports_the_uncapped_total() {
         &f.pool,
         DraftListInput {
             campaign_id: Some(1),
+            candidate_post_id: None,
         },
     )
     .await
@@ -138,6 +159,84 @@ async fn draft_list_is_capped_and_reports_the_uncapped_total() {
     assert_eq!(scoped.total_count, 505);
     let json = serde_json::to_value(&scoped).unwrap();
     assert_eq!(json["totalCount"], 505);
+}
+
+#[tokio::test]
+async fn draft_list_filters_to_one_idea_past_the_cap() {
+    let f = migrated().await;
+    // 510 ideas in campaign 1, each with its one draft (drafts are unique
+    // per idea). Idea 1's draft is the oldest, so the 500-row campaign page
+    // leaves it out.
+    seed(
+        &f.pool,
+        "INSERT INTO campaigns (id,name,status,daily_post_limit) VALUES (1,'Live','active',5),(2,'Other','active',5);
+         WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 510)
+         INSERT INTO target_posts (id,url,normalized_url,content,content_hash) SELECT i,'u'||i,'n'||i,'c','h'||i FROM n;
+         INSERT INTO candidate_posts (id,campaign_id,target_post_id,status)
+           SELECT id,1,id,'drafted' FROM target_posts;
+         INSERT INTO drafts (campaign_id,candidate_post_id,angle,status,updated_at)
+           SELECT 1,id,'A'||id,'drafting',datetime('2026-01-01', '+' || id || ' minutes') FROM candidate_posts;
+         INSERT INTO draft_variants (draft_id,variant_number,hook,body,status)
+           SELECT id,1,'H','B','draft' FROM drafts WHERE candidate_post_id = 1;",
+    )
+    .await;
+    let campaign = list_drafts(
+        &f.pool,
+        DraftListInput {
+            campaign_id: Some(1),
+            candidate_post_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(campaign.total_count, 510);
+    assert!(!campaign
+        .drafts
+        .iter()
+        .any(|draft| draft["candidate_post_id"] == 1));
+
+    let idea = list_drafts(
+        &f.pool,
+        DraftListInput {
+            campaign_id: Some(1),
+            candidate_post_id: Some(1),
+        },
+    )
+    .await
+    .unwrap();
+    // `totalCount` counts the idea filter, not the whole campaign.
+    assert_eq!(idea.total_count, 1);
+    assert_eq!(idea.drafts.len(), 1);
+    assert_eq!(idea.drafts[0]["candidate_post_id"], 1);
+    assert_eq!(idea.drafts[0]["angle"], "A1");
+    // Its related rows come along with it.
+    assert_eq!(idea.variants.len(), 1);
+    assert_eq!(idea.variants[0]["draft_id"], idea.drafts[0]["id"]);
+
+    let missing = list_drafts(
+        &f.pool,
+        DraftListInput {
+            campaign_id: Some(1),
+            candidate_post_id: Some(9999),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(missing.drafts.is_empty());
+    assert_eq!(missing.total_count, 0);
+
+    // The idea filter combines with the campaign filter.
+    let wrong_campaign = list_drafts(
+        &f.pool,
+        DraftListInput {
+            campaign_id: Some(2),
+            candidate_post_id: Some(1),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(wrong_campaign.drafts.is_empty());
+    assert_eq!(wrong_campaign.total_count, 0);
 }
 
 #[tokio::test]
@@ -151,7 +250,7 @@ async fn generation_requests_and_workflow_options_are_filtered() {
     .await;
     let rows = list_generation_requests(
         &f.pool,
-        DraftListInput {
+        DraftGenerationRequestListInput {
             campaign_id: Some(1),
         },
     )

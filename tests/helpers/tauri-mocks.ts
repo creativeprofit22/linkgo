@@ -19857,10 +19857,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         };
         // Mirrors `drafts_reads.rs`, reusing the SQL-mock row builders.
         if (cmd === "linkgo_draft_list") {
-          const input = nativeInput<{ campaignId?: number }>(args);
+          const input = nativeInput<{
+            campaignId?: number;
+            candidatePostId?: number;
+          }>(args);
           const values =
             input.campaignId === undefined ? [] : [input.campaignId];
-          const draftMatches = selectDraftJoin(values) as Array<{ id: number }>;
+          // Native filters by idea before the cap and the count.
+          const draftMatches = (
+            selectDraftJoin(values) as Array<{
+              id: number;
+              candidate_post_id: number;
+            }>
+          ).filter(
+            (row) =>
+              input.candidatePostId === undefined ||
+              row.candidate_post_id === input.candidatePostId,
+          );
           const draftRows = draftMatches.slice(0, 500);
           const variants = selectDraftVariants(
             "FROM draft_variants",
