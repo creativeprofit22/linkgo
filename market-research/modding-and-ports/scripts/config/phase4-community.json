@@ -1,0 +1,242 @@
+[
+  {
+    "id": "a4-c01",
+    "kind": "search",
+    "query": "site:reddit.com \"Nexus Mods\" love"
+  },
+  {
+    "id": "a4-c02",
+    "kind": "search",
+    "query": "site:reddit.com \"Nexus Mods\" problem"
+  },
+  {
+    "id": "a4-c03",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"Nexus Mods\""
+  },
+  {
+    "id": "a4-c04",
+    "kind": "search",
+    "query": "site:reddit.com \"Nexus Mods\" beginner install"
+  },
+  {
+    "id": "a4-c05",
+    "kind": "search",
+    "query": "site:reddit.com \"ModDB\" love"
+  },
+  {
+    "id": "a4-c06",
+    "kind": "search",
+    "query": "site:reddit.com \"ModDB\" problem"
+  },
+  {
+    "id": "a4-c07",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"ModDB\""
+  },
+  {
+    "id": "a4-c08",
+    "kind": "search",
+    "query": "site:reddit.com \"ModDB\" beginner install"
+  },
+  {
+    "id": "a4-c09",
+    "kind": "search",
+    "query": "site:reddit.com \"GameBanana\" love"
+  },
+  {
+    "id": "a4-c10",
+    "kind": "search",
+    "query": "site:reddit.com \"GameBanana\" problem"
+  },
+  {
+    "id": "a4-c11",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"GameBanana\""
+  },
+  {
+    "id": "a4-c12",
+    "kind": "search",
+    "query": "site:reddit.com \"GameBanana\" beginner install"
+  },
+  {
+    "id": "a4-c13",
+    "kind": "search",
+    "query": "site:reddit.com \"CurseForge\" love"
+  },
+  {
+    "id": "a4-c14",
+    "kind": "search",
+    "query": "site:reddit.com \"CurseForge\" problem"
+  },
+  {
+    "id": "a4-c15",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"CurseForge\""
+  },
+  {
+    "id": "a4-c16",
+    "kind": "search",
+    "query": "site:reddit.com \"CurseForge\" beginner install"
+  },
+  {
+    "id": "a4-c17",
+    "kind": "search",
+    "query": "site:reddit.com \"mod.io\" love"
+  },
+  {
+    "id": "a4-c18",
+    "kind": "search",
+    "query": "site:reddit.com \"mod.io\" problem"
+  },
+  {
+    "id": "a4-c19",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"mod.io\""
+  },
+  {
+    "id": "a4-c20",
+    "kind": "search",
+    "query": "site:reddit.com \"mod.io\" beginner install"
+  },
+  {
+    "id": "a4-c21",
+    "kind": "search",
+    "query": "site:reddit.com \"Thunderstore\" love"
+  },
+  {
+    "id": "a4-c22",
+    "kind": "search",
+    "query": "site:reddit.com \"Thunderstore\" problem"
+  },
+  {
+    "id": "a4-c23",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"Thunderstore\""
+  },
+  {
+    "id": "a4-c24",
+    "kind": "search",
+    "query": "site:reddit.com \"Thunderstore\" beginner install"
+  },
+  {
+    "id": "a4-c25",
+    "kind": "search",
+    "query": "site:reddit.com \"Steam Workshop\" love"
+  },
+  {
+    "id": "a4-c26",
+    "kind": "search",
+    "query": "site:reddit.com \"Steam Workshop\" problem"
+  },
+  {
+    "id": "a4-c27",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"Steam Workshop\""
+  },
+  {
+    "id": "a4-c28",
+    "kind": "search",
+    "query": "site:reddit.com \"Steam Workshop\" beginner install"
+  },
+  {
+    "id": "a4-c29",
+    "kind": "search",
+    "query": "site:reddit.com \"itch.io\" love"
+  },
+  {
+    "id": "a4-c30",
+    "kind": "search",
+    "query": "site:reddit.com \"itch.io\" problem"
+  },
+  {
+    "id": "a4-c31",
+    "kind": "search",
+    "query": "site:reddit.com switched from \"itch.io\""
+  },
+  {
+    "id": "a4-c32",
+    "kind": "search",
+    "query": "site:reddit.com \"itch.io\" beginner install"
+  },
+  {
+    "id": "a4-y01",
+    "kind": "search",
+    "query": "site:youtube.com \"Nexus Mods\" review"
+  },
+  {
+    "id": "a4-y02",
+    "kind": "search",
+    "query": "site:youtube.com \"Nexus Mods\" how to install mods"
+  },
+  {
+    "id": "a4-y03",
+    "kind": "search",
+    "query": "site:youtube.com \"ModDB\" review"
+  },
+  {
+    "id": "a4-y04",
+    "kind": "search",
+    "query": "site:youtube.com \"ModDB\" how to install mods"
+  },
+  {
+    "id": "a4-y05",
+    "kind": "search",
+    "query": "site:youtube.com \"GameBanana\" review"
+  },
+  {
+    "id": "a4-y06",
+    "kind": "search",
+    "query": "site:youtube.com \"GameBanana\" how to install mods"
+  },
+  {
+    "id": "a4-y07",
+    "kind": "search",
+    "query": "site:youtube.com \"CurseForge\" review"
+  },
+  {
+    "id": "a4-y08",
+    "kind": "search",
+    "query": "site:youtube.com \"CurseForge\" how to install mods"
+  },
+  {
+    "id": "a4-y09",
+    "kind": "search",
+    "query": "site:youtube.com \"mod.io\" review"
+  },
+  {
+    "id": "a4-y10",
+    "kind": "search",
+    "query": "site:youtube.com \"mod.io\" how to install mods"
+  },
+  {
+    "id": "a4-y11",
+    "kind": "search",
+    "query": "site:youtube.com \"Thunderstore\" review"
+  },
+  {
+    "id": "a4-y12",
+    "kind": "search",
+    "query": "site:youtube.com \"Thunderstore\" how to install mods"
+  },
+  {
+    "id": "a4-y13",
+    "kind": "search",
+    "query": "site:youtube.com \"Steam Workshop\" review"
+  },
+  {
+    "id": "a4-y14",
+    "kind": "search",
+    "query": "site:youtube.com \"Steam Workshop\" how to install mods"
+  },
+  {
+    "id": "a4-y15",
+    "kind": "search",
+    "query": "site:youtube.com \"itch.io\" review"
+  },
+  {
+    "id": "a4-y16",
+    "kind": "search",
+    "query": "site:youtube.com \"itch.io\" how to install games"
+  }
+]

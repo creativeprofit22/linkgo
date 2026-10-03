@@ -1,0 +1,53 @@
+[
+  {
+    "id": "s01-m-reddit-pc-port-recommendation",
+    "kind": "search",
+    "query": "site:reddit.com \"PC port\" recommend"
+  },
+  {
+    "id": "s02-m-youtube-mod-creation-howto",
+    "kind": "search",
+    "query": "site:youtube.com \"making mods\" how to"
+  },
+  {
+    "id": "s03-m-tiktok-fan-game-request",
+    "kind": "search",
+    "query": "site:tiktok.com \"fan game\" request"
+  },
+  {
+    "id": "s04-m-x-legal-problem",
+    "kind": "search",
+    "query": "site:x.com \"cease and desist\" problem"
+  },
+  {
+    "id": "s05-m-nexusmods-mod-install-problem",
+    "kind": "search",
+    "query": "site:nexusmods.com \"install mods\" problem"
+  },
+  {
+    "id": "s06-m-github-decomp-howto",
+    "kind": "search",
+    "query": "site:github.com \"decompilation\" how to"
+  },
+  {
+    "id": "s07-m-itchio-fan-game-recommendation",
+    "kind": "search",
+    "query": "site:itch.io \"fan game\" recommend"
+  },
+  {
+    "id": "s08-m-gbatemp-pc-port-request",
+    "kind": "search",
+    "query": "site:gbatemp.net \"PC port\" request"
+  },
+  {
+    "id": "s09-d-H1-1",
+    "kind": "search",
+    "query": "modding community survey age results"
+  },
+  {
+    "id": "s10-d-H7-1",
+    "kind": "search",
+    "query": "fan remake \"cancelled\" cease and desist",
+    "searchType": "news"
+  }
+]

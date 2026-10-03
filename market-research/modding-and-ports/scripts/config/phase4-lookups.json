@@ -1,0 +1,42 @@
+[
+  {
+    "id": "a4-l01",
+    "kind": "search",
+    "query": "site:nexusmods.com rewards OR guidelines OR \"getting started\""
+  },
+  {
+    "id": "a4-l02",
+    "kind": "search",
+    "query": "site:moddb.com premium OR rewards OR terms OR guidelines OR \"getting started\" OR \"mod manager\""
+  },
+  {
+    "id": "a4-l03",
+    "kind": "search",
+    "query": "site:gamebanana.com premium OR rewards OR terms OR guidelines OR \"getting started\" OR \"mod manager\""
+  },
+  {
+    "id": "a4-l04",
+    "kind": "search",
+    "query": "site:curseforge.com premium OR rewards OR terms OR guidelines OR \"getting started\""
+  },
+  {
+    "id": "a4-l05",
+    "kind": "search",
+    "query": "site:mod.io premium OR rewards OR guidelines OR \"getting started\" OR \"mod manager\""
+  },
+  {
+    "id": "a4-l06",
+    "kind": "search",
+    "query": "site:thunderstore.io premium OR rewards OR terms OR guidelines OR \"getting started\" OR \"mod manager\""
+  },
+  {
+    "id": "a4-l07",
+    "kind": "search",
+    "query": "site:steamcommunity.com premium OR rewards OR \"getting started\" OR \"mod manager\""
+  },
+  {
+    "id": "a4-l08",
+    "kind": "search",
+    "query": "site:itch.io premium OR guidelines OR \"getting started\""
+  }
+]

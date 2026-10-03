@@ -1,0 +1,332 @@
+[
+  {
+    "id": "m-reddit-mod-install-recommendation",
+    "kind": "search",
+    "query": "site:reddit.com \"install mods\" recommend"
+  },
+  {
+    "id": "m-reddit-mod-creation-problem",
+    "kind": "search",
+    "query": "site:reddit.com \"making mods\" problem"
+  },
+  {
+    "id": "m-reddit-pc-port-howto",
+    "kind": "search",
+    "query": "site:reddit.com \"PC port\" how to"
+  },
+  {
+    "id": "m-reddit-decomp-alternative",
+    "kind": "search",
+    "query": "site:reddit.com \"decompilation\" alternative"
+  },
+  {
+    "id": "m-reddit-rust-rebuild-request",
+    "kind": "search",
+    "query": "site:reddit.com \"rewritten in Rust\" request"
+  },
+  {
+    "id": "m-reddit-fan-game-recommendation",
+    "kind": "search",
+    "query": "site:reddit.com \"fan game\" recommend"
+  },
+  {
+    "id": "m-reddit-ip-revival-problem",
+    "kind": "search",
+    "query": "site:reddit.com \"dead franchise\" problem"
+  },
+  {
+    "id": "m-reddit-mod-tools-howto",
+    "kind": "search",
+    "query": "site:reddit.com \"modding tools\" how to"
+  },
+  {
+    "id": "m-reddit-learning-alternative",
+    "kind": "search",
+    "query": "site:reddit.com \"modding tutorial\" alternative"
+  },
+  {
+    "id": "m-reddit-community-request",
+    "kind": "search",
+    "query": "site:reddit.com \"modding discord\" request"
+  },
+  {
+    "id": "m-reddit-legal-recommendation",
+    "kind": "search",
+    "query": "site:reddit.com \"cease and desist\" recommend"
+  },
+  {
+    "id": "m-x-mod-install-alternative",
+    "kind": "search",
+    "query": "site:x.com \"install mods\" alternative"
+  },
+  {
+    "id": "m-x-mod-creation-request",
+    "kind": "search",
+    "query": "site:x.com \"making mods\" request"
+  },
+  {
+    "id": "m-x-pc-port-recommendation",
+    "kind": "search",
+    "query": "site:x.com \"PC port\" recommend"
+  },
+  {
+    "id": "m-x-decomp-problem",
+    "kind": "search",
+    "query": "site:x.com \"decompilation\" problem"
+  },
+  {
+    "id": "m-x-rust-rebuild-howto",
+    "kind": "search",
+    "query": "site:x.com \"rewritten in Rust\" how to"
+  },
+  {
+    "id": "m-x-fan-game-alternative",
+    "kind": "search",
+    "query": "site:x.com \"fan game\" alternative"
+  },
+  {
+    "id": "m-x-ip-revival-request",
+    "kind": "search",
+    "query": "site:x.com \"dead franchise\" request"
+  },
+  {
+    "id": "m-x-mod-tools-recommendation",
+    "kind": "search",
+    "query": "site:x.com \"modding tools\" recommend"
+  },
+  {
+    "id": "m-x-learning-problem",
+    "kind": "search",
+    "query": "site:x.com \"modding tutorial\" problem"
+  },
+  {
+    "id": "m-x-community-howto",
+    "kind": "search",
+    "query": "site:x.com \"modding discord\" how to"
+  },
+  {
+    "id": "m-x-legal-alternative",
+    "kind": "search",
+    "query": "site:x.com \"cease and desist\" alternative"
+  },
+  {
+    "id": "m-discord-mod-install-request",
+    "kind": "search",
+    "query": "site:disboard.org \"install mods\" request"
+  },
+  {
+    "id": "m-discord-mod-creation-recommendation",
+    "kind": "search",
+    "query": "site:disboard.org \"making mods\" recommend"
+  },
+  {
+    "id": "m-discord-pc-port-problem",
+    "kind": "search",
+    "query": "site:disboard.org \"PC port\" problem"
+  },
+  {
+    "id": "m-discord-decomp-howto",
+    "kind": "search",
+    "query": "site:disboard.org \"decompilation\" how to"
+  },
+  {
+    "id": "m-discord-rust-rebuild-alternative",
+    "kind": "search",
+    "query": "site:disboard.org \"rewritten in Rust\" alternative"
+  },
+  {
+    "id": "m-discord-fan-game-request",
+    "kind": "search",
+    "query": "site:disboard.org \"fan game\" request"
+  },
+  {
+    "id": "m-discord-ip-revival-recommendation",
+    "kind": "search",
+    "query": "site:disboard.org \"dead franchise\" recommend"
+  },
+  {
+    "id": "m-discord-mod-tools-problem",
+    "kind": "search",
+    "query": "site:disboard.org \"modding tools\" problem"
+  },
+  {
+    "id": "m-discord-learning-howto",
+    "kind": "search",
+    "query": "site:disboard.org \"modding tutorial\" how to"
+  },
+  {
+    "id": "m-discord-community-alternative",
+    "kind": "search",
+    "query": "site:disboard.org \"modding discord\" alternative"
+  },
+  {
+    "id": "m-discord-legal-request",
+    "kind": "search",
+    "query": "site:disboard.org \"cease and desist\" request"
+  },
+  {
+    "id": "m-fandom-mod-install-request",
+    "kind": "search",
+    "query": "site:fandom.com \"install mods\" request"
+  },
+  {
+    "id": "m-fandom-mod-creation-recommendation",
+    "kind": "search",
+    "query": "site:fandom.com \"making mods\" recommend"
+  },
+  {
+    "id": "m-fandom-pc-port-problem",
+    "kind": "search",
+    "query": "site:fandom.com \"PC port\" problem"
+  },
+  {
+    "id": "m-fandom-decomp-howto",
+    "kind": "search",
+    "query": "site:fandom.com \"decompilation\" how to"
+  },
+  {
+    "id": "m-fandom-rust-rebuild-alternative",
+    "kind": "search",
+    "query": "site:fandom.com \"rewritten in Rust\" alternative"
+  },
+  {
+    "id": "m-fandom-fan-game-request",
+    "kind": "search",
+    "query": "site:fandom.com \"fan game\" request"
+  },
+  {
+    "id": "m-fandom-ip-revival-recommendation",
+    "kind": "search",
+    "query": "site:fandom.com \"dead franchise\" recommend"
+  },
+  {
+    "id": "m-fandom-mod-tools-problem",
+    "kind": "search",
+    "query": "site:fandom.com \"modding tools\" problem"
+  },
+  {
+    "id": "m-fandom-learning-howto",
+    "kind": "search",
+    "query": "site:fandom.com \"modding tutorial\" how to"
+  },
+  {
+    "id": "m-fandom-community-alternative",
+    "kind": "search",
+    "query": "site:fandom.com \"modding discord\" alternative"
+  },
+  {
+    "id": "m-fandom-legal-request",
+    "kind": "search",
+    "query": "site:fandom.com \"cease and desist\" request"
+  },
+  {
+    "id": "m-resetera-mod-install-problem",
+    "kind": "search",
+    "query": "site:resetera.com \"install mods\" problem"
+  },
+  {
+    "id": "m-resetera-mod-creation-howto",
+    "kind": "search",
+    "query": "site:resetera.com \"making mods\" how to"
+  },
+  {
+    "id": "m-resetera-pc-port-alternative",
+    "kind": "search",
+    "query": "site:resetera.com \"PC port\" alternative"
+  },
+  {
+    "id": "m-resetera-decomp-request",
+    "kind": "search",
+    "query": "site:resetera.com \"decompilation\" request"
+  },
+  {
+    "id": "m-resetera-rust-rebuild-recommendation",
+    "kind": "search",
+    "query": "site:resetera.com \"rewritten in Rust\" recommend"
+  },
+  {
+    "id": "m-resetera-fan-game-problem",
+    "kind": "search",
+    "query": "site:resetera.com \"fan game\" problem"
+  },
+  {
+    "id": "m-resetera-ip-revival-howto",
+    "kind": "search",
+    "query": "site:resetera.com \"dead franchise\" how to"
+  },
+  {
+    "id": "m-resetera-mod-tools-alternative",
+    "kind": "search",
+    "query": "site:resetera.com \"modding tools\" alternative"
+  },
+  {
+    "id": "m-resetera-learning-request",
+    "kind": "search",
+    "query": "site:resetera.com \"modding tutorial\" request"
+  },
+  {
+    "id": "m-resetera-community-recommendation",
+    "kind": "search",
+    "query": "site:resetera.com \"modding discord\" recommend"
+  },
+  {
+    "id": "m-resetera-legal-problem",
+    "kind": "search",
+    "query": "site:resetera.com \"cease and desist\" problem"
+  },
+  {
+    "id": "m-gbatemp-mod-install-alternative",
+    "kind": "search",
+    "query": "site:gbatemp.net \"install mods\" alternative"
+  },
+  {
+    "id": "m-gbatemp-mod-creation-request",
+    "kind": "search",
+    "query": "site:gbatemp.net \"making mods\" request"
+  },
+  {
+    "id": "m-gbatemp-pc-port-recommendation",
+    "kind": "search",
+    "query": "site:gbatemp.net \"PC port\" recommend"
+  },
+  {
+    "id": "m-gbatemp-decomp-problem",
+    "kind": "search",
+    "query": "site:gbatemp.net \"decompilation\" problem"
+  },
+  {
+    "id": "m-gbatemp-rust-rebuild-howto",
+    "kind": "search",
+    "query": "site:gbatemp.net \"rewritten in Rust\" how to"
+  },
+  {
+    "id": "m-gbatemp-fan-game-alternative",
+    "kind": "search",
+    "query": "site:gbatemp.net \"fan game\" alternative"
+  },
+  {
+    "id": "m-gbatemp-ip-revival-request",
+    "kind": "search",
+    "query": "site:gbatemp.net \"dead franchise\" request"
+  },
+  {
+    "id": "m-gbatemp-mod-tools-recommendation",
+    "kind": "search",
+    "query": "site:gbatemp.net \"modding tools\" recommend"
+  },
+  {
+    "id": "m-gbatemp-learning-problem",
+    "kind": "search",
+    "query": "site:gbatemp.net \"modding tutorial\" problem"
+  },
+  {
+    "id": "m-gbatemp-community-howto",
+    "kind": "search",
+    "query": "site:gbatemp.net \"modding discord\" how to"
+  },
+  {
+    "id": "m-gbatemp-legal-alternative",
+    "kind": "search",
+    "query": "site:gbatemp.net \"cease and desist\" alternative"
+  }
+]

@@ -1,0 +1,167 @@
+[
+  {
+    "id": "m-hackernews-mod-creation-recommendation",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"making mods\" recommend"
+  },
+  {
+    "id": "m-rustforum-pc-port-alternative",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"PC port\" alternative"
+  },
+  {
+    "id": "m-hackernews-ip-revival-recommendation",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"dead franchise\" recommend"
+  },
+  {
+    "id": "m-github-community-request",
+    "kind": "search",
+    "query": "site:github.com \"modding discord\" request"
+  },
+  {
+    "id": "m-hackernews-fan-game-request",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"fan game\" request"
+  },
+  {
+    "id": "m-github-learning-alternative",
+    "kind": "search",
+    "query": "site:github.com \"modding tutorial\" alternative"
+  },
+  {
+    "id": "m-hackernews-decomp-howto",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"decompilation\" how to"
+  },
+  {
+    "id": "m-github-mod-install-recommendation",
+    "kind": "search",
+    "query": "site:github.com \"install mods\" recommend"
+  },
+  {
+    "id": "m-github-legal-recommendation",
+    "kind": "search",
+    "query": "site:github.com \"cease and desist\" recommend"
+  },
+  {
+    "id": "m-rustforum-decomp-request",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"decompilation\" request"
+  },
+  {
+    "id": "m-github-decomp-alternative",
+    "kind": "search",
+    "query": "site:github.com \"decompilation\" alternative"
+  },
+  {
+    "id": "m-github-mod-creation-problem",
+    "kind": "search",
+    "query": "site:github.com \"making mods\" problem"
+  },
+  {
+    "id": "m-rustforum-community-recommendation",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"modding discord\" recommend"
+  },
+  {
+    "id": "m-rustforum-fan-game-problem",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"fan game\" problem"
+  },
+  {
+    "id": "m-rustforum-rust-rebuild-recommendation",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"rewritten in Rust\" recommend"
+  },
+  {
+    "id": "m-github-pc-port-howto",
+    "kind": "search",
+    "query": "site:github.com \"PC port\" how to"
+  },
+  {
+    "id": "m-hackernews-legal-request",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"cease and desist\" request"
+  },
+  {
+    "id": "m-rustforum-mod-tools-alternative",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"modding tools\" alternative"
+  },
+  {
+    "id": "m-rustforum-mod-install-problem",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"install mods\" problem"
+  },
+  {
+    "id": "m-github-rust-rebuild-request",
+    "kind": "search",
+    "query": "site:github.com \"rewritten in Rust\" request"
+  },
+  {
+    "id": "m-rustforum-ip-revival-howto",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"dead franchise\" how to"
+  },
+  {
+    "id": "m-github-fan-game-recommendation",
+    "kind": "search",
+    "query": "site:github.com \"fan game\" recommend"
+  },
+  {
+    "id": "m-rustforum-legal-problem",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"cease and desist\" problem"
+  },
+  {
+    "id": "m-hackernews-learning-howto",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"modding tutorial\" how to"
+  },
+  {
+    "id": "m-hackernews-rust-rebuild-alternative",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"rewritten in Rust\" alternative"
+  },
+  {
+    "id": "m-hackernews-mod-tools-problem",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"modding tools\" problem"
+  },
+  {
+    "id": "m-hackernews-pc-port-problem",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"PC port\" problem"
+  },
+  {
+    "id": "m-rustforum-mod-creation-howto",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"making mods\" how to"
+  },
+  {
+    "id": "m-rustforum-learning-request",
+    "kind": "search",
+    "query": "site:users.rust-lang.org \"modding tutorial\" request"
+  },
+  {
+    "id": "m-github-ip-revival-problem",
+    "kind": "search",
+    "query": "site:github.com \"dead franchise\" problem"
+  },
+  {
+    "id": "m-hackernews-mod-install-request",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"install mods\" request"
+  },
+  {
+    "id": "m-hackernews-community-alternative",
+    "kind": "search",
+    "query": "site:news.ycombinator.com \"modding discord\" alternative"
+  },
+  {
+    "id": "m-github-mod-tools-howto",
+    "kind": "search",
+    "query": "site:github.com \"modding tools\" how to"
+  }
+]

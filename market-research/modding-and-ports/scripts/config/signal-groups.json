@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "frozenAt": "2026-10-02",
+  "matching": "Whole-word or whole-phrase, case-insensitive, against SERP titles and snippets. Negation is not handled; stance comes from deep-sample reading.",
+  "groups": {
+    "beginner": [
+      "beginner",
+      "beginners",
+      "newbie",
+      "noob",
+      "new to modding",
+      "first mod",
+      "never coded",
+      "no coding",
+      "no programming",
+      "no experience",
+      "complete beginner"
+    ],
+    "learning-curve": [
+      "learning curve",
+      "where do i start",
+      "where to start",
+      "how do i start",
+      "overwhelming",
+      "confusing",
+      "too complicated",
+      "steep",
+      "struggling",
+      "stuck"
+    ],
+    "play-only": [
+      "download",
+      "install",
+      "installing",
+      "play",
+      "modpack",
+      "mod manager",
+      "load order"
+    ],
+    "ideas-requests": [
+      "idea",
+      "ideas",
+      "mod request",
+      "requesting",
+      "wish someone",
+      "someone should make",
+      "would love a mod"
+    ],
+    "own-game": [
+      "my own game",
+      "make a game",
+      "making a game",
+      "first game",
+      "indie game",
+      "game jam"
+    ],
+    "revival": [
+      "revive",
+      "revival",
+      "dead franchise",
+      "abandoned",
+      "abandonware",
+      "remake",
+      "remaster",
+      "childhood"
+    ],
+    "port": [
+      "port",
+      "ported",
+      "porting",
+      "pc port",
+      "native port",
+      "unofficial port"
+    ],
+    "decomp": [
+      "decomp",
+      "decompilation",
+      "decompiled",
+      "recomp",
+      "recompilation",
+      "reverse engineering",
+      "reverse engineered"
+    ],
+    "rust": [
+      "rust",
+      "rewritten in rust",
+      "written in rust",
+      "bevy",
+      "rustlang"
+    ],
+    "ease-satisfaction": [
+      "easy",
+      "easier",
+      "simple",
+      "one click",
+      "works great",
+      "no problems",
+      "straightforward",
+      "user friendly"
+    ],
+    "legal": [
+      "cease and desist",
+      "takedown",
+      "dmca",
+      "lawsuit",
+      "shut down",
+      "copyright",
+      "nintendo"
+    ],
+    "discord": ["discord", "discord server", "server invite"],
+    "age": [
+      "years old",
+      "teen",
+      "teenager",
+      "high school",
+      "middle school",
+      "kid",
+      "kids",
+      "adult",
+      "in my 30s",
+      "in my 20s"
+    ],
+    "competitor-mention": [
+      "nexus mods",
+      "nexusmods",
+      "moddb",
+      "gamebanana",
+      "curseforge",
+      "mod.io",
+      "thunderstore",
+      "steam workshop",
+      "itch.io",
+      "vortex",
+      "mod organizer"
+    ]
+  }
+}

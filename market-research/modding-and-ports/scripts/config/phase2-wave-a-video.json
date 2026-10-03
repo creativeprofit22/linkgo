@@ -1,0 +1,167 @@
+[
+  {
+    "id": "m-youtube-mod-install-problem",
+    "kind": "search",
+    "query": "site:youtube.com \"install mods\" problem"
+  },
+  {
+    "id": "m-youtube-mod-creation-howto",
+    "kind": "search",
+    "query": "site:youtube.com \"making mods\" how to"
+  },
+  {
+    "id": "m-youtube-pc-port-alternative",
+    "kind": "search",
+    "query": "site:youtube.com \"PC port\" alternative"
+  },
+  {
+    "id": "m-youtube-decomp-request",
+    "kind": "search",
+    "query": "site:youtube.com \"decompilation\" request"
+  },
+  {
+    "id": "m-youtube-rust-rebuild-recommendation",
+    "kind": "search",
+    "query": "site:youtube.com \"rewritten in Rust\" recommend"
+  },
+  {
+    "id": "m-youtube-fan-game-problem",
+    "kind": "search",
+    "query": "site:youtube.com \"fan game\" problem"
+  },
+  {
+    "id": "m-youtube-ip-revival-howto",
+    "kind": "search",
+    "query": "site:youtube.com \"dead franchise\" how to"
+  },
+  {
+    "id": "m-youtube-mod-tools-alternative",
+    "kind": "search",
+    "query": "site:youtube.com \"modding tools\" alternative"
+  },
+  {
+    "id": "m-youtube-learning-request",
+    "kind": "search",
+    "query": "site:youtube.com \"modding tutorial\" request"
+  },
+  {
+    "id": "m-youtube-community-recommendation",
+    "kind": "search",
+    "query": "site:youtube.com \"modding discord\" recommend"
+  },
+  {
+    "id": "m-youtube-legal-problem",
+    "kind": "search",
+    "query": "site:youtube.com \"cease and desist\" problem"
+  },
+  {
+    "id": "m-tiktok-mod-install-howto",
+    "kind": "search",
+    "query": "site:tiktok.com \"install mods\" how to"
+  },
+  {
+    "id": "m-tiktok-mod-creation-alternative",
+    "kind": "search",
+    "query": "site:tiktok.com \"making mods\" alternative"
+  },
+  {
+    "id": "m-tiktok-pc-port-request",
+    "kind": "search",
+    "query": "site:tiktok.com \"PC port\" request"
+  },
+  {
+    "id": "m-tiktok-decomp-recommendation",
+    "kind": "search",
+    "query": "site:tiktok.com \"decompilation\" recommend"
+  },
+  {
+    "id": "m-tiktok-rust-rebuild-problem",
+    "kind": "search",
+    "query": "site:tiktok.com \"rewritten in Rust\" problem"
+  },
+  {
+    "id": "m-tiktok-fan-game-howto",
+    "kind": "search",
+    "query": "site:tiktok.com \"fan game\" how to"
+  },
+  {
+    "id": "m-tiktok-ip-revival-alternative",
+    "kind": "search",
+    "query": "site:tiktok.com \"dead franchise\" alternative"
+  },
+  {
+    "id": "m-tiktok-mod-tools-request",
+    "kind": "search",
+    "query": "site:tiktok.com \"modding tools\" request"
+  },
+  {
+    "id": "m-tiktok-learning-recommendation",
+    "kind": "search",
+    "query": "site:tiktok.com \"modding tutorial\" recommend"
+  },
+  {
+    "id": "m-tiktok-community-problem",
+    "kind": "search",
+    "query": "site:tiktok.com \"modding discord\" problem"
+  },
+  {
+    "id": "m-tiktok-legal-howto",
+    "kind": "search",
+    "query": "site:tiktok.com \"cease and desist\" how to"
+  },
+  {
+    "id": "m-twitch-mod-install-recommendation",
+    "kind": "search",
+    "query": "site:twitch.tv \"install mods\" recommend"
+  },
+  {
+    "id": "m-twitch-mod-creation-problem",
+    "kind": "search",
+    "query": "site:twitch.tv \"making mods\" problem"
+  },
+  {
+    "id": "m-twitch-pc-port-howto",
+    "kind": "search",
+    "query": "site:twitch.tv \"PC port\" how to"
+  },
+  {
+    "id": "m-twitch-decomp-alternative",
+    "kind": "search",
+    "query": "site:twitch.tv \"decompilation\" alternative"
+  },
+  {
+    "id": "m-twitch-rust-rebuild-request",
+    "kind": "search",
+    "query": "site:twitch.tv \"rewritten in Rust\" request"
+  },
+  {
+    "id": "m-twitch-fan-game-recommendation",
+    "kind": "search",
+    "query": "site:twitch.tv \"fan game\" recommend"
+  },
+  {
+    "id": "m-twitch-ip-revival-problem",
+    "kind": "search",
+    "query": "site:twitch.tv \"dead franchise\" problem"
+  },
+  {
+    "id": "m-twitch-mod-tools-howto",
+    "kind": "search",
+    "query": "site:twitch.tv \"modding tools\" how to"
+  },
+  {
+    "id": "m-twitch-learning-alternative",
+    "kind": "search",
+    "query": "site:twitch.tv \"modding tutorial\" alternative"
+  },
+  {
+    "id": "m-twitch-community-request",
+    "kind": "search",
+    "query": "site:twitch.tv \"modding discord\" request"
+  },
+  {
+    "id": "m-twitch-legal-recommendation",
+    "kind": "search",
+    "query": "site:twitch.tv \"cease and desist\" recommend"
+  }
+]

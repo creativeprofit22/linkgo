@@ -1,0 +1,561 @@
+{
+  "frozen": "2026-10-03",
+  "rule": "01-research-protocol.md section 10, Phase 4 addendum items 3-4. Groups: lookup (a4-l*, one site: search per competitor for its null official slots), community (a4-c* Reddit, a4-y* YouTube), disconfirm (a4-d*, open web). Disconfirmer additions (a4-x*, at most 6) are appended before they run.",
+  "queries": [
+    {
+      "id": "a4-l01",
+      "group": "lookup",
+      "competitor": "nexusmods",
+      "slots": ["creator-rewards", "content-policy", "beginner"],
+      "query": "site:nexusmods.com rewards OR guidelines OR \"getting started\""
+    },
+    {
+      "id": "a4-l02",
+      "group": "lookup",
+      "competitor": "moddb",
+      "slots": [
+        "premium",
+        "creator-rewards",
+        "terms",
+        "content-policy",
+        "beginner",
+        "mod-manager"
+      ],
+      "query": "site:moddb.com premium OR rewards OR terms OR guidelines OR \"getting started\" OR \"mod manager\""
+    },
+    {
+      "id": "a4-l03",
+      "group": "lookup",
+      "competitor": "gamebanana",
+      "slots": [
+        "premium",
+        "creator-rewards",
+        "terms",
+        "content-policy",
+        "beginner",
+        "mod-manager"
+      ],
+      "query": "site:gamebanana.com premium OR rewards OR terms OR guidelines OR \"getting started\" OR \"mod manager\""
+    },
+    {
+      "id": "a4-l04",
+      "group": "lookup",
+      "competitor": "curseforge",
+      "slots": [
+        "premium",
+        "creator-rewards",
+        "terms",
+        "content-policy",
+        "beginner"
+      ],
+      "query": "site:curseforge.com premium OR rewards OR terms OR guidelines OR \"getting started\""
+    },
+    {
+      "id": "a4-l05",
+      "group": "lookup",
+      "competitor": "modio",
+      "slots": [
+        "premium",
+        "creator-rewards",
+        "content-policy",
+        "beginner",
+        "mod-manager"
+      ],
+      "query": "site:mod.io premium OR rewards OR guidelines OR \"getting started\" OR \"mod manager\""
+    },
+    {
+      "id": "a4-l06",
+      "group": "lookup",
+      "competitor": "thunderstore",
+      "slots": [
+        "premium",
+        "creator-rewards",
+        "terms",
+        "content-policy",
+        "beginner",
+        "mod-manager"
+      ],
+      "query": "site:thunderstore.io premium OR rewards OR terms OR guidelines OR \"getting started\" OR \"mod manager\""
+    },
+    {
+      "id": "a4-l07",
+      "group": "lookup",
+      "competitor": "steamworkshop",
+      "slots": ["premium", "creator-rewards", "beginner", "mod-manager"],
+      "query": "site:steamcommunity.com premium OR rewards OR \"getting started\" OR \"mod manager\""
+    },
+    {
+      "id": "a4-l08",
+      "group": "lookup",
+      "competitor": "itchio",
+      "slots": ["premium", "content-policy", "beginner"],
+      "query": "site:itch.io premium OR guidelines OR \"getting started\""
+    },
+    {
+      "id": "a4-c01",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "nexusmods",
+      "intent": "praise",
+      "query": "site:reddit.com \"Nexus Mods\" love"
+    },
+    {
+      "id": "a4-c02",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "nexusmods",
+      "intent": "complaint",
+      "query": "site:reddit.com \"Nexus Mods\" problem"
+    },
+    {
+      "id": "a4-c03",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "nexusmods",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"Nexus Mods\""
+    },
+    {
+      "id": "a4-c04",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "nexusmods",
+      "intent": "beginner",
+      "query": "site:reddit.com \"Nexus Mods\" beginner install"
+    },
+    {
+      "id": "a4-c05",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "moddb",
+      "intent": "praise",
+      "query": "site:reddit.com \"ModDB\" love"
+    },
+    {
+      "id": "a4-c06",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "moddb",
+      "intent": "complaint",
+      "query": "site:reddit.com \"ModDB\" problem"
+    },
+    {
+      "id": "a4-c07",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "moddb",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"ModDB\""
+    },
+    {
+      "id": "a4-c08",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "moddb",
+      "intent": "beginner",
+      "query": "site:reddit.com \"ModDB\" beginner install"
+    },
+    {
+      "id": "a4-c09",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "gamebanana",
+      "intent": "praise",
+      "query": "site:reddit.com \"GameBanana\" love"
+    },
+    {
+      "id": "a4-c10",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "gamebanana",
+      "intent": "complaint",
+      "query": "site:reddit.com \"GameBanana\" problem"
+    },
+    {
+      "id": "a4-c11",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "gamebanana",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"GameBanana\""
+    },
+    {
+      "id": "a4-c12",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "gamebanana",
+      "intent": "beginner",
+      "query": "site:reddit.com \"GameBanana\" beginner install"
+    },
+    {
+      "id": "a4-c13",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "curseforge",
+      "intent": "praise",
+      "query": "site:reddit.com \"CurseForge\" love"
+    },
+    {
+      "id": "a4-c14",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "curseforge",
+      "intent": "complaint",
+      "query": "site:reddit.com \"CurseForge\" problem"
+    },
+    {
+      "id": "a4-c15",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "curseforge",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"CurseForge\""
+    },
+    {
+      "id": "a4-c16",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "curseforge",
+      "intent": "beginner",
+      "query": "site:reddit.com \"CurseForge\" beginner install"
+    },
+    {
+      "id": "a4-c17",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "modio",
+      "intent": "praise",
+      "query": "site:reddit.com \"mod.io\" love"
+    },
+    {
+      "id": "a4-c18",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "modio",
+      "intent": "complaint",
+      "query": "site:reddit.com \"mod.io\" problem"
+    },
+    {
+      "id": "a4-c19",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "modio",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"mod.io\""
+    },
+    {
+      "id": "a4-c20",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "modio",
+      "intent": "beginner",
+      "query": "site:reddit.com \"mod.io\" beginner install"
+    },
+    {
+      "id": "a4-c21",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "thunderstore",
+      "intent": "praise",
+      "query": "site:reddit.com \"Thunderstore\" love"
+    },
+    {
+      "id": "a4-c22",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "thunderstore",
+      "intent": "complaint",
+      "query": "site:reddit.com \"Thunderstore\" problem"
+    },
+    {
+      "id": "a4-c23",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "thunderstore",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"Thunderstore\""
+    },
+    {
+      "id": "a4-c24",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "thunderstore",
+      "intent": "beginner",
+      "query": "site:reddit.com \"Thunderstore\" beginner install"
+    },
+    {
+      "id": "a4-c25",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "steamworkshop",
+      "intent": "praise",
+      "query": "site:reddit.com \"Steam Workshop\" love"
+    },
+    {
+      "id": "a4-c26",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "steamworkshop",
+      "intent": "complaint",
+      "query": "site:reddit.com \"Steam Workshop\" problem"
+    },
+    {
+      "id": "a4-c27",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "steamworkshop",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"Steam Workshop\""
+    },
+    {
+      "id": "a4-c28",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "steamworkshop",
+      "intent": "beginner",
+      "query": "site:reddit.com \"Steam Workshop\" beginner install"
+    },
+    {
+      "id": "a4-c29",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "itchio",
+      "intent": "praise",
+      "query": "site:reddit.com \"itch.io\" love"
+    },
+    {
+      "id": "a4-c30",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "itchio",
+      "intent": "complaint",
+      "query": "site:reddit.com \"itch.io\" problem"
+    },
+    {
+      "id": "a4-c31",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "itchio",
+      "intent": "switching",
+      "query": "site:reddit.com switched from \"itch.io\""
+    },
+    {
+      "id": "a4-c32",
+      "group": "community",
+      "platform": "reddit",
+      "competitor": "itchio",
+      "intent": "beginner",
+      "query": "site:reddit.com \"itch.io\" beginner install"
+    },
+    {
+      "id": "a4-y01",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "nexusmods",
+      "intent": "review",
+      "query": "site:youtube.com \"Nexus Mods\" review"
+    },
+    {
+      "id": "a4-y02",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "nexusmods",
+      "intent": "install",
+      "query": "site:youtube.com \"Nexus Mods\" how to install mods"
+    },
+    {
+      "id": "a4-y03",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "moddb",
+      "intent": "review",
+      "query": "site:youtube.com \"ModDB\" review"
+    },
+    {
+      "id": "a4-y04",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "moddb",
+      "intent": "install",
+      "query": "site:youtube.com \"ModDB\" how to install mods"
+    },
+    {
+      "id": "a4-y05",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "gamebanana",
+      "intent": "review",
+      "query": "site:youtube.com \"GameBanana\" review"
+    },
+    {
+      "id": "a4-y06",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "gamebanana",
+      "intent": "install",
+      "query": "site:youtube.com \"GameBanana\" how to install mods"
+    },
+    {
+      "id": "a4-y07",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "curseforge",
+      "intent": "review",
+      "query": "site:youtube.com \"CurseForge\" review"
+    },
+    {
+      "id": "a4-y08",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "curseforge",
+      "intent": "install",
+      "query": "site:youtube.com \"CurseForge\" how to install mods"
+    },
+    {
+      "id": "a4-y09",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "modio",
+      "intent": "review",
+      "query": "site:youtube.com \"mod.io\" review"
+    },
+    {
+      "id": "a4-y10",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "modio",
+      "intent": "install",
+      "query": "site:youtube.com \"mod.io\" how to install mods"
+    },
+    {
+      "id": "a4-y11",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "thunderstore",
+      "intent": "review",
+      "query": "site:youtube.com \"Thunderstore\" review"
+    },
+    {
+      "id": "a4-y12",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "thunderstore",
+      "intent": "install",
+      "query": "site:youtube.com \"Thunderstore\" how to install mods"
+    },
+    {
+      "id": "a4-y13",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "steamworkshop",
+      "intent": "review",
+      "query": "site:youtube.com \"Steam Workshop\" review"
+    },
+    {
+      "id": "a4-y14",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "steamworkshop",
+      "intent": "install",
+      "query": "site:youtube.com \"Steam Workshop\" how to install mods"
+    },
+    {
+      "id": "a4-y15",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "itchio",
+      "intent": "review",
+      "query": "site:youtube.com \"itch.io\" review"
+    },
+    {
+      "id": "a4-y16",
+      "group": "community",
+      "platform": "youtube",
+      "competitor": "itchio",
+      "intent": "install",
+      "query": "site:youtube.com \"itch.io\" how to install games"
+    },
+    {
+      "id": "a4-d01",
+      "group": "disconfirm",
+      "query": "best mod manager for beginners"
+    },
+    {
+      "id": "a4-d02",
+      "group": "disconfirm",
+      "query": "one click mod install easy"
+    },
+    {
+      "id": "a4-d03",
+      "group": "disconfirm",
+      "query": "mod hub fan port downloads"
+    },
+    {
+      "id": "a4-d04",
+      "group": "disconfirm",
+      "query": "easiest way to install mods for new players"
+    },
+    {
+      "id": "a4-d05",
+      "group": "disconfirm",
+      "query": "mod manager easy to use review"
+    },
+    {
+      "id": "a4-d06",
+      "group": "disconfirm",
+      "query": "official modding guide for beginners"
+    },
+    {
+      "id": "a4-d07",
+      "group": "disconfirm",
+      "query": "fan game port download site"
+    },
+    {
+      "id": "a4-d08",
+      "group": "disconfirm",
+      "query": "mod creators earn money platform"
+    },
+    {
+      "id": "a4-x01",
+      "group": "disconfirm-added",
+      "addedBy": "Disconfirmer 2026-10-03, before run",
+      "reason": "discovery satisfaction for play-only users, not install",
+      "query": "mod discovery for casual players"
+    },
+    {
+      "id": "a4-x02",
+      "group": "disconfirm-added",
+      "addedBy": "Disconfirmer 2026-10-03, before run",
+      "reason": "whether platform coverage rather than ease is the pain point",
+      "query": "mod manager cross-platform Linux support"
+    },
+    {
+      "id": "a4-x03",
+      "group": "disconfirm-added",
+      "addedBy": "Disconfirmer 2026-10-03, before run",
+      "reason": "organic demand and existing homes for ports/fan projects",
+      "query": "game ports emulation fan projects where"
+    },
+    {
+      "id": "a4-x04",
+      "group": "disconfirm-added",
+      "addedBy": "Disconfirmer 2026-10-03, before run",
+      "reason": "whether incumbent curation/collection features are known and used",
+      "query": "mod collection sharing curated lists"
+    },
+    {
+      "id": "a4-x05",
+      "group": "disconfirm-added",
+      "addedBy": "Disconfirmer 2026-10-03, before run",
+      "reason": "unprompted reasons from outside the mod community",
+      "query": "why don't people mod games barriers"
+    },
+    {
+      "id": "a4-x06",
+      "group": "disconfirm-added",
+      "addedBy": "Disconfirmer 2026-10-03, before run",
+      "reason": "friction beyond the install step",
+      "query": "mod manager uninstall conflicts safety"
+    }
+  ]
+}

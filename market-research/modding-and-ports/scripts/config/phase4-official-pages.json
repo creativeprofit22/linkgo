@@ -1,0 +1,135 @@
+{
+  "frozen": "2026-10-03",
+  "rule": "01-research-protocol.md section 10, Phase 4 addendum item 3. One URL per slot; null = no known URL, resolved by the competitor's one logged site: lookup (group lookup in phase4-queries.json) or recorded as no page.",
+  "slots": [
+    "home",
+    "premium",
+    "creator-rewards",
+    "terms",
+    "content-policy",
+    "beginner",
+    "mod-manager"
+  ],
+  "competitors": [
+    {
+      "id": "nexusmods",
+      "name": "Nexus Mods",
+      "host": "nexusmods.com",
+      "phase2Mentions": 43,
+      "pages": {
+        "home": "https://www.nexusmods.com/",
+        "premium": "https://www.nexusmods.com/premium",
+        "creator-rewards": null,
+        "terms": "https://help.nexusmods.com/article/18-terms-of-service",
+        "content-policy": null,
+        "beginner": null,
+        "mod-manager": "https://www.nexusmods.com/site/mods/1"
+      }
+    },
+    {
+      "id": "moddb",
+      "name": "ModDB",
+      "host": "moddb.com",
+      "phase2Mentions": 7,
+      "pages": {
+        "home": "https://www.moddb.com/",
+        "premium": null,
+        "creator-rewards": null,
+        "terms": null,
+        "content-policy": null,
+        "beginner": null,
+        "mod-manager": null
+      }
+    },
+    {
+      "id": "gamebanana",
+      "name": "GameBanana",
+      "host": "gamebanana.com",
+      "phase2Mentions": 11,
+      "pages": {
+        "home": "https://gamebanana.com/",
+        "premium": null,
+        "creator-rewards": null,
+        "terms": null,
+        "content-policy": null,
+        "beginner": null,
+        "mod-manager": null
+      }
+    },
+    {
+      "id": "curseforge",
+      "name": "CurseForge",
+      "host": "curseforge.com",
+      "phase2Mentions": 41,
+      "pages": {
+        "home": "https://www.curseforge.com/",
+        "premium": null,
+        "creator-rewards": null,
+        "terms": null,
+        "content-policy": null,
+        "beginner": null,
+        "mod-manager": "https://www.curseforge.com/download/app"
+      }
+    },
+    {
+      "id": "modio",
+      "name": "mod.io",
+      "host": "mod.io",
+      "phase2Mentions": 8,
+      "pages": {
+        "home": "https://mod.io/",
+        "premium": null,
+        "creator-rewards": null,
+        "terms": "https://mod.io/terms",
+        "content-policy": null,
+        "beginner": null,
+        "mod-manager": null
+      }
+    },
+    {
+      "id": "thunderstore",
+      "name": "Thunderstore",
+      "host": "thunderstore.io",
+      "phase2Mentions": 65,
+      "pages": {
+        "home": "https://thunderstore.io/",
+        "premium": null,
+        "creator-rewards": null,
+        "terms": null,
+        "content-policy": null,
+        "beginner": null,
+        "mod-manager": null
+      }
+    },
+    {
+      "id": "steamworkshop",
+      "name": "Steam Workshop",
+      "host": "steamcommunity.com",
+      "phase2Mentions": 9,
+      "pages": {
+        "home": "https://steamcommunity.com/workshop/",
+        "premium": null,
+        "creator-rewards": null,
+        "terms": "https://store.steampowered.com/subscriber_agreement/",
+        "content-policy": "https://steamcommunity.com/workshop/workshoplegalagreement/",
+        "beginner": null,
+        "mod-manager": null
+      }
+    },
+    {
+      "id": "itchio",
+      "name": "itch.io",
+      "host": "itch.io",
+      "phase2Mentions": 29,
+      "pages": {
+        "home": "https://itch.io/",
+        "premium": null,
+        "creator-rewards": "https://itch.io/docs/creators/payments",
+        "terms": "https://itch.io/docs/legal/terms",
+        "content-policy": null,
+        "beginner": null,
+        "mod-manager": "https://itch.io/app"
+      }
+    }
+  ]
+}

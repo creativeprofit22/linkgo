@@ -1,0 +1,27 @@
+[
+  {
+    "id": "f01-nexusmods-home",
+    "kind": "scrape",
+    "url": "https://www.nexusmods.com/"
+  },
+  {
+    "id": "f02-steam-subscriber-agreement",
+    "kind": "scrape",
+    "url": "https://store.steampowered.com/subscriber_agreement/"
+  },
+  {
+    "id": "f03-github-sotn-decomp-readme",
+    "kind": "scrape",
+    "url": "https://github.com/xeeynamo/sotn-decomp"
+  },
+  {
+    "id": "f04-youtube-unity-mod-video",
+    "kind": "scrape",
+    "url": "https://www.youtube.com/watch?v=FNUnGhseWfI"
+  },
+  {
+    "id": "f05-reddit-emulation-pc-ports-thread",
+    "kind": "scrape",
+    "url": "https://www.reddit.com/r/emulation/comments/12nfdac/list_of_unofficial_console_pc_ports_with_tutorial/"
+  }
+]

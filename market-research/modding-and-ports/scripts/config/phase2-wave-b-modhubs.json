@@ -1,0 +1,442 @@
+[
+  {
+    "id": "m-moddb-fan-game-alternative",
+    "kind": "search",
+    "query": "site:moddb.com \"fan game\" alternative"
+  },
+  {
+    "id": "m-moddb-mod-creation-request",
+    "kind": "search",
+    "query": "site:moddb.com \"making mods\" request"
+  },
+  {
+    "id": "m-curseforge-ip-revival-problem",
+    "kind": "search",
+    "query": "site:curseforge.com \"dead franchise\" problem"
+  },
+  {
+    "id": "m-modio-community-recommendation",
+    "kind": "search",
+    "query": "site:mod.io \"modding discord\" recommend"
+  },
+  {
+    "id": "m-nexusmods-mod-tools-request",
+    "kind": "search",
+    "query": "site:nexusmods.com \"modding tools\" request"
+  },
+  {
+    "id": "m-itchio-learning-howto",
+    "kind": "search",
+    "query": "site:itch.io \"modding tutorial\" how to"
+  },
+  {
+    "id": "m-steam-decomp-problem",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"decompilation\" problem"
+  },
+  {
+    "id": "m-thunderstore-community-problem",
+    "kind": "search",
+    "query": "site:thunderstore.io \"modding discord\" problem"
+  },
+  {
+    "id": "m-steam-mod-install-alternative",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"install mods\" alternative"
+  },
+  {
+    "id": "m-nexusmods-fan-game-howto",
+    "kind": "search",
+    "query": "site:nexusmods.com \"fan game\" how to"
+  },
+  {
+    "id": "m-moddb-community-howto",
+    "kind": "search",
+    "query": "site:moddb.com \"modding discord\" how to"
+  },
+  {
+    "id": "m-moddb-decomp-problem",
+    "kind": "search",
+    "query": "site:moddb.com \"decompilation\" problem"
+  },
+  {
+    "id": "m-steam-community-howto",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"modding discord\" how to"
+  },
+  {
+    "id": "m-modio-mod-tools-alternative",
+    "kind": "search",
+    "query": "site:mod.io \"modding tools\" alternative"
+  },
+  {
+    "id": "m-thunderstore-decomp-recommendation",
+    "kind": "search",
+    "query": "site:thunderstore.io \"decompilation\" recommend"
+  },
+  {
+    "id": "m-curseforge-community-request",
+    "kind": "search",
+    "query": "site:curseforge.com \"modding discord\" request"
+  },
+  {
+    "id": "m-gamebanana-rust-rebuild-alternative",
+    "kind": "search",
+    "query": "site:gamebanana.com \"rewritten in Rust\" alternative"
+  },
+  {
+    "id": "m-thunderstore-ip-revival-alternative",
+    "kind": "search",
+    "query": "site:thunderstore.io \"dead franchise\" alternative"
+  },
+  {
+    "id": "m-gamebanana-ip-revival-recommendation",
+    "kind": "search",
+    "query": "site:gamebanana.com \"dead franchise\" recommend"
+  },
+  {
+    "id": "m-thunderstore-pc-port-request",
+    "kind": "search",
+    "query": "site:thunderstore.io \"PC port\" request"
+  },
+  {
+    "id": "m-steam-pc-port-recommendation",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"PC port\" recommend"
+  },
+  {
+    "id": "m-curseforge-mod-creation-problem",
+    "kind": "search",
+    "query": "site:curseforge.com \"making mods\" problem"
+  },
+  {
+    "id": "m-nexusmods-legal-howto",
+    "kind": "search",
+    "query": "site:nexusmods.com \"cease and desist\" how to"
+  },
+  {
+    "id": "m-modio-mod-creation-howto",
+    "kind": "search",
+    "query": "site:mod.io \"making mods\" how to"
+  },
+  {
+    "id": "m-gamebanana-decomp-howto",
+    "kind": "search",
+    "query": "site:gamebanana.com \"decompilation\" how to"
+  },
+  {
+    "id": "m-moddb-mod-install-alternative",
+    "kind": "search",
+    "query": "site:moddb.com \"install mods\" alternative"
+  },
+  {
+    "id": "m-thunderstore-mod-creation-alternative",
+    "kind": "search",
+    "query": "site:thunderstore.io \"making mods\" alternative"
+  },
+  {
+    "id": "m-itchio-ip-revival-recommendation",
+    "kind": "search",
+    "query": "site:itch.io \"dead franchise\" recommend"
+  },
+  {
+    "id": "m-modio-ip-revival-howto",
+    "kind": "search",
+    "query": "site:mod.io \"dead franchise\" how to"
+  },
+  {
+    "id": "m-curseforge-decomp-alternative",
+    "kind": "search",
+    "query": "site:curseforge.com \"decompilation\" alternative"
+  },
+  {
+    "id": "m-moddb-learning-problem",
+    "kind": "search",
+    "query": "site:moddb.com \"modding tutorial\" problem"
+  },
+  {
+    "id": "m-steam-legal-alternative",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"cease and desist\" alternative"
+  },
+  {
+    "id": "m-itchio-decomp-howto",
+    "kind": "search",
+    "query": "site:itch.io \"decompilation\" how to"
+  },
+  {
+    "id": "m-gamebanana-legal-request",
+    "kind": "search",
+    "query": "site:gamebanana.com \"cease and desist\" request"
+  },
+  {
+    "id": "m-gamebanana-community-alternative",
+    "kind": "search",
+    "query": "site:gamebanana.com \"modding discord\" alternative"
+  },
+  {
+    "id": "m-steam-ip-revival-request",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"dead franchise\" request"
+  },
+  {
+    "id": "m-modio-rust-rebuild-recommendation",
+    "kind": "search",
+    "query": "site:mod.io \"rewritten in Rust\" recommend"
+  },
+  {
+    "id": "m-moddb-rust-rebuild-howto",
+    "kind": "search",
+    "query": "site:moddb.com \"rewritten in Rust\" how to"
+  },
+  {
+    "id": "m-moddb-pc-port-recommendation",
+    "kind": "search",
+    "query": "site:moddb.com \"PC port\" recommend"
+  },
+  {
+    "id": "m-gamebanana-mod-creation-recommendation",
+    "kind": "search",
+    "query": "site:gamebanana.com \"making mods\" recommend"
+  },
+  {
+    "id": "m-curseforge-mod-tools-howto",
+    "kind": "search",
+    "query": "site:curseforge.com \"modding tools\" how to"
+  },
+  {
+    "id": "m-gamebanana-learning-howto",
+    "kind": "search",
+    "query": "site:gamebanana.com \"modding tutorial\" how to"
+  },
+  {
+    "id": "m-steam-rust-rebuild-howto",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"rewritten in Rust\" how to"
+  },
+  {
+    "id": "m-itchio-pc-port-problem",
+    "kind": "search",
+    "query": "site:itch.io \"PC port\" problem"
+  },
+  {
+    "id": "m-curseforge-legal-recommendation",
+    "kind": "search",
+    "query": "site:curseforge.com \"cease and desist\" recommend"
+  },
+  {
+    "id": "m-modio-pc-port-alternative",
+    "kind": "search",
+    "query": "site:mod.io \"PC port\" alternative"
+  },
+  {
+    "id": "m-thunderstore-legal-howto",
+    "kind": "search",
+    "query": "site:thunderstore.io \"cease and desist\" how to"
+  },
+  {
+    "id": "m-itchio-community-alternative",
+    "kind": "search",
+    "query": "site:itch.io \"modding discord\" alternative"
+  },
+  {
+    "id": "m-gamebanana-mod-tools-problem",
+    "kind": "search",
+    "query": "site:gamebanana.com \"modding tools\" problem"
+  },
+  {
+    "id": "m-modio-mod-install-problem",
+    "kind": "search",
+    "query": "site:mod.io \"install mods\" problem"
+  },
+  {
+    "id": "m-nexusmods-mod-creation-alternative",
+    "kind": "search",
+    "query": "site:nexusmods.com \"making mods\" alternative"
+  },
+  {
+    "id": "m-modio-learning-request",
+    "kind": "search",
+    "query": "site:mod.io \"modding tutorial\" request"
+  },
+  {
+    "id": "m-steam-mod-tools-recommendation",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"modding tools\" recommend"
+  },
+  {
+    "id": "m-gamebanana-pc-port-problem",
+    "kind": "search",
+    "query": "site:gamebanana.com \"PC port\" problem"
+  },
+  {
+    "id": "m-curseforge-rust-rebuild-request",
+    "kind": "search",
+    "query": "site:curseforge.com \"rewritten in Rust\" request"
+  },
+  {
+    "id": "m-thunderstore-mod-tools-request",
+    "kind": "search",
+    "query": "site:thunderstore.io \"modding tools\" request"
+  },
+  {
+    "id": "m-itchio-fan-game-request",
+    "kind": "search",
+    "query": "site:itch.io \"fan game\" request"
+  },
+  {
+    "id": "m-nexusmods-ip-revival-alternative",
+    "kind": "search",
+    "query": "site:nexusmods.com \"dead franchise\" alternative"
+  },
+  {
+    "id": "m-steam-mod-creation-request",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"making mods\" request"
+  },
+  {
+    "id": "m-steam-fan-game-alternative",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"fan game\" alternative"
+  },
+  {
+    "id": "m-nexusmods-learning-recommendation",
+    "kind": "search",
+    "query": "site:nexusmods.com \"modding tutorial\" recommend"
+  },
+  {
+    "id": "m-curseforge-mod-install-recommendation",
+    "kind": "search",
+    "query": "site:curseforge.com \"install mods\" recommend"
+  },
+  {
+    "id": "m-modio-fan-game-problem",
+    "kind": "search",
+    "query": "site:mod.io \"fan game\" problem"
+  },
+  {
+    "id": "m-moddb-mod-tools-recommendation",
+    "kind": "search",
+    "query": "site:moddb.com \"modding tools\" recommend"
+  },
+  {
+    "id": "m-gamebanana-mod-install-request",
+    "kind": "search",
+    "query": "site:gamebanana.com \"install mods\" request"
+  },
+  {
+    "id": "m-thunderstore-fan-game-howto",
+    "kind": "search",
+    "query": "site:thunderstore.io \"fan game\" how to"
+  },
+  {
+    "id": "m-itchio-mod-tools-problem",
+    "kind": "search",
+    "query": "site:itch.io \"modding tools\" problem"
+  },
+  {
+    "id": "m-nexusmods-mod-install-howto",
+    "kind": "search",
+    "query": "site:nexusmods.com \"install mods\" how to"
+  },
+  {
+    "id": "m-thunderstore-rust-rebuild-problem",
+    "kind": "search",
+    "query": "site:thunderstore.io \"rewritten in Rust\" problem"
+  },
+  {
+    "id": "m-nexusmods-rust-rebuild-problem",
+    "kind": "search",
+    "query": "site:nexusmods.com \"rewritten in Rust\" problem"
+  },
+  {
+    "id": "m-curseforge-pc-port-howto",
+    "kind": "search",
+    "query": "site:curseforge.com \"PC port\" how to"
+  },
+  {
+    "id": "m-thunderstore-mod-install-howto",
+    "kind": "search",
+    "query": "site:thunderstore.io \"install mods\" how to"
+  },
+  {
+    "id": "m-itchio-mod-install-request",
+    "kind": "search",
+    "query": "site:itch.io \"install mods\" request"
+  },
+  {
+    "id": "m-itchio-rust-rebuild-alternative",
+    "kind": "search",
+    "query": "site:itch.io \"rewritten in Rust\" alternative"
+  },
+  {
+    "id": "m-thunderstore-learning-recommendation",
+    "kind": "search",
+    "query": "site:thunderstore.io \"modding tutorial\" recommend"
+  },
+  {
+    "id": "m-moddb-legal-alternative",
+    "kind": "search",
+    "query": "site:moddb.com \"cease and desist\" alternative"
+  },
+  {
+    "id": "m-modio-decomp-request",
+    "kind": "search",
+    "query": "site:mod.io \"decompilation\" request"
+  },
+  {
+    "id": "m-nexusmods-pc-port-request",
+    "kind": "search",
+    "query": "site:nexusmods.com \"PC port\" request"
+  },
+  {
+    "id": "m-itchio-legal-request",
+    "kind": "search",
+    "query": "site:itch.io \"cease and desist\" request"
+  },
+  {
+    "id": "m-moddb-ip-revival-request",
+    "kind": "search",
+    "query": "site:moddb.com \"dead franchise\" request"
+  },
+  {
+    "id": "m-curseforge-learning-alternative",
+    "kind": "search",
+    "query": "site:curseforge.com \"modding tutorial\" alternative"
+  },
+  {
+    "id": "m-steam-learning-problem",
+    "kind": "search",
+    "query": "site:steamcommunity.com \"modding tutorial\" problem"
+  },
+  {
+    "id": "m-gamebanana-fan-game-request",
+    "kind": "search",
+    "query": "site:gamebanana.com \"fan game\" request"
+  },
+  {
+    "id": "m-modio-legal-problem",
+    "kind": "search",
+    "query": "site:mod.io \"cease and desist\" problem"
+  },
+  {
+    "id": "m-nexusmods-community-problem",
+    "kind": "search",
+    "query": "site:nexusmods.com \"modding discord\" problem"
+  },
+  {
+    "id": "m-nexusmods-decomp-recommendation",
+    "kind": "search",
+    "query": "site:nexusmods.com \"decompilation\" recommend"
+  },
+  {
+    "id": "m-curseforge-fan-game-recommendation",
+    "kind": "search",
+    "query": "site:curseforge.com \"fan game\" recommend"
+  },
+  {
+    "id": "m-itchio-mod-creation-recommendation",
+    "kind": "search",
+    "query": "site:itch.io \"making mods\" recommend"
+  }
+]

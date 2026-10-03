@@ -1,0 +1,71 @@
+{
+  "note": "Phase 2 mention dictionary, registered 2026-10-02 before any Phase 2 request (protocol section 10). Hub terms copy the frozen competitor-mention group. Other terms are well-known named tools, engines, port/decomp projects and emulators, chosen without looking at Phase 2 results. Counts are visibility only.",
+  "categories": {
+    "hub": [
+      "nexus mods",
+      "nexusmods",
+      "moddb",
+      "gamebanana",
+      "curseforge",
+      "mod.io",
+      "thunderstore",
+      "steam workshop",
+      "itch.io",
+      "vortex",
+      "mod organizer"
+    ],
+    "tool": [
+      "r2modman",
+      "bepinex",
+      "melonloader",
+      "smapi",
+      "script extender",
+      "skse",
+      "xedit",
+      "blender",
+      "ghidra",
+      "ida pro"
+    ],
+    "engine": [
+      "unity",
+      "unreal engine",
+      "godot",
+      "game maker",
+      "gamemaker",
+      "rpg maker",
+      "source engine",
+      "bevy"
+    ],
+    "port-project": [
+      "ship of harkinian",
+      "2 ship 2 harkinian",
+      "harbour masters",
+      "sm64ex",
+      "render96",
+      "n64recomp",
+      "zelda64recomp",
+      "spaghettikart",
+      "opengoal",
+      "openmw",
+      "openrct2",
+      "openttd",
+      "devilutionx",
+      "re3",
+      "revc",
+      "pokeemerald",
+      "pokered",
+      "sonic mania plus",
+      "rsdkv5"
+    ],
+    "emulator": [
+      "emulator",
+      "retroarch",
+      "dolphin emulator",
+      "pcsx2",
+      "rpcs3",
+      "yuzu",
+      "ryujinx",
+      "project64"
+    ]
+  }
+}

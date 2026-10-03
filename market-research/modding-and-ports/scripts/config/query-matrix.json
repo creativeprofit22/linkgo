@@ -1,0 +1,329 @@
+{
+  "version": 1,
+  "frozenAt": "2026-10-02",
+  "template": "site:{host} \"{phrase}\" {intent}",
+  "platforms": [
+    {
+      "id": "reddit",
+      "host": "reddit.com",
+      "reason": "Largest public modding and porting discussion base."
+    },
+    {
+      "id": "youtube",
+      "host": "youtube.com",
+      "reason": "Main tutorial and showcase medium for mods and ports."
+    },
+    {
+      "id": "tiktok",
+      "host": "tiktok.com",
+      "reason": "Short-form reach to the youngest part of the claimed audience (H1)."
+    },
+    {
+      "id": "x",
+      "host": "x.com",
+      "reason": "Announcements, takedown news and creator chatter."
+    },
+    {
+      "id": "discord",
+      "host": "disboard.org",
+      "reason": "Public Discord directory; server content itself is not indexed and is never joined (H12)."
+    },
+    {
+      "id": "nexusmods",
+      "host": "nexusmods.com",
+      "reason": "Largest mod hub; the named incumbent (H11)."
+    },
+    {
+      "id": "moddb",
+      "host": "moddb.com",
+      "reason": "Long-running hub for total conversions and fan projects."
+    },
+    {
+      "id": "gamebanana",
+      "host": "gamebanana.com",
+      "reason": "Hub with a young-skewing creator base and tutorials."
+    },
+    {
+      "id": "curseforge",
+      "host": "curseforge.com",
+      "reason": "Minecraft-scale mod distribution and modpack tooling."
+    },
+    {
+      "id": "modio",
+      "host": "mod.io",
+      "reason": "Cross-platform, in-game mod delivery used by studios."
+    },
+    {
+      "id": "thunderstore",
+      "host": "thunderstore.io",
+      "reason": "Mod-manager-first hub, relevant to ease of install (H3, H10)."
+    },
+    {
+      "id": "steam",
+      "host": "steamcommunity.com",
+      "reason": "Steam Workshop and discussion boards; the default for many players."
+    },
+    {
+      "id": "itchio",
+      "host": "itch.io",
+      "reason": "Fan games and first games by new creators (H6)."
+    },
+    {
+      "id": "github",
+      "host": "github.com",
+      "reason": "Decomp, recomp, port and Rust rebuild source projects (H8, H9)."
+    },
+    {
+      "id": "fandom",
+      "host": "fandom.com",
+      "reason": "Game wikis that document mods, ports and dormant franchises."
+    },
+    {
+      "id": "twitch",
+      "host": "twitch.tv",
+      "reason": "Live play of modded games and ports; channel signal (H12)."
+    },
+    {
+      "id": "resetera",
+      "host": "resetera.com",
+      "reason": "Enthusiast forum that covers ports, revivals and takedowns."
+    },
+    {
+      "id": "hackernews",
+      "host": "news.ycombinator.com",
+      "reason": "Developer-side view of decomps and Rust rewrites (H2, H9)."
+    },
+    {
+      "id": "gbatemp",
+      "host": "gbatemp.net",
+      "reason": "Chosen as the game-specific forum: the main homebrew, port and console-modding forum."
+    },
+    {
+      "id": "rustforum",
+      "host": "users.rust-lang.org",
+      "reason": "Rust community forum; tests whether Rust game rebuilds reach beyond developers (H9)."
+    }
+  ],
+  "themes": [
+    {
+      "id": "mod-install",
+      "phrase": "install mods",
+      "reason": "Playing side: how players get mods running (H3, H10)."
+    },
+    {
+      "id": "mod-creation",
+      "phrase": "making mods",
+      "reason": "Creating side, neutral on skill level (H2, H4, H5)."
+    },
+    {
+      "id": "pc-port",
+      "phrase": "PC port",
+      "reason": "Porting legacy and other-platform games to PC (H8)."
+    },
+    {
+      "id": "decomp",
+      "phrase": "decompilation",
+      "reason": "Decomp and recomp projects that make ports possible (H8)."
+    },
+    {
+      "id": "rust-rebuild",
+      "phrase": "rewritten in Rust",
+      "reason": "Rust rebuilds; phrase avoids the survival game Rust (H9)."
+    },
+    {
+      "id": "fan-game",
+      "phrase": "fan game",
+      "reason": "Fan-made games (H6, H7)."
+    },
+    {
+      "id": "ip-revival",
+      "phrase": "dead franchise",
+      "reason": "Player wording for dormant childhood IPs (H7)."
+    },
+    {
+      "id": "mod-tools",
+      "phrase": "modding tools",
+      "reason": "Creation tooling and engines (H5, H10)."
+    },
+    {
+      "id": "learning",
+      "phrase": "modding tutorial",
+      "reason": "Learning resources and their adequacy (H5)."
+    },
+    {
+      "id": "community",
+      "phrase": "modding discord",
+      "reason": "Where modding communities gather (H12)."
+    },
+    {
+      "id": "legal",
+      "phrase": "cease and desist",
+      "reason": "Takedowns and rights-holder action (H7, risk)."
+    }
+  ],
+  "intents": [
+    { "id": "recommendation", "word": "recommend" },
+    { "id": "problem", "word": "problem" },
+    { "id": "howto", "word": "how to" },
+    { "id": "alternative", "word": "alternative" },
+    { "id": "request", "word": "request" }
+  ],
+  "disconfirmation": [
+    {
+      "id": "H1-1",
+      "hypothesis": "H1",
+      "query": "modding community survey age results"
+    },
+    { "id": "H1-2", "hypothesis": "H1", "query": "\"average age\" modders" },
+    { "id": "H1-3", "hypothesis": "H1", "query": "\"nexus mods\" survey age" },
+    {
+      "id": "H2-1",
+      "hypothesis": "H2",
+      "query": "\"software engineer\" modding hobby"
+    },
+    {
+      "id": "H2-2",
+      "hypothesis": "H2",
+      "query": "\"professional developer\" makes mods"
+    },
+    {
+      "id": "H2-3",
+      "hypothesis": "H2",
+      "query": "modders \"years of programming\" experience"
+    },
+    {
+      "id": "H3-1",
+      "hypothesis": "H3",
+      "query": "\"mod manager\" \"easy to use\""
+    },
+    {
+      "id": "H3-2",
+      "hypothesis": "H3",
+      "query": "\"nexus mods\" collections \"one click\""
+    },
+    {
+      "id": "H3-3",
+      "hypothesis": "H3",
+      "query": "installing mods \"never had a problem\""
+    },
+    {
+      "id": "H4-1",
+      "hypothesis": "H4",
+      "query": "modding \"no ideas\" what to make"
+    },
+    { "id": "H4-2", "hypothesis": "H4", "query": "\"out of ideas\" mod" },
+    {
+      "id": "H4-3",
+      "hypothesis": "H4",
+      "query": "\"mod ideas\" \"don't know what to make\""
+    },
+    { "id": "H5-1", "hypothesis": "H5", "query": "\"modding is easy\"" },
+    {
+      "id": "H5-2",
+      "hypothesis": "H5",
+      "query": "\"learned to mod\" in a weekend"
+    },
+    {
+      "id": "H5-3",
+      "hypothesis": "H5",
+      "query": "\"plenty of tutorials\" modding"
+    },
+    {
+      "id": "H6-1",
+      "hypothesis": "H6",
+      "query": "\"rather mod\" than make a game"
+    },
+    {
+      "id": "H6-2",
+      "hypothesis": "H6",
+      "query": "\"total conversion\" instead of own game"
+    },
+    {
+      "id": "H6-3",
+      "hypothesis": "H6",
+      "query": "\"making a game\" too much work modding"
+    },
+    {
+      "id": "H7-1",
+      "hypothesis": "H7",
+      "query": "fan remake \"cancelled\" cease and desist"
+    },
+    {
+      "id": "H7-2",
+      "hypothesis": "H7",
+      "query": "\"revival project\" abandoned fan"
+    },
+    {
+      "id": "H7-3",
+      "hypothesis": "H7",
+      "query": "\"nobody asked for\" remake franchise"
+    },
+    {
+      "id": "H8-1",
+      "hypothesis": "H8",
+      "query": "\"PC port\" \"not worth\" emulation"
+    },
+    {
+      "id": "H8-2",
+      "hypothesis": "H8",
+      "query": "decomp port \"just use an emulator\""
+    },
+    { "id": "H8-3", "hypothesis": "H8", "query": "fan port \"nobody plays\"" },
+    {
+      "id": "H9-1",
+      "hypothesis": "H9",
+      "query": "Rust game development \"not ready\""
+    },
+    {
+      "id": "H9-2",
+      "hypothesis": "H9",
+      "query": "\"rewritten in Rust\" game port abandoned"
+    },
+    {
+      "id": "H9-3",
+      "hypothesis": "H9",
+      "query": "players \"don't care\" what language game written in"
+    },
+    {
+      "id": "H10-1",
+      "hypothesis": "H10",
+      "query": "\"modding has never been easier\""
+    },
+    {
+      "id": "H10-2",
+      "hypothesis": "H10",
+      "query": "\"mod manager\" \"one click install\""
+    },
+    { "id": "H10-3", "hypothesis": "H10", "query": "modding \"too easy\" now" },
+    {
+      "id": "H11-1",
+      "hypothesis": "H11",
+      "query": "\"nexus mods\" \"best mod site\""
+    },
+    {
+      "id": "H11-2",
+      "hypothesis": "H11",
+      "query": "\"why I use\" \"nexus mods\""
+    },
+    {
+      "id": "H11-3",
+      "hypothesis": "H11",
+      "query": "\"thunderstore\" \"easy\" mod manager"
+    },
+    {
+      "id": "H12-1",
+      "hypothesis": "H12",
+      "query": "modding \"forum instead of discord\""
+    },
+    {
+      "id": "H12-2",
+      "hypothesis": "H12",
+      "query": "discord \"bad for\" modding knowledge"
+    },
+    {
+      "id": "H12-3",
+      "hypothesis": "H12",
+      "query": "modding discord servers \"dead\""
+    }
+  ]
+}
