@@ -5,7 +5,7 @@ import {
   type ModelDefaultAccount,
 } from "@/agent/provider-catalog";
 import type { AgentProviderKey } from "@/agent/types";
-import { getAuthStatus } from "@/features/integrations/data";
+import { getAuthStatus, isUsableAiAccount } from "@/features/integrations/data";
 import type { ConnectedAccount } from "@/features/integrations/types";
 
 export interface AgentAccounts {
@@ -15,11 +15,15 @@ export interface AgentAccounts {
   loaded: boolean;
   defaultModelFor: (providerKey: AgentProviderKey) => string;
   /**
-   * First AI service with a `connected` account, in catalog order, then
-   * "Other AI service". Practice mode only when none is connected.
+   * First AI service with a usable account (connected, or an OpenAI/Anthropic
+   * sign-in that renews itself), in catalog order, then "Other AI service".
+   * Practice mode only when none is usable.
    */
   defaultProvider: AgentProviderKey;
-  /** True when at least one AI service account is connected. */
+  /**
+   * True when at least one AI service account is usable (connected, or an
+   * auto-renewing sign-in). Matches the setup checklist and agent readiness.
+   */
   hasConnectedAi: boolean;
 }
 
@@ -28,15 +32,14 @@ const AI_PROVIDER_ORDER: readonly AgentProviderKey[] = [
   "custom",
 ];
 
-function firstConnectedAiProvider(
+function firstUsableAiProvider(
   accounts: readonly ConnectedAccount[],
 ): AgentProviderKey | null {
   for (const providerKey of AI_PROVIDER_ORDER)
     if (
       accounts.some(
         (account) =>
-          account.provider_key === providerKey &&
-          account.status === "connected",
+          account.provider_key === providerKey && isUsableAiAccount(account),
       )
     )
       return providerKey;
@@ -75,13 +78,13 @@ export function useAgentAccounts(): AgentAccounts {
       defaultAgentModelFor(providerKey, accounts),
     [accounts],
   );
-  const connected = firstConnectedAiProvider(accounts);
+  const usable = firstUsableAiProvider(accounts);
   return {
     accounts,
     loaded,
     defaultModelFor,
-    defaultProvider: connected ?? "dry_run",
-    hasConnectedAi: connected !== null,
+    defaultProvider: usable ?? "dry_run",
+    hasConnectedAi: usable !== null,
   };
 }
 

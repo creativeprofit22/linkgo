@@ -5,8 +5,12 @@ import {
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
-import { defaultAgentModelFor } from "@/agent/provider-catalog";
+import {
+  AGENT_PROVIDER_KEYS,
+  defaultAgentModelFor,
+} from "@/agent/provider-catalog";
 import type { AgentProviderKey } from "@/agent/types";
+import { isAutoRenewingAiSignIn } from "@/features/integrations/account-renewal";
 import { AUTH_PROVIDERS } from "@/features/integrations/providers";
 import {
   authProgressEventSchema,
@@ -21,6 +25,7 @@ import {
 import type {
   AuthProgressEvent,
   AuthStatus,
+  ConnectedAccount,
   LogoutInput,
   OAuthCodeInput,
   OAuthStartInput,
@@ -84,6 +89,28 @@ async function invokeMutation(cmd: string, args?: unknown): Promise<unknown> {
   const result = await invokeCommand(cmd, args);
   if (result === null) throw new DesktopRequiredError(cmd);
   return result;
+}
+
+const AI_ACCOUNT_KEYS: ReadonlySet<string> = new Set<string>(
+  AGENT_PROVIDER_KEYS.filter((key) => key !== "dry_run"),
+);
+
+/**
+ * True when a saved account lets the AI assistant write: an AI service that is
+ * connected, or an OpenAI/Anthropic sign-in that renews itself. A custom
+ * service also needs its own address. Single source for the setup checklist,
+ * agent-runtime readiness and the AI service defaults in drafting dialogs.
+ */
+export function isUsableAiAccount(
+  account: Pick<
+    ConnectedAccount,
+    "provider_key" | "auth_method" | "status" | "has_base_url_override"
+  >,
+): boolean {
+  if (!AI_ACCOUNT_KEYS.has(account.provider_key)) return false;
+  if (account.provider_key === "custom" && !account.has_base_url_override)
+    return false;
+  return account.status === "connected" || isAutoRenewingAiSignIn(account);
 }
 
 export async function getAuthStatus(): Promise<AuthStatus> {

@@ -1,20 +1,14 @@
 import type { AgentProviderKey } from "@/agent";
+import { isUsableAiAccount } from "@/features/integrations/data";
 import type { ConnectedAccount } from "@/features/integrations/types";
 
 /**
- * An OpenAI/Anthropic account sign-in whose access token expired is still
- * usable: native code refreshes it before each agent call and returns a clear
- * reconnect error if the refresh token is rejected. `reauth_required` stays
- * not ready. Mirrors isAutoRenewingAiSignIn in the integrations feature.
+ * Practice mode is always ready. Any other provider needs a usable account
+ * (see isUsableAiAccount): connected, or an OpenAI/Anthropic sign-in whose
+ * access token expired — native code refreshes it before each agent call and
+ * returns a clear reconnect error if the refresh token is rejected. A custom
+ * service also needs its own address. `reauth_required` stays not ready.
  */
-function isRenewableAiSignIn(account: ConnectedAccount): boolean {
-  return (
-    account.auth_method === "oauth" &&
-    account.status === "expired" &&
-    (account.provider_key === "openai" || account.provider_key === "anthropic")
-  );
-}
-
 export function isAgentProviderReady(
   providerKey: AgentProviderKey,
   connectedAccounts: ConnectedAccount[],
@@ -22,8 +16,6 @@ export function isAgentProviderReady(
   if (providerKey === "dry_run") return true;
   return connectedAccounts.some(
     (account) =>
-      account.provider_key === providerKey &&
-      (account.status === "connected" || isRenewableAiSignIn(account)) &&
-      (providerKey !== "custom" || account.has_base_url_override),
+      account.provider_key === providerKey && isUsableAiAccount(account),
   );
 }

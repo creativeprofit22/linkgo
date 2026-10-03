@@ -5,7 +5,7 @@ import type { ConnectedAccount } from "@/features/integrations/types";
  * token. Native code refreshes it before every agent call (and reports a
  * reconnect error if the refresh token is rejected), so the account is still
  * usable. `reauth_required` and LinkedIn are deliberately excluded.
- * Keep in sync with agent-runtime provider readiness.
+ * Shared via isUsableAiAccount by setup, agent readiness and AI defaults.
  */
 export function isAutoRenewingAiSignIn(
   account: Pick<ConnectedAccount, "provider_key" | "auth_method" | "status">,

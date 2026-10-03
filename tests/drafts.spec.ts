@@ -337,6 +337,47 @@ for (const { authMethod, expectedModel } of [
   });
 }
 
+for (const { state, expectedProvider } of [
+  { state: "expired", expectedProvider: "anthropic" },
+  { state: "reauth_required", expectedProvider: "dry_run" },
+] as const) {
+  test(`defaults the AI service to ${expectedProvider} for an Anthropic sign-in that is ${state}`, async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.evaluate((nextState) => {
+      const hooks = window as unknown as {
+        __LINKGO_AUTH_SEED_AI_ACCOUNT__: (
+          providerKey: string,
+          authMethod: string,
+        ) => void;
+        __LINKGO_AUTH_EXPIRE_SIGN_IN__: (key: string) => void;
+        __LINKGO_AUTH_REQUIRE_REAUTH__: (key: string, error: string) => void;
+      };
+      hooks.__LINKGO_AUTH_SEED_AI_ACCOUNT__("anthropic", "oauth");
+      if (nextState === "expired")
+        hooks.__LINKGO_AUTH_EXPIRE_SIGN_IN__("anthropic");
+      else
+        hooks.__LINKGO_AUTH_REQUIRE_REAUTH__(
+          "anthropic",
+          "Sign-in expired or was revoked; reconnect this provider",
+        );
+    }, state);
+    await createCampaign(page);
+    await openQueue(page);
+    await addCandidate(page);
+    await openDrafts(page);
+
+    await page.getByRole("button", { name: "Write with AI" }).click();
+    const dialog = page.getByRole("dialog", {
+      name: "Write versions with AI",
+    });
+    await expect(dialog).toBeVisible();
+
+    await expect(dialog.getByLabel("AI service")).toHaveValue(expectedProvider);
+  });
+}
+
 test("creating a draft removes the drafted candidate from draft flows", async ({
   page,
 }) => {
