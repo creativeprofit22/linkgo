@@ -48,6 +48,8 @@ The Brand voice tab shows all five built-ins as cards with role, tool, **On**/**
 
 Runtime playbooks can be enabled or disabled and can store bounded custom runtime instructions.
 
+`#/playbooks?focus=<playbook key>` scrolls to that guide and puts the cursor in "Your own instructions" when the guide has that field. Guidance-only guides (such as `linkedin_commenter`) have no such field, so the link scrolls to the guide and focuses its heading, which screen readers announce. The first-run checklist ([setup](setup.md)) uses `focus=linkedin_writer` for "Describe how you write", and counts the step done once the Writer guide has non-empty instructions.
+
 The LinkedIn Commenter card is visible as guidance-only and intentionally exposes no autonomous posting or commenting action.
 
 ## Test coverage

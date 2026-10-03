@@ -13,10 +13,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAgentModelDefaults } from "@/hooks/use-agent-model-defaults";
+import { useAgentAccounts } from "@/hooks/use-agent-model-defaults";
 import {
   AGENT_PROVIDER_KEYS,
-  DEFAULT_AGENT_MODELS,
   PROVIDER_LABELS,
   type AgentProviderKey,
 } from "@/agent/provider-catalog";
@@ -27,13 +26,19 @@ interface RunCandidateDiscoveryDialogProps {
   campaign: CampaignWithKeywords | null;
   onRun: (input: RunCandidateDiscoveryInput) => Promise<void>;
   disabled?: boolean;
+  /** Forces the dialog open, e.g. when a link asked to find topics. */
+  open?: boolean | undefined;
+  /** Called whenever the dialog opens or closes. */
+  onOpenChange?: ((open: boolean) => void) | undefined;
 }
 
 interface DiscoveryFormState {
   seedKeywords: string;
   notes: string;
-  providerKey: AgentProviderKey;
-  modelName: string;
+  /** `null` until the operator picks one; then the connected default applies. */
+  providerKey: AgentProviderKey | null;
+  /** `null` until the operator edits it; then the provider's default applies. */
+  modelName: string | null;
   playbookKey: "";
 }
 
@@ -45,8 +50,8 @@ function getInitialFormState(
   return {
     seedKeywords,
     notes: "",
-    providerKey: "dry_run",
-    modelName: DEFAULT_AGENT_MODELS.dry_run,
+    providerKey: null,
+    modelName: null,
     playbookKey: "",
   };
 }
@@ -82,8 +87,15 @@ export function RunCandidateDiscoveryDialog({
   campaign,
   onRun,
   disabled = false,
+  open: openProp,
+  onOpenChange,
 }: RunCandidateDiscoveryDialogProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = openProp ?? innerOpen;
+  const setOpen = (next: boolean): void => {
+    setInnerOpen(next);
+    onOpenChange?.(next);
+  };
   const [submitting, setSubmitting] = useState(false);
   const [seedKeywordError, setSeedKeywordError] = useState<string | null>(null);
   const [form, setForm] = useState<DiscoveryFormState>(() =>
@@ -98,13 +110,17 @@ export function RunCandidateDiscoveryDialog({
   }, [campaign, open]);
 
   const providerOptions = useMemo(() => [...AGENT_PROVIDER_KEYS], []);
-  const defaultModelFor = useAgentModelDefaults();
+  const ai = useAgentAccounts();
+  // Until the operator picks, follow the first connected AI service; this
+  // updates when the accounts finish loading. Practice mode when none is.
+  const providerKey: AgentProviderKey = form.providerKey ?? ai.defaultProvider;
+  const modelName = form.modelName ?? ai.defaultModelFor(providerKey);
 
-  const updateProvider = (providerKey: AgentProviderKey): void => {
+  const updateProvider = (nextProviderKey: AgentProviderKey): void => {
     setForm((current) => ({
       ...current,
-      providerKey,
-      modelName: defaultModelFor(providerKey),
+      providerKey: nextProviderKey,
+      modelName: null,
     }));
   };
 
@@ -126,8 +142,8 @@ export function RunCandidateDiscoveryDialog({
         campaignId: campaign.id,
         seedKeywords: parsedSeedKeywords.keywords,
         notes: form.notes,
-        providerKey: form.providerKey,
-        modelName: form.modelName,
+        providerKey,
+        modelName,
         playbookKey: form.playbookKey,
       });
       setOpen(false);
@@ -207,7 +223,7 @@ export function RunCandidateDiscoveryDialog({
             <Field label="AI service" htmlFor="discovery-provider">
               <select
                 id="discovery-provider"
-                value={form.providerKey}
+                value={providerKey}
                 onChange={(event) =>
                   updateProvider(event.target.value as AgentProviderKey)
                 }
@@ -223,13 +239,16 @@ export function RunCandidateDiscoveryDialog({
             <Field label="AI model" htmlFor="discovery-model">
               <Input
                 id="discovery-model"
-                value={form.modelName}
-                onChange={(event) =>
+                value={modelName}
+                onChange={(event) => {
+                  const nextModelName = event.target.value;
+                  // A typed model pins the provider it was typed for.
                   setForm((current) => ({
                     ...current,
-                    modelName: event.target.value,
-                  }))
-                }
+                    providerKey: current.providerKey ?? providerKey,
+                    modelName: nextModelName,
+                  }));
+                }}
                 maxLength={120}
               />
             </Field>

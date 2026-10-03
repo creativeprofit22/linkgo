@@ -1,4 +1,7 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import {
+  defineRoute,
+  optionalRouteFlag,
+} from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const candidateStatusSchema = z.enum([
@@ -270,5 +273,24 @@ export const candidateAgentRunContextSchema = z
   })
   .strict();
 
+/**
+ * Link params for Ideas; `find=1` opens Find topics for the chosen campaign.
+ * Lives here (not in types) because types already import this file.
+ */
+export type CandidateQueueRouteParams = {
+  find?: "1" | undefined;
+};
+
+/**
+ * Link params for Ideas (`#/queue?find=1`). `find=1` opens Find topics for
+ * the selected campaign once it has loaded.
+ */
+export const candidateQueueRouteSearchSchema = z.object({
+  find: optionalRouteFlag(),
+});
+
 /** Address of the Ideas screen (`#/queue`). See docs/features/navigation.md. */
-export const candidateQueueRoute = defineRoute("queue", emptyRouteSearch());
+export const candidateQueueRoute = defineRoute<
+  "queue",
+  CandidateQueueRouteParams
+>("queue", candidateQueueRouteSearchSchema);

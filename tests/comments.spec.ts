@@ -15,7 +15,10 @@ test("Comments tab renders no-campaign and empty states", async ({ page }) => {
     page.getByText("No campaigns yet", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("Go to Campaigns and create a campaign first"),
+    page.getByText("Create a campaign to get started."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Create your first campaign" }),
   ).toBeVisible();
 
   await createCampaign(page);

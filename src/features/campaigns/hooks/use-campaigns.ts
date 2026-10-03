@@ -7,6 +7,7 @@ import {
   setCampaignStatus,
   updateCampaign as updateCampaignRecord,
 } from "@/features/campaigns/data";
+import { announceDataChange } from "@/lib/data-change-events";
 import { toPlainMessage } from "@/lib/plain-message";
 import type {
   CampaignStatus,
@@ -65,6 +66,7 @@ export function useCampaigns(): UseCampaignsState {
     async (input: CreateCampaignInput) => {
       try {
         await createCampaign(input);
+        announceDataChange("campaigns");
         await loadCampaigns();
       } catch (caught) {
         const message = getErrorMessage(caught);
@@ -81,6 +83,7 @@ export function useCampaigns(): UseCampaignsState {
     async (input: UpdateCampaignInput) => {
       try {
         await updateCampaignRecord(input);
+        announceDataChange("campaigns");
         await loadCampaigns();
       } catch (caught) {
         const message = getErrorMessage(caught);
@@ -97,6 +100,7 @@ export function useCampaigns(): UseCampaignsState {
     async (id: number, status: CampaignStatus) => {
       try {
         await setCampaignStatus(id, status);
+        announceDataChange("campaigns");
         await loadCampaigns();
       } catch (caught) {
         const message = getErrorMessage(caught);

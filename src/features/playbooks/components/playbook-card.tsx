@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen, LockKeyhole } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,13 +26,29 @@ interface PlaybookCardProps {
   playbook: AgentPlaybookView;
   saving: boolean;
   onUpdate: (input: UpdatePlaybookOverrideInput) => Promise<void>;
+  /**
+   * Scrolls to this guide once, then focuses "Your own instructions" when the
+   * guide has that field, otherwise the guide's heading.
+   */
+  focusInstructions?: boolean;
 }
 
 export function PlaybookCard({
   playbook,
   saving,
   onUpdate,
+  focusInstructions = false,
 }: PlaybookCardProps): React.ReactNode {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const instructionsRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!focusInstructions) return;
+    cardRef.current?.scrollIntoView({ block: "center" });
+    const target = instructionsRef.current ?? headingRef.current;
+    target?.focus({ preventScroll: true });
+  }, [focusInstructions]);
   const [enabled, setEnabled] = useState(playbook.enabled);
   const [customInstructions, setCustomInstructions] = useState(
     playbook.customInstructions,
@@ -59,11 +75,15 @@ export function PlaybookCard({
   }
 
   return (
-    <Card className="bg-card/70">
+    <Card ref={cardRef} className="bg-card/70">
       <CardHeader className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle
+              ref={headingRef}
+              tabIndex={-1}
+              className="flex items-center gap-2 text-base"
+            >
               <BookOpen className="size-4" /> {playbook.label}
             </CardTitle>
             <p className="text-muted-foreground text-sm">{playbook.summary}</p>
@@ -133,6 +153,7 @@ export function PlaybookCard({
                 Your own instructions
               </Label>
               <Textarea
+                ref={instructionsRef}
                 id={`${playbook.key}-custom`}
                 value={customInstructions}
                 maxLength={2000}

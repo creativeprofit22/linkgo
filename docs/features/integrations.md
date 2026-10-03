@@ -36,6 +36,20 @@ GG AI providers exposed in Linkgo:
 - Every API-key provider can save an optional base URL override; GG AI defaults are used when the field is blank.
 - Custom providers use OpenAI-compatible endpoints and must include a base URL.
 
+## Connected accounts screen
+
+- LinkedIn's card is shown first (it is the first setup step), then the AI
+  services in catalog order.
+- `#/integrations?connect=<provider key>` opens that service's connect dialog
+  once accounts load (desktop app only; the browser preview only shows the
+  screen). Closing it removes `connect` from the link. Used by the first-run
+  checklist ([setup](setup.md)); the link never saves a credential.
+- `isUsableAiAccount(account)` (public, `data.ts`) says whether an AI account
+  lets the assistant write: connected, or an OpenAI/Anthropic sign-in that
+  renews itself; custom services also need their address. It is the single
+  readiness rule: the setup checklist, agent-run readiness and the default AI
+  service in drafting dialogs (`useAgentAccounts`) all use it.
+
 ## Provider destinations and local-provider consent
 
 The native destination policy (`src-tauri/src/net/destination.rs`) checks every Base URL when it is saved and again right before each provider request:

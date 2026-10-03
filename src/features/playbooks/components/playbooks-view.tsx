@@ -3,10 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlaybookCard } from "@/features/playbooks/components/playbook-card";
 import { usePlaybooks } from "@/features/playbooks/hooks/use-playbooks";
+import { playbooksRoute } from "@/features/playbooks/schemas";
+import { useRouteParams } from "@/lib/navigation/use-hash-navigation";
 
 export function PlaybooksView(): React.ReactNode {
   const { playbooks, loading, saving, error, loadPlaybooks, updateOverride } =
     usePlaybooks();
+  const { params: linkParams } = useRouteParams(playbooksRoute);
+  const focusKey = linkParams?.focus ?? null;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -76,6 +80,7 @@ export function PlaybooksView(): React.ReactNode {
                 playbook={playbook}
                 saving={saving}
                 onUpdate={updateOverride}
+                focusInstructions={focusKey === playbook.key}
               />
             ))}
           </div>

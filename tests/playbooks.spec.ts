@@ -83,6 +83,18 @@ test("shows commenter as operator guidance only without autonomous posting", asy
   ).toHaveCount(0);
 });
 
+test("focus link scrolls to and focuses a guidance-only guide heading", async ({
+  page,
+}) => {
+  await page.goto("/#/playbooks?focus=linkedin_commenter", {
+    waitUntil: "domcontentloaded",
+  });
+
+  const heading = page.getByRole("heading", { name: "LinkedIn Commenter" });
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+});
+
 test("native override command rejects invalid playbook overrides", async ({
   page,
 }) => {

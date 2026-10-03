@@ -1,4 +1,5 @@
 import { AlertCircle, Target, Workflow } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreateWorkflowRunDialog } from "@/features/workflows/components/create-workflow-run-dialog";
@@ -219,10 +220,11 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns and create a campaign first. Each automation belongs
-            to one campaign.
+            Create a campaign to get started. Each automation belongs to one
+            campaign.
           </p>
         </div>
+        <CreateFirstCampaignButton />
       </CardContent>
     </Card>
   );

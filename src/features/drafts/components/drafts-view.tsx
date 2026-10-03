@@ -1,4 +1,5 @@
 import { AlertCircle, FileText, Info, Target } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -497,10 +498,11 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Go to Campaigns and create a campaign first. Drafts are written from
-            ideas inside a campaign.
+            Create a campaign to get started. Drafts are written from ideas
+            inside a campaign.
           </p>
         </div>
+        <CreateFirstCampaignButton />
       </CardContent>
     </Card>
   );

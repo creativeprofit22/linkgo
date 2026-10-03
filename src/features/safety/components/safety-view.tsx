@@ -1,4 +1,5 @@
 import { AlertCircle, ShieldAlert, Target } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -247,6 +248,7 @@ function EmptyNoCampaigns(): React.ReactNode {
             emergency pause any time.
           </p>
         </div>
+        <CreateFirstCampaignButton />
       </CardContent>
     </Card>
   );

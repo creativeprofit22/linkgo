@@ -94,9 +94,10 @@ Tests: `src-tauri/src/candidate_queue_store_tests.rs`.
 - Header and explanation that intake, discovery, and scoring are operator-triggered while external actions remain gated.
 - Campaign selector.
 - Candidate intake policy summary (on screen: `Idea filters`) and accessible editor, including archived read-only state and manual-override disclosure.
-- `Find topics`, `Score ideas`, `Import posts`, and `Add idea` actions.
+- `Find topics`, `Score ideas`, `Import posts`, and `Add idea` actions. `#/queue?find=1` opens Find topics once a non-archived campaign is selected (the setup checklist's **Find your first idea**); closing it removes `find` from the link. The param type lives in `schemas.ts` because `types/index.ts` already imports it.
+- Find topics defaults its AI service to the first connected AI service (via `useAgentAccounts`, same as Generate draft) and that service's default model. Practice mode stays selectable and is the default only when no AI service is connected. The default updates once connected accounts finish loading unless the operator already picked a service or typed a model; closing the dialog resets to the default.
 - Loading and retry states.
-- No-campaign and empty-queue states.
+- No-campaign state with **Create your first campaign**, and empty-queue state.
 - Summary cards for total candidates, suggestions, scored candidates, shortlisted candidates, and average score.
 - Discovery suggestion cards with promote/dismiss actions.
 - Recent source import batches with accepted, duplicate, and rejected item reasons.

@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Target,
 } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -393,10 +394,11 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Go to Campaigns and create a campaign first. Then you can plan its
-            approved posts here.
+            Create a campaign to get started. Then you can plan its approved
+            posts here.
           </p>
         </div>
+        <CreateFirstCampaignButton />
       </CardContent>
     </Card>
   );

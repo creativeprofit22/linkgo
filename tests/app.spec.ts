@@ -16,7 +16,11 @@ test("app root renders campaigns by default", async ({ page }) => {
     "aria-current",
     "page",
   );
-  await expect(page.getByText("No campaigns yet")).toBeVisible();
+  // A fresh start shows the setup checklist instead of the empty card.
+  await expect(
+    page.getByRole("region", { name: "Get started with Linkgo" }),
+  ).toBeVisible();
+  await expect(page.getByText("0 of 4 done")).toBeVisible();
 });
 
 test("sidebar sections scroll vertically when the window is short", async ({

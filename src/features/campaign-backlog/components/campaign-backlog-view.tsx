@@ -7,6 +7,7 @@ import {
   ListRestart,
   Target,
 } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -118,7 +119,8 @@ export function CampaignBacklogView(): React.ReactNode {
         <EmptyState
           icon={Target}
           title="Create a campaign first"
-          description="Every task belongs to a campaign. Open Campaigns and create one to get started."
+          description="Every task belongs to a campaign. Create one to get started."
+          action={<CreateFirstCampaignButton />}
         />
       ) : dashboard !== null ? (
         <>
@@ -422,10 +424,12 @@ function EmptyState({
   icon: Icon,
   title,
   description,
+  action,
 }: {
   icon: typeof ClipboardList;
   title: string;
   description: string;
+  action?: React.ReactNode;
 }): React.ReactNode {
   return (
     <Card className="bg-card/70 border-dashed">
@@ -437,6 +441,7 @@ function EmptyState({
             {description}
           </p>
         </div>
+        {action}
       </CardContent>
     </Card>
   );

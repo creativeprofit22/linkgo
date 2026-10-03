@@ -1,4 +1,5 @@
 import { AlertCircle, Bot, Target } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AgentRunCard } from "@/features/agent-runtime/components/agent-run-card";
@@ -218,10 +219,11 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns and create a campaign first. Each assistant task
-            belongs to one campaign.
+            Create a campaign to get started. Each assistant task belongs to one
+            campaign.
           </p>
         </div>
+        <CreateFirstCampaignButton />
       </CardContent>
     </Card>
   );

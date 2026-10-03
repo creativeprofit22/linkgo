@@ -10,6 +10,7 @@ import {
   submitOAuthCode,
   subscribeToAuthProgress,
 } from "@/features/integrations/data";
+import { announceDataChange } from "@/lib/data-change-events";
 import { toPlainMessage } from "@/lib/plain-message";
 import type {
   AuthProgressEvent,
@@ -84,7 +85,9 @@ export function useIntegrations(): UseIntegrationsState {
         void (async () => {
           try {
             const next = await getAuthStatus();
-            if (active) setStatus(next);
+            if (!active) return;
+            setStatus(next);
+            if (event.status === "auth_done") announceDataChange("accounts");
           } catch {
             // The next manual refresh surfaces load errors.
           }
@@ -102,6 +105,7 @@ export function useIntegrations(): UseIntegrationsState {
   const saveKey = useCallback(async (input: SaveApiKeyInput) => {
     try {
       setStatus(await saveApiKey(input));
+      announceDataChange("accounts");
       toast.success("Account connected");
     } catch (caught) {
       toast.error("We couldn't connect this account", {
@@ -127,6 +131,7 @@ export function useIntegrations(): UseIntegrationsState {
   const submitCode = useCallback(async (input: OAuthCodeInput) => {
     try {
       setStatus(await submitOAuthCode(input));
+      announceDataChange("accounts");
       toast.success("Account connected");
     } catch (caught) {
       toast.error("That sign-in code didn't work", {
@@ -150,6 +155,7 @@ export function useIntegrations(): UseIntegrationsState {
   const disconnect = useCallback(async (input: LogoutInput) => {
     try {
       setStatus(await disconnectProvider(input));
+      announceDataChange("accounts");
       toast.success("Account disconnected");
     } catch (caught) {
       toast.error("We couldn't disconnect this account", {
@@ -162,6 +168,7 @@ export function useIntegrations(): UseIntegrationsState {
   const check = useCallback(async (input: LogoutInput) => {
     try {
       setStatus(await checkProvider(input));
+      announceDataChange("accounts");
     } catch (caught) {
       toast.error("Connection check failed", {
         description: getErrorMessage(caught),

@@ -18,6 +18,8 @@ Why it is hand-rolled rather than a router library:
 - Screen ids match the old tab ids: `campaigns`, `autopilot`, `backlog`,
   `queue` (Ideas), `drafts`, `approvals`, `calendar`, `scheduler`, `comments`,
   `metrics`, `workflows`, `agents`, `playbooks`, `integrations`, `safety`.
+  `setup` (Get started) is linkable but not in the Main menu; the sidebar
+  setup launcher opens it ([setup](setup.md)).
 
 ## Ownership
 
@@ -133,10 +135,28 @@ draft** / **Open drafts**.
 See `docs/features/post-flow.md` for how these links chain one post from idea
 to calendar.
 
+### Setup links (open a dialog)
+
+Used by the first-run checklist ([setup](setup.md)). Each opens a dialog or
+field; closing the dialog replaces the link without the param, so refresh
+doesn't reopen it. None of them saves anything.
+
+| Link                                    | Opens                                                                                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `#/integrations?connect=<provider key>` | That service's connect dialog, once accounts load (desktop app only).                                                                            |
+| `#/campaigns?new=1`                     | **New campaign**, name pre-filled "My posts".                                                                                                    |
+| `#/playbooks?focus=<playbook key>`      | Scrolls to that guide and focuses "Your own instructions" when the guide has it; guidance-only guides are scrolled to and their heading focused. |
+| `#/queue?find=1`                        | **Find topics** for the selected campaign (needs a non-archived campaign).                                                                       |
+
+Unknown provider or playbook keys and any value other than `1` are
+`invalid-params`: the screen opens without the param.
+
 ## Adding a linkable screen or param
 
 1. Declare or extend the route in the feature's `schemas.ts`; put the param
    type in `types/index.ts` (a `type` alias, optional keys as `T | undefined`).
+   Exception: when `types/index.ts` already imports `schemas.ts` (Ideas), keep
+   the param type in `schemas.ts` to avoid an import cycle.
 2. New screens: add the route to `homeRoutes` and a menu entry in
    `src/pages/home.tsx`.
 3. Read params with `useRouteParams`; treat them as untrusted — check the item

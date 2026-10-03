@@ -61,3 +61,8 @@ export interface UpdateCampaignInput {
   dailyCommentLimit?: number;
   keywords?: string[];
 }
+
+/** Link params for Campaigns; `new=1` opens New campaign pre-filled. */
+export type CampaignsRouteParams = {
+  new?: "1" | undefined;
+};

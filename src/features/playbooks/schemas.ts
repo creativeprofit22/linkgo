@@ -1,6 +1,7 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import { defineRoute } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 import { AGENT_PLAYBOOK_KEYS } from "@/agent/playbooks";
+import type { PlaybooksRouteParams } from "@/features/playbooks/types";
 
 export const playbookKeySchema = z.enum(AGENT_PLAYBOOK_KEYS);
 
@@ -21,5 +22,16 @@ export const updatePlaybookOverrideSchema = z.object({
   customInstructions: z.string().trim().max(2000).default(""),
 });
 
+/**
+ * Link params for Brand voice (`#/playbooks?focus=linkedin_writer`). `focus`
+ * scrolls to that guide and puts the cursor in "Your own instructions".
+ */
+export const playbooksRouteSearchSchema = z.object({
+  focus: playbookKeySchema.optional(),
+});
+
 /** Address of the Brand voice screen (`#/playbooks`). See docs/features/navigation.md. */
-export const playbooksRoute = defineRoute("playbooks", emptyRouteSearch());
+export const playbooksRoute = defineRoute<"playbooks", PlaybooksRouteParams>(
+  "playbooks",
+  playbooksRouteSearchSchema,
+);

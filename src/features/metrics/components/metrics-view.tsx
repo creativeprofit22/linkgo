@@ -1,4 +1,5 @@
 import { AlertCircle, BarChart3, RefreshCw, Target } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CampaignMemoryCard } from "@/features/metrics/components/campaign-memory-card";
@@ -449,10 +450,11 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Go to Campaigns and create a campaign first. Then you can track
-            results for the posts in it.
+            Create a campaign to get started. Then you can track results for the
+            posts in it.
           </p>
         </div>
+        <CreateFirstCampaignButton />
       </CardContent>
     </Card>
   );

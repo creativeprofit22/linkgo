@@ -4,6 +4,7 @@ import {
   listPlaybooks,
   updatePlaybookOverride,
 } from "@/features/playbooks/data";
+import { announceDataChange } from "@/lib/data-change-events";
 import { toPlainMessage } from "@/lib/plain-message";
 import type {
   AgentPlaybookView,
@@ -52,6 +53,7 @@ export function usePlaybooks(): UsePlaybooksState {
       setSaving(true);
       try {
         await updatePlaybookOverride(input);
+        announceDataChange("playbooks");
         setPlaybooks(await listPlaybooks());
         toast.success("Guide saved");
       } catch (caught) {

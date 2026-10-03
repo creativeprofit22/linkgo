@@ -6,12 +6,17 @@ import { ProviderLoginDialog } from "@/features/integrations/components/provider
 import { isAutoRenewingAiSignIn } from "@/features/integrations/account-renewal";
 import { useIntegrations } from "@/features/integrations/hooks/use-integrations";
 import { getAuthProvider } from "@/features/integrations/providers";
+import { integrationsRoute } from "@/features/integrations/schemas";
 import type {
   AuthProgressEvent,
   AuthProvider,
   ConnectedAccount,
   ConnectedAccountStatus,
 } from "@/features/integrations/types";
+import {
+  navigateTo,
+  useRouteParams,
+} from "@/lib/navigation/use-hash-navigation";
 import { toPlainMessage } from "@/lib/plain-message";
 
 const statusLabels: Record<ConnectedAccountStatus, string> = {
@@ -50,6 +55,14 @@ function withPlainLabel(provider: AuthProvider): AuthProvider {
     : { ...provider, label: known.label, secretLabel: known.secretLabel };
 }
 
+/** LinkedIn first (it's the first setup step), then the catalog order. */
+function linkedInFirst(providers: readonly AuthProvider[]): AuthProvider[] {
+  return [
+    ...providers.filter((provider) => provider.key === "linkedin"),
+    ...providers.filter((provider) => provider.key !== "linkedin"),
+  ];
+}
+
 export function IntegrationsView(): React.ReactNode {
   const {
     providers,
@@ -66,6 +79,20 @@ export function IntegrationsView(): React.ReactNode {
     disconnect,
     check,
   } = useIntegrations();
+  const { params: linkParams } = useRouteParams(integrationsRoute);
+  // A `connect` link opens that service's dialog once accounts have loaded;
+  // the browser preview can't connect anything, so it only shows the screen.
+  const linkedProviderKey =
+    !loading && desktopRequiredMessage === null
+      ? (linkParams?.connect ?? null)
+      : null;
+  // Closing a dialog a link opened drops `connect` from the address
+  // (replace), so refresh doesn't reopen it while Back/Forward still work.
+  const closeConnectLink = (open: boolean): void => {
+    if (!open && linkParams?.connect !== undefined) {
+      navigateTo(integrationsRoute, undefined, { replace: true });
+    }
+  };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -134,10 +161,12 @@ export function IntegrationsView(): React.ReactNode {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {providers.map((provider) => (
+            {linkedInFirst(providers).map((provider) => (
               <ProviderCard
                 key={provider.key}
                 provider={withPlainLabel(provider)}
+                linkOpen={linkedProviderKey === provider.key}
+                onLinkOpenChange={closeConnectLink}
                 account={
                   accounts.find(
                     (candidate) => candidate.provider_key === provider.key,
@@ -206,8 +235,12 @@ function ProviderCard({
   onCheck,
   progressEvent,
   desktopRequired,
+  linkOpen,
+  onLinkOpenChange,
 }: {
   provider: AuthProvider;
+  linkOpen: boolean;
+  onLinkOpenChange: (open: boolean) => void;
   account: ConnectedAccount | null;
   onSaveKey: React.ComponentProps<typeof ProviderLoginDialog>["onSaveKey"];
   onStartOAuth: React.ComponentProps<
@@ -283,6 +316,8 @@ function ProviderCard({
             progressEvent={progressEvent}
             disabled={desktopRequired}
             disabledReasonId="integrations-desktop-required"
+            open={linkOpen ? true : undefined}
+            onOpenChange={linkOpen ? onLinkOpenChange : undefined}
           />
         </div>
       </CardContent>

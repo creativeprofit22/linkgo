@@ -2,10 +2,29 @@ import { AlertCircle, Target } from "lucide-react";
 import { AddCampaignDialog } from "@/features/campaigns/components/add-campaign-dialog";
 import { CampaignCard } from "@/features/campaigns/components/campaign-card";
 import { useCampaigns } from "@/features/campaigns/hooks/use-campaigns";
+import { campaignsRoute } from "@/features/campaigns/schemas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  navigateTo,
+  useRouteParams,
+} from "@/lib/navigation/use-hash-navigation";
 
-export function CampaignsView(): React.ReactNode {
+/** Starter name for a first campaign opened from a setup link. */
+export const STARTER_CAMPAIGN_NAME = "My posts";
+
+interface CampaignsViewProps {
+  /**
+   * Replaces the empty card when there are no campaigns (the shell passes
+   * the setup checklist). Receives the default card to fall back to.
+   */
+  renderEmpty?: (defaultEmpty: React.ReactNode) => React.ReactNode;
+}
+
+export function CampaignsView({
+  renderEmpty,
+}: CampaignsViewProps = {}): React.ReactNode {
+  const { params: linkParams } = useRouteParams(campaignsRoute);
   const {
     campaigns,
     loading,
@@ -16,6 +35,14 @@ export function CampaignsView(): React.ReactNode {
     archiveCampaign,
     setStatus,
   } = useCampaigns();
+  // `new=1` opens New campaign pre-filled. Closing it drops the flag from the
+  // address (replace) so refresh doesn't reopen it.
+  const newFromLink = !loading && linkParams?.new === "1";
+  const closeNewLink = (open: boolean): void => {
+    if (!open && linkParams?.new !== undefined) {
+      navigateTo(campaignsRoute, undefined, { replace: true });
+    }
+  };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -37,7 +64,12 @@ export function CampaignsView(): React.ReactNode {
             </div>
           </div>
         </div>
-        <AddCampaignDialog onCreate={addCampaign} />
+        <AddCampaignDialog
+          onCreate={addCampaign}
+          open={newFromLink ? true : undefined}
+          onOpenChange={newFromLink ? closeNewLink : undefined}
+          initialName={newFromLink ? STARTER_CAMPAIGN_NAME : undefined}
+        />
       </div>
 
       {error && (
@@ -66,7 +98,9 @@ export function CampaignsView(): React.ReactNode {
           </CardContent>
         </Card>
       ) : campaigns.length === 0 ? (
-        <EmptyCampaigns onCreate={addCampaign} />
+        (renderEmpty?.(<EmptyCampaigns onCreate={addCampaign} />) ?? (
+          <EmptyCampaigns onCreate={addCampaign} />
+        ))
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {campaigns.map((campaign) => (

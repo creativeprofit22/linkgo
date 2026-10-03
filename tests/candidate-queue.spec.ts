@@ -495,7 +495,12 @@ test("queue renders no-campaign empty state", async ({ page }) => {
   await expect(
     page.getByText("No campaigns yet", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Open Campaigns first")).toBeVisible();
+  await expect(
+    page.getByText("Create a campaign to get started."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Create your first campaign" }),
+  ).toHaveAttribute("href", "#/campaigns?new=1");
 });
 
 test("discovery blocks seed keywords over schema max length", async ({
@@ -526,6 +531,50 @@ test("discovery blocks seed keywords over schema max length", async ({
   });
 
   expect(agentRunInsertCount).toBe(0);
+});
+
+test("find topics defaults to the connected AI service", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+
+  // With no AI connected, Practice mode is the default.
+  await page.goto("/#/queue?find=1", { waitUntil: "domcontentloaded" });
+  const practiceDialog = page.getByRole("dialog", { name: "Find topics" });
+  await expect(practiceDialog).toBeVisible();
+  await expect(practiceDialog.getByLabel("AI service")).toHaveValue("dry_run");
+
+  await page.goto("/#/integrations?connect=anthropic", {
+    waitUntil: "domcontentloaded",
+  });
+  const connect = page.getByRole("dialog", { name: "Anthropic connection" });
+  await connect
+    .getByLabel("Anthropic API key or OAuth token")
+    .fill("test-key-00000000");
+  await connect.getByRole("button", { name: "Save API key" }).click();
+  await expect(
+    connect.getByText("Connected. Your key is stored safely"),
+  ).toBeVisible();
+
+  await page.goto("/#/queue?find=1", { waitUntil: "domcontentloaded" });
+  const dialog = page.getByRole("dialog", { name: "Find topics" });
+  await expect(dialog).toBeVisible();
+  const provider = dialog.getByLabel("AI service");
+  await expect(provider).toHaveValue("anthropic");
+  await expect(provider.locator("option:checked")).toHaveText("Anthropic");
+  await expect(dialog.getByLabel("AI model")).toHaveValue("claude-sonnet-4-6");
+
+  // Practice mode stays selectable, and a manual pick sticks while open.
+  await provider.selectOption("dry_run");
+  await expect(provider).toHaveValue("dry_run");
+  await expect(dialog.getByLabel("AI model")).toHaveValue("dry-run-local");
+
+  // Closing resets to the connected default.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: "Find topics" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Find topics" }).getByLabel("AI service"),
+  ).toHaveValue("anthropic");
 });
 
 test("dry-run discovery creates, promotes, and dismisses suggestions", async ({

@@ -1,4 +1,8 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import type { CampaignsRouteParams } from "@/features/campaigns/types";
+import {
+  defineRoute,
+  optionalRouteFlag,
+} from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 export const campaignStatusSchema = z.enum([
@@ -124,5 +128,17 @@ export const campaignWithKeywordsSchema = z
 
 export const campaignListSchema = z.array(campaignWithKeywordsSchema);
 
+/**
+ * Link params for Campaigns (`#/campaigns?new=1`). `new=1` opens the New
+ * campaign dialog pre-filled with a starter name; nothing is created until
+ * the user clicks Create.
+ */
+export const campaignsRouteSearchSchema = z.object({
+  new: optionalRouteFlag(),
+});
+
 /** Address of the Campaigns screen (`#/campaigns`). See docs/features/navigation.md. */
-export const campaignsRoute = defineRoute("campaigns", emptyRouteSearch());
+export const campaignsRoute = defineRoute<"campaigns", CampaignsRouteParams>(
+  "campaigns",
+  campaignsRouteSearchSchema,
+);

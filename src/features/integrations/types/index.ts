@@ -127,3 +127,8 @@ export interface AuthProgressEvent {
   summary: string;
   authUrl?: string | null | undefined;
 }
+
+/** Link params for Connected accounts; `connect` opens that service's dialog. */
+export type IntegrationsRouteParams = {
+  connect?: AuthProviderKey | undefined;
+};

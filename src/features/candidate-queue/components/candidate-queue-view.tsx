@@ -1,10 +1,12 @@
 import { AlertCircle, ListChecks, Target } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { AddCandidateDialog } from "@/features/candidate-queue/components/add-candidate-dialog";
 import { CandidateCard } from "@/features/candidate-queue/components/candidate-card";
 import { DiscoveryItemCard } from "@/features/candidate-queue/components/discovery-item-card";
 import { RunCandidateDiscoveryDialog } from "@/features/candidate-queue/components/run-candidate-discovery-dialog";
 import { ScoreCandidatesDialog } from "@/features/candidate-queue/components/score-candidates-dialog";
 import { useCandidateQueue } from "@/features/candidate-queue/hooks/use-candidate-queue";
+import { candidateQueueRoute } from "@/features/candidate-queue/schemas";
 import {
   CandidatePolicyCard,
   useCandidatePolicy,
@@ -28,6 +30,10 @@ import {
 import { ListTruncationNotice } from "@/components/list-truncation-notice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  navigateTo,
+  useRouteParams,
+} from "@/lib/navigation/use-hash-navigation";
 
 const statusOrder: CandidateStatus[] = [
   "new",
@@ -63,10 +69,23 @@ export function CandidateQueueView(): React.ReactNode {
     promoteDiscoveryItem,
     dismissDiscoveryItem,
   } = useCandidateQueue();
+  const { params: linkParams } = useRouteParams(candidateQueueRoute);
 
   const selectedCampaign =
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
+  // `find=1` opens Find topics once a usable campaign is selected. Closing it
+  // drops the flag from the address (replace) so refresh doesn't reopen it.
+  const findFromLink =
+    linkParams?.find === "1" &&
+    !loading &&
+    selectedCampaign !== null &&
+    !selectedCampaignArchived;
+  const closeFindLink = (open: boolean): void => {
+    if (!open && linkParams?.find !== undefined) {
+      navigateTo(candidateQueueRoute, undefined, { replace: true });
+    }
+  };
   const sourceImports = useSourceImports(selectedCampaignId);
   const candidatePolicy = useCandidatePolicy(selectedCampaignId);
   const summary = getCandidateSummary(
@@ -110,6 +129,8 @@ export function CandidateQueueView(): React.ReactNode {
             campaign={selectedCampaign}
             onRun={runDiscovery}
             disabled={campaigns.length === 0 || selectedCampaignArchived}
+            open={findFromLink ? true : undefined}
+            onOpenChange={findFromLink ? closeFindLink : undefined}
           />
           <ScoreCandidatesDialog
             campaignId={selectedCampaignId}
@@ -408,10 +429,11 @@ function EmptyNoCampaigns(): React.ReactNode {
         <div>
           <h3 className="text-lg font-semibold">No campaigns yet</h3>
           <p className="text-muted-foreground mt-2 max-w-lg text-sm">
-            Open Campaigns first and create a campaign. Ideas uses it to skip
-            repeats and sort ideas by how well they match.
+            Create a campaign to get started. Ideas uses it to skip repeats and
+            sort ideas by how well they match.
           </p>
         </div>
+        <CreateFirstCampaignButton />
       </CardContent>
     </Card>
   );

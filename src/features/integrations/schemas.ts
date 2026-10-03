@@ -1,4 +1,4 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import { defineRoute } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 import {
   AUTH_METHODS,
@@ -6,6 +6,7 @@ import {
   CONNECTED_ACCOUNT_STATUSES,
   CREDENTIAL_EVENT_TYPES,
 } from "@/features/integrations/types";
+import type { IntegrationsRouteParams } from "@/features/integrations/types";
 
 export const authMethodSchema = z.enum(AUTH_METHODS);
 export const authProviderKeySchema = z.enum(AUTH_PROVIDER_KEYS);
@@ -146,8 +147,16 @@ export const authProgressEventSchema = z.object({
   authUrl: z.string().trim().nullable().optional(),
 });
 
+/**
+ * Link params for Connected accounts (`#/integrations?connect=linkedin`).
+ * `connect` opens that service's connect dialog once accounts load.
+ */
+export const integrationsRouteSearchSchema = z.object({
+  connect: authProviderKeySchema.optional(),
+});
+
 /** Address of the Connected accounts screen (`#/integrations`). See docs/features/navigation.md. */
-export const integrationsRoute = defineRoute(
+export const integrationsRoute = defineRoute<
   "integrations",
-  emptyRouteSearch(),
-);
+  IntegrationsRouteParams
+>("integrations", integrationsRouteSearchSchema);

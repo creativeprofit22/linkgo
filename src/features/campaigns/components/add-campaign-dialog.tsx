@@ -30,6 +30,12 @@ import type {
 
 interface AddCampaignDialogProps {
   onCreate: (input: CreateCampaignInput) => Promise<void>;
+  /** Forces the dialog open, e.g. when a link asked for a new campaign. */
+  open?: boolean | undefined;
+  /** Called whenever the dialog opens or closes. */
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  /** Starter name filled in when the dialog opens with an empty name. */
+  initialName?: string | undefined;
 }
 
 interface EditCampaignDialogProps {
@@ -105,11 +111,29 @@ function validateCampaignForm(form: CampaignFormState): FormValidation {
 
 export function AddCampaignDialog({
   onCreate,
+  open: openProp,
+  onOpenChange,
+  initialName,
 }: AddCampaignDialogProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = openProp ?? innerOpen;
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<CampaignFormState>(initialFormState);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Pre-fill the starter name each time the dialog opens with no name yet;
+  // the user still reviews it and clicks Create.
+  useEffect(() => {
+    if (!open || initialName === undefined) return;
+    setForm((current) =>
+      current.name === "" ? { ...current, name: initialName } : current,
+    );
+  }, [open, initialName]);
+
+  const setOpen = (next: boolean): void => {
+    setInnerOpen(next);
+    onOpenChange?.(next);
+  };
 
   const handleOpenChange = (next: boolean): void => {
     if (!next) setFormError(null);

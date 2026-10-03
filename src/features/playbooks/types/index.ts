@@ -32,3 +32,8 @@ export interface RuntimePlaybookPrompt {
   definition: AgentPlaybookDefinition;
   customInstructions: string;
 }
+
+/** Link params for Brand voice; `focus` jumps to that guide's own instructions. */
+export type PlaybooksRouteParams = {
+  focus?: AgentPlaybookKey | undefined;
+};

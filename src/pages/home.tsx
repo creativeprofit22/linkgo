@@ -36,6 +36,12 @@ import { metricsRoute } from "@/features/metrics/schemas";
 import { playbooksRoute } from "@/features/playbooks/schemas";
 import { safetyRoute } from "@/features/safety/schemas";
 import { schedulerRoute } from "@/features/scheduler/schemas";
+import {
+  SetupEmptyCampaigns,
+  SetupLauncher,
+  SetupView,
+} from "@/features/setup";
+import { setupRoute } from "@/features/setup/schemas";
 import { workflowsRoute } from "@/features/workflows/schemas";
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
 import {
@@ -154,6 +160,7 @@ const homeRoutes = [
   playbooksRoute,
   integrationsRoute,
   safetyRoute,
+  setupRoute,
 ] as const;
 
 type HomeTab = (typeof homeRoutes)[number]["id"];
@@ -296,8 +303,20 @@ const tabs: RoadmapTab[] = [
   },
 ];
 
+/** Get started screen: reachable from the setup launcher, not the Main menu. */
+const setupTab: RoadmapTab = {
+  route: setupRoute,
+  label: "Get started",
+  description: "Set up Linkgo in four short steps.",
+  icon: Activity,
+  enabled: true,
+  docHref: "docs/features/setup.md",
+};
+
 function getActiveRoadmapTab(activeTab: HomeTab): RoadmapTab {
-  const tab = tabs.find((candidate) => candidate.route.id === activeTab);
+  const tab = [...tabs, setupTab].find(
+    (candidate) => candidate.route.id === activeTab,
+  );
   if (tab) return tab;
   throw new Error(`Unknown Linkgo tab: ${activeTab}`);
 }
@@ -359,6 +378,10 @@ export function HomePage(): React.ReactNode {
             </p>
           </div>
 
+          <div className="mb-2 shrink-0 sm:mb-3 [&:empty]:hidden">
+            <SetupLauncher active={activeTab === setupRoute.id} />
+          </div>
+
           <nav
             className="flex gap-2 overflow-x-auto pb-1 sm:-mr-2 sm:block sm:min-h-0 sm:flex-1 sm:space-y-2 sm:overflow-x-hidden sm:overflow-y-auto sm:pr-2 sm:pb-0"
             aria-label="Main menu"
@@ -412,7 +435,13 @@ export function HomePage(): React.ReactNode {
           )}
           <Suspense fallback={featureViewFallback}>
             {activeRoadmapTab.route.id === "campaigns" ? (
-              <CampaignsView />
+              <CampaignsView
+                renderEmpty={(defaultEmpty) => (
+                  <SetupEmptyCampaigns fallback={defaultEmpty} />
+                )}
+              />
+            ) : activeRoadmapTab.route.id === "setup" ? (
+              <SetupView />
             ) : activeRoadmapTab.route.id === "autopilot" ? (
               <AutopilotPlannerView />
             ) : activeRoadmapTab.route.id === "backlog" ? (

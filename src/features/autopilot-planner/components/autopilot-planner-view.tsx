@@ -6,6 +6,7 @@ import {
   Route,
   Square,
 } from "lucide-react";
+import { CreateFirstCampaignButton } from "@/features/campaigns";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -355,15 +356,23 @@ function FirstUseState({
       : activeAutopilotCount === 0
         ? "Make a campaign active and include it in Autopilot. Autopilot only creates tasks. It never posts."
         : "Open a campaign that's included in Autopilot and import posts. Autopilot only uses finished imports that passed your idea filters.";
-  return <EmptyState title={title} description={description} />;
+  return (
+    <EmptyState
+      title={title}
+      description={description}
+      action={campaignCount === 0 ? <CreateFirstCampaignButton /> : undefined}
+    />
+  );
 }
 
 function EmptyState({
   title,
   description,
+  action,
 }: {
   title: string;
   description: string;
+  action?: React.ReactNode;
 }): React.ReactNode {
   return (
     <Card className="bg-card/70 border-dashed forced-colors:border">
@@ -372,6 +381,7 @@ function EmptyState({
         <p className="text-muted-foreground mt-1 max-w-xl text-sm">
           {description}
         </p>
+        {action ? <div className="mt-4">{action}</div> : null}
       </CardContent>
     </Card>
   );

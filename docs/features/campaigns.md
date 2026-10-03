@@ -54,8 +54,14 @@ The unreachable `getCampaign`, `addCampaignKeyword` and `deleteCampaign` functio
 `CampaignsView` renders:
 
 - Header and explanation.
-- `New campaign` action.
-- Empty state.
+- `New campaign` action. `#/campaigns?new=1` opens it with the name
+  pre-filled "My posts" (`STARTER_CAMPAIGN_NAME`); nothing is created until
+  the user clicks Create. Closing it removes `new` from the link.
+- Empty state: the shell passes `renderEmpty`, which shows the first-run
+  setup checklist ([setup](setup.md)) until the user hides it, then this
+  screen's own empty card.
+- `CreateFirstCampaignButton` (public, from `@/features/campaigns`) — the fix
+  button on every screen that needs a campaign; links to `#/campaigns?new=1`.
 - Campaign cards with status, explicit local-planner eligibility, product, audience, keywords, and limits.
 - Status actions for active, paused, draft restore, and archive.
 

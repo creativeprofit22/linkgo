@@ -49,6 +49,10 @@ interface ProviderLoginDialogProps {
   disabled?: boolean;
   /** Element id explaining why the dialog is disabled. */
   disabledReasonId?: string;
+  /** Forces the dialog open, e.g. when a link asked for this service. */
+  open?: boolean | undefined;
+  /** Called whenever the dialog opens or closes. */
+  onOpenChange?: ((open: boolean) => void) | undefined;
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -96,8 +100,15 @@ export function ProviderLoginDialog({
   progressEvent = null,
   disabled = false,
   disabledReasonId,
+  open: openProp,
+  onOpenChange,
 }: ProviderLoginDialogProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = openProp ?? innerOpen;
+  const setOpen = (next: boolean): void => {
+    setInnerOpen(next);
+    onOpenChange?.(next);
+  };
   const aiProvider = aiAccountProvider(provider.key);
   const [method, setMethod] = useState<AuthMethod>(provider.defaultMethod);
   const [confirmReplaceSignIn, setConfirmReplaceSignIn] = useState(false);
