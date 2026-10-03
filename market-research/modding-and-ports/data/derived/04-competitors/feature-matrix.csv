@@ -1,0 +1,97 @@
+competitor,feature,value,pageId,quote,evidence
+nexusmods,free-download,Yes,bdf20df2cb46d0df,"Get free, quality content for your games: new weapons, stories, and more!",Free mods and content stated
+nexusmods,paid-membership,Yes,328942a482dbf74b,Instant downloads (no delay/countdown),Premium membership tier offered
+nexusmods,creator-payouts,Yes,2c3a4d833400b4fb,"Make mods, earn extra—our rewards programme enables",PayPal payouts and donations available
+nexusmods,own-mod-manager-or-client,Yes,38622826cde16ea8,Vortex is the easiest way to manage your mods,Nexus Mods' own mod manager
+nexusmods,one-click-install,Yes,38622826cde16ea8,Install mods and collections with 1-click,Collections feature enables one-click install
+nexusmods,multi-game-catalogue,Yes,38622826cde16ea8,Vortex supports over 500 games,Vortex supports 500+ games
+nexusmods,fan-games-or-original-games,No,bdf20df2cb46d0df,Auto-install hundreds of mods to get next-level graphics,Home page describes mods only; no standalone games
+nexusmods,beginner-install-guide,Yes,38622826cde16ea8,Get guides and resources for using the app and modding specific games,Official Vortex guides and resources
+nexusmods,creation-docs-or-tools,Yes,2c3a4d833400b4fb,We provide the tools to let your creativity shine,Creator tools offered
+nexusmods,console-or-cross-platform,No,38622826cde16ea8,Download for Windows,Manager page offers Windows only
+nexusmods,api-or-sdk-for-studios,Yes,25ec7e2ca43609dc,applications (e.g. Vortex and Nexus Mods App) and our APIs,Terms reference Nexus Mods APIs
+nexusmods,curation-or-moderation,Yes,25ec7e2ca43609dc,We minimise the length of time for which terrorism content is present on the site,Terms describe content moderation
+curseforge,free-download,Partial,708ae56fb23e9f4c,"Any Free, PC (Steam) Only mod that is submitted to the platform will be immediately approved",Free mods stated on one game's guidelines (ARK)
+curseforge,paid-membership,Yes,c522c1d20711db1f,Remove Ads And Support Authors With CurseForge Premium,Premium subscription offered
+curseforge,creator-payouts,Yes,c522c1d20711db1f,"Since 2020, we've paid $18M+ to creators",Creator payments stated
+curseforge,own-mod-manager-or-client,Yes,c522c1d20711db1f,"Download the CurseForge app to easily install, update, and manage your mods in one click",CurseForge app manages mods
+curseforge,one-click-install,Yes,e3b8dfe14d158e9b,"Add mods with a single click – easy installation, no manual setup, no waiting",One-click installation stated
+curseforge,multi-game-catalogue,Yes,e3b8dfe14d158e9b,Browse all (128),128 games listed
+curseforge,fan-games-or-original-games,No,c522c1d20711db1f,Find mods built specifically for the games you play – all in one place,Mods for existing games only
+curseforge,beginner-install-guide,Unknown,,,No beginner guide in captured pages
+curseforge,creation-docs-or-tools,Yes,e3b8dfe14d158e9b,Publish and manage your mods with tools designed specifically for creators,Creator tools stated
+curseforge,console-or-cross-platform,Partial,708ae56fb23e9f4c,"available cross-platform on Steam, Xbox Series X/S, Windows PC, and Playstation 5",Console mods stated for one game (ARK)
+curseforge,api-or-sdk-for-studios,Yes,e3b8dfe14d158e9b,Apply for an API Key,API key application offered
+curseforge,curation-or-moderation,Yes,e3b8dfe14d158e9b,"CurseForge scans and moderates every mod, giving you fast, worry-free installs",Every mod scanned and moderated
+moddb,free-download,Yes,d59e876624d17b88,"games, mods, addons and other downloadable Content, which are made available",Terms describe downloadable content made available
+moddb,paid-membership,Partial,d59e876624d17b88,Some parts of the Service such as ad free support are billed on a subscription basis,Ad-free subscription only
+moddb,creator-payouts,Unknown,,,Not stated in captured pages
+moddb,own-mod-manager-or-client,Unknown,,,Not stated; home promotes sister service mod.io SDK
+moddb,one-click-install,Unknown,,,Not stated
+moddb,multi-game-catalogue,Yes,e3613c86d4b1a17d,"Games and mods development for Windows, Linux and Mac",Home lists games and mods across platforms
+moddb,fan-games-or-original-games,Yes,e3613c86d4b1a17d,"Games and mods development for Windows, Linux and Mac",Home covers games as well as mods
+moddb,beginner-install-guide,Unknown,,,Not stated
+moddb,creation-docs-or-tools,Unknown,,,Not stated
+moddb,console-or-cross-platform,Partial,e3613c86d4b1a17d,"Games and mods development for Windows, Linux and Mac",Desktop platforms stated; no console
+moddb,api-or-sdk-for-studios,Partial,e3613c86d4b1a17d,"Enable mods in-game with mod.io, a SDK you can integrate in-game",Points studios to sister service mod.io SDK
+moddb,curation-or-moderation,Yes,d59e876624d17b88,We reserve the right to delete or disable content alleged to be infringing,Terms reserve content removal
+gamebanana,free-download,Unknown,,,Home page title only (not captured)
+gamebanana,paid-membership,No,32962383fdeaf3a4,We don't have paywalls or sell mods,Home page states no paywalls; ad-funded
+gamebanana,creator-payouts,Unknown,,,Not captured
+gamebanana,own-mod-manager-or-client,Unknown,,,Not captured
+gamebanana,one-click-install,Unknown,,,Not captured
+gamebanana,multi-game-catalogue,Unknown,,,Not captured
+gamebanana,fan-games-or-original-games,Unknown,,,Not captured
+gamebanana,beginner-install-guide,Unknown,,,Not captured
+gamebanana,creation-docs-or-tools,Unknown,,,Not captured
+gamebanana,console-or-cross-platform,Unknown,,,Not captured
+gamebanana,api-or-sdk-for-studios,Unknown,,,Not captured
+gamebanana,curation-or-moderation,Unknown,,,Not captured
+modio,free-download,Unknown,,,Only developer SDK docs captured; player offer not stated
+modio,paid-membership,Unknown,,,Only studio analytics tiers stated; no player tier (lead)
+modio,creator-payouts,Unknown,,,Creator-rewards page not captured
+modio,own-mod-manager-or-client,Partial,9393e9e417fda60f,The latter is done via a simple `EnableModManagement()` call,In-game mod management via studio SDK; no standalone app stated
+modio,one-click-install,Partial,9393e9e417fda60f,Subscribing to mods is very simple. The following code,Subscribe-to-install exists where a studio integrates the SDK
+modio,multi-game-catalogue,Partial,9393e9e417fda60f,Before we can interact with your game's mods via the API,Per-game catalogues via studio integration
+modio,fan-games-or-original-games,Unknown,,,Not stated
+modio,beginner-install-guide,Unknown,,,Captured guide is for developers not players
+modio,creation-docs-or-tools,Yes,9393e9e417fda60f,Uploading mods is a two-step process:,Documented mod upload workflow
+modio,console-or-cross-platform,Unknown,,,Quote not in captured docs page (dropped by lead)
+modio,api-or-sdk-for-studios,Yes,9393e9e417fda60f,This guide covers the most common functions of the mod.io Unity Engine plugin,SDK and plugin for studios
+modio,curation-or-moderation,Unknown,,,Not captured
+thunderstore,free-download,Yes,4a7e357c3bbad165,"Choose from over 110,000 mods across 300+ games",Home offers mods to download
+thunderstore,paid-membership,Partial,e3f1faf5615d3203,Subscription available,Manager app lists an optional subscription
+thunderstore,creator-payouts,Unknown,,,Not stated in captured pages
+thunderstore,own-mod-manager-or-client,Yes,4a7e357c3bbad165,Download Thunderstore Mod Manager for Windows,Own mod manager app
+thunderstore,one-click-install,Yes,e3f1faf5615d3203,Download and install mods directly from the manager,Install directly from manager
+thunderstore,multi-game-catalogue,Yes,4a7e357c3bbad165,"over 110,000 mods across 300+ games",300+ games stated
+thunderstore,fan-games-or-original-games,Unknown,,,Not stated
+thunderstore,beginner-install-guide,Unknown,,,Wiki linked but guide not captured
+thunderstore,creation-docs-or-tools,Yes,4a7e357c3bbad165,Package Format Docs,Package format docs linked
+thunderstore,console-or-cross-platform,No,4a7e357c3bbad165,Download Thunderstore Mod Manager for Windows to easily install,Manager offered for Windows only
+thunderstore,api-or-sdk-for-studios,Yes,4a7e357c3bbad165,API Docs,API docs linked
+thunderstore,curation-or-moderation,Yes,95cec47ae3e5ea9b,Packages containing malware are not allowed.,Global rules enforce bans
+steamworkshop,free-download,Yes,4b95ba787bcc0f6f,"Create, discover, and download content for your game",Download content stated
+steamworkshop,paid-membership,Unknown,,,Not stated
+steamworkshop,creator-payouts,Partial,f49b957b54c7710b,"compensation you may receive as a result of this making available, are defined in the App-Specific Terms",Compensation possible; set per game
+steamworkshop,own-mod-manager-or-client,Yes,4b95ba787bcc0f6f,Workshop Collections can now be shared via a link from within the Steam Client,Workshop runs inside Valve's own Steam Client
+steamworkshop,one-click-install,Yes,4b95ba787bcc0f6f,Millions of players regularly subscribe to and vote on items,Subscribe to an item to get it
+steamworkshop,multi-game-catalogue,Yes,4b95ba787bcc0f6f,"there are over 3,000 games with Workshop enabled with a combined total of over 50 million items uploaded",3000+ games and 50M+ items
+steamworkshop,fan-games-or-original-games,No,4b95ba787bcc0f6f,content for your game,Content for existing games only
+steamworkshop,beginner-install-guide,Unknown,,,Not captured
+steamworkshop,creation-docs-or-tools,Unknown,,,Not captured
+steamworkshop,console-or-cross-platform,Unknown,,,Not stated
+steamworkshop,api-or-sdk-for-studios,Unknown,,,Not captured
+steamworkshop,curation-or-moderation,Unknown,,,Legal-agreement page captured navigation only
+itchio,free-download,Yes,5288b5c20ec0be33,is a simple way to find and share indie games online for free,Free indie games stated
+itchio,paid-membership,Unknown,,,No user subscription stated
+itchio,creator-payouts,Yes,ad770df9f79820c6,how creators can accept payments and get paid,Creator payments guide
+itchio,own-mod-manager-or-client,Yes,20dfb1872095ef52,lets you effortlessly download and run games and software from itch.io,Own desktop app (games not mods)
+itchio,one-click-install,Yes,20dfb1872095ef52,lets you effortlessly download and run games and software from itch.io,App downloads and runs games
+itchio,multi-game-catalogue,Yes,bf6393f70d91dad6,itch.io is home to over 1 million projects,Over 1 million projects
+itchio,fan-games-or-original-games,Yes,5288b5c20ec0be33,is a simple way to find and share indie games online for free,Hosts standalone indie games
+itchio,beginner-install-guide,Unknown,,,Not captured
+itchio,creation-docs-or-tools,Yes,bf6393f70d91dad6,we strongly encourage you to upload your files directly to our platform,Creator upload guidance
+itchio,console-or-cross-platform,Partial,20dfb1872095ef52,"For Windows, macOS, and Linux",Desktop platforms; no console stated
+itchio,api-or-sdk-for-studios,Yes,ad770df9f79820c6,Server-side API reference,API reference listed
+itchio,curation-or-moderation,Yes,bf6393f70d91dad6,our systems or a site moderator may choose to remove your page from itch.io's discovery index,Moderators can delist pages

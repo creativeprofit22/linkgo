@@ -1,0 +1,49 @@
+competitor,policy,value,pageId,quote,evidence
+nexusmods,takedown-dmca,IP claims can lead to identity disclosure to claimant,25ec7e2ca43609dc,We have the right to disclose your identity to anyone who is claiming that,Terms provide for IP claims
+nexusmods,ip-ownership-licence,Creators keep ownership; grant licence,25ec7e2ca43609dc,"You (or your licensors, as applicable) retain all ownership rights in the content",Ownership kept by uploader
+nexusmods,minimum-age,18+ or 13+ with parental consent,25ec7e2ca43609dc,"you are aged 18 or older, or, that you are aged 13 or older",Age requirement in terms
+nexusmods,adult-content,Allowed for verified 18+ users only,25ec7e2ca43609dc,"whilst permitted on our site, must only be made available to users who are 18 or over",Adult content gated to 18+
+nexusmods,creator-terms,Rewards discretionary and non-contractual,25ec7e2ca43609dc,the scheme is entirely discretionary and non-contractual and does not form part of these terms,Rewards not a contractual right
+nexusmods,paid-mods-allowed,Unknown,,,Not stated
+curseforge,takedown-dmca,Unknown,,,Not stated in captured pages
+curseforge,ip-ownership-licence,Authors grant Overwolf broad licence,a51eb6b8067b2c17,"You grant Overwolf an unrestricted, worldwide, royalty-free license to use, store, reproduce, distribute",Licence to operator
+curseforge,minimum-age,Unknown,,,Not stated in captured pages
+curseforge,adult-content,Nudity/sexual mods banned (one game's rules),708ae56fb23e9f4c,"Mods must not modify the game to allow for nudity, sexual content",ARK guidelines only
+curseforge,creator-terms,Published mod-author terms,a51eb6b8067b2c17,These Terms govern your access to and use of the Platform,Author terms exist
+curseforge,paid-mods-allowed,Yes; premium mods sold to end users,a51eb6b8067b2c17,"a high-quality Mod made for a specific third-party game, which is being sold to End-Users",Premium mods defined in terms
+moddb,takedown-dmca,DMCA notices handled,d59e876624d17b88,"DBolical Pty Ltd complies with the DMCA, and we respond to notices",DMCA process stated
+moddb,ip-ownership-licence,Uploader grants non-exclusive licence,d59e876624d17b88,"you grant us a worldwide, non-exclusive, royalty-free license to use, copy, reproduce",Non-exclusive licence
+moddb,minimum-age,13+,d59e876624d17b88,Children under 13 are not permitted to use the Service.,Minimum age 13
+moddb,adult-content,Pornographic content prohibited,d59e876624d17b88,"indecent, seditious, offensive, pornographic",Terms ban pornographic content
+moddb,creator-terms,Uploaders responsible for their content,d59e876624d17b88,You are responsible for the Content that you post to the Service,Uploader liability
+moddb,paid-mods-allowed,Unknown,,,Not stated
+gamebanana,takedown-dmca,Unknown,,,Not captured
+gamebanana,ip-ownership-licence,Unknown,,,Not captured
+gamebanana,minimum-age,Unknown,,,Not captured
+gamebanana,adult-content,Unknown,,,Not captured
+gamebanana,creator-terms,Unknown,,,Not captured
+gamebanana,paid-mods-allowed,No; hub says it never sells mods,32962383fdeaf3a4,We don't have paywalls or sell mods - we never will,Home page pledge; ads fund the site
+modio,takedown-dmca,Unknown,,,Terms page not captured
+modio,ip-ownership-licence,Unknown,,,Terms page not captured
+modio,minimum-age,Unknown,,,Terms page not captured
+modio,adult-content,Unknown,,,Terms page not captured
+modio,creator-terms,Unknown,,,Terms page not captured
+modio,paid-mods-allowed,Unknown,,,Terms page not captured
+thunderstore,takedown-dmca,Unknown,,,Not stated in captured pages
+thunderstore,ip-ownership-licence,Unknown,,,Not stated in captured pages
+thunderstore,minimum-age,Unknown,,,Not stated
+thunderstore,adult-content,Allowed if flagged NSFW,95cec47ae3e5ea9b,All packages containing NSFW content must have the,NSFW flag required
+thunderstore,creator-terms,Unknown,,,Not stated in captured pages
+thunderstore,paid-mods-allowed,Unknown,,,Not stated
+steamworkshop,takedown-dmca,Unknown,,,Legal-agreement page captured navigation only
+steamworkshop,ip-ownership-licence,Unknown,,,Captured quote not about Workshop contributions
+steamworkshop,minimum-age,13+,f49b957b54c7710b,You may not become a Subscriber if you are under the age of 13,Subscriber minimum age
+steamworkshop,adult-content,Unknown,,,Legal-agreement page captured navigation only
+steamworkshop,creator-terms,Compensation set by app-specific terms,f49b957b54c7710b,"compensation you may receive as a result of this making available, are defined in the App-Specific Terms",Per-game terms
+steamworkshop,paid-mods-allowed,Free by default; paid by exception,f49b957b54c7710b,"Workshop Contributions are in principle made available to Subscribers for free. By way of exception, they may be made available to Subscribers for a fee.",Paid items allowed as exception
+itchio,takedown-dmca,DMCA notices and counter-notices,54c2f2868e358658,submit a notification pursuant to the Digital Millennium Copyright Act,DMCA process
+itchio,ip-ownership-licence,Publishers keep ownership,54c2f2868e358658,Publishers retain all ownership rights to the submitted content,Creator ownership
+itchio,minimum-age,Users 13+,54c2f2868e358658,Users affirm that they are over the age of 13,User minimum age
+itchio,adult-content,Allowed; shown only to opted-in accounts,bf6393f70d91dad6,adult content if they've enabled it on their account settings,Opt-in filtering
+itchio,creator-terms,Creators choose itch.io share 0–100%,ad770df9f79820c6,"can decide what percentage of your sales will go towards itch.io, from 0% to 100%",Open revenue share
+itchio,paid-mods-allowed,Creators set their own prices,54c2f2868e358658,"Publishers may set the prices, at their own discretion, for their content",Paid content allowed

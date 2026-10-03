@@ -1,0 +1,5 @@
+method,items,attempts,ok,okWithRecords,failed,failedByClass,coded,usable,okRate,usableRate
+reddit_posts,48,48,48,48,0,,48,45,1.000,0.938
+scrape,38,42,38,38,0,,8,5,1.000,0.132
+youtube_comments,6,6,6,6,0,,6,6,1.000,1.000
+all,92,96,92,92,0,,62,56,1.000,0.609
