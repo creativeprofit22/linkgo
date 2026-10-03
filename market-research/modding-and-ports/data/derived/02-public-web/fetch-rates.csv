@@ -1,0 +1,10 @@
+method,items,attempts,ok,okWithRecords,failed,failedByClass,coded,usable,okRate,usableRate
+facebook_posts,5,5,5,5,0,,5,5,1.000,1.000
+instagram_posts,2,2,2,2,0,,2,2,1.000,1.000
+reddit_posts,10,10,10,10,0,,10,10,1.000,1.000
+scrape,40,40,36,36,4,brd_error:4,40,31,0.900,0.775
+tiktok_posts,5,5,5,5,0,,5,5,1.000,1.000
+x_posts,8,8,8,8,0,,8,8,1.000,1.000
+youtube_comments,4,4,4,4,0,,4,3,1.000,0.750
+youtube_videos,8,8,8,8,0,,8,8,1.000,1.000
+all,82,82,78,78,4,brd_error:4,82,72,0.951,0.878

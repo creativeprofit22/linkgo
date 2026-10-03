@@ -1,0 +1,124 @@
+recordId,platform,method,usable,sourceType,segment,hypothesis,stance,codingPass,note
+00020947eeadd009,hackernews,scrape,yes,b,unclear,-,off-topic,first,Legal discussion of trademark enforcement on fanworks
+0048470f317bddf0,twitch,scrape,no,,,-,off-topic,first,Page blocked; no accessible content
+008939129521af9c,youtube,youtube_comments,yes,b,unclear,-,off-topic,first,Two brief comments expressing gratitude; no substantive data on any hypothesis.
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H2,neutral,review,Tutorial teaching coding pattern is not evidence of creator's own coding experience
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H6,contradicts,first+review,Modding existing game; not creating original games
+00c0dbe360341f72,moddb,scrape,yes,c,both,H11,contradicts,first+review,ModDB thriving 20 years; incumbent hub successfully serving community
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H12,supports,first+review,Acknowledgments cite multiple Discord communities as collaborators
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H6,contradicts,first+review,Creator modding existing game; not making original
+012dcae0ca749ee7,discord,scrape,yes,c,both,H12,neutral,review,Directory listing Discord servers; no evidence people cite Discord as gathering place
+013975a981507c0e,x,x_posts,yes,b,creator,H12,supports,first+review,User seeking access to modding Discord; indicates Discord is community hub
+013975a981507c0e,x,x_posts,yes,b,creator,H5,neutral,review,Discord access barrier is onboarding; not modding tool learning curve barrier
+01459f505eab78b1,itchio,scrape,yes,d,both,H10,neutral,review,Feature existence (free publishing; tutorial) without person naming barriers as main problem
+0152010641229cbf,tiktok,tiktok_posts,yes,b,player,H10,supports,first+review,Comments reveal installation; setup; and plugin troubleshooting barriers
+0152010641229cbf,tiktok,tiktok_posts,yes,b,player,H3,supports,first+review,Installation tutorial; comments reveal unmet needs (games not appearing; help wanted)
+019730235c0334ac,youtube,youtube_comments,no,,,-,off-topic,first,Dead page; no comments available on video.
+019730235c0334ac,youtube,youtube_videos,yes,b,both,H12,supports,first+review,Tutorial directs people to Discord; cites as community resource
+019730235c0334ac,youtube,youtube_videos,yes,b,both,H3,contradicts,review,Discord provides installation help; describes user need being met; contradicts unmet need
+019dfea27e812111,gamebanana,scrape,yes,b,player,H8,supports,first+review,Direct player request for PC port of legacy game
+01ad3dc709236d1d,curseforge,scrape,yes,c,creator,-,off-topic,first,Infrastructure project page; no specific demand or barrier discussion
+01faaad40decb254,steam,scrape,yes,b,both,H10,supports,first+review,Player frustrated by delayed modding tools; cites unmet tool need at launch
+0200c94fc9fd7f6d,fandom,scrape,yes,c,both,H10,contradicts,first+review,Accessible mod manager and tutorials reduce barriers; contradicts unmet demand
+0200c94fc9fd7f6d,fandom,scrape,yes,c,both,H12,supports,first+review,Discord cited as tech support hub; identified as gathering place for community
+0200c94fc9fd7f6d,fandom,scrape,yes,c,both,H5,contradicts,first+review,Wiki tutorials and mod managers readily available; contradicts steep learning curve
+0208de2c7be77ae2,youtube,youtube_comments,yes,b,both,H10,supports,first+review,Multiple comments cite payment barrier; main problem blocking free mod creation
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H10,supports,first+review,Commenters overwhelmingly cite payment as primary barrier to tool use
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H2,neutral,review,Tool feature description; not creator-side person describing their own coding experience
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,player,H3,neutral,review,Tool feature existence alone; not a person reporting unmet needs
+022783490e3a3ffb,gbatemp,scrape,yes,c,player,H8,neutral,review,Flash cartridge for legacy DS games; not PC port per H8 non-PC platform rule
+0261141328578cbe,gamebanana,scrape,yes,b,creator,H5,neutral,first+review,Mod loader tutorial provided; learning difficulty unspecified
+02f192aebffc83bd,itchio,scrape,yes,b,creator,H10,supports,first+review,Modder seeking guidance; tool bugs; unmet support needs for modding creation
+02f192aebffc83bd,itchio,scrape,yes,b,creator,H5,supports,first+review,Modder requests tutorial; reports tool export problems as barrier to creation
+03137c17428f83ab,modio,scrape,yes,d,creator,-,off-topic,first,Minimal listing; insufficient content for coding
+034960b138e41cb0,nexusmods,scrape,yes,c,both,H10,neutral,review,Mere product listing; no person cites install/setup barrier
+034960b138e41cb0,nexusmods,scrape,yes,c,both,H11,contradicts,first+review,Nexus platform actively covering the need
+034960b138e41cb0,nexusmods,scrape,yes,c,both,H5,neutral,review,Product page only; no person describes learning barriers
+034960b138e41cb0,nexusmods,scrape,yes,c,both,H6,contradicts,first+review,Article covers modding an existing game; not an original game
+046efa0743163a16,twitch,scrape,no,,,-,off-topic,first,Not on-topic for any hypothesis after review
+048204092bd06ab2,x,x_posts,yes,b,n/a,-,off-topic,first,General programming language philosophy (Rust for agents); unrelated to games
+04a7b986c5a2589e,reddit,reddit_posts,yes,b,player,-,off-topic,first,Franchise health debate; not about fan revival mechanisms
+04b675335ae09df6,x,x_posts,yes,b,creator,H10,supports,first+review,Game developer motivated to improve modding tools despite short-term productivity cost
+04b675335ae09df6,x,x_posts,yes,b,creator,H5,neutral,review,Developer-side friction commentary; not beginner reporting learning barriers
+050d5a837ceea43d,moddb,scrape,yes,c,both,H4,supports,first+review,Concrete mod project: TTT recreated for Half-Life
+050d5a837ceea43d,moddb,scrape,yes,c,both,H6,contradicts,first+review,Half-Life mod modifies existing game
+059958ac86c650e0,other,scrape,yes,b,creator,H10,supports,first+review,Modders seek better tools; tool barriers explicit
+059958ac86c650e0,other,scrape,yes,b,creator,H11,supports,first+review,Users prefer Mod Organizer over Nexus NMM
+059958ac86c650e0,other,scrape,yes,b,creator,H5,supports,first+review,Creators describe tool complexity; learning barriers discussed
+05c0e904916d8af3,rustforum,scrape,no,,,-,off-topic,first,Not on-topic for any hypothesis after review
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H10,supports,first+review,UI/organization barrier to mod management
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H4,supports,first+review,GitHub issue proposes concrete UI feature
+05e262879ec1ff59,github,scrape,yes,d,creator,H10,supports,first+review,Setup and discoverability barriers central to issue
+05e262879ec1ff59,github,scrape,yes,d,creator,H5,supports,first+review,Setup difficulty and configuration confusion acknowledged
+0606d9f66b0aa4d7,steam,scrape,yes,b,creator,H6,contradicts,first+review,Fan-game discussion; advice: use original IP
+0629637e5e732577,facebook,facebook_posts,yes,b,player,H3,supports,first+review,Console player unable to emulate due to old computer; access barriers
+06c8f718c765f272,thunderstore,scrape,yes,c,player,H11,supports,first+review,Thunderstore is alternative to Nexus for game-specific mods
+06c8f718c765f272,thunderstore,scrape,yes,c,player,H12,supports,first+review,Discord explicitly cited for Lethal Company modding
+06e8228c70e66f37,other,scrape,no,,,-,off-topic,first,Not on-topic for any hypothesis after review
+07079e239d77ba06,other,scrape,yes,e,player,H6,contradicts,first+review,Total-conversion mods modify existing games
+07079e239d77ba06,other,scrape,yes,e,player,H7,neutral,review,Article discusses fan-favorite franchises but not named dormant IPs
+070c55295fb404dc,reddit,reddit_posts,yes,b,creator,H10,supports,first+review,Looking for mod manager tools; seeking simplified setup process
+070c55295fb404dc,reddit,reddit_posts,yes,b,creator,H2,neutral,review,User has prior Xbox modding experience; no coding experience discussed
+078d40e6d378ac49,youtube,youtube_comments,yes,b,both,H5,neutral,review,Viewers comment on creator's struggle; not beginner themselves reporting learning curve
+078d40e6d378ac49,youtube,youtube_videos,yes,b,creator,H2,contradicts,first+review,Creator shows advanced Blender; rigging; animation; engine skills
+078d40e6d378ac49,youtube,youtube_videos,yes,b,creator,H5,neutral,review,Skilled creator struggles with tool complexity; not beginner learning curve evidence
+078df2651da97476,resetera,scrape,yes,b,player,H4,supports,first+review,Concrete feature ideas for improving Sonic games
+07acafd789b2164b,youtube,youtube_videos,yes,b,player,H8,neutral,lead,Fan parody game titled as a PC port; no port of an existing title described
+08129be849fed969,other,scrape,no,,,-,off-topic,first,Not on-topic for any hypothesis after review
+0837d136e9ba841a,other,scrape,yes,b,creator,H10,supports,first+review,Users discuss tool configuration and setup challenges
+0837d136e9ba841a,other,scrape,yes,b,creator,H12,supports,first+review,Discord cited as primary gathering place for community
+0837d136e9ba841a,other,scrape,yes,b,creator,H8,supports,first+review,BuildGDX enables legacy game ports to modern platforms
+090b9e4613ae4bae,youtube,youtube_videos,yes,b,player,H8,neutral,lead,Fan-made game titled as a PC port; no port of an existing title described
+0920b1b3fb897a08,youtube,youtube_videos,yes,c,n/a,-,off-topic,first,Official director commentary on Evil Dead film franchise; unrelated to game modding.
+0927c1921ee142eb,youtube,youtube_videos,yes,e,creator,-,off-topic,first,News/commentary on Unreal Engine documentation DEI policies; not about modding demand.
+09a254c6713b2aec,gbatemp,scrape,yes,b,player,H3,neutral,review,Switch port discussion; not about unmet install/discovery needs
+09a254c6713b2aec,gbatemp,scrape,yes,b,player,H7,contradicts,first+review,Sonic actively developed; not dormant IP
+09a254c6713b2aec,gbatemp,scrape,yes,b,player,H8,neutral,review,Switch port (not PC); rule excludes non-PC ports for H8
+09abaa44c4709574,resetera,scrape,yes,b,creator,H11,supports,first+review,Knowledge locked on Discord not centralized hub
+09abaa44c4709574,resetera,scrape,yes,b,creator,H12,supports,first+review,Discord concentration of modding community knowledge
+09abaa44c4709574,resetera,scrape,yes,b,creator,H5,supports,first+review,Creator describes month-long struggle; knowledge scattered
+09af88756aeb53ec,fandom,scrape,yes,c,both,H10,neutral,review,Fandom wiki mod page only; no person cites barrier
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H2,supports,first+review,First-time modder unsure what tools required
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H4,supports,first+review,Concrete plans for weapon movesets and incantation types
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H5,supports,first+review,Tool complexity and learning requirements evident; unclear specifications
+0ae88b2672e4bbdc,discord,scrape,yes,b,both,H12,supports,first+review,Multiple Tomb Raider Discord communities documented
+0b49674ce4f4527b,x,x_posts,yes,b,n/a,-,off-topic,first,Rust kernel rewrite technical debate; not game or modding related
+0bb7c3cef7353668,x,x_posts,yes,b,n/a,-,off-topic,first,SaaS startup legal/business story; unrelated to games; modding; or ports
+0c0bd7c81bca8e89,modio,scrape,no,,,-,off-topic,first,Empty; only page title present
+0c8c89501981da09,other,scrape,yes,b,both,-,off-topic,review,Not on-topic for any hypothesis after review
+0cb0a8346d063939,x,x_posts,yes,b,creator,H10,supports,first+review,Explicitly asks if non-programmers can access modding tools; barriers are concern
+0cb0a8346d063939,x,x_posts,yes,b,creator,H2,supports,first+review,Self-identifies as non-programmer wanting to create mods; seeking accessible tools
+0cb0a8346d063939,x,x_posts,yes,b,creator,H5,supports,first+review,Queries whether visual scripting exists; seeks accessibility for non-programmers
+0cb295c8f26ad475,curseforge,scrape,no,,,-,off-topic,first,Blocked/empty content
+0dfed503ae7b413d,reddit,reddit_posts,yes,b,creator,H7,supports,first+review,Fan mods and fan art keep dormant IP alive; ongoing engagement
+0e178064a04641cc,tiktok,tiktok_posts,yes,b,n/a,-,off-topic,first,Movie franchise timeline discussion; unrelated to games; modding; or ports
+0e4dd1bb7b512ffa,x,x_posts,yes,b,both,-,off-topic,review,Not on-topic for any hypothesis after review
+0ff90b895fb7753d,hackernews,scrape,yes,b,creator,H6,contradicts,review,Spider-Man 2000 modding (existing game) not original game
+0ff90b895fb7753d,hackernews,scrape,yes,b,creator,H7,supports,first+review,Named dormant IP (Spider-Man 2000) decompilation/revival
+0ff90b895fb7753d,hackernews,scrape,yes,b,creator,H8,supports,first+review,Legacy game decompilation/porting discussion by players
+10223f7e1a170f78,reddit,reddit_posts,yes,b,unclear,-,off-topic,first,Film franchise discussion; game-unrelated
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H10,supports,first+review,Manual installation barrier despite hub existence
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H3,supports,first+review,Players report manual installation as unmet discovery/install need
+108588fd0ee9fd23,tiktok,tiktok_posts,yes,c,creator,H4,supports,first+review,Comments express concrete feature requests (multiplayer; maps; war simulation)
+10ee73e7292e0fcf,rustforum,scrape,no,,,-,off-topic,first,Only page title; no forum content present
+1162d5936f2eebdb,other,scrape,yes,d,n/a,H11,neutral,lead,News of a hub expanding its data holdings; no user-stated unmet need or reason to switch
+12add6978e1382a1,other,scrape,no,,,-,off-topic,first,Blocked/empty content
+12c3ddd40a12d052,x,x_posts,yes,b,creator,-,off-topic,review,Not on-topic for any hypothesis after review
+1351278bd2fb3274,reddit,reddit_posts,yes,b,unclear,-,off-topic,first,CS career hobbies; not modding-related
+14007615a97cc9e9,reddit,reddit_posts,yes,b,unclear,-,off-topic,review,Not on-topic for any hypothesis after review
+1927b2c3bcbcc3d1,reddit,reddit_posts,yes,b,player,H10,supports,first+review,Mod compatibility and dependency complexity; description reading required for setup
+1bcf10d30c20dac7,reddit,reddit_posts,yes,b,player,-,off-topic,first,Requests game recommendations; not about modding; creation; or ports
+1c2bbd7e16e9b530,reddit,reddit_posts,yes,b,creator,-,off-topic,review,Not on-topic for any hypothesis after review
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,c,creator,H11,contradicts,review,Incumbent platform actively covers creation education; not unmet gap
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,c,creator,H5,contradicts,review,Incumbent's own tutorial shows tools/tutorials sufficient; barriers addressed
+1f957f45b4b28372,facebook,facebook_posts,yes,b,unclear,H10,supports,first+review,Hours troubleshooting mod setup reported; installation complexity frustrating
+2230ed210c75044e,facebook,facebook_posts,yes,b,creator,H2,supports,first+review,Creator lacks coding expertise; wants ideas implemented by others
+2230ed210c75044e,facebook,facebook_posts,yes,b,creator,H4,supports,first+review,Multiple concrete mod ideas but no expertise to build them
+2230ed210c75044e,facebook,facebook_posts,yes,b,creator,H5,supports,first+review,Unsure of tools needed; resources to learn expertise unavailable
+28f044c742f76612,tiktok,tiktok_posts,yes,b,both,H4,supports,first+review,Comment expresses specific mod idea (Arthur Morgan character on RDR1)
+28f044c742f76612,tiktok,tiktok_posts,yes,b,both,H8,supports,first+review,Player excitement about Red Dead 1 PC port after 14+ year gap
+2bc1561324c46b43,facebook,facebook_posts,yes,b,player,-,off-topic,first,Mod difficulty preference discussion; unrelated to hypotheses
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H10,supports,first+review,Mod setup complexity complained about; unmet barrier simplification needed
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H3,supports,first+review,Frustrated with mod dependency downloads; installation barriers
+7d98b459db42dcdd,instagram,instagram_posts,yes,b,unclear,-,off-topic,first,Hardware keyboard modding; game-unrelated
+8c912d431a8849ca,instagram,instagram_posts,yes,b,player,-,off-topic,first,Retro game nostalgia; not about revival through fan action

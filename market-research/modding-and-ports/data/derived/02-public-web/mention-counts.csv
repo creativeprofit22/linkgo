@@ -1,0 +1,57 @@
+category,term,records,results,queries
+hub,nexus mods,43,45,20
+hub,nexusmods,8,8,7
+hub,moddb,7,7,6
+hub,gamebanana,11,12,10
+hub,curseforge,41,53,19
+hub,mod.io,8,8,4
+hub,thunderstore,65,67,18
+hub,steam workshop,9,9,9
+hub,itch.io,29,30,13
+hub,vortex,15,18,14
+hub,mod organizer,2,2,2
+tool,r2modman,12,12,5
+tool,bepinex,11,12,7
+tool,melonloader,0,0,0
+tool,smapi,0,0,0
+tool,script extender,0,0,0
+tool,skse,0,0,0
+tool,xedit,0,0,0
+tool,blender,10,11,11
+tool,ghidra,4,4,4
+tool,ida pro,0,0,0
+engine,unity,19,19,17
+engine,unreal engine,9,11,11
+engine,godot,5,5,3
+engine,game maker,1,1,1
+engine,gamemaker,2,2,2
+engine,rpg maker,1,1,1
+engine,source engine,3,3,3
+engine,bevy,2,2,2
+port-project,ship of harkinian,9,10,5
+port-project,2 ship 2 harkinian,0,0,0
+port-project,harbour masters,3,3,3
+port-project,sm64ex,0,0,0
+port-project,render96,0,0,0
+port-project,n64recomp,0,0,0
+port-project,zelda64recomp,0,0,0
+port-project,spaghettikart,0,0,0
+port-project,opengoal,4,4,4
+port-project,openmw,1,1,1
+port-project,openrct2,0,0,0
+port-project,openttd,0,0,0
+port-project,devilutionx,0,0,0
+port-project,re3,0,0,0
+port-project,revc,0,0,0
+port-project,pokeemerald,0,0,0
+port-project,pokered,0,0,0
+port-project,sonic mania plus,0,0,0
+port-project,rsdkv5,3,3,2
+emulator,emulator,32,32,17
+emulator,retroarch,0,0,0
+emulator,dolphin emulator,0,0,0
+emulator,pcsx2,3,3,3
+emulator,rpcs3,1,1,1
+emulator,yuzu,1,1,1
+emulator,ryujinx,0,0,0
+emulator,project64,0,0,0
