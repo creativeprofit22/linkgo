@@ -1,0 +1,412 @@
+recordId,platform,method,usable,sourceType,segment,hypothesis,stance,codingPass,note
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H1,off-topic,a1,No ages mentioned
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H2,contradicts,a1,Tutorial demonstrates advanced programming knowledge (ECS pattern)
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H3,off-topic,a2,Teaching ECS pattern for modding; no player voices
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H4,neutral,a2,Educational content on tools; not idea/request posts
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H5,off-topic,a1,Educational content on design patterns; no beginner struggle narrative
+008939129521af9c,youtube,youtube_videos,yes,b,creator,H6,neutral,a2,Framework tutorial; does not address game creation goals
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H1,off-topic,a1,No ages stated
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H2,contradicts,a1,"Mod showcases advanced technical skills: physics, custom models"
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H3,off-topic,a2,Mod project page; no audience voice present
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H4,neutral,a2,Completed project; not requesting ideas
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H5,off-topic,a1,Release page; no learning experience narrative
+01277e12f08703f3,thunderstore,scrape,yes,d,creator,H6,contradicts,a2,Modding existing game (Zelda 64)
+013975a981507c0e,x,x_posts,yes,b,unclear,H1,neutral,a1,One poster ages 19 (within 15-21 range); limited sample
+013975a981507c0e,x,x_posts,yes,b,unclear,H2,off-topic,a1,Post about Discord access; no coding background revealed
+013975a981507c0e,x,x_posts,yes,b,player,H3,supports,a2,Player reports unmet need: lost modding Discord access
+013975a981507c0e,x,x_posts,yes,b,player,H4,off-topic,a2,Play-only voice; not creator-side
+013975a981507c0e,x,x_posts,yes,b,unclear,H5,off-topic,a1,No learning tools/curve discussion
+013975a981507c0e,x,x_posts,yes,b,player,H6,off-topic,a2,Play-only voice; not creator-side
+014de28eedea41f8,youtube,youtube_comments,yes,b,creator,H1,off-topic,a1,No ages mentioned.
+014de28eedea41f8,youtube,youtube_comments,yes,b,creator,H2,off-topic,a1+lead,"Commenters report getting lost, build errors; reveals beginner struggles with setup. [lead: supports -> off-topic; comments report confusion but not their own coding background (H5 only)]"
+014de28eedea41f8,youtube,youtube_comments,yes,b,creator,H3,off-topic,a2,Creator-side mod tutorial; no play-only voices.
+014de28eedea41f8,youtube,youtube_comments,yes,b,creator,H4,neutral,a2,Creator technical discussion; no idea/request posts.
+014de28eedea41f8,youtube,youtube_comments,yes,b,creator,H5,supports,a1,Multiple reports of confusion; tutorial takes much longer than shown.
+014de28eedea41f8,youtube,youtube_comments,yes,b,creator,H6,contradicts,a2,Minecraft mod tutorial.
+0152010641229cbf,tiktok,tiktok_posts,yes,b,both,H1,off-topic,a1,No ages mentioned
+0152010641229cbf,tiktok,tiktok_posts,yes,b,both,H2,off-topic,a1,Installation tutorial; no creator coding experience revealed
+0152010641229cbf,tiktok,tiktok_posts,yes,b,player,H3,supports,a2,Multiple play-only voices report unmet install/DLC help needs
+0152010641229cbf,tiktok,tiktok_posts,yes,b,player,H4,off-topic,a2,Player-focused content
+0152010641229cbf,tiktok,tiktok_posts,yes,b,both,H5,off-topic,a1+lead,"Comments show users struggling: install errors and game discovery issues [lead: supports -> off-topic; mod install trouble on a handheld belongs to H3, not beginner learning]"
+0152010641229cbf,tiktok,tiktok_posts,yes,b,player,H6,off-topic,a2,Player-focused content
+019730235c0334ac,youtube,youtube_videos,yes,b,n/a,H1,off-topic,a1,No ages mentioned
+019730235c0334ac,youtube,youtube_videos,yes,b,n/a,H2,off-topic,a1,Discord join tutorial; no coding discussed
+019730235c0334ac,youtube,youtube_videos,yes,b,player,H3,neutral,a2,Play-only but no unmet needs expressed
+019730235c0334ac,youtube,youtube_videos,yes,b,player,H4,off-topic,a2,Player-focused
+019730235c0334ac,youtube,youtube_videos,yes,b,n/a,H5,off-topic,a1,Not about mod tools or learning curve
+019730235c0334ac,youtube,youtube_videos,yes,b,player,H6,off-topic,a2,Player-focused
+0200c94fc9fd7f6d,riskofrain2,scrape,yes,c,n/a,H1,off-topic,a1,Administrative wiki; no ages
+0200c94fc9fd7f6d,riskofrain2,scrape,yes,c,n/a,H2,off-topic,a1,Official guide; not creator personal experience
+0200c94fc9fd7f6d,fandom,scrape,yes,c,n/a,H3,off-topic,a2,Wiki page with no audience voice
+0200c94fc9fd7f6d,fandom,scrape,yes,c,n/a,H4,off-topic,a2,Wiki page with no audience voice
+0200c94fc9fd7f6d,riskofrain2,scrape,yes,c,n/a,H5,off-topic,a1,Installation steps without personal learning narrative
+0200c94fc9fd7f6d,fandom,scrape,yes,c,n/a,H6,off-topic,a2,Wiki page with no audience voice
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H1,off-topic,a1,No ages stated
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H2,off-topic,a1+lead,Video and comment discuss modding without coding; tool enables non-coders [lead: supports -> off-topic; comments are cost complaints; no own coding background (Disconfirmer pass 2)]
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H3,neutral,a2,Some play-only commenters; no unmet needs stated
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H4,neutral,a2+lead,Multiple creator-side commenters discuss accessibility of mod-making tools [lead: supports -> neutral; comments complain an AI mod tool costs money; no ideas]
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H5,off-topic,a1+lead,"Tool solves learning barrier for users lacking coding skills [lead: supports -> off-topic; cost complaints, not learning difficulty]"
+0208de2c7be77ae2,youtube,youtube_videos,yes,b,both,H6,neutral,a2,Mixed views on tool accessibility vs learning to code
+0261141328578cbe,gamebanana,scrape,no,c,n/a,H1,off-topic,a1,File truncated; insufficient content
+0261141328578cbe,gamebanana,scrape,no,c,n/a,H2,off-topic,a1,File truncated; insufficient content
+0261141328578cbe,gamebanana,scrape,no,c,n/a,H3,off-topic,a2,Content truncated/unusable
+0261141328578cbe,gamebanana,scrape,no,c,n/a,H4,off-topic,a2,Content truncated/unusable
+0261141328578cbe,gamebanana,scrape,no,c,n/a,H5,off-topic,a1,File truncated; insufficient content
+0261141328578cbe,gamebanana,scrape,no,c,n/a,H6,off-topic,a2,Content truncated/unusable
+0286461b0c41599a,reddit,reddit_posts,yes,b,n/a,H1,off-topic,a1,Reddit moderation policy; not about game modding/ports
+0286461b0c41599a,reddit,reddit_posts,yes,b,n/a,H2,off-topic,a1,Reddit moderation policy; not about game modding/ports
+0286461b0c41599a,reddit,reddit_posts,no,b,n/a,H3,off-topic,a2,"Reddit subreddit moderation, not game modding."
+0286461b0c41599a,reddit,reddit_posts,no,b,n/a,H4,off-topic,a2,"Reddit subreddit moderation, not game modding."
+0286461b0c41599a,reddit,reddit_posts,yes,b,n/a,H5,off-topic,a1,Reddit moderation policy; not about game modding/ports
+0286461b0c41599a,reddit,reddit_posts,no,b,n/a,H6,off-topic,a2,"Reddit subreddit moderation, not game modding."
+02f192aebffc83bd,itch.io,scrape,yes,b,player,H1,off-topic,a1,No ages mentioned
+02f192aebffc83bd,itch.io,scrape,yes,b,player,H2,off-topic,a1,Tool usage question; no creator coding background revealed
+02f192aebffc83bd,itch.io,scrape,yes,b,creator,H3,off-topic,a2,Creator seeking modding knowledge; no play-only voices
+02f192aebffc83bd,itch.io,scrape,yes,b,creator,H4,neutral,a2+lead,"Creator requests modding tutorial; signals idea/knowledge request [lead: supports -> neutral; asks for a modding tutorial, not a mod idea]"
+02f192aebffc83bd,itch.io,scrape,yes,b,player,H5,supports,a1,Poster reports tool issues with export functionality
+02f192aebffc83bd,itch.io,scrape,yes,b,creator,H6,neutral,a2,Discussing modding tools/framework; goal not stated
+034960b138e41cb0,nexusmods,scrape,yes,e,creator,H1,off-topic,a1,No ages mentioned
+034960b138e41cb0,nexusmods,scrape,yes,e,creator,H2,off-topic,a1,Framework overview article; not personal coding background
+034960b138e41cb0,nexusmods,scrape,yes,e,creator,H3,off-topic,a2,Framework news announcement; no play-only voices
+034960b138e41cb0,nexusmods,scrape,yes,e,creator,H4,neutral,a2+lead,"Announcing new modding tools and framework [lead: supports -> neutral; tool release announcement, not an idea or request]"
+034960b138e41cb0,nexusmods,scrape,yes,e,creator,H5,off-topic,a1,Not about learning experience
+034960b138e41cb0,nexusmods,scrape,yes,e,creator,H6,neutral,a2,Tools/framework discussion; game creation goals not addressed
+04b675335ae09df6,x,x_posts,yes,b,creator,H1,off-topic,a1,No age stated
+04b675335ae09df6,x,x_posts,yes,b,creator,H2,contradicts,a1,Professional founder using modding tools professionally
+04b675335ae09df6,x,x_posts,yes,b,creator,H3,off-topic,a2,Creator-side only; no play-only voices
+04b675335ae09df6,x,x_posts,yes,b,creator,H4,neutral,a2,Discussing tool improvement; no specific ideas/requests
+04b675335ae09df6,x,x_posts,yes,b,creator,H5,off-topic,a1,No learning narrative
+04b675335ae09df6,x,x_posts,yes,b,creator,H6,off-topic,a2,Tool discussion; game creation goals not addressed
+050d5a837ceea43d,moddb,scrape,yes,d,creator,H1,off-topic,a1,No ages mentioned
+050d5a837ceea43d,moddb,scrape,yes,d,creator,H2,contradicts,a1,"Creator shows advanced modding skills: custom mechanics, HUD design"
+050d5a837ceea43d,moddb,scrape,yes,d,both,H3,supports,a2,Play-only commenters ask about gameplay features/bots as unmet needs
+050d5a837ceea43d,moddb,scrape,yes,d,both,H4,neutral,a2,Mod comments discuss features; not idea requests
+050d5a837ceea43d,moddb,scrape,yes,d,creator,H5,off-topic,a1,Release page; no learning experience described
+050d5a837ceea43d,moddb,scrape,yes,d,both,H6,contradicts,a2,Modding existing game (Half-Life)
+059958ac86c650e0,gunetwork,scrape,yes,b,both,H1,off-topic,a1,No ages mentioned
+059958ac86c650e0,gunetwork,scrape,yes,b,both,H2,off-topic,a1,Tool preference discussion; not creator coding skills
+059958ac86c650e0,gunetwork,scrape,yes,b,player,H3,supports,a2,Play-only voices report unmet need for better mod managers/tools
+059958ac86c650e0,gunetwork,scrape,yes,b,player,H4,off-topic,a2,Player-focused
+059958ac86c650e0,gunetwork,scrape,yes,b,both,H5,off-topic,a1,Experienced modders discussing tools; not beginners
+059958ac86c650e0,gunetwork,scrape,yes,b,player,H6,off-topic,a2,Player-focused
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H1,off-topic,a1,No ages mentioned
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H2,off-topic,a1,UI/UX design request; no coding experience revealed
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H3,off-topic,a2,Creator requesting feature; no play-only voices
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H4,neutral,a2+lead,"Creator posting feature request and ideas for UI [lead: supports -> neutral; feature request for a mod tool UI, not a mod or game idea]"
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H5,off-topic,a1,Not about learning curve
+05c4bb7a38e4810d,github,scrape,yes,d,creator,H6,off-topic,a2,Feature request for mod framework; game goals not addressed
+05e262879ec1ff59,github,scrape,yes,d,creator,H1,off-topic,a1,No ages mentioned
+05e262879ec1ff59,github,scrape,yes,d,creator,H2,off-topic,a1,Developer discussing user friction; not personal coding background
+05e262879ec1ff59,github,scrape,yes,d,creator,H3,off-topic,a2,Creator discussing UX; no play-only voices
+05e262879ec1ff59,github,scrape,yes,d,creator,H4,neutral,a2+lead,"Ideas for improving mod discoverability and user experience [lead: supports -> neutral; developer roadmap for a mod loader, not an idea or request]"
+05e262879ec1ff59,github,scrape,yes,d,creator,H5,off-topic,a1+lead,"Issue describes users struggling with setup: forgetting .NET Core install [lead: supports -> off-topic; end-user setup trouble belongs to H3, not beginner learning]"
+05e262879ec1ff59,github,scrape,yes,d,creator,H6,off-topic,a2,Tool improvement discussion; game creation goals not addressed
+0606d9f66b0aa4d7,steam,scrape,yes,b,both,H1,off-topic,a1,No ages mentioned
+0606d9f66b0aa4d7,steam,scrape,yes,b,both,H2,off-topic,a1,Copyright/legal discussion; not modding creation
+0606d9f66b0aa4d7,steam,scrape,yes,b,creator,H3,off-topic,a2,Creators discussing fan-game publishing; no play-only voices
+0606d9f66b0aa4d7,steam,scrape,yes,b,creator,H4,supports,a2,Multiple creators proposing fan-game ideas and concepts
+0606d9f66b0aa4d7,steam,scrape,yes,b,both,H5,off-topic,a1,Not about modding tools or learning
+0606d9f66b0aa4d7,steam,scrape,yes,b,creator,H6,supports,a2,Creators want to make original content from scratch (fan-games)
+0629637e5e732577,facebook,facebook_posts,yes,b,player,H1,off-topic,a1,No ages mentioned; post about emulation/ports not modding
+0629637e5e732577,facebook,facebook_posts,yes,b,player,H2,off-topic,a1,About ports/emulation; not modding creation
+0629637e5e732577,facebook,facebook_posts,yes,b,player,H3,supports,a2,Player reports need; wants to play games; suggests emulation workaround
+0629637e5e732577,facebook,facebook_posts,yes,b,player,H4,off-topic,a2,Player-focused
+0629637e5e732577,facebook,facebook_posts,yes,b,player,H5,off-topic,a1,Not about modding tools or learning
+0629637e5e732577,facebook,facebook_posts,yes,b,player,H6,off-topic,a2,Player-focused
+07079e239d77ba06,gamespot,scrape,yes,e,n/a,H1,off-topic,a1,Article lists mods; no age data
+07079e239d77ba06,gamespot,scrape,yes,e,n/a,H2,off-topic,a1,News content; no creator background revealed
+07079e239d77ba06,gamespot,scrape,yes,e,n/a,H3,off-topic,a2,News article; no audience voice
+07079e239d77ba06,gamespot,scrape,yes,e,n/a,H4,off-topic,a2,News article; not creator discussion
+07079e239d77ba06,gamespot,scrape,yes,e,n/a,H5,off-topic,a1,Curated article; no learning experience
+07079e239d77ba06,gamespot,scrape,yes,e,n/a,H6,off-topic,a2,News article; no creator voice
+070c55295fb404dc,reddit,reddit_posts,yes,b,player,H1,off-topic,a1,New player asking mod managers; no age
+070c55295fb404dc,reddit,reddit_posts,yes,b,player,H2,off-topic,a1,Player segment; not creator background
+070c55295fb404dc,reddit,reddit_posts,yes,b,player,H3,neutral,a2,"Play-only asking tool questions, not needs"
+070c55295fb404dc,reddit,reddit_posts,yes,b,player,H4,off-topic,a2,Play-only; H4 creator-only
+070c55295fb404dc,reddit,reddit_posts,yes,b,player,H5,off-topic,a1,Tool recommendations only; no learning
+070c55295fb404dc,reddit,reddit_posts,yes,b,player,H6,off-topic,a2,Play-only; H6 creator-only
+078d40e6d378ac49,youtube,youtube_comments,yes,b,creator,H1,off-topic,a1,Comments on mod video; no ages
+078d40e6d378ac49,youtube,youtube_comments,yes,b,creator,H2,off-topic,a1,Technical knowledge shown; not coding background
+078d40e6d378ac49,youtube,youtube_comments,yes,b,creator,H3,off-topic,a2,Creator-only; no play-only voices
+078d40e6d378ac49,youtube,youtube_comments,yes,b,creator,H4,neutral,a2,Creator technical work; no ideas pitched
+078d40e6d378ac49,youtube,youtube_comments,yes,b,creator,H5,off-topic,a1,Comments on video; not commenter's experience
+078d40e6d378ac49,youtube,youtube_comments,yes,b,creator,H6,contradicts,a2,Modding L4D2; existing game
+078df2651da97476,resetera,scrape,yes,b,both,H1,off-topic,a1,Forum about Sonic; no age data
+078df2651da97476,resetera,scrape,yes,b,both,H2,off-topic,a1,Fan games discussed; no creator background
+078df2651da97476,resetera,scrape,yes,b,both,H3,neutral,a2,Play-only wanting ports/fan games; mixed
+078df2651da97476,resetera,scrape,yes,b,both,H4,supports,a2,Creator ideas abundant; indie discussions
+078df2651da97476,resetera,scrape,yes,b,both,H5,off-topic,a1,Game design discussion; not mod creation learning
+078df2651da97476,resetera,scrape,yes,b,both,H6,neutral,a2,Original fan games and ports equally
+09a254c6713b2aec,gbatemp,scrape,yes,b,both,H1,off-topic,a1,Homebrew port project; no ages
+09a254c6713b2aec,gbatemp,scrape,yes,b,both,H2,off-topic,a1,Creator background not revealed
+09a254c6713b2aec,gbatemp,scrape,yes,b,player,H3,supports,a2,Play-only wanting ports; unmet need
+09a254c6713b2aec,gbatemp,scrape,yes,b,player,H4,off-topic,a2,Play-only; H4 creator-only
+09a254c6713b2aec,gbatemp,scrape,yes,b,both,H5,off-topic,a1,Project announcement; no learning described
+09a254c6713b2aec,gbatemp,scrape,yes,b,player,H6,off-topic,a2,Play-only; H6 creator-only
+09abaa44c4709574,resetera,scrape,yes,b,creator,H1,off-topic,a1,MCC modding documentation thread; no ages
+09abaa44c4709574,resetera,scrape,yes,b,creator,H2,off-topic,a1,Tool discussion; not personal coding background
+09abaa44c4709574,resetera,scrape,yes,b,creator,H3,off-topic,a2,Creator-only; no play-only
+09abaa44c4709574,resetera,scrape,yes,b,creator,H4,neutral,a2,Creator discussing documentation; no new ideas
+09abaa44c4709574,resetera,scrape,yes,b,creator,H5,supports,a1,Tools too hard; knowledge locked on Discord
+09abaa44c4709574,resetera,scrape,yes,b,creator,H6,contradicts,a2,Modding Halo MCC; existing game
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,New mod creator asking tools; no age
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H2,neutral,a1+lead,First-time creator; no programming background mentioned [lead: supports -> neutral; OP states no coding background; one reply mentions basic software-dev knowledge]
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator planning mods; not play-only
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H4,supports,a2,Creator has mod idea; Ghostflame incantations
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H5,supports,a1,Beginner asking what tools needed; lost
+0a78e743e5cb91cd,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,Modifying Elden Ring; existing game
+0acc66416fcc8a46,reddit,reddit_posts,yes,b,unclear,H1,off-topic,a1,Character AI community age poll; not modding/ports audience
+0acc66416fcc8a46,reddit,reddit_posts,yes,b,unclear,H2,off-topic,a1,Character AI community; not modding/ports
+0acc66416fcc8a46,reddit,reddit_posts,no,a,n/a,H3,off-topic,a2,Age demographics survey only.
+0acc66416fcc8a46,reddit,reddit_posts,no,a,n/a,H4,off-topic,a2,Age demographics survey only.
+0acc66416fcc8a46,reddit,reddit_posts,yes,b,unclear,H5,off-topic,a1,Character AI community; not modding/ports
+0acc66416fcc8a46,reddit,reddit_posts,no,a,n/a,H6,off-topic,a2,Age demographics survey only.
+0cb0a8346d063939,x,x_posts,yes,b,creator,H1,off-topic,a1,Hytale modding discussion; no ages
+0cb0a8346d063939,x,x_posts,yes,b,creator,H2,supports,a1,Explicitly self-identifies as non-programmer
+0cb0a8346d063939,x,x_posts,yes,b,creator,H3,off-topic,a2,Creator-side modding interest; not play-only
+0cb0a8346d063939,x,x_posts,yes,b,creator,H4,neutral,a2,Creator asking tool accessibility; no ideas
+0cb0a8346d063939,x,x_posts,yes,b,creator,H5,off-topic,a1,Hypothetical question; not own experience
+0cb0a8346d063939,x,x_posts,yes,b,creator,H6,contradicts,a2,Modding Hytale; existing game
+0d83dc917a139679,youtube,youtube_comments,yes,b,creator,H1,off-topic,a1,No ages mentioned.
+0d83dc917a139679,youtube,youtube_comments,yes,b,creator,H2,off-topic,a1+lead,Build errors and tool difficulty reported; steps don't reproduce for everyone. [lead: supports -> off-topic; build errors reported; own coding background not stated (H5 only)]
+0d83dc917a139679,youtube,youtube_comments,yes,b,creator,H3,off-topic,a2,Creator-side mod tutorial; no play-only voices.
+0d83dc917a139679,youtube,youtube_comments,yes,b,creator,H4,neutral,a2,Creator technical discussion; no idea/request posts.
+0d83dc917a139679,youtube,youtube_comments,yes,b,creator,H5,supports,a1,High dropout rate (72K/245K views); build and gradle errors prevent progress.
+0d83dc917a139679,youtube,youtube_comments,yes,b,creator,H6,contradicts,a2,Minecraft modding tutorial.
+0f360510f04e3155,roblox,scrape,no,a,n/a,H1,off-topic,a1-lead,blocked fetch
+0ff90b895fb7753d,hackernews,scrape,yes,b,creator,H1,off-topic,a1,Decompilation project discussion; no ages
+0ff90b895fb7753d,hackernews,scrape,yes,b,creator,H2,contradicts,a1,Technical developers; reverse engineering expertise shown
+0ff90b895fb7753d,hackernews,scrape,yes,b,both,H3,neutral,a2,Mostly decompilation; one player ROM wish
+0ff90b895fb7753d,hackernews,scrape,yes,b,both,H4,neutral,a2,Both-segment; idea mentions not dominating
+0ff90b895fb7753d,hackernews,scrape,yes,b,creator,H5,off-topic,a1,Professional technical discussion; not beginner learning
+0ff90b895fb7753d,hackernews,scrape,yes,b,both,H6,contradicts,a2,ROM hacks and mods of existing games
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H1,off-topic,a1,Mod installation forum; no ages
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H2,off-topic,a1,Player segment; not creator coding background
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H3,supports,a2,Play-only reporting unmet need; install difficulty
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H4,off-topic,a2,Play-only; H4 creator-only
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H5,off-topic,a1,Installation help; not mod creation learning
+10620d8444ddae8f,nexusmods,scrape,yes,b,player,H6,off-topic,a2,Play-only; H6 creator-only
+108588fd0ee9fd23,tiktok,tiktok_posts,yes,b,creator,H1,off-topic,a1,Voxel Playground modding tutorial; no ages
+108588fd0ee9fd23,tiktok,tiktok_posts,yes,b,creator,H2,off-topic,a1,Tutorial content; creator background not revealed
+108588fd0ee9fd23,tiktok,tiktok_posts,yes,b,both,H3,neutral,a2,Play-only feature requests; not unmet needs
+108588fd0ee9fd23,tiktok,tiktok_posts,yes,b,both,H4,supports,a2,Creator tutorial; commenters request mod ideas
+108588fd0ee9fd23,tiktok,tiktok_posts,yes,b,creator,H5,neutral,a1,Tutorial available; learners engaging but unclear effectiveness
+108588fd0ee9fd23,tiktok,tiktok_posts,yes,b,both,H6,contradicts,a2,Modifying Voxel Playground; existing game
+1374b574438f3050,rpubs,scrape,no,a,n/a,H1,off-topic,a1-lead,survey report body not rendered (embedded frame)
+13fbdf825b2c7a2d,youtube,youtube_comments,yes,b,both,H1,off-topic,a1,No ages mentioned.
+13fbdf825b2c7a2d,youtube,youtube_comments,yes,b,both,H2,off-topic,a1,Mod downloading not creation; no creator backgrounds discussed.
+13fbdf825b2c7a2d,youtube,youtube_comments,yes,b,player,H3,supports,a2,Play-only voices report unmet need: download access.
+13fbdf825b2c7a2d,youtube,youtube_comments,yes,b,player,H4,off-topic,a2,Player-side; not creator-side.
+13fbdf825b2c7a2d,youtube,youtube_comments,yes,b,both,H5,off-topic,a1,Mod downloading tutorial; not about learning to create.
+13fbdf825b2c7a2d,youtube,youtube_comments,yes,b,player,H6,off-topic,a2,Player-side; not creator-side.
+1612a3bc82721871,youtube,youtube_comments,yes,b,both,H1,off-topic,a1,No ages mentioned.
+1612a3bc82721871,youtube,youtube_comments,yes,b,both,H2,off-topic,a1,Fan games/ROM hacks discussion; no coding backgrounds revealed.
+1612a3bc82721871,youtube,youtube_comments,yes,b,player,H3,neutral,a2,Play-only voices discuss fan games; no needs stated.
+1612a3bc82721871,youtube,youtube_comments,yes,b,player,H4,off-topic,a2,Player-side; not creator-side.
+1612a3bc82721871,youtube,youtube_comments,yes,b,both,H5,neutral,a1,Difficulty mentioned but as game design challenge not tool/tutorial difficulty.
+1612a3bc82721871,youtube,youtube_comments,yes,b,player,H6,off-topic,a2,Player-side; not creator-side.
+16b21c20cf5a0b56,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Minecraft modding question post; no ages
+16b21c20cf5a0b56,reddit,reddit_posts,yes,b,creator,H2,supports,a1,Beginner asking where to start learning Minecraft mods
+16b21c20cf5a0b56,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+16b21c20cf5a0b56,reddit,reddit_posts,yes,b,creator,H4,neutral,a2,"Creator seeking guidance on learning Minecraft modding, not proposing specific ideas."
+16b21c20cf5a0b56,reddit,reddit_posts,yes,b,creator,H5,supports,a1,Beginner post lacks direction; replies show tools/learning needed
+16b21c20cf5a0b56,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,Wants to learn modding existing game (Minecraft).
+17ae7a133a282512,reddit,reddit_posts,yes,b,unclear,H1,off-topic,a1,Deltarune game community age poll; not modding/ports research
+17ae7a133a282512,reddit,reddit_posts,yes,b,unclear,H2,off-topic,a1,Game community discussion; not modding/ports
+17ae7a133a282512,reddit,reddit_posts,no,a,n/a,H3,off-topic,a2,Age demographics survey only.
+17ae7a133a282512,reddit,reddit_posts,no,a,n/a,H4,off-topic,a2,Age demographics survey only.
+17ae7a133a282512,reddit,reddit_posts,yes,b,unclear,H5,off-topic,a1,Game community discussion; not modding/ports
+17ae7a133a282512,reddit,reddit_posts,no,a,n/a,H6,off-topic,a2,Age demographics survey only.
+1b1f173d112048e5,jyu,scrape,no,a,n/a,H1,off-topic,a1-lead,PDF thesis; fetched binary not readable
+1ea68fbf4590213f,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Game modding question; no ages stated
+1ea68fbf4590213f,reddit,reddit_posts,yes,b,creator,H2,off-topic,a1+lead,Creator wanting to learn modding; lacks prior knowledge [lead: supports -> off-topic; no one states their own coding background]
+1ea68fbf4590213f,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+1ea68fbf4590213f,reddit,reddit_posts,yes,b,creator,H4,supports,a2,Creator proposing custom mod scenes for existing game.
+1ea68fbf4590213f,reddit,reddit_posts,yes,b,creator,H5,supports,a1,Tutorial failure described due to tool complexity (Ren'py knowledge)
+1ea68fbf4590213f,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,Wants to mod existing game OL:B&A.
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,b,creator,H1,off-topic,a1,Skyrim mod tutorial part 5; no ages
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,b,creator,H2,off-topic,a1,Tutorial series; creator background not shown
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,b,creator,H3,off-topic,a2,Creator tutorial; not play-only
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,b,creator,H4,neutral,a2,Creator tutorial; no new ideas pitched
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,b,creator,H5,off-topic,a1,One unclear comment; insufficient data
+1f58870d1c97f87b,tiktok,tiktok_posts,yes,b,creator,H6,contradicts,a2,Modifying Skyrim; existing game
+2230ed210c75044e,facebook,facebook_posts,yes,b,both,H1,off-topic,a1,Mod idea interface request; no ages
+2230ed210c75044e,facebook,facebook_posts,yes,b,both,H2,supports,a1,Creator lacks expertise to make mods
+2230ed210c75044e,facebook,facebook_posts,yes,b,both,H3,neutral,a2,Play-only requesting platform; not reporting need
+2230ed210c75044e,facebook,facebook_posts,yes,b,both,H4,supports,a2,Idea/request post; many mod ideas
+2230ed210c75044e,facebook,facebook_posts,yes,b,both,H5,supports,a1,Lacks resources to learn modding skills
+2230ed210c75044e,facebook,facebook_posts,yes,b,both,H6,off-topic,a2,Play-only perspective; no goal info
+27eb16402eb1c2f1,reddit,reddit_posts,yes,b,unclear,H1,off-topic,a1,Dimension 20 TTRPG community age poll; not modding/ports
+27eb16402eb1c2f1,reddit,reddit_posts,yes,b,unclear,H2,off-topic,a1,TTRPG show community; not modding/ports
+27eb16402eb1c2f1,reddit,reddit_posts,no,a,n/a,H3,off-topic,a2,Age demographics survey only.
+27eb16402eb1c2f1,reddit,reddit_posts,no,a,n/a,H4,off-topic,a2,Age demographics survey only.
+27eb16402eb1c2f1,reddit,reddit_posts,yes,b,unclear,H5,off-topic,a1,TTRPG show community; not modding/ports
+27eb16402eb1c2f1,reddit,reddit_posts,no,a,n/a,H6,off-topic,a2,Age demographics survey only.
+28f044c742f76612,tiktok,tiktok_posts,yes,b,player,H1,off-topic,a1,Red Dead Redemption port rumors; no ages
+28f044c742f76612,tiktok,tiktok_posts,yes,b,player,H2,off-topic,a1,Player interest in port; not creator background
+28f044c742f76612,tiktok,tiktok_posts,yes,e,player,H3,supports,a2,Play-only unmet need; RDR1 port 14-year want
+28f044c742f76612,tiktok,tiktok_posts,yes,e,player,H4,off-topic,a2,Play-only; H4 creator-only
+28f044c742f76612,tiktok,tiktok_posts,yes,b,player,H5,off-topic,a1,Port discussion; not mod creation learning
+28f044c742f76612,tiktok,tiktok_posts,yes,e,player,H6,off-topic,a2,Play-only; H6 creator-only
+2a2febf042cdb486,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Game development question; no ages stated
+2a2febf042cdb486,reddit,reddit_posts,yes,b,creator,H2,supports,a1,Game dev beginner states lacks experience; needs simple projects
+2a2febf042cdb486,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+2a2febf042cdb486,reddit,reddit_posts,yes,b,creator,H4,supports,a2,Creator has project in mind and seeks advice implementing it.
+2a2febf042cdb486,reddit,reddit_posts,yes,b,creator,H5,supports,a1,Beginner not knowing where to start or what scope fits
+2a2febf042cdb486,reddit,reddit_posts,yes,b,creator,H6,supports,a2,Wants to make original game they envisioned.
+2a83578fd76a60b4,reddit,reddit_posts,yes,b,both,H1,off-topic,a1,Modding question post; no ages
+2a83578fd76a60b4,reddit,reddit_posts,yes,b,both,H2,off-topic,a1+lead,"Comments reveal reverse-engineering requires senior-level skills [lead: contradicts -> off-topic; third-party claim about reverse engineers, not own background]"
+2a83578fd76a60b4,reddit,reddit_posts,yes,b,unclear,H3,off-topic,a2,Technical discussion without audience unmet need expression.
+2a83578fd76a60b4,reddit,reddit_posts,yes,b,unclear,H4,off-topic,a2,"Technical question about modding methods, no creator goals."
+2a83578fd76a60b4,reddit,reddit_posts,yes,b,both,H5,off-topic,a1,Technical discussion; not beginner learning experience
+2a83578fd76a60b4,reddit,reddit_posts,yes,b,unclear,H6,off-topic,a2,Technical discussion without creator goal direction.
+3026ab37a91f2df0,reddit,reddit_posts,yes,b,both,H1,off-topic,a1,Skyrim modding discussion; no ages
+3026ab37a91f2df0,reddit,reddit_posts,yes,b,both,H2,off-topic,a1+lead,"Modders discuss technical expertise; full-scale projects, deep skills [lead: contradicts -> off-topic; general remark on modder skill, no own background]"
+3026ab37a91f2df0,reddit,reddit_posts,yes,b,both,H3,off-topic,a2,Creator-side record with no play-only voices.
+3026ab37a91f2df0,reddit,reddit_posts,yes,b,both,H4,neutral,a2,"Creators discuss mod requests; mixed views, some fulfill, some decline."
+3026ab37a91f2df0,reddit,reddit_posts,yes,b,both,H5,off-topic,a1,Experienced modders advising; not beginner learning experience
+3026ab37a91f2df0,reddit,reddit_posts,yes,b,both,H6,contradicts,a2,"Discussion of modding existing games (Skyrim, etc.)."
+3392d81b050349bc,tiktok,tiktok_comments,yes,b,both,H1,off-topic,a1,No self-stated ages; zodiac references not numerical ages.
+3392d81b050349bc,tiktok,tiktok_comments,yes,b,both,H2,off-topic,a1,Game dev interest mentioned; no creator backgrounds revealed.
+3392d81b050349bc,tiktok,tiktok_comments,yes,b,creator,H3,off-topic,a2,Creator-side game dev interest; no play-only voices.
+3392d81b050349bc,tiktok,tiktok_comments,yes,b,creator,H4,supports,a2,Creators express game ideas.
+3392d81b050349bc,tiktok,tiktok_comments,yes,b,both,H5,neutral,a1,School and interest in game design noted; specific learning experience not described.
+3392d81b050349bc,tiktok,tiktok_comments,yes,b,creator,H6,supports,a2,Focus on creating original games.
+3b3174868016307e,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Game dev discussion; no ages
+3b3174868016307e,reddit,reddit_posts,yes,b,creator,H2,contradicts,a1,OP has strong programming background; comments discuss skilled developers
+3b3174868016307e,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+3b3174868016307e,reddit,reddit_posts,yes,b,creator,H4,off-topic,a2,"Creator seeking advice on learning path, not expressing ideas."
+3b3174868016307e,reddit,reddit_posts,yes,b,creator,H5,off-topic,a1,Not about learning experience or difficulty barriers
+3b3174868016307e,reddit,reddit_posts,yes,b,creator,H6,neutral,a2,Balanced discussion of modding existing vs making original games.
+3e69f78fffedef0f,youtube,youtube_comments,yes,b,creator,H1,off-topic,a1,No ages mentioned.
+3e69f78fffedef0f,youtube,youtube_comments,yes,b,creator,H2,off-topic,a1+lead,"File installation and Java version confusion; reveals lack of prior experience. [lead: supports -> off-topic; commenters install mods (players), not creators]"
+3e69f78fffedef0f,youtube,youtube_comments,yes,b,player,H3,supports,a2,Play-only voices report unmet need: mod installation.
+3e69f78fffedef0f,youtube,youtube_comments,yes,b,player,H4,off-topic,a2,Player-side; not creator-side.
+3e69f78fffedef0f,youtube,youtube_comments,yes,b,creator,H5,supports,a1,Beginners stuck on basic operations; tools too hard; multiple report unable to proceed.
+3e69f78fffedef0f,youtube,youtube_comments,yes,b,player,H6,off-topic,a2,Player-side; not creator-side.
+443ecd7177ccce1b,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Beginner modding question; no ages
+443ecd7177ccce1b,reddit,reddit_posts,yes,b,creator,H2,off-topic,a1+lead,"Beginner wanting to start modding; long-time modders respond [lead: supports -> off-topic; OP states art skill only, not coding background]"
+443ecd7177ccce1b,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+443ecd7177ccce1b,reddit,reddit_posts,yes,b,creator,H4,off-topic,a2,Creator seeking guidance on which game to mod.
+443ecd7177ccce1b,reddit,reddit_posts,yes,b,creator,H5,supports,a1,Beginner not knowing where to start; multiple tool suggestions needed
+443ecd7177ccce1b,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,All suggestions focus on modding existing games.
+4514276e559fcd97,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Beginner modding learner; no ages
+4514276e559fcd97,reddit,reddit_posts,yes,b,creator,H2,supports,a1,OP wants to learn modding; seeks direct teaching due to lack of skill
+4514276e559fcd97,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+4514276e559fcd97,reddit,reddit_posts,yes,b,creator,H4,neutral,a2,"Creator wants to learn modding, seeking resources/tutoring."
+4514276e559fcd97,reddit,reddit_posts,yes,b,creator,H5,supports,a1,OP says tutorials blotchy/insufficient; seeking structured teaching
+4514276e559fcd97,reddit,reddit_posts,yes,b,creator,H6,off-topic,a2,No readable goal between original vs existing games.
+46d3ff623db2fc15,reddit,reddit_posts,yes,b,player,H1,off-topic,a1,Mod player discussion; no ages
+46d3ff623db2fc15,reddit,reddit_posts,yes,b,player,H2,off-topic,a1,Player-side only; not creation discussion
+46d3ff623db2fc15,reddit,reddit_posts,yes,b,player,H3,contradicts,a2,Play-only person well-served by vanilla+ mods meeting enhancement needs.
+46d3ff623db2fc15,reddit,reddit_posts,yes,b,player,H4,off-topic,a2,"Play-only record, no creator-side data."
+46d3ff623db2fc15,reddit,reddit_posts,yes,b,player,H5,off-topic,a1,Player-side discussion; not learning to create
+46d3ff623db2fc15,reddit,reddit_posts,yes,b,player,H6,off-topic,a2,"Play-only record, no creator-side data."
+47a3d80527865a96,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Modding techniques question; no ages
+47a3d80527865a96,reddit,reddit_posts,yes,b,creator,H2,off-topic,a1+lead,OP revealing lack of modding technical knowledge [lead: supports -> off-topic; curious asker; own coding background not stated]
+47a3d80527865a96,reddit,reddit_posts,yes,b,unclear,H3,off-topic,a2,Technical discussion without play-only audience needs.
+47a3d80527865a96,reddit,reddit_posts,yes,b,unclear,H4,off-topic,a2,"Technical question about modding methods, no creator goals."
+47a3d80527865a96,reddit,reddit_posts,yes,b,creator,H5,off-topic,a1,Technical question; not beginner describing own experience
+47a3d80527865a96,reddit,reddit_posts,yes,b,unclear,H6,off-topic,a2,Technical discussion without creator goal direction.
+490129b0503d6494,reddit,reddit_posts,yes,b,creator,H1,neutral,a1,One commenter age 15-16 (past); too few data points
+490129b0503d6494,reddit,reddit_posts,yes,b,creator,H2,neutral,a1+lead,"Multiple commenters describe starting modding with no background [lead: supports -> neutral; OP background not stated; commenters mixed (school computing, art)]"
+490129b0503d6494,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+490129b0503d6494,reddit,reddit_posts,yes,b,creator,H4,off-topic,a2,"Creator seeking advice on learning path, not expressing ideas."
+490129b0503d6494,reddit,reddit_posts,yes,b,creator,H5,supports,a1,Multiple beginners describe starting/learning modding; mixed outcomes
+490129b0503d6494,reddit,reddit_posts,yes,b,creator,H6,neutral,a2,Balanced discussion of modding existing vs making original games.
+49ad882f9d7cff41,tiktok,tiktok_comments,no,b,n/a,H1,off-topic,lead,crawl returned video-unavailable error; no comments
+49ad882f9d7cff41,tiktok,tiktok_comments,no,b,n/a,H2,off-topic,lead,crawl returned video-unavailable error; no comments
+49ad882f9d7cff41,tiktok,tiktok_comments,no,b,n/a,H3,off-topic,lead,crawl returned video-unavailable error; no comments
+49ad882f9d7cff41,tiktok,tiktok_comments,no,b,n/a,H4,off-topic,lead,crawl returned video-unavailable error; no comments
+49ad882f9d7cff41,tiktok,tiktok_comments,no,b,n/a,H5,off-topic,lead,crawl returned video-unavailable error; no comments
+49ad882f9d7cff41,tiktok,tiktok_comments,no,b,n/a,H6,off-topic,lead,crawl returned video-unavailable error; no comments
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H1,off-topic,a1,Mod dependency complaints; no ages
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H2,off-topic,a1,Player frustration; not creator coding background
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H3,supports,a2,Play-only reporting unmet need; mod install complexity
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H4,off-topic,a2,Play-only; H4 creator-only
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H5,off-topic,a1,Installation issues; not mod creation learning
+4db1663d80f6b811,facebook,facebook_posts,yes,b,player,H6,off-topic,a2,Play-only; H6 creator-only
+4f9d55a86746921f,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Zero programming knowledge question; no ages
+4f9d55a86746921f,reddit,reddit_posts,yes,b,creator,H2,supports,a1,OP explicitly states zero programming knowledge
+4f9d55a86746921f,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+4f9d55a86746921f,reddit,reddit_posts,yes,b,creator,H4,supports,a2,"Creator proposes specific mod ideas: difficulty tweaks, boss changes, mechanics."
+4f9d55a86746921f,reddit,reddit_posts,yes,b,creator,H5,supports,a1,OP anticipates difficulty; comments note tools/knowledge barriers
+4f9d55a86746921f,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,Wants to modify existing soulsborne and action RPG games.
+50318cc6beac282e,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,Modding difficulty post; no ages
+50318cc6beac282e,reddit,reddit_posts,yes,b,creator,H2,contradicts,a1,OP is programming student with coding knowledge
+50318cc6beac282e,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-only record with no play-only voices.
+50318cc6beac282e,reddit,reddit_posts,yes,b,creator,H4,off-topic,a2,"Creator comparing difficulty of modding vs game dev, not expressing ideas."
+50318cc6beac282e,reddit,reddit_posts,yes,b,creator,H5,supports,a1,OP finds modding too difficult; overwhelming learning barrier despite coding skill
+50318cc6beac282e,reddit,reddit_posts,yes,b,creator,H6,neutral,a2,Balanced discussion comparing modding existing vs making original games.
+509f58eea695e578,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,No ages mentioned.
+509f58eea695e578,reddit,reddit_posts,yes,b,creator,H2,supports,a1,Multiple commenters confirm starting mod dev with no coding knowledge.
+509f58eea695e578,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-side modding learning; no play-only voices.
+509f58eea695e578,reddit,reddit_posts,yes,b,creator,H4,neutral,a2,Creator discussion of modding; no idea/request posts.
+509f58eea695e578,reddit,reddit_posts,yes,b,creator,H5,supports,a1,Absolute beginner asks how much knowledge needed; tutorials and learning paths provided.
+509f58eea695e578,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,Modding existing game (Minecraft).
+524d71738a9e4987,reddit,reddit_posts,yes,b,both,H1,off-topic,a1,No ages mentioned.
+524d71738a9e4987,reddit,reddit_posts,yes,b,both,H2,off-topic,a1,Discussion of game types for beginners; creators' backgrounds not revealed.
+524d71738a9e4987,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-side game dev; no play-only voices.
+524d71738a9e4987,reddit,reddit_posts,yes,b,creator,H4,supports,a2,Main post requests ideas for starter game types.
+524d71738a9e4987,reddit,reddit_posts,yes,b,both,H5,neutral,a1,Suggests easiest games but no specific beginner learning experience described.
+524d71738a9e4987,reddit,reddit_posts,yes,b,creator,H6,supports,a2,Asker wants to make original games.
+5570d611f6a85f23,reddit,reddit_posts,yes,b,both,H1,off-topic,a1+lead,"Age survey in modding community; 10 stated ages all outside 15-21 range. [lead: contradicts -> off-topic; population is wristwatch modding, not games]"
+5570d611f6a85f23,reddit,reddit_posts,yes,b,both,H2,off-topic,a1,Watch modding context; coding experience not discussed.
+5570d611f6a85f23,reddit,reddit_posts,yes,b,n/a,H3,off-topic,a2,Off-scope: watch modding not game modding.
+5570d611f6a85f23,reddit,reddit_posts,yes,b,n/a,H4,off-topic,a2,Off-scope: watch modding not game modding.
+5570d611f6a85f23,reddit,reddit_posts,yes,b,both,H5,off-topic,a1,Watch modding; learning curve for software modding not addressed.
+5570d611f6a85f23,reddit,reddit_posts,yes,b,n/a,H6,off-topic,a2,Off-scope: watch modding not game modding.
+5a5003a5020d0a7a,reddit,reddit_posts,yes,b,both,H1,neutral,a1,One self-stated age in 15-21 range; insufficient data for population claim.
+5a5003a5020d0a7a,reddit,reddit_posts,yes,b,both,H2,off-topic,a1,No creator in comments reveals own coding background.
+5a5003a5020d0a7a,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-side game concepts; no play-only voices.
+5a5003a5020d0a7a,reddit,reddit_posts,yes,b,creator,H4,supports,a2,Many creator idea/request posts for game concepts.
+5a5003a5020d0a7a,reddit,reddit_posts,yes,b,both,H5,off-topic,a1,High school student wants to make game; no beginner learning experience shared.
+5a5003a5020d0a7a,reddit,reddit_posts,yes,b,creator,H6,supports,a2,Asker and commenters want original games.
+60f4afe69ba95d36,acm,scrape,yes,a,creator,H1,off-topic,a1-lead,survey of 68 women modders; fetched text gives no age figure
+620cf858ae5f7bfe,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,No ages mentioned.
+620cf858ae5f7bfe,reddit,reddit_posts,yes,b,creator,H2,contradicts,a1,OP completed second year CS undergrad; has formal programming training.
+620cf858ae5f7bfe,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-side modding; no play-only voices.
+620cf858ae5f7bfe,reddit,reddit_posts,yes,b,creator,H4,neutral,a2,Creator discussion; no idea/request dominance.
+620cf858ae5f7bfe,reddit,reddit_posts,yes,b,creator,H5,off-topic,a1,Experienced programmer inquires about modding; not beginner learning curve.
+620cf858ae5f7bfe,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,Modding existing games for portfolio.
+67cf2513bd5a7011,scottishgames,scrape,yes,a,n/a,H1,off-topic,a1-lead,adjacent population: GameMaker new users aged 13-21 grew after free tier
+6bbceb411a84ed90,nexusmods,scrape,yes,a,player,H1,neutral,a1-lead,"2015 site survey, 25k+ answers: 22% up to 17, 40% 18-24; median bracket straddles 21"
+87465a2a0d0e3051,reddit,reddit_posts,yes,b,both,H1,off-topic,a1,No ages mentioned.
+87465a2a0d0e3051,reddit,reddit_posts,yes,b,both,H2,off-topic,a1,Mod request thread; mostly play-only voices; no creator backgrounds revealed.
+87465a2a0d0e3051,reddit,reddit_posts,yes,b,both,H3,supports,a2,Play-only voices request unmet mods.
+87465a2a0d0e3051,reddit,reddit_posts,yes,b,both,H4,supports,a2,20+ idea/request posts for mods.
+87465a2a0d0e3051,reddit,reddit_posts,yes,b,both,H5,off-topic,a1,Mod request discussion; not about learning curve for creators.
+87465a2a0d0e3051,reddit,reddit_posts,yes,b,both,H6,contradicts,a2,All requests for modding existing (Starfield).
+8898314032da4c8b,theesa,scrape,yes,a,n/a,H1,off-topic,a1-lead,adjacent population (US players): average player 37; cannot test H1
+8ac9b2616359fab9,reddit,reddit_posts,yes,b,creator,H1,off-topic,a1,No ages mentioned.
+8ac9b2616359fab9,reddit,reddit_posts,yes,b,creator,H2,off-topic,a1,Creator requests mod idea; own coding background not revealed.
+8ac9b2616359fab9,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-side mod idea; no play-only voices.
+8ac9b2616359fab9,reddit,reddit_posts,yes,b,creator,H4,supports,a2,Poster has mod idea/request.
+8ac9b2616359fab9,reddit,reddit_posts,yes,b,creator,H5,off-topic,a1,Mod request/idea; learning curve not discussed.
+8ac9b2616359fab9,reddit,reddit_posts,yes,b,creator,H6,contradicts,a2,Wants to mod existing (RimWorld).
+910e4fb685ff1bbb,scratch,scrape,yes,a,n/a,H1,off-topic,a1-lead,adjacent population; age chart not rendered in fetched page
+99d9bd252651e58c,similarweb,scrape,yes,a,player,H1,neutral,a1-lead,"modelled traffic estimate: largest visitor group 18-24; not a survey, context only"
+b0d4b719b059d1ad,reddit,reddit_posts,yes,b,player,H1,off-topic,a1,No ages mentioned.
+b0d4b719b059d1ad,reddit,reddit_posts,yes,b,player,H2,off-topic,a1,Play-only perspective; creator-side coding background not relevant.
+b0d4b719b059d1ad,reddit,reddit_posts,yes,b,player,H3,neutral,a2+lead,Play-only voice prefers vanilla; mods as problem. [lead: contradicts -> neutral; author dislikes mods; not a play-only mod user]
+b0d4b719b059d1ad,reddit,reddit_posts,yes,b,player,H4,off-topic,a2,Player-side; not creator-side.
+b0d4b719b059d1ad,reddit,reddit_posts,yes,b,player,H5,off-topic,a1,Play-only voice; learning curve for creators not addressed.
+b0d4b719b059d1ad,reddit,reddit_posts,yes,b,player,H6,off-topic,a2,Player-side; not creator-side.
+b11c8ef41adefde5,reddit,reddit_posts,yes,b,both,H1,off-topic,a1,No ages mentioned.
+b11c8ef41adefde5,reddit,reddit_posts,yes,b,both,H2,supports,a1+lead,OP has no experience; majority of commenters discuss modding vs game dev without revealing own backgrounds. [lead: neutral -> supports; OP says they have not yet learned coding]
+b11c8ef41adefde5,reddit,reddit_posts,yes,b,creator,H3,off-topic,a2,Creator-side discussion; no play-only voices.
+b11c8ef41adefde5,reddit,reddit_posts,yes,b,creator,H4,neutral,a2,Creator discussion; no idea/no-idea dominance.
+b11c8ef41adefde5,reddit,reddit_posts,yes,b,both,H5,supports,a1,OP explicitly describes not knowing where to start; comments discuss learning difficulty.
+b11c8ef41adefde5,reddit,reddit_posts,yes,b,creator,H6,neutral,a2,Both modding and original games discussed equally.
+c121bb5cb8cb5b50,acm,scrape,yes,a,creator,H1,contradicts,a1-lead,2023 survey of 483 adult mod makers: mean age 28.5; under-18s excluded by design
+ce381c28a9d8c757,reddit,reddit_posts,yes,b,both,H1,off-topic,a1,No ages mentioned.
+ce381c28a9d8c757,reddit,reddit_posts,yes,b,both,H2,off-topic,a1,Game criticism discussion; creator coding backgrounds not revealed.
+ce381c28a9d8c757,reddit,reddit_posts,yes,b,player,H3,supports,a2,Play-only voice wants vanilla fixes not mods.
+ce381c28a9d8c757,reddit,reddit_posts,yes,b,player,H4,off-topic,a2,Player-side; not creator-side.
+ce381c28a9d8c757,reddit,reddit_posts,yes,b,both,H5,off-topic,a1,Game criticism debate; not about learning curve.
+ce381c28a9d8c757,reddit,reddit_posts,yes,b,player,H6,off-topic,a2,Player-side; not creator-side.
+d853624cedbcb9b4,researchgate,scrape,yes,a,n/a,H1,off-topic,a1-lead,mod popularity case study; no audience age data
+dfff1583e86f890f,uvt,scrape,no,a,n/a,H1,off-topic,a1-lead,PDF thesis; fetched binary not readable
+ecb41e2ce2cd469d,roblox,scrape,no,a,n/a,H1,off-topic,a1-lead,blocked fetch
+f4218f243263f508,godotengine,scrape,yes,a,n/a,H1,off-topic,a1-lead,adjacent population; poll results only behind an external link
+f8c0add2bac4a091,unc,scrape,no,a,n/a,H1,off-topic,a1-lead,PDF study; fetched binary not readable
