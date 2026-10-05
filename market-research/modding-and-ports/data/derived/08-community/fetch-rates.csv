@@ -1,0 +1,7 @@
+method,items,attempts,ok,okWithRecords,failed,failedByClass,coded,usable,okRate,usableRate
+reddit_posts,16,16,16,16,0,,16,16,1.000,1.000
+scrape,20,20,19,19,1,brd_error:1,10,6,0.950,0.300
+tiktok_posts,4,4,4,4,0,,4,4,1.000,1.000
+x_posts,8,8,8,8,0,,8,8,1.000,1.000
+youtube_videos,8,8,8,8,0,,8,8,1.000,1.000
+all,56,56,55,55,1,brd_error:1,46,42,0.982,0.750

@@ -1,6 +1,7 @@
 # Research Roadmap — Modding, Fan Games And Ports
 
-Status: planned. No research has been run.
+Status: phases 1–10 complete (Phase 10 finished 2026-10-04); Phase 11 not
+started.
 Created: 2026-10-02.
 Canonical tracker: the app's Project Notes Roadmap (phases drafted for owner
 approval). This file mirrors it so the research folder is self-contained.
@@ -215,6 +216,10 @@ A phase is done only when **all** of these hold:
   `crunchbase_company` for competitor funding and scale.
 - **Team (3):** 1 Collector. 1 Analyst (the model). 1 Verifier (checks every
   input against its source and date).
+- **Status:** complete, 2026-10-04 (`09-market-sizing.md`). De-duplicated
+  base TAM about $9.1M a year, SOM about $32k (low $1.9k, high $2.4M).
+  Spend $0.21 against a $0.20 allowance (billing lag; owner-approved
+  settlement); $0.27 left in `phases-09-11`.
 
 ### Phase 10 — Personas and positioning
 
@@ -224,6 +229,15 @@ A phase is done only when **all** of these hold:
   `search` for verbatim language the earlier phases did not capture.
 - **Team (4):** 1 Collector (gap-fill). 1 Analyst (personas and positioning).
   1 Disconfirmer (red-teams the positioning). 1 Verifier.
+- **Status:** complete, 2026-10-04 (`10-personas-and-positioning.md`). Three
+  personas built (mod player, beginner creator, PC-port player); fan-game
+  segment not built (13 records). H10 Partially supported on both sides; H11
+  Partially supported overall, Unproven per side. Play hub vs creator tools:
+  the evidence does not choose. "Democratizing": the idea fits, the word
+  does not, and Nexus Mods already says "for everyone". Owner raised caps by
+  $0.15 (study $6.19, `phases-09-11` $0.63). Spend $0.215 booked (about
+  $0.225 with meter lag) against a $0.24 allowance; about $0.20 left for
+  Phase 11.
 
 ### Phase 11 — Evidence audit and synthesis
 

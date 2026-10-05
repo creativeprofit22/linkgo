@@ -19,12 +19,12 @@ const NOV = new Date("2026-11-02T00:00:00Z");
 function makeLedger(entries = []) {
   return {
     version: 1,
-    studyCapUsd: 5,
+    studyCapUsd: 5.38,
     zoneBaseline: { month: "2026-10", totalUsd: 0 },
     groups: [
       { id: "phase-01", phases: [1], capUsd: 0.15 },
       { id: "phase-02", phases: [2], capUsd: 1.94 },
-      { id: "phases-03-08", phases: [3, 4, 5, 6, 7, 8], capUsd: 2.43 },
+      { id: "phases-03-08", phases: [3, 4, 5, 6, 7, 8], capUsd: 2.81 },
       { id: "phases-09-11", phases: [9, 10, 11], capUsd: 0.48 },
     ],
     entries,
@@ -50,12 +50,24 @@ function tempLedger(ledger) {
 }
 
 describe("spend ledger", () => {
-  test("the committed study ledger is valid and adds up to $5", () => {
+  test("the committed study ledger is valid and adds up to $6.19", () => {
+    // Owner decision 2026-10-03: study cap $5 -> $5.38, phases 3-8 $2.43 -> $2.81.
+    // Lead bumps under the owner's small-bump approval (Phase 7): +$0.12, +$0.04.
+    // Owner decision (Phase 8 allowance $0.60): +$0.50.
+    // Owner decision 2026-10-04 (Phase 10 plan): phases 9-11 $0.48 -> $0.63.
     const file = new URL("../../data/spend-ledger.json", import.meta.url);
     const ledger = validateLedger(JSON.parse(fs.readFileSync(file, "utf8")));
     const caps = ledger.groups.reduce((s, g) => s + g.capUsd, 0);
-    assert.ok(Math.abs(caps - 5) < 1e-9);
-    assert.equal(ledger.studyCapUsd, 5);
+    assert.ok(Math.abs(caps - 6.19) < 1e-9);
+    assert.equal(ledger.studyCapUsd, 6.19);
+    assert.equal(
+      ledger.groups.find((g) => g.id === "phases-03-08").capUsd,
+      3.47,
+    );
+    assert.equal(
+      ledger.groups.find((g) => g.id === "phases-09-11").capUsd,
+      0.63,
+    );
   });
 
   test("the committed ledger is exactly what the writer produces", () => {
@@ -90,8 +102,8 @@ describe("spend ledger", () => {
     assert.equal(rem.remaining, 1.94);
     // Zone spend elsewhere eats the study total, not the group's.
     const late = computeRemaining(ledger, "02-public-web", 4.0, OCT);
-    assert.equal(late.studyRemaining, 0.905);
-    assert.equal(late.remaining, 0.905);
+    assert.equal(late.studyRemaining, 1.285); // 5.38 - (4.0 zone + 0.095)
+    assert.equal(late.remaining, 1.285);
   });
 
   test("unreadable zone cost fails closed", () => {

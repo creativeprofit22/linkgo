@@ -1,0 +1,44 @@
+recordId,method,platform,usable,onTopic,projects,source_games,original_platform,side,demand_type,served,h8,quote
+035fbe751fa2e89d,reddit_posts,reddit,yes,no,,,,,,,,
+072460df43954447,reddit_posts,reddit,yes,yes,,Grand Theft Auto: Liberty City Stories,PS2,player,request,partly,supports,is there a PC port of this game and if so how do you get it to work on windows 10?
+0beeb89496403564,reddit_posts,reddit,yes,no,,,,,,,,
+136842f0246ef1b7,reddit_posts,reddit,yes,yes,,Magic Survival,mobile,player,request,unmet,supports,This game would be so good on PC and controlled with a pointer and mouse.
+14007615a97cc9e9,reddit_posts,reddit,yes,no,,,,,,,,
+14f54070315db5b0,reddit_posts,reddit,yes,no,,,,,,,,
+15b0ba8b4f86d13e,reddit_posts,reddit,yes,yes,Paperboat,Paper Mario 64; Paper Mario: The Thousand-Year Door; Super Paper Mario; Paper Mario: Sticker Star,N64; GameCube; Wii,player,use-praise,partly,supports,"native PC ports are amazing, better than emulators for a few reasons"
+19232e6492bf0c0a,reddit_posts,reddit,yes,yes,,Mario 64; Sonic 1; Sonic 2; Zelda 64,N64; Genesis,player,news,unclear,supports,I've seen this term used when referring to old games like Mario 64 or Sonic 1 and 2
+199fdd11cc9a6c82,reddit_posts,reddit,yes,no,,,,,,,,
+231d7a480e3cdd49,reddit_posts,reddit,yes,yes,,Occidental Heroes,mobile,player,request,unmet,supports,"I wish there was a PC port so we, fans, could play it on PC."
+23af56635eb15487,reddit_posts,reddit,yes,no,,,,,,,,
+2ad29ecf3e12b07d,reddit_posts,reddit,yes,no,,,,,,,,
+2ca825b8577ad2da,reddit_posts,reddit,yes,no,,,,,,,,
+31796178e41755a4,reddit_posts,reddit,yes,yes,silent-hill-decomp,Silent Hill,PS1,both,news,fully,supports,Silent Hill PC Port Just Got Better!
+32f5ebf9fe7918f6,reddit_posts,reddit,yes,yes,,Mario Kart 64; Sonic Unleashed,N64; Xbox 360,player,other,unclear,supports,Why some unofficial PC ports are called decompilition like Mario kart 64 port and some are recompilitions
+3380497ae8ade0c0,reddit_posts,reddit,yes,yes,,Sonic Unleashed,Xbox 360,player,other,fully,supports,Would be awesome to see more Sonic games ported to PC that aren't on the 360.
+33d48417a600914d,reddit_posts,reddit,yes,no,,,,,,,,
+391891b9c390989a,reddit_posts,reddit,yes,yes,chipdx,Chip's Challenge,DOS,developer,use-praise,fully,supports,I built a Chip's Challenge remake in Rust using OpenGL
+4af7d93015833230,reddit_posts,reddit,yes,no,,,,,,,,
+5bf4d5ca5236c6e8,reddit_posts,reddit,yes,no,,,,,,,,
+631df141563b433a,reddit_posts,reddit,yes,no,,,,,,,,
+d0cad98df7416176,reddit_posts,reddit,yes,no,,,,,,,,
+08bc9b34c51e47f4,scrape,forum,yes,no,,,PC,unclear,other,unclear,off-topic,
+095d385db9c45035,scrape,forum,yes,yes,Banjo-Kazooie recompilation project; Super Mario 64 PC port; Jak 3 PC port; Zelda decompilation; Donkey Kong 64 recomp,Banjo-Kazooie; Super Mario 64; Jak 3; The Legend of Zelda: Twilight Princess; Donkey Kong 64,Nintendo 64; PlayStation; Wii,player,use-praise,fully,supports,Stop n Swop will finally be real and it only took 26 years!
+35bada1381424968,scrape,forum,yes,no,,,,,other,unclear,off-topic,
+53fd308d35e06610,scrape,forum,yes,no,,,,,other,unclear,off-topic,
+5ccff46bbb94d79b,scrape,forum,yes,yes,Majora's Mask decompilation; ZeldaRET,The Legend of Zelda: Majora's Mask,Nintendo 64,player,news,partly,supports,Another milestone in N64 decompilation project has been reached today
+8bc8422747d6ac9d,scrape,forum,no,no,,,,,,,off-topic,
+00e6225e93ef842a,youtube_videos,youtube,yes,yes,N64 Recomp Launcher; various N64 recomps and PC ports,Multiple N64 games,Nintendo 64; Xbox 360,player,use-praise; install-help,fully,supports,"N64 decomp, recomp, and PC ports, as well as other systems recomp and PC ports have been blowing up"
+02ad53538a37ae7f,youtube_videos,youtube,yes,yes,MetaHook; Half-Life: Source; Black Mesa; Xash3D; FreeHL,Half-Life,PC,player,use-praise; critique,fully,supports,This video is my take on some of the source ports
+03163c278683c242,youtube_videos,youtube,yes,yes,Gears of War 2 Hollow,Gears of War 2,Xbox 360,player,use-praise,fully,supports,Gears of War 2 is finally playable natively on PC without the heavy hardware demands of emulation!
+04cca45727676965,youtube_videos,youtube,yes,yes,Multiple N64 recomps and PC ports,Multiple N64 games,Nintendo 64,player,use-praise,fully,supports,"every single game you're watching in this video, you can play on your PC today"
+05e05cef30a23d52,youtube_videos,youtube,yes,yes,BanjoRecomp,Banjo-Kazooie,Nintendo 64,player,install-help; use-praise,fully,supports,one of these modern uh recompiled PC ports with HD textures
+0b8ac56493f21b03,youtube_videos,youtube,yes,no,,,,,other,unclear,off-topic,
+36f4bea96d7b5ac2,youtube_videos,youtube,yes,yes,Animal Crossing PC Port; ACRE team decompilation,Animal Crossing,GameCube,player,use-praise,fully,supports,the first native PC port of a GameCube game
+63f319263474c5f6,scrape,news,yes,yes,Super Mario Galaxy decompilation,Super Mario Galaxy,Wii,unclear,news,partly,supports,The process essentially involves taking a game's code and reverse-engineering it
+72e3339965498846,scrape,news,yes,no,,,,,other,unclear,off-topic,
+ae793cc449d35e2b,scrape,news,yes,yes,IW4L; MinecraftOSS,Modern Warfare 2; Minecraft; Skate 3,Xbox 360; PC,developer,news,fully,supports,"the mashup runs on IW4L, which is a Rust rewrite of Modern Warfare 2"
+ece8c17b97d48cb5,scrape,news,yes,yes,The World is Not Enough PC port,The World is Not Enough; 007: Nightfire,Nintendo 64,developer,news,partly,supports,recompiled port of The World is Not Enough for the PC platform
+2e672c3ef277a127,scrape,forum,yes,no,,,,,,,off-topic,
+3f047b6322206559,scrape,forum,yes,no,,,,,,,off-topic,
+d70d1324193e1526,scrape,forum,yes,no,,,,,,,off-topic,
+ff3b72d84eca5493,scrape,forum,yes,yes,,,,player,other,unclear,neutral,Classics remastered by fans when it's too niche for publishers

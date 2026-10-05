@@ -1,0 +1,143 @@
+{
+  "cases": [
+    {
+      "queryId": "p7-e01",
+      "recordId": "68cce252e20179d2"
+    },
+    {
+      "queryId": "p7-e02",
+      "recordId": "2c3cd5ca86f98f3d"
+    },
+    {
+      "queryId": "p7-e03",
+      "recordId": "80711dcddb62a49e"
+    },
+    {
+      "queryId": "p7-e04",
+      "recordId": "196cf9f8389d96e0"
+    },
+    {
+      "queryId": "p7-e05",
+      "recordId": "f2a64f7161d73685"
+    },
+    {
+      "queryId": "p7-e06",
+      "recordId": "18a57f6d119a0f82"
+    },
+    {
+      "queryId": "p7-e07",
+      "recordId": "a58a1f1f8fc8ea57"
+    },
+    {
+      "queryId": "p7-e08",
+      "recordId": "54806c6b0d429b72"
+    },
+    {
+      "queryId": "p7-e09",
+      "recordId": "734dd38504ddfd55"
+    },
+    {
+      "queryId": "p7-e10",
+      "recordId": null
+    },
+    {
+      "queryId": "p7-e11",
+      "recordId": "8e130523443280d3"
+    },
+    {
+      "queryId": "p7-e12",
+      "recordId": "014f390004d2083e"
+    },
+    {
+      "queryId": "p7-e13",
+      "recordId": "c8fcd2a6d761c522"
+    },
+    {
+      "queryId": "p7-e14",
+      "recordId": "82aba94448a4b17d"
+    },
+    {
+      "queryId": "p7-e15",
+      "recordId": "fa3cddcb9075d5e7"
+    },
+    {
+      "queryId": "p7-e16",
+      "recordId": "4863180cf5c7e5c6"
+    },
+    {
+      "queryId": "p7-e17",
+      "recordId": "995942354488a876"
+    },
+    {
+      "queryId": "p7-e18",
+      "recordId": "1663b3e03bd68d1e"
+    },
+    {
+      "queryId": "p7-e19",
+      "recordId": "05237f289593c500"
+    },
+    {
+      "queryId": "p7-e20",
+      "recordId": "0b2763b8d527bc12"
+    }
+  ],
+  "revival": {
+    "eligible": 43,
+    "quota": 16,
+    "selected": 16,
+    "selectedByQuery": {
+      "p7-v01": 2,
+      "p7-v02": 2,
+      "p7-v03": 2,
+      "p7-v04": 2,
+      "p7-v05": 2,
+      "p7-v06": 2,
+      "p7-v07": 2,
+      "p7-v08": 2
+    },
+    "recordIds": [
+      "201bab2578ab7987",
+      "0099baec2b8ec2e1",
+      "0533b150250882fb",
+      "1c733ae032ba99a9",
+      "525bd1faa020035e",
+      "043ea57c177e5389",
+      "1f641ade31e0d82e",
+      "3314f4b92e6bc35e",
+      "78c1e57bd3675016",
+      "00d5b1f3aea41943",
+      "18db8183f4545950",
+      "2009fcac525b6c09",
+      "82129e8163dc5786",
+      "18a9406614ab47f0",
+      "218e3485cabf566e",
+      "73428b8c3af5657a"
+    ]
+  },
+  "disconfirm": [
+    {
+      "queryId": "p7-d01",
+      "recordId": "826fa3ec63ca6e8b"
+    },
+    {
+      "queryId": "p7-d02",
+      "recordId": "1bb4724a1abe43c7"
+    },
+    {
+      "queryId": "p7-d03",
+      "recordId": "189afd67aac6d52a"
+    },
+    {
+      "queryId": "p7-d04",
+      "recordId": "913eeb4f2dc52982"
+    },
+    {
+      "queryId": "p7-d05",
+      "recordId": "45b97690eb176556"
+    },
+    {
+      "queryId": "p7-d06",
+      "recordId": "542dd41eaa48b067"
+    }
+  ]
+}

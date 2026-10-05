@@ -1,0 +1,197 @@
+{
+  "frozen": "2026-10-03 01-research-protocol.md section 10, Phase 7 addendum item 4, before any Phase 7 request. One lookup query per policy (p7-l*, in phase7-queries.json); the first result on a listed official domain is scraped. No URL is guessed; a policy with no official result is logged 'not found'. Hub terms captured in Phase 4 are cited from 04-mod-hub-competitors.md, not re-collected.",
+  "policies": [
+    {
+      "id": "microsoft-gcur",
+      "kind": "rights-holder",
+      "owner": "Microsoft (Xbox)",
+      "name": "Game Content Usage Rules",
+      "domains": ["xbox.com", "microsoft.com"],
+      "lookup": "p7-l01"
+    },
+    {
+      "id": "nintendo-content",
+      "kind": "rights-holder",
+      "owner": "Nintendo",
+      "name": "Game content guidelines for online video and image sharing",
+      "domains": ["nintendo.co.jp", "nintendo.com"],
+      "lookup": "p7-l02"
+    },
+    {
+      "id": "nintendo-ip",
+      "kind": "rights-holder",
+      "owner": "Nintendo",
+      "name": "Intellectual property / anti-piracy policy",
+      "domains": ["nintendo.com", "nintendo.co.jp"],
+      "lookup": "p7-l03"
+    },
+    {
+      "id": "sega-fan",
+      "kind": "rights-holder",
+      "owner": "Sega",
+      "name": "Fan content guidelines",
+      "domains": ["sega.com", "sega.co.jp", "sega.jp"],
+      "lookup": "p7-l04"
+    },
+    {
+      "id": "square-enix-fan",
+      "kind": "rights-holder",
+      "owner": "Square Enix",
+      "name": "Fan content / materials usage guidelines",
+      "domains": [
+        "square-enix.com",
+        "square-enix-games.com",
+        "jp.square-enix.com"
+      ],
+      "lookup": "p7-l05"
+    },
+    {
+      "id": "capcom-fan",
+      "kind": "rights-holder",
+      "owner": "Capcom",
+      "name": "Fan creation guidelines",
+      "domains": ["capcom.com", "capcom.co.jp"],
+      "lookup": "p7-l06"
+    },
+    {
+      "id": "bandai-namco-fan",
+      "kind": "rights-holder",
+      "owner": "Bandai Namco Entertainment",
+      "name": "Fan content guidelines",
+      "domains": [
+        "bandainamcoent.com",
+        "bandainamcoent.co.jp",
+        "bandainamco-ent.co.jp"
+      ],
+      "lookup": "p7-l07"
+    },
+    {
+      "id": "riot-legal",
+      "kind": "rights-holder",
+      "owner": "Riot Games",
+      "name": "Legal Jibber Jabber (fan content policy)",
+      "domains": ["riotgames.com"],
+      "lookup": "p7-l08"
+    },
+    {
+      "id": "blizzard-fan",
+      "kind": "rights-holder",
+      "owner": "Blizzard Entertainment",
+      "name": "Fan content / video policy",
+      "domains": ["blizzard.com"],
+      "lookup": "p7-l09"
+    },
+    {
+      "id": "rockstar-mods",
+      "kind": "rights-holder",
+      "owner": "Take-Two / Rockstar Games",
+      "name": "PC single-player mods policy",
+      "domains": ["rockstargames.com", "take2games.com"],
+      "lookup": "p7-l10"
+    },
+    {
+      "id": "cdpr-fan",
+      "kind": "rights-holder",
+      "owner": "CD PROJEKT RED",
+      "name": "Fan content guidelines",
+      "domains": ["cdprojektred.com", "cdprojekt.com"],
+      "lookup": "p7-l11"
+    },
+    {
+      "id": "paradox-ugc",
+      "kind": "rights-holder",
+      "owner": "Paradox Interactive",
+      "name": "User generated content / fan content policy",
+      "domains": ["paradoxinteractive.com", "paradoxplaza.com"],
+      "lookup": "p7-l12"
+    },
+    {
+      "id": "mojang-usage",
+      "kind": "rights-holder",
+      "owner": "Mojang (Minecraft)",
+      "name": "Minecraft usage guidelines",
+      "domains": ["minecraft.net"],
+      "lookup": "p7-l13"
+    },
+    {
+      "id": "valve-workshop",
+      "kind": "hosting",
+      "owner": "Valve",
+      "name": "Steam Workshop legal agreement",
+      "domains": [
+        "steamcommunity.com",
+        "store.steampowered.com",
+        "steampowered.com"
+      ],
+      "lookup": "p7-l14"
+    },
+    {
+      "id": "github-dmca",
+      "kind": "hosting",
+      "owner": "GitHub",
+      "name": "DMCA takedown policy",
+      "domains": ["docs.github.com", "github.com"],
+      "lookup": "p7-l15"
+    },
+    {
+      "id": "discord-tos",
+      "kind": "hosting",
+      "owner": "Discord",
+      "name": "Terms of Service",
+      "domains": ["discord.com"],
+      "lookup": "p7-l16"
+    },
+    {
+      "id": "discord-guidelines",
+      "kind": "hosting",
+      "owner": "Discord",
+      "name": "Community Guidelines",
+      "domains": ["discord.com"],
+      "lookup": "p7-l17"
+    },
+    {
+      "id": "us-coppa",
+      "kind": "child-safety",
+      "owner": "US Federal Trade Commission",
+      "name": "COPPA rule guidance",
+      "domains": ["ftc.gov"],
+      "lookup": "p7-l18"
+    },
+    {
+      "id": "uk-aadc",
+      "kind": "child-safety",
+      "owner": "UK Information Commissioner's Office",
+      "name": "Age appropriate design code",
+      "domains": ["ico.org.uk"],
+      "lookup": "p7-l19"
+    },
+    {
+      "id": "uk-osa",
+      "kind": "child-safety",
+      "owner": "Ofcom (UK)",
+      "name": "Online Safety Act protection of children codes",
+      "domains": ["ofcom.org.uk"],
+      "lookup": "p7-l20"
+    },
+    {
+      "id": "eu-dsa-minors",
+      "kind": "child-safety",
+      "owner": "European Commission",
+      "name": "Digital Services Act protection of minors guidelines",
+      "domains": ["digital-strategy.ec.europa.eu", "ec.europa.eu"],
+      "lookup": "p7-l21"
+    },
+    {
+      "id": "eu-gdpr-children",
+      "kind": "child-safety",
+      "owner": "EU (GDPR Article 8)",
+      "name": "Conditions for a child's consent",
+      "domains": [
+        "eur-lex.europa.eu",
+        "edpb.europa.eu",
+        "commission.europa.eu"
+      ],
+      "lookup": "p7-l22"
+    }
+  ]
+}

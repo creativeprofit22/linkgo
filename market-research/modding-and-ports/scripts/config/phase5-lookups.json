@@ -1,0 +1,77 @@
+[
+  {
+    "id": "a5-l01",
+    "kind": "search",
+    "query": "site:unity.com \"getting started\" OR tutorial OR pricing OR plans"
+  },
+  {
+    "id": "a5-l02",
+    "kind": "search",
+    "query": "site:epicgames.com \"unreal engine\" \"getting started\" OR tutorial OR license OR EULA"
+  },
+  {
+    "id": "a5-l03",
+    "kind": "search",
+    "query": "site:godotengine.org \"getting started\" OR tutorial OR license"
+  },
+  {
+    "id": "a5-l04",
+    "kind": "search",
+    "query": "site:gamemaker.io \"getting started\" OR tutorial OR pricing OR license"
+  },
+  {
+    "id": "a5-l05",
+    "kind": "search",
+    "query": "site:rpgmakerweb.com \"getting started\" OR tutorial OR license OR EULA OR buy"
+  },
+  {
+    "id": "a5-l06",
+    "kind": "search",
+    "query": "site:gdevelop.io \"getting started\" OR tutorial OR pricing OR license"
+  },
+  {
+    "id": "a5-l07",
+    "kind": "search",
+    "query": "site:construct.net \"getting started\" OR tutorial OR pricing OR license OR buy"
+  },
+  {
+    "id": "a5-l08",
+    "kind": "search",
+    "query": "site:roblox.com studio \"get started\" OR tutorial OR terms OR monetization"
+  },
+  {
+    "id": "a5-l09",
+    "kind": "search",
+    "query": "site:creationkit.com \"getting started\" OR tutorial OR EULA OR license"
+  },
+  {
+    "id": "a5-l10",
+    "kind": "search",
+    "query": "site:bepinex.dev \"getting started\" OR installation OR plugin OR license"
+  },
+  {
+    "id": "a5-l11",
+    "kind": "search",
+    "query": "site:melonwiki.xyz \"getting started\" OR installation OR mod OR license"
+  },
+  {
+    "id": "a5-l12",
+    "kind": "search",
+    "query": "site:fabricmc.net \"getting started\" OR tutorial OR license"
+  },
+  {
+    "id": "a5-l13",
+    "kind": "search",
+    "query": "site:github.com tModLoader \"modding guide\" OR wiki OR license"
+  },
+  {
+    "id": "a5-l14",
+    "kind": "search",
+    "query": "site:blockbench.net \"getting started\" OR quickstart OR tutorial OR license"
+  },
+  {
+    "id": "a5-l15",
+    "kind": "search",
+    "query": "AI game maker make a game without coding"
+  }
+]

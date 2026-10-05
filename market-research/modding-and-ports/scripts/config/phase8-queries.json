@@ -1,0 +1,224 @@
+{
+  "frozen": "2026-10-03 01-research-protocol.md section 10, Phase 8 addendum items 5-7, before any Phase 8 request. Groups: community (p8-g*, where-to-gather questions; platform reddit 8, youtube 4, tiktok 4, x 4, web 4), directory (p8-s*, directory lookups), disconfirm (p8-d*). Disconfirmer additions (p8-x*, group disconfirmer, at most 4) are appended before they run.",
+  "rule": "Queries are neutral about venue: no query names Discord as the answer except the directory lookups and the disconfirmation queries, which name it to test it. No person is named.",
+  "queries": [
+    {
+      "id": "p8-g01",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com where do modders talk"
+    },
+    {
+      "id": "p8-g02",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com best community to learn modding"
+    },
+    {
+      "id": "p8-g03",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com where to ask for help making a mod"
+    },
+    {
+      "id": "p8-g04",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com where to find people to make a fan game with"
+    },
+    {
+      "id": "p8-g05",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com modding community recommendations"
+    },
+    {
+      "id": "p8-g06",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com where do romhackers hang out"
+    },
+    {
+      "id": "p8-g07",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com where to share my mod"
+    },
+    {
+      "id": "p8-g08",
+      "group": "community",
+      "platform": "reddit",
+      "query": "site:reddit.com looking for a modding team"
+    },
+    {
+      "id": "p8-g09",
+      "group": "community",
+      "platform": "youtube",
+      "query": "site:youtube.com where to find a modding community"
+    },
+    {
+      "id": "p8-g10",
+      "group": "community",
+      "platform": "youtube",
+      "query": "site:youtube.com how to start modding join community"
+    },
+    {
+      "id": "p8-g11",
+      "group": "community",
+      "platform": "youtube",
+      "query": "site:youtube.com where to get help making mods"
+    },
+    {
+      "id": "p8-g12",
+      "group": "community",
+      "platform": "youtube",
+      "query": "site:youtube.com fan game development team community"
+    },
+    {
+      "id": "p8-g13",
+      "group": "community",
+      "platform": "tiktok",
+      "query": "site:tiktok.com modding community"
+    },
+    {
+      "id": "p8-g14",
+      "group": "community",
+      "platform": "tiktok",
+      "query": "site:tiktok.com how to start modding games"
+    },
+    {
+      "id": "p8-g15",
+      "group": "community",
+      "platform": "tiktok",
+      "query": "site:tiktok.com making a fan game"
+    },
+    {
+      "id": "p8-g16",
+      "group": "community",
+      "platform": "tiktok",
+      "query": "site:tiktok.com game mod showcase"
+    },
+    {
+      "id": "p8-g17",
+      "group": "community",
+      "platform": "x",
+      "query": "site:x.com modding community"
+    },
+    {
+      "id": "p8-g18",
+      "group": "community",
+      "platform": "x",
+      "query": "site:x.com looking for modders"
+    },
+    {
+      "id": "p8-g19",
+      "group": "community",
+      "platform": "x",
+      "query": "site:x.com fan game recruiting"
+    },
+    {
+      "id": "p8-g20",
+      "group": "community",
+      "platform": "x",
+      "query": "site:x.com new mod released join"
+    },
+    {
+      "id": "p8-g21",
+      "group": "community",
+      "platform": "web",
+      "query": "where do game modders talk forum"
+    },
+    {
+      "id": "p8-g22",
+      "group": "community",
+      "platform": "web",
+      "query": "best place to learn game modding community"
+    },
+    {
+      "id": "p8-g23",
+      "group": "community",
+      "platform": "web",
+      "query": "where to find fan game developers forum"
+    },
+    {
+      "id": "p8-g24",
+      "group": "community",
+      "platform": "web",
+      "query": "romhacking community where to ask questions"
+    },
+    {
+      "id": "p8-s01",
+      "group": "directory",
+      "query": "site:disboard.org servers tag modding"
+    },
+    {
+      "id": "p8-s02",
+      "group": "directory",
+      "query": "site:discord.com servers modding community"
+    },
+    {
+      "id": "p8-s03",
+      "group": "directory",
+      "query": "site:top.gg discord servers modding"
+    },
+    {
+      "id": "p8-s04",
+      "group": "directory",
+      "query": "site:discadia.com modding discord servers"
+    },
+    {
+      "id": "p8-d01",
+      "group": "disconfirm",
+      "query": "modding communities moving away from Discord"
+    },
+    {
+      "id": "p8-d02",
+      "group": "disconfirm",
+      "query": "Discord bad for modding knowledge not searchable"
+    },
+    {
+      "id": "p8-d03",
+      "group": "disconfirm",
+      "query": "modders prefer forums over Discord"
+    },
+    {
+      "id": "p8-d04",
+      "group": "disconfirm",
+      "query": "Reddit main place for modding community"
+    },
+    {
+      "id": "p8-d05",
+      "group": "disconfirm",
+      "query": "Steam Workshop community instead of Discord modding"
+    },
+    {
+      "id": "p8-d06",
+      "group": "disconfirm",
+      "query": "too many Discord servers modding fragmented"
+    },
+    {
+      "id": "p8-x01",
+      "group": "disconfirmer",
+      "query": "Nexus Mods ModDB Steam Community vs Discord modding hub",
+      "target": "H12: gathering concentrated on hubs or forums"
+    },
+    {
+      "id": "p8-x02",
+      "group": "disconfirmer",
+      "query": "large Discord modding servers list membership thousands",
+      "target": "H12: niche saturated by large servers"
+    },
+    {
+      "id": "p8-x03",
+      "group": "disconfirmer",
+      "query": "modding community platform comparison Reddit forum Discord 2025",
+      "target": "H12: venue preference"
+    },
+    {
+      "id": "p8-x04",
+      "group": "disconfirmer",
+      "query": "mod creators distribution strategy Nexus Steam Workshop Discord separate",
+      "target": "H12: creators split across venues"
+    }
+  ]
+}

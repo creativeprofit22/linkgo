@@ -1,0 +1,64 @@
+{
+  "candidates": 165,
+  "platforms": [
+    {
+      "platform": "reddit",
+      "method": "reddit_posts",
+      "quota": 28,
+      "perQuery": 2,
+      "candidates": 89,
+      "eligible": 86,
+      "queriesWithEligible": 11,
+      "selected": 22,
+      "selectedByQuery": {
+        "p6-c01": 2,
+        "p6-c02": 2,
+        "p6-c03": 2,
+        "p6-c04": 2,
+        "p6-c05": 2,
+        "p6-c06": 2,
+        "p6-c07": 2,
+        "p6-c11": 2,
+        "p6-c12": 2,
+        "p6-c13": 2,
+        "p6-c14": 2
+      }
+    },
+    {
+      "platform": "youtube",
+      "method": "youtube_videos",
+      "quota": 8,
+      "perQuery": 1,
+      "candidates": 63,
+      "eligible": 63,
+      "queriesWithEligible": 7,
+      "selected": 7,
+      "selectedByQuery": {
+        "p6-y01": 1,
+        "p6-y02": 1,
+        "p6-y03": 1,
+        "p6-y04": 1,
+        "p6-y05": 1,
+        "p6-y06": 1,
+        "p6-y08": 1
+      }
+    },
+    {
+      "platform": "forum",
+      "method": "scrape",
+      "quota": 6,
+      "perQuery": 2,
+      "candidates": 13,
+      "eligible": 13,
+      "queriesWithEligible": 5,
+      "selected": 6,
+      "selectedByQuery": {
+        "p6-d01": 2,
+        "p6-d02": 1,
+        "p6-d03": 1,
+        "p6-d04": 1,
+        "p6-d06": 1
+      }
+    }
+  ]
+}

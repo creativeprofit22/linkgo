@@ -1,0 +1,22 @@
+recordId,method,platform,usable,onTopic,rebuilds,venue,content,side,h9,quote
+3a3e5553bb0e53a7,github_repository_file,github,yes,yes,Another World,developer,code-language,developer,contradicts,"Write idiomatic, clean Rust as much as possible (and learn how to do so at the same time)."
+3f4ccf684786a51a,github_repository_file,github,yes,yes,Columns,developer,code-language,developer,contradicts,A Rust and SDL2-based revival of Duff Software's Kolumz game.
+bfccac84a1d7883f,github_repository_file,github,yes,yes,Doom,developer,code-language,developer,contradicts,A little Doom 1 & 2 Renderer written in Rust.
+dc4eb6d62f481f22,github_repository_file,github,yes,yes,Prince of Persia,developer,code-language,developer,contradicts,into a Rust port with a pluggable graphics/audio/input backend.
+14007615a97cc9e9,reddit_posts,reddit,yes,no,,developer,code-language,developer,off-topic,
+14f54070315db5b0,reddit_posts,reddit,yes,no,,developer,code-language,developer,off-topic,
+199fdd11cc9a6c82,reddit_posts,reddit,yes,no,,developer,code-language,developer,off-topic,
+2ca825b8577ad2da,reddit_posts,reddit,yes,no,,player,playing-installing,player,off-topic,
+33d48417a600914d,reddit_posts,reddit,yes,no,,developer,code-language,developer,off-topic,
+391891b9c390989a,reddit_posts,reddit,yes,yes,Chip's Challenge,developer,mixed,developer,contradicts,I've been working on a fan-made remake of Chip's Challenge to learn more about gameplay and graphics programming in Rust.
+5bf4d5ca5236c6e8,reddit_posts,reddit,yes,no,,player,playing-installing,player,off-topic,
+d0cad98df7416176,reddit_posts,reddit,yes,no,,player,playing-installing,player,off-topic,
+08bc9b34c51e47f4,scrape,forum,yes,no,,player,playing-installing,player,off-topic,
+14943c510fcfc9cc,scrape,github,yes,yes,Prince of Persia,developer,code-language,developer,contradicts,"The original Prince of Persia for Apple II, re-imagined in Rust"
+3245ed510c9e2577,scrape,github,yes,yes,Columns,developer,code-language,developer,contradicts,A Rust and SDL2-based revival of Duff Software's Kolumz game.
+43a69a8e96361f01,scrape,github,yes,yes,Doom,developer,code-language,developer,contradicts,A little Doom 1 & 2 Renderer written in Rust.
+72e3339965498846,scrape,news,yes,no,,player,code-language,developer,off-topic,
+790284ba7b15c27d,scrape,github,yes,yes,Another World,developer,code-language,developer,contradicts,This is a project I started mainly to teach myself Rust
+ae793cc449d35e2b,scrape,news,yes,yes,Modern Warfare 2; Minecraft,player,mixed,both,contradicts,"the mashup runs on IW4L, which is a Rust rewrite of Modern Warfare 2"
+0b8ac56493f21b03,youtube_videos,youtube,yes,no,,developer,code-language,developer,off-topic,
+d70d1324193e1526,scrape,forum,yes,no,,player,playing-installing,player,off-topic,

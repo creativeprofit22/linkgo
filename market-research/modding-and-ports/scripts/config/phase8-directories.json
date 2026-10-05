@@ -1,0 +1,29 @@
+{
+  "frozen": "2026-10-03 01-research-protocol.md section 10, Phase 8 addendum item 6, before any Phase 8 request. Disboard topic tag pages, page 1, the directory's default order, no query flags (no NSFW filter override). No server page is opened and no invite is followed. Other directories are added only from p8-s* results that are topic listing pages on that directory's own domain (at most 4), each logged with its query id before it is scraped.",
+  "disboard": [
+    { "tag": "modding", "url": "https://disboard.org/servers/tag/modding" },
+    {
+      "tag": "minecraft-mods",
+      "url": "https://disboard.org/servers/tag/minecraft-mods"
+    },
+    { "tag": "skyrim", "url": "https://disboard.org/servers/tag/skyrim" },
+    { "tag": "gamedev", "url": "https://disboard.org/servers/tag/gamedev" },
+    { "tag": "roblox", "url": "https://disboard.org/servers/tag/roblox" },
+    { "tag": "fan-games", "url": "https://disboard.org/servers/tag/fan-games" },
+    {
+      "tag": "romhacking",
+      "url": "https://disboard.org/servers/tag/romhacking"
+    },
+    { "tag": "emulation", "url": "https://disboard.org/servers/tag/emulation" },
+    {
+      "tag": "decompilation",
+      "url": "https://disboard.org/servers/tag/decompilation"
+    },
+    {
+      "tag": "game-modding",
+      "url": "https://disboard.org/servers/tag/game-modding"
+    }
+  ],
+  "otherDirectoryDomains": ["discord.com", "top.gg", "discadia.com"],
+  "added": []
+}

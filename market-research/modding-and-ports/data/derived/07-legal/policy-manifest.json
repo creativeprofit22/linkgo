@@ -1,0 +1,134 @@
+[
+  {
+    "policy": "microsoft-gcur",
+    "lookup": "p7-l01",
+    "status": "found",
+    "recordId": "f6793ce954aa48ca"
+  },
+  {
+    "policy": "nintendo-content",
+    "lookup": "p7-l02",
+    "status": "found",
+    "recordId": "c5d21506a3072d31"
+  },
+  {
+    "policy": "nintendo-ip",
+    "lookup": "p7-l03",
+    "status": "found",
+    "recordId": "446cfc9abbf3acbc"
+  },
+  {
+    "policy": "sega-fan",
+    "lookup": "p7-l04",
+    "status": "found",
+    "recordId": "09d259f98a1c1ff2"
+  },
+  {
+    "policy": "square-enix-fan",
+    "lookup": "p7-l05",
+    "status": "found",
+    "recordId": "be1689dacdb5556a"
+  },
+  {
+    "policy": "capcom-fan",
+    "lookup": "p7-l06",
+    "status": "found",
+    "recordId": "ee2fe39773551ed6"
+  },
+  {
+    "policy": "bandai-namco-fan",
+    "lookup": "p7-l07",
+    "status": "found",
+    "recordId": "128404eb727db3c1"
+  },
+  {
+    "policy": "riot-legal",
+    "lookup": "p7-l08",
+    "status": "found",
+    "recordId": "0ea66eb04254b2ba"
+  },
+  {
+    "policy": "blizzard-fan",
+    "lookup": "p7-l09",
+    "status": "not found",
+    "recordId": null
+  },
+  {
+    "policy": "rockstar-mods",
+    "lookup": "p7-l10",
+    "status": "found",
+    "recordId": "e50d637390a36851"
+  },
+  {
+    "policy": "cdpr-fan",
+    "lookup": "p7-l11",
+    "status": "not found",
+    "recordId": null
+  },
+  {
+    "policy": "paradox-ugc",
+    "lookup": "p7-l12",
+    "status": "found",
+    "recordId": "c5a08ed3234de91d"
+  },
+  {
+    "policy": "mojang-usage",
+    "lookup": "p7-l13",
+    "status": "not found",
+    "recordId": null
+  },
+  {
+    "policy": "valve-workshop",
+    "lookup": "p7-l14",
+    "status": "found",
+    "recordId": "a33342f546067ed6"
+  },
+  {
+    "policy": "github-dmca",
+    "lookup": "p7-l15",
+    "status": "found",
+    "recordId": "8e33619af679a647"
+  },
+  {
+    "policy": "discord-tos",
+    "lookup": "p7-l16",
+    "status": "found",
+    "recordId": "65ae8f2e67c302c0"
+  },
+  {
+    "policy": "discord-guidelines",
+    "lookup": "p7-l17",
+    "status": "found",
+    "recordId": "86a142bb33a0e19b"
+  },
+  {
+    "policy": "us-coppa",
+    "lookup": "p7-l18",
+    "status": "found",
+    "recordId": "518f336e7dd301e5"
+  },
+  {
+    "policy": "uk-aadc",
+    "lookup": "p7-l19",
+    "status": "found",
+    "recordId": "6d7b84d546f4e2ae"
+  },
+  {
+    "policy": "uk-osa",
+    "lookup": "p7-l20",
+    "status": "found",
+    "recordId": "69fdbe6f44d76116"
+  },
+  {
+    "policy": "eu-dsa-minors",
+    "lookup": "p7-l21",
+    "status": "found",
+    "recordId": "a17bf3935047e468"
+  },
+  {
+    "policy": "eu-gdpr-children",
+    "lookup": "p7-l22",
+    "status": "not found",
+    "recordId": null
+  }
+]

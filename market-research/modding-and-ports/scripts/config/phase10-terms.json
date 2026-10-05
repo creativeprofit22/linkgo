@@ -1,0 +1,68 @@
+{
+  "frozen": "2026-10-04 01-research-protocol.md section 10, Phase 10 addendum items 8-9, before any Phase 10 request. Case-insensitive regexes over the body of handle-scrubbed reading copies (text after the first '---' line). A record counts once per family.",
+  "families": {
+    "phrase": ["\\bdemocrati[sz]\\w*"],
+    "synonym": ["\\bfor everyone\\b", "\\banyone can\\b", "\\baccessible\\b"],
+    "need": [
+      "\\beas(?:y|ier|iest)\\b",
+      "\\bsimple\\b",
+      "\\bone[- ]click\\b",
+      "\\bno (?:coding|code)\\b",
+      "\\bwithout (?:coding|code)\\b",
+      "\\bbeginners?\\b",
+      "\\bwhere (?:to|do i|should i) start\\b",
+      "\\btoo hard\\b",
+      "\\bconfus(?:ing|ed)\\b"
+    ]
+  },
+  "thresholds": {
+    "phraseFitsShare": 0.05,
+    "phraseMaxShareForConceptFit": 0.01,
+    "conceptFitsNeedShare": 0.25,
+    "doesNotFitNeedShare": 0.1
+  },
+  "onTopic": [
+    {
+      "phase": "02-public-web",
+      "file": "deep-sample-coding.csv",
+      "rule": "usable=yes and any row stance != off-topic"
+    },
+    {
+      "phase": "03-audience",
+      "file": "deep-sample-coding.csv",
+      "rule": "usable=yes and any row stance != off-topic"
+    },
+    {
+      "phase": "04-competitors",
+      "file": "sentiment-coding.csv",
+      "rule": "usable=yes and any of H3/H10/H11 != off-topic"
+    },
+    {
+      "phase": "05-creator-tools",
+      "file": "learner-coding.csv",
+      "rule": "onTopic=yes"
+    },
+    {
+      "phase": "06-ports-rust",
+      "file": "port-demand-coding.csv",
+      "rule": "onTopic=yes"
+    },
+    {
+      "phase": "06-ports-rust",
+      "file": "rust-relevance-coding.csv",
+      "rule": "onTopic=yes"
+    },
+    { "phase": "07-legal", "file": "demand-coding.csv", "rule": "onTopic=yes" },
+    {
+      "phase": "08-community",
+      "file": "venue-coding.csv",
+      "rule": "onTopic=yes"
+    },
+    {
+      "phase": "10-personas",
+      "file": "gapfill-coding.csv",
+      "rule": "onTopic=yes"
+    }
+  ],
+  "officialPages": "Stored official pages: 04-competitors and 05-creator-tools reading copies whose role line starts with 'official', and 09-sizing scrape envelopes. Phase 10 p10-c* results are counted from their search envelopes and are snippet-only."
+}

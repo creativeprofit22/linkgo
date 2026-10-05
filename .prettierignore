@@ -8,3 +8,6 @@ Cargo.lock
 # Raw Bright Data output for the market research; git-ignored via a nested
 # .gitignore that Prettier does not read.
 market-research/modding-and-ports/data/raw
+
+# Generated market-research reading site.
+market-research/modding-and-ports/site

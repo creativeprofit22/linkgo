@@ -1,0 +1,200 @@
+{
+  "frozen": "2026-10-03 01-research-protocol.md section 10, Phase 6 addendum item 5, before any Phase 6 request. Port projects = the 19 port-project terms of scripts/config/mention-terms.json mapped to public repositories; curated lists = the list pages x-add-3 returned in Phase 2 (data/raw/02-public-web/search/x-add-3.json). Rust candidates are appended by Collector C2 under item 5 (first 10 distinct game rebuilds from p6-r* then p6-n05-n06 results, query-id order then rank), each with a logged reason, before they are fetched.",
+  "githubFiles": "README.md for every fetchable repository (branch HEAD resolves to the default branch; one retry with main, then master, logged). Cargo.toml only for a Rust candidate whose language bar was not captured. Text files only; never release assets, binaries, ROMs or game data.",
+  "curatedLists": [
+    {
+      "id": "list-readonlymemo",
+      "kind": "scrape",
+      "url": "https://readonlymemo.com/decompilation-projects-and-n64-recompiled-list/"
+    },
+    {
+      "id": "list-resetera",
+      "kind": "scrape",
+      "url": "https://www.resetera.com/threads/decompilation-projects-ot-free-next-gen-update-for-your-favorite-classics.682687/"
+    },
+    {
+      "id": "list-pcgamingwiki",
+      "kind": "scrape",
+      "url": "https://www.pcgamingwiki.com/wiki/List_of_unofficial_ports"
+    },
+    {
+      "id": "list-backloggd",
+      "kind": "scrape",
+      "url": "https://backloggd.com/u/Exellock/list/console-games-with-fan-made-pc-ports/",
+      "note": "user list page; the list owner's name is in the URL and must never enter derived data"
+    },
+    {
+      "id": "list-korben",
+      "kind": "scrape",
+      "url": "https://korben.info/en/10-recomp-projects-that-pull-your-old-games-out-of-their-console.html"
+    },
+    {
+      "id": "list-steamdeckhq",
+      "kind": "scrape",
+      "url": "https://steamdeckhq.com/news/find-native-pc-ports-retro-games-n64recomplauncher/"
+    },
+    {
+      "id": "list-reddit-steamdeck",
+      "kind": "pipeline",
+      "type": "reddit_posts",
+      "url": "https://www.reddit.com/r/SteamDeck/comments/1j6cnzz/pc_ports_decompilations_recompilations_remakes/"
+    }
+  ],
+  "ports": [
+    {
+      "term": "ship of harkinian",
+      "repo": "https://github.com/HarbourMasters/Shipwright"
+    },
+    {
+      "term": "2 ship 2 harkinian",
+      "repo": "https://github.com/HarbourMasters/2ship2harkinian"
+    },
+    {
+      "term": "harbour masters",
+      "repo": null,
+      "reason": "team name, not one project; its projects are covered by ship of harkinian, 2 ship 2 harkinian and spaghettikart"
+    },
+    {
+      "term": "sm64ex",
+      "repo": "https://github.com/sm64pc/sm64ex"
+    },
+    {
+      "term": "render96",
+      "repo": "https://github.com/Render96/Render96ex"
+    },
+    {
+      "term": "n64recomp",
+      "repo": "https://github.com/N64Recomp/N64Recomp",
+      "note": "recompilation tool, not a game port; recorded as tooling"
+    },
+    {
+      "term": "zelda64recomp",
+      "repo": "https://github.com/Zelda64Recomp/Zelda64Recomp"
+    },
+    {
+      "term": "spaghettikart",
+      "repo": "https://github.com/HarbourMasters/SpaghettiKart"
+    },
+    {
+      "term": "opengoal",
+      "repo": "https://github.com/open-goal/jak-project"
+    },
+    {
+      "term": "openmw",
+      "repo": "https://github.com/OpenMW/openmw",
+      "note": "GitHub mirror; main development is on GitLab"
+    },
+    {
+      "term": "openrct2",
+      "repo": "https://github.com/OpenRCT2/OpenRCT2"
+    },
+    {
+      "term": "openttd",
+      "repo": "https://github.com/OpenTTD/OpenTTD"
+    },
+    {
+      "term": "devilutionx",
+      "repo": "https://github.com/diasurgical/devilutionX"
+    },
+    {
+      "term": "re3",
+      "repo": null,
+      "reason": "repository taken down after a 2021 DMCA notice; status recorded from public pages, not fetched"
+    },
+    {
+      "term": "revc",
+      "repo": null,
+      "reason": "taken down with re3; status recorded from public pages, not fetched"
+    },
+    {
+      "term": "pokeemerald",
+      "repo": "https://github.com/pret/pokeemerald",
+      "note": "decomp that rebuilds the original ROM; a port only if a native PC build exists"
+    },
+    {
+      "term": "pokered",
+      "repo": "https://github.com/pret/pokered",
+      "note": "disassembly that rebuilds the original ROM; a port only if a native PC build exists"
+    },
+    {
+      "term": "sonic mania plus",
+      "repo": null,
+      "reason": "official commercial release, excluded from the fan inventory (addendum item 3); boundary case"
+    },
+    {
+      "term": "rsdkv5",
+      "repo": "https://github.com/RSDKModding/RSDKv5-Decompilation"
+    }
+  ],
+  "rust": [
+    {
+      "name": "rust-doom",
+      "repo": "https://github.com/cristicbz/rust-doom",
+      "sourceGame": "Doom / Doom II",
+      "originalPlatform": "unclear",
+      "foundBy": "p6-r03",
+      "rank": 2
+    },
+    {
+      "name": "pop-rs",
+      "repo": "https://github.com/sunsided/pop-rs",
+      "sourceGame": "Prince of Persia",
+      "originalPlatform": "unclear",
+      "foundBy": "p6-r06",
+      "rank": 2
+    },
+    {
+      "name": "awer",
+      "repo": "https://github.com/Gnurou/awer",
+      "sourceGame": "Another World",
+      "originalPlatform": "unclear",
+      "foundBy": "p6-r06",
+      "rank": 4
+    },
+    {
+      "name": "columns",
+      "repo": "https://github.com/RavuAlHemio/columns",
+      "sourceGame": "Kolumz (Duff Software)",
+      "originalPlatform": "unclear",
+      "foundBy": "p6-r06",
+      "rank": 8
+    }
+  ],
+  "rustLog": [
+    "p6-r01 #6: boundary — Android-on-SteamOS compatibility layer — compatibility tool, not a rebuild of a specific game; Rust not indicated",
+    "p6-r02 #1: boundary — Veloren — new original game written in Rust, not a rebuild",
+    "p6-r02 #2: repo not found — Maze Runner (1970s) remake in Rust — Rust remake of a specific game named in a curated list snippet; no project repository stated (result URL is the list repository)",
+    "p6-r02 #3: boundary — Flash-game recreation article (Bevy) — tutorial/article; no specific game named",
+    "p6-r02 #4: boundary — Rust gamedev retrospective — article on original indie development, not a rebuild",
+    "p6-r02 #7: boundary — Bevy talk — engine tutorial, not a rebuild",
+    "p6-r03 #1: boundary — unnamed old C++ game rebuilt in Rust (forum thread) — specific game not named in result",
+    "p6-r03 #2: accepted — rust-doom (Doom / Doom II) — Doom 1 & 2 renderer written in Rust; partial remake of a specific game, scope to confirm on repository",
+    "p6-r03 #4: boundary — awesome-rust list mirror — curated list; named entries are original games",
+    "p6-r03 #5: repo not found — RBattle (XBattle) — Rust resurrection of the 1990s X Windows game XBattle; no repository stated in result",
+    "p6-r03 #7: boundary — awesome-rust crate page — curated list/library entry, not a rebuild",
+    "p6-r03 #8: boundary — lib.rs game-development category — library index, not a specific rebuild",
+    "p6-r03 #9: boundary — Sulis (Read Rust) — new original game written in Rust",
+    "p6-r05 #8: boundary — Rust game engine (podcast) — generic engine, not a rebuild",
+    "p6-r06 #1: boundary — Dejavu (Game Maker reimplementation) — engine/tool reimplementation, not a specific game",
+    "p6-r06 #2: accepted — pop-rs (Prince of Persia) — issue under the project repository describes reimplementing the game subsystems in idiomatic Rust",
+    "p6-r06 #3: boundary — awesome-game-remakes list — curated list (Rust entry already logged at p6-r02 #2)",
+    "p6-r06 #4: accepted — awer (Another World) — Another World engine reimplementation in Rust",
+    "p6-r06 #5: boundary — FNaF Engine (Rust) — generic engine for fan games, not a rebuild of a specific game",
+    "p6-r06 #6: boundary — game-preservation topic page — NES emulator listing; emulators excluded",
+    "p6-r06 #7: boundary — Chariot (Age of Empires 1997 engine reimplementation) — specific-game rebuild but the stored result text does not indicate Rust",
+    "p6-r06 #8: accepted — columns (Kolumz) — Rust/SDL2 reimplementation of Duff Software's Kolumz",
+    "p6-r06 #9: boundary — agb — library for writing new Game Boy Advance games in Rust, not a rebuild",
+    "p6-r06 #10: boundary — game-2d topic page (Dose Response) — new original game, not a rebuild",
+    "p6-r08 #1: boundary — recompilation topic page (PSP game, Pokémon Snap) — static recompilation projects; Rust not indicated",
+    "p6-r08 #2: boundary — decompilation/N64 Recompiled list — curated port list; Rust not indicated",
+    "p6-r08 #3: boundary — Switch recomps video — static recompilation coverage; no Rust rebuild indicated",
+    "p6-r08 #5: boundary — PCGamingWiki unofficial ports list — curated port list; Rust not indicated",
+    "p6-r08 #6: boundary — native PC ports article — press article; no Rust rebuild indicated",
+    "p6-r08 #7: boundary — static-recompilation topic page (Pokémon Snap) — static recompilation port; Rust not indicated",
+    "p6-r08 #8: boundary — Age of Recomps article — recomp roundup; no Rust rebuild indicated",
+    "p6-n05 #1: boundary — Minecraft/MW2/Skate 3 mashup — mashup of several games, not a rebuild of one game; Rust language not indicated",
+    "p6-n06 #1: boundary — OpenStrike (PSP) — new Counter-Strike-style game on console; Rust not indicated",
+    "p6-n06 #2: boundary — MS-DOS Edit remake — official text-editor remake, not a game",
+    "p6-n06 #3: boundary — Half-Life PS1 fan port — PC-to-console port; Rust not indicated"
+  ]
+}

@@ -1,0 +1,5 @@
+method,items,attempts,ok,okWithRecords,failed,failedByClass,coded,usable,okRate,usableRate
+reddit_posts,28,28,28,28,0,,28,27,1.000,0.964
+scrape,34,44,28,28,6,brd_error:6,8,4,0.824,0.118
+youtube_videos,8,8,8,8,0,,8,8,1.000,1.000
+all,70,80,64,64,6,brd_error:6,44,39,0.914,0.557

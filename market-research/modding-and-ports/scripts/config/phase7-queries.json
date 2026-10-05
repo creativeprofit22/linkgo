@@ -1,0 +1,322 @@
+{
+  "frozen": "2026-10-03 01-research-protocol.md section 10, Phase 7 addendum items 5-6, before any Phase 7 request. Groups: enforcement (p7-e*, news or web), revival (p7-v*, web, hypothesis-blind sample), disconfirm (p7-d*, web), lookup (p7-l*, one per policy in phase7-policies.json). Disconfirmer additions (p7-x*, group disconfirmer, at most 4) are appended before they run.",
+  "rule": "Queries name projects and companies, never a person. Written before any Phase 7 request.",
+  "queries": [
+    {
+      "id": "p7-e01",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "Nintendo cease and desist fan game"
+    },
+    {
+      "id": "p7-e02",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "Nintendo DMCA takedown fan project"
+    },
+    {
+      "id": "p7-e03",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "fan remake shut down by publisher"
+    },
+    {
+      "id": "p7-e04",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "decompilation project DMCA takedown"
+    },
+    {
+      "id": "p7-e05",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "Take-Two lawsuit reverse engineered GTA source code"
+    },
+    {
+      "id": "p7-e06",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "game mod taken down copyright publisher"
+    },
+    {
+      "id": "p7-e07",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "Nintendo emulator lawsuit settlement"
+    },
+    {
+      "id": "p7-e08",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "GitHub DMCA fan game repository removed"
+    },
+    {
+      "id": "p7-e09",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "Sega fan game takedown"
+    },
+    {
+      "id": "p7-e10",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "Square Enix fan remake cease and desist"
+    },
+    {
+      "id": "p7-e11",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "Pokemon fan game shut down"
+    },
+    {
+      "id": "p7-e12",
+      "group": "enforcement",
+      "searchType": "news",
+      "query": "modder sued by game publisher"
+    },
+    {
+      "id": "p7-e13",
+      "group": "enforcement",
+      "query": "list of fan games shut down by Nintendo"
+    },
+    {
+      "id": "p7-e14",
+      "group": "enforcement",
+      "query": "AM2R cease and desist Nintendo"
+    },
+    {
+      "id": "p7-e15",
+      "group": "enforcement",
+      "query": "Chrono Trigger Resurrection cease and desist"
+    },
+    {
+      "id": "p7-e16",
+      "group": "enforcement",
+      "query": "Streets of Rage Remake taken down Sega"
+    },
+    {
+      "id": "p7-e17",
+      "group": "enforcement",
+      "query": "GitHub DMCA notice game decompilation repository"
+    },
+    {
+      "id": "p7-e18",
+      "group": "enforcement",
+      "query": "ROM site lawsuit Nintendo damages"
+    },
+    {
+      "id": "p7-e19",
+      "group": "enforcement",
+      "query": "Pokemon Uranium takedown Nintendo"
+    },
+    {
+      "id": "p7-e20",
+      "group": "enforcement",
+      "query": "Take-Two mod takedown GTA modding tool"
+    },
+    {
+      "id": "p7-v01",
+      "group": "revival",
+      "query": "petition revive game franchise"
+    },
+    {
+      "id": "p7-v02",
+      "group": "revival",
+      "query": "fan remake of abandoned game franchise"
+    },
+    {
+      "id": "p7-v03",
+      "group": "revival",
+      "query": "dead game franchise fans want revived"
+    },
+    {
+      "id": "p7-v04",
+      "group": "revival",
+      "query": "unofficial fan made sequel to abandoned game series"
+    },
+    {
+      "id": "p7-v05",
+      "group": "revival",
+      "query": "fan revival of dormant game IP"
+    },
+    {
+      "id": "p7-v06",
+      "group": "revival",
+      "query": "abandonware game fan remake released"
+    },
+    {
+      "id": "p7-v07",
+      "group": "revival",
+      "query": "fans keep dead franchise alive with fan game"
+    },
+    {
+      "id": "p7-v08",
+      "group": "revival",
+      "query": "bring back game series petition signatures"
+    },
+    {
+      "id": "p7-d01",
+      "group": "disconfirm",
+      "query": "fan game officially licensed by publisher"
+    },
+    {
+      "id": "p7-d02",
+      "group": "disconfirm",
+      "query": "publisher hired fan game developers"
+    },
+    {
+      "id": "p7-d03",
+      "group": "disconfirm",
+      "query": "fan remake approved by rights holder"
+    },
+    {
+      "id": "p7-d04",
+      "group": "disconfirm",
+      "query": "fan project became official game"
+    },
+    {
+      "id": "p7-d05",
+      "group": "disconfirm",
+      "query": "publisher allows fan games guidelines"
+    },
+    {
+      "id": "p7-d06",
+      "group": "disconfirm",
+      "query": "long running fan game never taken down"
+    },
+    {
+      "id": "p7-l01",
+      "group": "lookup",
+      "query": "site:xbox.com Game Content Usage Rules"
+    },
+    {
+      "id": "p7-l02",
+      "group": "lookup",
+      "query": "site:nintendo.co.jp guidelines for online video image sharing platforms"
+    },
+    {
+      "id": "p7-l03",
+      "group": "lookup",
+      "query": "site:nintendo.com intellectual property piracy legal information"
+    },
+    {
+      "id": "p7-l04",
+      "group": "lookup",
+      "query": "Sega fan content guidelines official"
+    },
+    {
+      "id": "p7-l05",
+      "group": "lookup",
+      "query": "Square Enix fan content guidelines official"
+    },
+    {
+      "id": "p7-l06",
+      "group": "lookup",
+      "query": "Capcom fan creation guidelines official"
+    },
+    {
+      "id": "p7-l07",
+      "group": "lookup",
+      "query": "Bandai Namco fan content guidelines official"
+    },
+    {
+      "id": "p7-l08",
+      "group": "lookup",
+      "query": "site:riotgames.com legal jibber jabber"
+    },
+    {
+      "id": "p7-l09",
+      "group": "lookup",
+      "query": "site:blizzard.com fan content policy"
+    },
+    {
+      "id": "p7-l10",
+      "group": "lookup",
+      "query": "site:rockstargames.com PC single-player mods"
+    },
+    {
+      "id": "p7-l11",
+      "group": "lookup",
+      "query": "CD PROJEKT RED fan content guidelines"
+    },
+    {
+      "id": "p7-l12",
+      "group": "lookup",
+      "query": "Paradox Interactive user generated content policy"
+    },
+    {
+      "id": "p7-l13",
+      "group": "lookup",
+      "query": "site:minecraft.net usage guidelines"
+    },
+    {
+      "id": "p7-l14",
+      "group": "lookup",
+      "query": "Steam Workshop legal agreement"
+    },
+    {
+      "id": "p7-l15",
+      "group": "lookup",
+      "query": "site:docs.github.com DMCA takedown policy"
+    },
+    {
+      "id": "p7-l16",
+      "group": "lookup",
+      "query": "site:discord.com terms of service"
+    },
+    {
+      "id": "p7-l17",
+      "group": "lookup",
+      "query": "site:discord.com community guidelines"
+    },
+    {
+      "id": "p7-l18",
+      "group": "lookup",
+      "query": "site:ftc.gov COPPA frequently asked questions"
+    },
+    {
+      "id": "p7-l19",
+      "group": "lookup",
+      "query": "site:ico.org.uk age appropriate design code"
+    },
+    {
+      "id": "p7-l20",
+      "group": "lookup",
+      "query": "site:ofcom.org.uk protection of children codes online safety"
+    },
+    {
+      "id": "p7-l21",
+      "group": "lookup",
+      "query": "Digital Services Act guidelines protection of minors European Commission"
+    },
+    {
+      "id": "p7-l22",
+      "group": "lookup",
+      "query": "GDPR Article 8 conditions applicable to child's consent"
+    },
+    {
+      "id": "p7-x01",
+      "group": "disconfirmer",
+      "query": "fan game still online years later no takedown",
+      "target": "H7 survival: tolerated long-running fan projects"
+    },
+    {
+      "id": "p7-x02",
+      "group": "disconfirmer",
+      "query": "Return of Reckoning Games Workshop permission Warhammer Online",
+      "target": "H7 survival: tolerated or licensed status of a revival"
+    },
+    {
+      "id": "p7-x03",
+      "group": "disconfirmer",
+      "query": "Game Jolt fan games policy",
+      "target": "Risk: whether fan-game hosting continued after takedowns"
+    },
+    {
+      "id": "p7-x04",
+      "group": "disconfirmer",
+      "query": "abandoned game franchise fan remake publisher approved",
+      "target": "H7 survival: licensed revivals of dormant IP"
+    }
+  ]
+}

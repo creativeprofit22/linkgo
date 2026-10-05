@@ -1,0 +1,368 @@
+{
+  "frozen": "2026-10-03 01-research-protocol.md section 10, Phase 6 addendum items 5-8. Groups: inventory (p6-i* port inventory, open web, Collector C1), rust (p6-r* Rust rebuild inventory, open web, Collector C2), news (p6-n*, searchType news; n01-n04 C1, n05-n06 C2), community (p6-c* Reddit, p6-y* YouTube; direction help-seeking / showcase / neutral, balanced), disconfirm (p6-d*, open web). Disconfirmer additions (p6-x*, group disconfirmer, at most 6) are appended before they run and sampled separately (at most 1 per query, quota 4).",
+  "rule": "Rust means the programming language. Queries name no person. Written before any Phase 6 request.",
+  "queries": [
+    {
+      "id": "p6-i01",
+      "group": "inventory",
+      "query": "list of decompilation projects native PC port"
+    },
+    {
+      "id": "p6-i02",
+      "group": "inventory",
+      "query": "static recompilation native PC port released"
+    },
+    {
+      "id": "p6-i03",
+      "group": "inventory",
+      "query": "N64 recompiled native PC port"
+    },
+    {
+      "id": "p6-i04",
+      "group": "inventory",
+      "query": "fan made PC port of console game released"
+    },
+    {
+      "id": "p6-i05",
+      "group": "inventory",
+      "query": "source port classic game open source engine"
+    },
+    {
+      "id": "p6-i06",
+      "group": "inventory",
+      "query": "PS2 OR PS3 game static recompilation PC port"
+    },
+    {
+      "id": "p6-i07",
+      "group": "inventory",
+      "query": "GameCube OR Wii decompilation PC port"
+    },
+    {
+      "id": "p6-i08",
+      "group": "inventory",
+      "query": "PS1 decompilation PC port"
+    },
+    {
+      "id": "p6-i09",
+      "group": "inventory",
+      "query": "Game Boy Advance OR DS decompilation PC port"
+    },
+    {
+      "id": "p6-i10",
+      "group": "inventory",
+      "query": "open source reimplementation of classic game engine"
+    },
+    {
+      "id": "p6-i11",
+      "group": "inventory",
+      "query": "Xbox 360 recompilation PC port"
+    },
+    {
+      "id": "p6-i12",
+      "group": "inventory",
+      "query": "Dreamcast OR Saturn decompilation PC port"
+    },
+    {
+      "id": "p6-r01",
+      "group": "rust",
+      "query": "game rewritten in Rust open source"
+    },
+    {
+      "id": "p6-r02",
+      "group": "rust",
+      "query": "classic game reimplementation written in Rust"
+    },
+    {
+      "id": "p6-r03",
+      "group": "rust",
+      "query": "\"written in Rust\" source port game"
+    },
+    {
+      "id": "p6-r04",
+      "group": "rust",
+      "query": "\"in Rust\" decompilation game port"
+    },
+    {
+      "id": "p6-r05",
+      "group": "rust",
+      "query": "\"rewrite in Rust\" game engine remake"
+    },
+    {
+      "id": "p6-r06",
+      "group": "rust",
+      "query": "site:github.com game reimplementation Rust"
+    },
+    {
+      "id": "p6-r07",
+      "group": "rust",
+      "query": "Rust remake of classic game open source"
+    },
+    {
+      "id": "p6-r08",
+      "group": "rust",
+      "query": "static recompilation Rust game port"
+    },
+    {
+      "id": "p6-n01",
+      "group": "news",
+      "searchType": "news",
+      "collector": "C1",
+      "query": "decompilation PC port"
+    },
+    {
+      "id": "p6-n02",
+      "group": "news",
+      "searchType": "news",
+      "collector": "C1",
+      "query": "recompiled PC port"
+    },
+    {
+      "id": "p6-n03",
+      "group": "news",
+      "searchType": "news",
+      "collector": "C1",
+      "query": "fan made PC port"
+    },
+    {
+      "id": "p6-n04",
+      "group": "news",
+      "searchType": "news",
+      "collector": "C1",
+      "query": "unofficial PC port source port"
+    },
+    {
+      "id": "p6-n05",
+      "group": "news",
+      "searchType": "news",
+      "collector": "C2",
+      "query": "game rewritten in Rust"
+    },
+    {
+      "id": "p6-n06",
+      "group": "news",
+      "searchType": "news",
+      "collector": "C2",
+      "query": "Rust programming language game remake"
+    },
+    {
+      "id": "p6-c01",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com decomp PC port \"how do I install\""
+    },
+    {
+      "id": "p6-c02",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com recomp \"not working\""
+    },
+    {
+      "id": "p6-c03",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"is there a PC port\""
+    },
+    {
+      "id": "p6-c04",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"wish there was a PC port\""
+    },
+    {
+      "id": "p6-c05",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com decompilation PC port \"runs great\""
+    },
+    {
+      "id": "p6-c06",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com recompiled \"finally playable\""
+    },
+    {
+      "id": "p6-c07",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com \"native PC port\" \"just released\""
+    },
+    {
+      "id": "p6-c08",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com decompilation PC port"
+    },
+    {
+      "id": "p6-c09",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com static recompilation port"
+    },
+    {
+      "id": "p6-c10",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com source port classic game"
+    },
+    {
+      "id": "p6-c11",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com game \"rewritten in Rust\""
+    },
+    {
+      "id": "p6-c12",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com \"written in Rust\" game port"
+    },
+    {
+      "id": "p6-c13",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com \"in Rust\" remake playable"
+    },
+    {
+      "id": "p6-c14",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"cargo build\" game port error"
+    },
+    {
+      "id": "p6-y01",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "neutral",
+      "query": "site:youtube.com decompilation PC port"
+    },
+    {
+      "id": "p6-y02",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "help-seeking",
+      "query": "site:youtube.com recompiled PC port how to install"
+    },
+    {
+      "id": "p6-y03",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "showcase",
+      "query": "site:youtube.com fan made native PC port"
+    },
+    {
+      "id": "p6-y04",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "showcase",
+      "query": "site:youtube.com N64 recomp"
+    },
+    {
+      "id": "p6-y05",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "neutral",
+      "query": "site:youtube.com source port classic game"
+    },
+    {
+      "id": "p6-y06",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "neutral",
+      "query": "site:youtube.com game rewritten in Rust"
+    },
+    {
+      "id": "p6-y07",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "showcase",
+      "query": "site:youtube.com \"written in Rust\" game remake"
+    },
+    {
+      "id": "p6-y08",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "help-seeking",
+      "query": "site:youtube.com PC port vs emulation"
+    },
+    {
+      "id": "p6-d01",
+      "group": "disconfirm",
+      "query": "\"emulation is good enough\" PC port"
+    },
+    {
+      "id": "p6-d02",
+      "group": "disconfirm",
+      "query": "\"why bother\" decompilation port emulator"
+    },
+    {
+      "id": "p6-d03",
+      "group": "disconfirm",
+      "query": "fan PC port abandoned cease and desist"
+    },
+    {
+      "id": "p6-d04",
+      "group": "disconfirm",
+      "query": "decompilation ports \"only Nintendo\" games"
+    },
+    {
+      "id": "p6-d05",
+      "group": "disconfirm",
+      "query": "\"rewrite it in Rust\" games overrated"
+    },
+    {
+      "id": "p6-d06",
+      "group": "disconfirm",
+      "query": "Rust game remake nobody plays"
+    },
+    {
+      "id": "p6-x01",
+      "group": "disconfirmer",
+      "query": "Rust rewrite game port emulation subreddit",
+      "target": "H9: Rust rebuilds in player venues (Disconfirmer: dropped non-operator \"latest:month\")"
+    },
+    {
+      "id": "p6-x02",
+      "group": "disconfirmer",
+      "query": "Steam Deck Rust rebuild game playable",
+      "target": "H9: player venues (Steam Deck)"
+    },
+    {
+      "id": "p6-x03",
+      "group": "disconfirmer",
+      "query": "emulator better than native PC port",
+      "target": "H8: emulation is enough"
+    },
+    {
+      "id": "p6-x04",
+      "group": "disconfirmer",
+      "query": "fan PC port DMCA takedown 2026",
+      "target": "H8: takedowns limit ports"
+    },
+    {
+      "id": "p6-x05",
+      "group": "disconfirmer",
+      "query": "Rust game remake abandoned unmaintained",
+      "target": "H9: Rust rebuilds rare / unplayed"
+    },
+    {
+      "id": "p6-x06",
+      "group": "disconfirmer",
+      "query": "why fan ports instead of official PC port",
+      "target": "H8: demand concentrated in specific titles"
+    }
+  ]
+}

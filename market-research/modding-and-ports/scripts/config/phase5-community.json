@@ -1,0 +1,122 @@
+[
+  {
+    "id": "a5-c01",
+    "kind": "search",
+    "query": "site:reddit.com modding \"where do I start\""
+  },
+  {
+    "id": "a5-c02",
+    "kind": "search",
+    "query": "site:reddit.com modding \"easier than I thought\""
+  },
+  {
+    "id": "a5-c03",
+    "kind": "search",
+    "query": "site:reddit.com \"learn to code\" \"make mods\""
+  },
+  {
+    "id": "a5-c04",
+    "kind": "search",
+    "query": "site:reddit.com \"no code\" game maker beginner"
+  },
+  {
+    "id": "a5-c05",
+    "kind": "search",
+    "query": "site:reddit.com \"make my own game\" beginner"
+  },
+  {
+    "id": "a5-c06",
+    "kind": "search",
+    "query": "site:reddit.com modding \"instead of making\" a game"
+  },
+  {
+    "id": "a5-c07",
+    "kind": "search",
+    "query": "site:reddit.com \"gave up\" modding"
+  },
+  {
+    "id": "a5-c08",
+    "kind": "search",
+    "query": "site:reddit.com \"finished my first mod\""
+  },
+  {
+    "id": "a5-c09",
+    "kind": "search",
+    "query": "site:reddit.com \"first game\" \"gave up\""
+  },
+  {
+    "id": "a5-c10",
+    "kind": "search",
+    "query": "site:reddit.com \"finished my first game\""
+  },
+  {
+    "id": "a5-c11",
+    "kind": "search",
+    "query": "site:reddit.com \"game engine\" \"too hard\" beginner"
+  },
+  {
+    "id": "a5-c12",
+    "kind": "search",
+    "query": "site:reddit.com \"game engine\" \"easy to learn\""
+  },
+  {
+    "id": "a5-c13",
+    "kind": "search",
+    "query": "site:reddit.com modding tutorial outdated"
+  },
+  {
+    "id": "a5-c14",
+    "kind": "search",
+    "query": "site:reddit.com modding tutorial \"really helped\""
+  },
+  {
+    "id": "a5-c15",
+    "kind": "search",
+    "query": "site:reddit.com \"no programming experience\" modding"
+  },
+  {
+    "id": "a5-c16",
+    "kind": "search",
+    "query": "site:reddit.com \"as a programmer\" modding"
+  },
+  {
+    "id": "a5-y01",
+    "kind": "search",
+    "query": "site:youtube.com modding tutorial for beginners"
+  },
+  {
+    "id": "a5-y02",
+    "kind": "search",
+    "query": "site:youtube.com \"your first mod\""
+  },
+  {
+    "id": "a5-y03",
+    "kind": "search",
+    "query": "site:youtube.com \"your first game\" beginner"
+  },
+  {
+    "id": "a5-y04",
+    "kind": "search",
+    "query": "site:youtube.com beginner game dev mistakes"
+  },
+  {
+    "id": "a5-y05",
+    "kind": "search",
+    "query": "site:youtube.com \"why I quit\" game development"
+  },
+  {
+    "id": "a5-y06",
+    "kind": "search",
+    "query": "site:youtube.com \"made a game\" \"no experience\""
+  },
+  {
+    "id": "a5-y07",
+    "kind": "search",
+    "query": "site:youtube.com modding \"no coding\""
+  },
+  {
+    "id": "a5-y08",
+    "kind": "search",
+    "query": "site:youtube.com \"game engine\" for beginners"
+  }
+]

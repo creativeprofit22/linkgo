@@ -1,0 +1,13 @@
+{
+  "frozen": "2026-10-04 01-research-protocol.md section 10, Phase 9 addendum item 7, before any Phase 9 request. 8 organisations. URL = the crunchbase.com/organization/<slug> result for the organisation in the p9-k01/p9-k02 search results (first matching result, logged), else the fallback slug below (also logged). The Phase 1 pilot showed `nexus-mods` returns 'Page not found', so Nexus Mods runs only with a slug found by search. Fields kept: name, founded year, employee band, total funding, last funding type/date, website, short description. No person data enters derived files.",
+  "companies": [
+    { "id": "p9-cb01", "name": "Nexus Mods", "fallbackSlug": null },
+    { "id": "p9-cb02", "name": "Overwolf (CurseForge)", "fallbackSlug": "overwolf" },
+    { "id": "p9-cb03", "name": "mod.io", "fallbackSlug": "mod-io" },
+    { "id": "p9-cb04", "name": "Thunderstore", "fallbackSlug": "thunderstore" },
+    { "id": "p9-cb05", "name": "itch.io", "fallbackSlug": "itch-io" },
+    { "id": "p9-cb06", "name": "DBolical (ModDB)", "fallbackSlug": "dbolical" },
+    { "id": "p9-cb07", "name": "GameBanana", "fallbackSlug": "gamebanana" },
+    { "id": "p9-cb08", "name": "Game Jolt", "fallbackSlug": "game-jolt" }
+  ]
+}

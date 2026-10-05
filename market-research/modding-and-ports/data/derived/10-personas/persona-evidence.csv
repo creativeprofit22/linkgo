@@ -1,0 +1,74 @@
+persona,field,strength,claim,recordId,platform,quote
+S1,snapshot,one platform,Plays modded games; experienced players trim mod lists to avoid conflicts; newcomers ask whether to mod at all.,043b7cd8d0fff651,reddit,I use a lot less mods and hardly use additions
+S1,snapshot,one platform,Plays modded games; experienced players trim mod lists to avoid conflicts; newcomers ask whether to mod at all.,11619f83baf59f6a,reddit,probably better to play vanilla until you find things that bother you
+S1,snapshot,one platform,Plays modded games; experienced players trim mod lists to avoid conflicts; newcomers ask whether to mod at all.,4fce9dbcc7ba685f,reddit,
+S1,personality,one platform,"Persistent; self-deprecating about slow learning; once setup clicks, judges it manageable.",068d488c92f47ead,reddit,"It was hard at first, to be honest, but I was able to learn."
+S1,personality,one platform,"Persistent; self-deprecating about slow learning; once setup clicks, judges it manageable.",13b54abf201b01b4,reddit,I recently figured out how to work Nexus Mods after an embarrassingly long time
+S1,emotional-state,ok,From exhausted by an unstable mod list to relieved and grateful once setup works.,068d488c92f47ead,reddit,"It was hard at first, to be honest, but I was able to learn."
+S1,emotional-state,ok,From exhausted by an unstable mod list to relieved and grateful once setup works.,2cbf2f622360084e,reddit,I'm exhausted. I can't figure out how to solve my problem.
+S1,emotional-state,ok,From exhausted by an unstable mod list to relieved and grateful once setup works.,1614307c34dae5b5,youtube,"Thank you Sir , now I can enjoy mod ."
+S1,core-worry,ok,Keeping a mod list stable; the main hub's health as creators leave; dependency downloads.,124f46b98231810c,reddit,I'm seeing more and more mod creators leaving NexusMods
+S1,core-worry,ok,Keeping a mod list stable; the main hub's health as creators leave; dependency downloads.,2cbf2f622360084e,reddit,I must have spent at least 800 hours just modding my game
+S1,core-worry,ok,Keeping a mod list stable; the main hub's health as creators leave; dependency downloads.,4db1663d80f6b811,facebook,
+S1,jobs-to-be-done,ok,"Get mods downloaded, installed and working; some find this easy once learned, others hit download failures.",068d488c92f47ead,reddit,I was actually surprised how easy it was
+S1,jobs-to-be-done,ok,"Get mods downloaded, installed and working; some find this easy once learned, others hit download failures.",06f6203b8b2af239,forum,I can't download any mods over 1 megabyte
+S1,triggers,one platform,Starting a game and asking whether to mod; creators leaving the main hub; a manager pulling unwanted mods.,124f46b98231810c,reddit,I'm seeing more and more mod creators leaving NexusMods
+S1,triggers,one platform,Starting a game and asking whether to mod; creators leaving the main hub; a manager pulling unwanted mods.,11619f83baf59f6a,reddit,probably better to play vanilla until you find things that bother you
+S1,triggers,one platform,Starting a game and asking whether to mod; creators leaving the main hub; a manager pulling unwanted mods.,01f8f2dc5e421baf,reddit,will download at least 70 different random mods
+S1,objections,one platform,Too many install steps; downloads failing; trouble reaching the hub.,124f46b98231810c,reddit,I can't even get nexus to work
+S1,objections,one platform,Too many install steps; downloads failing; trouble reaching the hub.,00d75e6953e04431,reddit,mods won't download no matter which game I open
+S1,objections,one platform,Too many install steps; downloads failing; trouble reaching the hub.,226b4ee0bb58cfde,reddit,"every tutorial says I have to install this, download that, run this program, etc. etc."
+S1,decision-criteria,ok,Stability and knowing what they are doing; some trade mod count for fewer conflicts.,043b7cd8d0fff651,reddit,I use a lot less mods and hardly use additions
+S1,decision-criteria,ok,Stability and knowing what they are doing; some trade mod count for fewer conflicts.,068d488c92f47ead,reddit,I just have to know what I'm doing
+S1,decision-criteria,ok,Stability and knowing what they are doing; some trade mod count for fewer conflicts.,08238ee18f61973f,youtube,stable is wonderful in a Bethesda product
+S1,voice,ok,I use a lot less mods and hardly use additions,043b7cd8d0fff651,reddit,I use a lot less mods and hardly use additions
+S1,voice,ok,"It was hard at first, to be honest, but I was able to learn.",068d488c92f47ead,reddit,"It was hard at first, to be honest, but I was able to learn."
+S1,voice,ok,I'm exhausted. I can't figure out how to solve my problem.,2cbf2f622360084e,reddit,I'm exhausted. I can't figure out how to solve my problem.
+S1,voice,ok,I'm seeing more and more mod creators leaving NexusMods,124f46b98231810c,reddit,I'm seeing more and more mod creators leaving NexusMods
+S1,voice,ok,"Thank you Sir , now I can enjoy mod .",1614307c34dae5b5,youtube,"Thank you Sir , now I can enjoy mod ."
+S1,best-offer,planned,"Planned (hypothesis): help keeping a mod list stable (conflict and dependency help) with fewer install steps. Answers: core-worry, objections, jobs-to-be-done.",,,
+S2,snapshot,one platform,"Beginners with no coding or 3D skills asking where to start (Minecraft mods, first games).",0b237aba4b5ec278,reddit,"I have zero coding experience, no 3D modeling skills"
+S2,snapshot,one platform,"Beginners with no coding or 3D skills asking where to start (Minecraft mods, first games).",16b21c20cf5a0b56,reddit,
+S2,snapshot,one platform,"Beginners with no coding or 3D skills asking where to start (Minecraft mods, first games).",2a2febf042cdb486,reddit,
+S2,personality,ok,"Idea-driven; some enjoy learning and overcoming barriers, others want someone else to build their ideas.",27fa0fb9a84fa49f,reddit,"I do it because I enjoy spending my time learning, making content, overcoming barriers"
+S2,personality,ok,"Idea-driven; some enjoy learning and overcoming barriers, others want someone else to build their ideas.",2230ed210c75044e,facebook,
+S2,emotional-state,thin,Daunted at the start.,13a99cadaa51f411,reddit,initial period of staring at your screen
+S2,core-worry,one platform,A steep learning curve and finding resources to learn from.,13a99cadaa51f411,reddit,initial learning curve is going to be pretty sharp
+S2,core-worry,one platform,A steep learning curve and finding resources to learn from.,19d612737835c36f,reddit,my main difficulty was finding resources to learn and
+S2,jobs-to-be-done,one platform,"Pick a tool or engine, find a place to start learning, and finish things.",04850798c8ffaf9e,reddit,What is the most easy game engine from your perspective?
+S2,jobs-to-be-done,one platform,"Pick a tool or engine, find a place to start learning, and finish things.",236cb8a4fd411ef7,reddit,"Anyway, what'd be a good place to start learning"
+S2,jobs-to-be-done,one platform,"Pick a tool or engine, find a place to start learning, and finish things.",27fa0fb9a84fa49f,reddit,often not complete things
+S2,triggers,ok,Having a specific mod idea.,28f044c742f76612,tiktok,
+S2,triggers,ok,Having a specific mod idea.,4f9d55a86746921f,reddit,
+S2,objections,ok,Steep curve; slow official tools; scarce learning resources; code required (Java for Minecraft).,13a99cadaa51f411,reddit,the creation kit is slow and cumbersome
+S2,objections,ok,Steep curve; slow official tools; scarce learning resources; code required (Java for Minecraft).,19d612737835c36f,reddit,my main difficulty was finding resources to learn and
+S2,objections,ok,Steep curve; slow official tools; scarce learning resources; code required (Java for Minecraft).,6565f0a9e4a7630d,forum,You will have to learn Java one way or another
+S2,decision-criteria,one platform,"Keeps going when learning itself is rewarding (enjoyment, a good first game jam).",27fa0fb9a84fa49f,reddit,"I do it because I enjoy spending my time learning, making content, overcoming barriers"
+S2,decision-criteria,one platform,"Keeps going when learning itself is rewarding (enjoyment, a good first game jam).",1f6a69bbb2ac5aaf,reddit,It ended up being one of the best weekends
+S2,voice,one platform,initial learning curve is going to be pretty sharp,13a99cadaa51f411,reddit,initial learning curve is going to be pretty sharp
+S2,voice,one platform,"I have zero coding experience, no 3D modeling skills",0b237aba4b5ec278,reddit,"I have zero coding experience, no 3D modeling skills"
+S2,voice,one platform,"I do it because I enjoy spending my time learning, making content, overcoming barriers",27fa0fb9a84fa49f,reddit,"I do it because I enjoy spending my time learning, making content, overcoming barriers"
+S2,best-offer,planned,"Planned (hypothesis): a guided first-mod path needing little or no code, with curated tutorials. Answers: objections, core-worry, jobs-to-be-done.",,,
+S3,snapshot,one platform,Players asking for or praising PC ports of older console and mobile games; some prefer ports to emulators.,072460df43954447,reddit,
+S3,snapshot,one platform,Players asking for or praising PC ports of older console and mobile games; some prefer ports to emulators.,136842f0246ef1b7,reddit,This game would be so good on PC and controlled with a pointer and mouse.
+S3,snapshot,one platform,Players asking for or praising PC ports of older console and mobile games; some prefer ports to emulators.,15b0ba8b4f86d13e,reddit,"native PC ports are amazing, better than emulators for a few reasons"
+S3,personality,ok,Enthusiastic about native ports and long-awaited fan milestones.,15b0ba8b4f86d13e,reddit,"native PC ports are amazing, better than emulators for a few reasons"
+S3,personality,ok,Enthusiastic about native ports and long-awaited fan milestones.,095d385db9c45035,forum,Stop n Swop will finally be real and it only took 26 years!
+S3,emotional-state,ok,Excited when ports arrive; wishful when none exists.,231d7a480e3cdd49,reddit,"I wish there was a PC port so we, fans, could play it on PC."
+S3,emotional-state,ok,Excited when ports arrive; wishful when none exists.,00e6225e93ef842a,youtube,
+S3,emotional-state,ok,Excited when ports arrive; wishful when none exists.,04cca45727676965,youtube,"every single game you're watching in this video, you can play on your PC today"
+S3,core-worry,ok,Favourite games are not playable on PC.,231d7a480e3cdd49,reddit,"I wish there was a PC port so we, fans, could play it on PC."
+S3,core-worry,ok,Favourite games are not playable on PC.,28f044c742f76612,tiktok,
+S3,jobs-to-be-done,ok,Play older games natively on PC; follow decompilation progress; get a port running.,072460df43954447,reddit,
+S3,jobs-to-be-done,ok,Play older games natively on PC; follow decompilation progress; get a port running.,03163c278683c242,youtube,
+S3,jobs-to-be-done,ok,Play older games natively on PC; follow decompilation progress; get a port running.,5ccff46bbb94d79b,forum,Another milestone in N64 decompilation project has been reached today
+S3,triggers,ok,A wanted game with no PC port.,019dfea27e812111,gamebanana,
+S3,triggers,ok,A wanted game with no PC port.,231d7a480e3cdd49,reddit,"I wish there was a PC port so we, fans, could play it on PC."
+S3,objections,one platform,Getting a port working on a modern PC; confusing port terms (decompilation vs recompilation).,072460df43954447,reddit,
+S3,objections,one platform,Getting a port working on a modern PC; confusing port terms (decompilation vs recompilation).,32f5ebf9fe7918f6,reddit,
+S3,decision-criteria,one platform,Native PC ports over emulation; extras such as HD textures.,36f4bea96d7b5ac2,youtube,the first native PC port of a GameCube game
+S3,decision-criteria,one platform,Native PC ports over emulation; extras such as HD textures.,05e05cef30a23d52,youtube,one of these modern uh recompiled PC ports with HD textures
+S3,voice,ok,"native PC ports are amazing, better than emulators for a few reasons",15b0ba8b4f86d13e,reddit,"native PC ports are amazing, better than emulators for a few reasons"
+S3,voice,ok,"I wish there was a PC port so we, fans, could play it on PC.",231d7a480e3cdd49,reddit,"I wish there was a PC port so we, fans, could play it on PC."
+S3,voice,ok,"every single game you're watching in this video, you can play on your PC today",04cca45727676965,youtube,"every single game you're watching in this video, you can play on your PC today"
+S3,best-offer,planned,"Planned (hypothesis): port discovery with setup guides; legal risk High for hosting ports (07). Answers: jobs-to-be-done, objections.",,,

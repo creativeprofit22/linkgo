@@ -1,0 +1,6 @@
+method,items,attempts,ok,okWithRecords,failed,failedByClass,coded,usable,okRate,usableRate
+github_repository_file,20,20,20,20,0,,0,0,1.000,0.000
+reddit_posts,23,23,23,23,0,,22,22,1.000,0.957
+scrape,24,25,24,24,0,,14,13,1.000,0.542
+youtube_videos,7,7,7,7,0,,7,7,1.000,1.000
+all,74,75,74,74,0,,43,42,1.000,0.568

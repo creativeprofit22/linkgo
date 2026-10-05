@@ -1,0 +1,192 @@
+{
+  "frozen": "2026-10-04 01-research-protocol.md section 10, Phase 10 addendum items 11-12, before any Phase 10 request. Groups: persona (p10-g*, neutral persona-language questions per segment; platform reddit 8, youtube 4, web 2), disconfirm (p10-d*), competitor (p10-c*, positioning wording). Disconfirmer additions (p10-x*, group disconfirmer, at most 4, searches only) are appended before they run.",
+  "rule": "Persona queries ask how people start, choose, struggle or stop; they never assume that modding is hard or that a new product is wanted. Disconfirmation queries look for the opposite. Competitor queries look for the positioning wording itself. No person is named.",
+  "queries": [
+    {
+      "id": "p10-c01",
+      "group": "competitor",
+      "platform": "web",
+      "query": "\"democratizing modding\""
+    },
+    {
+      "id": "p10-c02",
+      "group": "competitor",
+      "platform": "web",
+      "query": "democratize game modding platform"
+    },
+    {
+      "id": "p10-c03",
+      "group": "competitor",
+      "platform": "web",
+      "query": "\"modding for everyone\""
+    },
+    {
+      "id": "p10-c04",
+      "group": "competitor",
+      "platform": "web",
+      "query": "\"anyone can make mods\""
+    },
+    {
+      "id": "p10-c05",
+      "group": "competitor",
+      "platform": "web",
+      "query": "make game modding accessible to everyone"
+    },
+    {
+      "id": "p10-c06",
+      "group": "competitor",
+      "platform": "web",
+      "query": "mod platform \"for everyone\" creators players"
+    },
+    {
+      "id": "p10-d01",
+      "group": "disconfirm",
+      "platform": "reddit",
+      "query": "site:reddit.com modding is easy now"
+    },
+    {
+      "id": "p10-d02",
+      "group": "disconfirm",
+      "platform": "reddit",
+      "query": "site:reddit.com mod managers make it simple"
+    },
+    {
+      "id": "p10-d03",
+      "group": "disconfirm",
+      "platform": "reddit",
+      "query": "site:reddit.com don't need another mod site"
+    },
+    {
+      "id": "p10-d04",
+      "group": "disconfirm",
+      "platform": "youtube",
+      "query": "site:youtube.com modding is not for beginners"
+    },
+    {
+      "id": "p10-g01",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S1",
+      "query": "site:reddit.com first time using mods advice"
+    },
+    {
+      "id": "p10-g02",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S1",
+      "query": "site:reddit.com choosing a mod manager"
+    },
+    {
+      "id": "p10-g03",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S1",
+      "query": "site:reddit.com why I stopped using mods"
+    },
+    {
+      "id": "p10-g04",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S2",
+      "query": "site:reddit.com how did you start making mods"
+    },
+    {
+      "id": "p10-g05",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S2",
+      "query": "site:reddit.com why I stopped modding"
+    },
+    {
+      "id": "p10-g06",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S2",
+      "query": "site:reddit.com what I wish I knew before making my first mod"
+    },
+    {
+      "id": "p10-g07",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S3",
+      "query": "site:reddit.com playing a pc port of an old console game"
+    },
+    {
+      "id": "p10-g08",
+      "group": "persona",
+      "platform": "reddit",
+      "segment": "S4",
+      "query": "site:reddit.com making a fan game of a series I love"
+    },
+    {
+      "id": "p10-g09",
+      "group": "persona",
+      "platform": "youtube",
+      "segment": "S1",
+      "query": "site:youtube.com how to install mods for beginners"
+    },
+    {
+      "id": "p10-g10",
+      "group": "persona",
+      "platform": "youtube",
+      "segment": "S2",
+      "query": "site:youtube.com making my first mod"
+    },
+    {
+      "id": "p10-g11",
+      "group": "persona",
+      "platform": "youtube",
+      "segment": "S3",
+      "query": "site:youtube.com pc port decompilation how to play"
+    },
+    {
+      "id": "p10-g12",
+      "group": "persona",
+      "platform": "youtube",
+      "segment": "S4",
+      "query": "site:youtube.com fan game devlog"
+    },
+    {
+      "id": "p10-g13",
+      "group": "persona",
+      "platform": "web",
+      "segment": "S1",
+      "query": "new to modding where do I start forum"
+    },
+    {
+      "id": "p10-g14",
+      "group": "persona",
+      "platform": "web",
+      "segment": "S2",
+      "query": "learning to mod games as a hobby forum"
+    },
+    {
+      "id": "p10-x01",
+      "group": "disconfirmer",
+      "platform": "web",
+      "query": "modders \"democratizing modding\" OR \"modding for everyone\"",
+      "appended": "2026-10-04 Disconfirmer: tests that the audience never uses the wording"
+    },
+    {
+      "id": "p10-x02",
+      "group": "disconfirmer",
+      "platform": "web",
+      "query": "site:curseforge.com OR site:thunderstore.io \"for everyone\"",
+      "appended": "2026-10-04 Disconfirmer: tests that only one incumbent hub claims it"
+    },
+    {
+      "id": "p10-x03",
+      "group": "disconfirmer",
+      "platform": "web",
+      "query": "modding was easier than I thought beginner",
+      "appended": "2026-10-04 Disconfirmer: tests that beginners find modding hard"
+    },
+    {
+      "id": "p10-x04",
+      "group": "disconfirmer",
+      "platform": "web",
+      "query": "pc port decomp players worried legal takedown",
+      "appended": "2026-10-04 Disconfirmer: tests whether port players voice legal worry"
+    }
+  ]
+}

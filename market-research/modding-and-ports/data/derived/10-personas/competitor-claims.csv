@@ -1,0 +1,25 @@
+source,phase,recordId,queryId,host,organisation,knownCompetitor,phraseTerms,synonymTerms,snippetOnly,selfClaim,context
+search-snippet,10-personas,,p10-c05,80.lv,80.lv,no,,\baccessible\b,yes,no,media article quoting an interviewee on AI making creation accessible
+search-snippet,10-personas,,p10-c06,thesims4.curseforge.com,CurseForge,yes,,\bfor everyone\b,yes,unclear,Sims 4 hub landing copy; snippet cut before the subject of 'for everyone'
+stored-page,04-competitors,a51eb6b8067b2c17,,curseforge.com,CurseForge,yes,,\baccessible\b,no,boilerplate,terms of service legal text
+stored-page,05-creator-tools,8803cbd7facda3a9,,wiki.gdevelop.io,GDevelop,yes,,\baccessible\b,no,boilerplate,docs: tutorials 'accessible from' a page
+search-snippet,10-personas,,p10-c06,nexusmods.com,Nexus Mods,yes,,\bfor everyone\b,yes,yes,About page: 'Modding should be for everyone' (same page stored in 09)
+stored-page,04-competitors,25ec7e2ca43609dc,,help.nexusmods.com,Nexus Mods,yes,,\baccessible\b,no,boilerplate,terms text 'accessible via our site'
+stored-page,04-competitors,2c3a4d833400b4fb,,nexusmods.com,Nexus Mods,yes,,\baccessible\b,no,no,creator-rewards page: describes a community tool as 'flexible and accessible'
+stored-page,09-sizing,p9-s01,,nexusmods.com,Nexus Mods,yes,,\baccessible\b;\bfor everyone\b,no,yes,"About page (stored 09): 'Modding should be for everyone', 'make modding simple and accessible'"
+search-snippet,10-personas,,p10-c03,steamcommunity.com,Steam Workshop,yes,,\bfor everyone\b,yes,no,"user discussion threads on Steam Community, not Valve copy"
+search-snippet,10-personas,,p10-c04,steamcommunity.com,Steam Workshop,yes,,\banyone can\b,yes,no,"user discussion threads on Steam Community, not Valve copy"
+search-snippet,10-personas,,p10-c06,steamcommunity.com,Steam Workshop,yes,,\baccessible\b;\bfor everyone\b,yes,no,"user discussion threads on Steam Community, not Valve copy"
+stored-page,04-competitors,4b95ba787bcc0f6f,,steamcommunity.com,Steam Workshop,yes,,\baccessible\b;\bfor everyone\b,no,boilerplate,"Workshop update notes: 'deployed for everyone', 'accessible to players'"
+search-snippet,10-personas,,p10-c01,accelxr.substack.com,accelxr.substack.com,no,\bdemocrati[sz]\w*,,yes,no,research blog listing AI agents as 'democratizing modding'; not a product claim
+search-snippet,10-personas,,p10-c02,blog.apifornia.com,blog.apifornia.com,no,,\baccessible\b,yes,no,"no-code game-dev blog; about game development, not modding"
+search-snippet,10-personas,,p10-c02,courier-journal.com,courier-journal.com,no,\bdemocrati[sz]\w*,,yes,other-domain,press release: a multiplayer-modding sandbox 'designed to democratize'; company words on a news site
+search-snippet,10-personas,,p10-c03,github.com,github.com,no,,\bfor everyone\b,yes,other-domain,a small modding tool's repo: 'software that makes modding for everyone'
+stored-page,04-competitors,bf6393f70d91dad6,,itch.io,itch.io,yes,,\baccessible\b;\bfor everyone\b,no,boilerplate,"content policy: page 'accessible via direct access', 'ready for everyone to see'"
+search-snippet,10-personas,,p10-c02,jsonline.com,jsonline.com,no,\bdemocrati[sz]\w*,,yes,other-domain,same press release as above (same organisation)
+search-snippet,10-personas,,p10-c01,lemonloader.com,lemonloader.com,no,\bdemocrati[sz]\w*,,yes,unclear,site about a mod loader says 'democratizing modding'; owner of the site unclear
+search-snippet,10-personas,,p10-c05,mod.io,mod.io,yes,,\baccessible\b,yes,yes,landing copy 'Easily accessible UGC & mods for all your players' (aimed at studios)
+search-snippet,10-personas,,p10-c06,naavik.co,naavik.co,no,,\bfor everyone\b,yes,no,industry interview; 'thankful for everyone' is not a claim
+search-snippet,10-personas,,p10-c01,store.steampowered.com,store.steampowered.com,no,\bdemocrati[sz]\w*,,yes,other-domain,"a node-based modding tool's store page uses the exact phrase; developer copy, not its own domain"
+stored-page,04-competitors,f49b957b54c7710b,,store.steampowered.com,store.steampowered.com,no,,\baccessible\b,no,boilerplate,Steam subscriber agreement legal text
+search-snippet,10-personas,,p10-c04,yal.cc,yal.cc,no,,\banyone can\b,yes,yes,a game-mod tool developer's own site: 'anyone can make mods' for one game

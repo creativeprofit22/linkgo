@@ -1,0 +1,24 @@
+recordId,phase,term,sense,note
+00e6225e93ef842a,06-ports-rust,democratiz*,borderline,"video speaker: a tool gives a ""democratization"" of seeing how games work; not about making mods"
+01faaad40decb254,02-public-web,for everyone,off-sense,"""not a huge disappointment for everyone"""
+0200c94fc9fd7f6d,02-public-web,accessible,off-sense,"a game area ""accessible only through"" another"
+034960b138e41cb0,02-public-web;03-audience;05-creator-tools,accessible,off-sense,servers stay vanilla to stay reachable for players; not about ease of modding
+03c923391f1672ab,08-community,for everyone,off-sense,"fan project title ""a place for everyone"""
+04cca45727676965,06-ports-rust,for everyone,off-sense,"""not going to be for everyone"" about a game"
+097c148125ba5f58,08-community,for everyone,off-sense,"a mod helps ""everyone else"" who uses it"
+0cb0a8346d063939,02-public-web;03-audience,accessible,in-sense-audience,hopes modding becomes accessible to non-programmers like the speaker
+175da1e8d47cfbe7,04-competitors,anyone can,off-sense,"""anyone can suggest"" a mod pack"
+191d7b025742b70d,08-community,accessible,off-sense,web version of a game reaching more players
+1bc20fda5a29bc74,04-competitors,anyone can,off-sense,"""if anyone can help"""
+1f641ade31e0d82e,07-legal,accessible,off-sense,keeping a shut-down fan game available
+209e20c67d45c843,04-competitors,for everyone,off-sense,"""a crappy day for everyone"""
+218e3485cabf566e,07-legal,anyone can,borderline,"a fan revival project ""anyone can have an active part on"""
+31fb052c5fbf63f5,08-community,for everyone,off-sense,"an academic text ""probably not for everyone"""
+3392d81b050349bc,03-audience,for everyone;accessible,off-sense,"""something for everyone""; disability accessibility of games (different sense)"
+443ecd7177ccce1b,03-audience,accessible,in-sense-audience,"a map editor first used as a kid was ""extremely accessible"""
+4514276e559fcd97,03-audience,anyone can,off-sense,"""anyone can help me"""
+5d08091b7ee5132d,08-community,accessible,in-sense-audience,"one mod platform judged ""more accessible and fluid"" than another"
+62de0573648cf157,08-community,accessible,in-sense-other-voice,"a game company statement: open modding ""makes it accessible to everyone"""
+6752f99eebb5fe51,08-community,accessible,off-sense,"community information walled off, not easy to find"
+6bbceb411a84ed90,03-audience,for everyone,off-sense,unrelated use
+c121bb5cb8cb5b50,03-audience,accessible;democratiz*,in-sense-other-voice,"research paper: making modding more accessible; ""Democratizing"" only in a cited title"

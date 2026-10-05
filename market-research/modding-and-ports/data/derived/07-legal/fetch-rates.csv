@@ -1,0 +1,3 @@
+method,items,attempts,ok,okWithRecords,failed,failedByClass,coded,usable,okRate,usableRate
+scrape,63,67,56,56,7,brd_error:7,16,10,0.889,0.159
+all,63,67,56,56,7,brd_error:7,16,10,0.889,0.159

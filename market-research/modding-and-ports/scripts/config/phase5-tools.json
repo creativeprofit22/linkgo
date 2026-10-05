@@ -1,0 +1,223 @@
+{
+  "frozen": "2026-10-03",
+  "rule": "01-research-protocol.md section 10, Phase 5 addendum items 2-3. A tool is in if it is used to make mods or games AND it is in the starting list or named in >= 3 coded Phase 2-4 records. One URL per slot; null = no known URL. Every tool has one logged site: lookup (a5-l*, phase5-queries.json); its pick fills a null slot, or replaces a config URL that is not found or still blocked after two retry rounds. An empty slot is recorded as no page found.",
+  "slots": ["docs", "pricing"],
+  "slotMeaning": {
+    "docs": "official getting-started page or first mod / first game tutorial",
+    "pricing": "pricing, licence or EULA page covering cost and rights to the output"
+  },
+  "mentionCount": {
+    "method": "case-insensitive tool-name match over coded rows of data/derived/02-public-web/deep-sample-coding.csv, 03-audience/deep-sample-coding.csv and 04-competitors/sentiment-coding.csv, counted once per recordId, 2026-10-03",
+    "result": "No tool outside the starting list reaches 3 records. Minecraft modding 4 records (covered by the fabric-forge entry); Roblox 2; Unreal, Godot, GameMaker, Blender, Ren'Py and Scratch 1 each (one Scratch hit is the phrase 'from scratch'); one record mentions an unnamed paid AI mod tool."
+  },
+  "excluded": [
+    {
+      "tool": "Nexus Mods Vortex, r2modman, CurseForge app, other mod managers",
+      "reason": "install tools for players; covered by Phase 4, cited not re-scraped"
+    },
+    {
+      "tool": "Blender",
+      "reason": "general 3D asset tool, not a mod or game maker; 1 coded record (< 3)"
+    },
+    {
+      "tool": "Ren'Py",
+      "reason": "not in the starting list; 1 coded record (< 3)"
+    },
+    {
+      "tool": "Scratch",
+      "reason": "not in the starting list; 1 relevant coded record (< 3), Phase 3 cites it as an adjacent population only"
+    }
+  ],
+  "aiDiscovery": {
+    "lookupId": "a5-l15",
+    "rule": "Collector C1 takes the first two results, in rank order, whose page is the own site of an AI-assisted game or mod creation product (host belongs to the product; not an article, list, store, video, forum or social page). Each pick is logged with its rank and reason. For each pick one site: lookup (a5-l16, a5-l17) is appended to phase5-queries.json before it runs, and the tool is added below with category ai-assisted and null slots. Fewer than two qualifying results is logged, not replaced.",
+    "log": [
+      {
+        "rank": 1,
+        "url": "https://gdevelop.io/",
+        "decision": "skipped",
+        "reason": "product's own site, but GDevelop is already in the starting list (id gdevelop, category no-code) with its own lookup a5-l06; not added twice"
+      },
+      {
+        "rank": 2,
+        "url": "https://www.astrocade.com/create",
+        "decision": "picked",
+        "toolId": "astrocade",
+        "reason": "own site of an AI game creation product (host astrocade.com belongs to the product; create page, not an article, list, store, video, forum or social page)"
+      },
+      {
+        "rank": 3,
+        "url": "https://rosebud.ai/ai-game-creator",
+        "decision": "picked",
+        "toolId": "rosebud",
+        "reason": "own site of an AI game creation product (host rosebud.ai belongs to the product; product page, not an article, list, store, video, forum or social page)"
+      },
+      {
+        "note": "ranks 4-8 not considered: two picks reached at rank 3"
+      }
+    ]
+  },
+  "tools": [
+    {
+      "id": "unity",
+      "name": "Unity",
+      "category": "engine",
+      "host": "unity.com",
+      "pages": {
+        "docs": "https://learn.unity.com/",
+        "pricing": "https://unity.com/pricing"
+      }
+    },
+    {
+      "id": "unreal",
+      "name": "Unreal Engine",
+      "category": "engine",
+      "host": "epicgames.com",
+      "pages": {
+        "docs": null,
+        "pricing": "https://www.unrealengine.com/en-US/license"
+      }
+    },
+    {
+      "id": "godot",
+      "name": "Godot",
+      "category": "engine",
+      "host": "godotengine.org",
+      "pages": {
+        "docs": "https://docs.godotengine.org/en/stable/getting_started/introduction/index.html",
+        "pricing": "https://godotengine.org/license/"
+      }
+    },
+    {
+      "id": "gamemaker",
+      "name": "GameMaker",
+      "category": "engine",
+      "host": "gamemaker.io",
+      "pages": {
+        "docs": null,
+        "pricing": "https://gamemaker.io/en/get"
+      }
+    },
+    {
+      "id": "rpgmaker",
+      "name": "RPG Maker",
+      "category": "no-code",
+      "host": "rpgmakerweb.com",
+      "pages": {
+        "docs": null,
+        "pricing": null
+      }
+    },
+    {
+      "id": "gdevelop",
+      "name": "GDevelop",
+      "category": "no-code",
+      "host": "gdevelop.io",
+      "pages": {
+        "docs": "https://wiki.gdevelop.io/gdevelop5/getting_started/",
+        "pricing": "https://gdevelop.io/pricing"
+      }
+    },
+    {
+      "id": "construct",
+      "name": "Construct",
+      "category": "no-code",
+      "host": "construct.net",
+      "pages": {
+        "docs": "https://www.construct.net/en/tutorials",
+        "pricing": null
+      }
+    },
+    {
+      "id": "roblox",
+      "name": "Roblox Studio",
+      "category": "no-code",
+      "host": "roblox.com",
+      "pages": {
+        "docs": "https://create.roblox.com/docs/get-started",
+        "pricing": "https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use"
+      }
+    },
+    {
+      "id": "creationkit",
+      "name": "Bethesda Creation Kit",
+      "category": "modding-kit",
+      "host": "creationkit.com",
+      "pages": {
+        "docs": null,
+        "pricing": null
+      }
+    },
+    {
+      "id": "bepinex",
+      "name": "BepInEx",
+      "category": "modding-kit",
+      "host": "bepinex.dev",
+      "pages": {
+        "docs": "https://docs.bepinex.dev/articles/user_guide/installation/index.html",
+        "pricing": "https://github.com/BepInEx/BepInEx/blob/master/LICENSE"
+      }
+    },
+    {
+      "id": "melonloader",
+      "name": "MelonLoader",
+      "category": "modding-kit",
+      "host": "melonwiki.xyz",
+      "pages": {
+        "docs": "https://melonwiki.xyz/",
+        "pricing": null
+      }
+    },
+    {
+      "id": "fabric-forge",
+      "name": "Minecraft Fabric / Forge",
+      "category": "modding-kit",
+      "host": "fabricmc.net",
+      "pages": {
+        "docs": "https://docs.fabricmc.net/develop/getting-started/introduction-to-fabric",
+        "pricing": "https://www.minecraft.net/en-us/usage-guidelines"
+      }
+    },
+    {
+      "id": "tmodloader",
+      "name": "tModLoader",
+      "category": "modding-kit",
+      "host": "github.com",
+      "pathPrefix": "/tModLoader/",
+      "pages": {
+        "docs": "https://github.com/tModLoader/tModLoader/wiki/Basic-tModLoader-Modding-Guide",
+        "pricing": null
+      }
+    },
+    {
+      "id": "blockbench",
+      "name": "Blockbench",
+      "category": "modding-kit",
+      "host": "blockbench.net",
+      "pages": {
+        "docs": null,
+        "pricing": null
+      }
+    },
+    {
+      "id": "astrocade",
+      "name": "Astrocade",
+      "category": "ai-assisted",
+      "host": "astrocade.com",
+      "pages": {
+        "docs": null,
+        "pricing": null
+      }
+    },
+    {
+      "id": "rosebud",
+      "name": "Rosebud AI",
+      "category": "ai-assisted",
+      "host": "rosebud.ai",
+      "pages": {
+        "docs": null,
+        "pricing": null
+      }
+    }
+  ]
+}

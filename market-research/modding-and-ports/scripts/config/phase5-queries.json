@@ -1,0 +1,352 @@
+{
+  "frozen": "2026-10-03",
+  "rule": "01-research-protocol.md section 10, Phase 5 addendum items 3-4. Groups: lookup (a5-l*, one site: search per tool for its docs and pricing/licence pages, plus a5-l15 open-web AI tool discovery), community (a5-c* Reddit, a5-y* YouTube; direction help-seeking / showcase / neutral, balanced), disconfirm (a5-d*, open web, tools already easy for beginners). a5-l16/a5-l17 (AI tool site lookups) and Disconfirmer additions (a5-x*, group disconfirmer, at most 6) are appended before they run; their thread-shaped open-web results are sampled separately (at most 1 per query, quota 4) so the frozen sample is unchanged.",
+  "queries": [
+    {
+      "id": "a5-l01",
+      "group": "lookup",
+      "tool": "unity",
+      "query": "site:unity.com \"getting started\" OR tutorial OR pricing OR plans"
+    },
+    {
+      "id": "a5-l02",
+      "group": "lookup",
+      "tool": "unreal",
+      "query": "site:epicgames.com \"unreal engine\" \"getting started\" OR tutorial OR license OR EULA"
+    },
+    {
+      "id": "a5-l03",
+      "group": "lookup",
+      "tool": "godot",
+      "query": "site:godotengine.org \"getting started\" OR tutorial OR license"
+    },
+    {
+      "id": "a5-l04",
+      "group": "lookup",
+      "tool": "gamemaker",
+      "query": "site:gamemaker.io \"getting started\" OR tutorial OR pricing OR license"
+    },
+    {
+      "id": "a5-l05",
+      "group": "lookup",
+      "tool": "rpgmaker",
+      "query": "site:rpgmakerweb.com \"getting started\" OR tutorial OR license OR EULA OR buy"
+    },
+    {
+      "id": "a5-l06",
+      "group": "lookup",
+      "tool": "gdevelop",
+      "query": "site:gdevelop.io \"getting started\" OR tutorial OR pricing OR license"
+    },
+    {
+      "id": "a5-l07",
+      "group": "lookup",
+      "tool": "construct",
+      "query": "site:construct.net \"getting started\" OR tutorial OR pricing OR license OR buy"
+    },
+    {
+      "id": "a5-l08",
+      "group": "lookup",
+      "tool": "roblox",
+      "query": "site:roblox.com studio \"get started\" OR tutorial OR terms OR monetization"
+    },
+    {
+      "id": "a5-l09",
+      "group": "lookup",
+      "tool": "creationkit",
+      "query": "site:creationkit.com \"getting started\" OR tutorial OR EULA OR license"
+    },
+    {
+      "id": "a5-l10",
+      "group": "lookup",
+      "tool": "bepinex",
+      "query": "site:bepinex.dev \"getting started\" OR installation OR plugin OR license"
+    },
+    {
+      "id": "a5-l11",
+      "group": "lookup",
+      "tool": "melonloader",
+      "query": "site:melonwiki.xyz \"getting started\" OR installation OR mod OR license"
+    },
+    {
+      "id": "a5-l12",
+      "group": "lookup",
+      "tool": "fabric-forge",
+      "query": "site:fabricmc.net \"getting started\" OR tutorial OR license"
+    },
+    {
+      "id": "a5-l13",
+      "group": "lookup",
+      "tool": "tmodloader",
+      "query": "site:github.com tModLoader \"modding guide\" OR wiki OR license"
+    },
+    {
+      "id": "a5-l14",
+      "group": "lookup",
+      "tool": "blockbench",
+      "query": "site:blockbench.net \"getting started\" OR quickstart OR tutorial OR license"
+    },
+    {
+      "id": "a5-l15",
+      "group": "lookup",
+      "tool": "ai-discovery",
+      "query": "AI game maker make a game without coding"
+    },
+    {
+      "id": "a5-l16",
+      "group": "lookup",
+      "tool": "astrocade",
+      "query": "site:astrocade.com \"getting started\" OR tutorial OR pricing OR terms"
+    },
+    {
+      "id": "a5-l17",
+      "group": "lookup",
+      "tool": "rosebud",
+      "query": "site:rosebud.ai \"getting started\" OR tutorial OR pricing OR terms"
+    },
+    {
+      "id": "a5-c01",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com modding \"where do I start\""
+    },
+    {
+      "id": "a5-c02",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com modding \"easier than I thought\""
+    },
+    {
+      "id": "a5-c03",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"learn to code\" \"make mods\""
+    },
+    {
+      "id": "a5-c04",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com \"no code\" game maker beginner"
+    },
+    {
+      "id": "a5-c05",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"make my own game\" beginner"
+    },
+    {
+      "id": "a5-c06",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com modding \"instead of making\" a game"
+    },
+    {
+      "id": "a5-c07",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"gave up\" modding"
+    },
+    {
+      "id": "a5-c08",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com \"finished my first mod\""
+    },
+    {
+      "id": "a5-c09",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"first game\" \"gave up\""
+    },
+    {
+      "id": "a5-c10",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com \"finished my first game\""
+    },
+    {
+      "id": "a5-c11",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"game engine\" \"too hard\" beginner"
+    },
+    {
+      "id": "a5-c12",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com \"game engine\" \"easy to learn\""
+    },
+    {
+      "id": "a5-c13",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com modding tutorial outdated"
+    },
+    {
+      "id": "a5-c14",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "showcase",
+      "query": "site:reddit.com modding tutorial \"really helped\""
+    },
+    {
+      "id": "a5-c15",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "help-seeking",
+      "query": "site:reddit.com \"no programming experience\" modding"
+    },
+    {
+      "id": "a5-c16",
+      "group": "community",
+      "platform": "reddit",
+      "direction": "neutral",
+      "query": "site:reddit.com \"as a programmer\" modding"
+    },
+    {
+      "id": "a5-y01",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "neutral",
+      "query": "site:youtube.com modding tutorial for beginners"
+    },
+    {
+      "id": "a5-y02",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "neutral",
+      "query": "site:youtube.com \"your first mod\""
+    },
+    {
+      "id": "a5-y03",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "neutral",
+      "query": "site:youtube.com \"your first game\" beginner"
+    },
+    {
+      "id": "a5-y04",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "help-seeking",
+      "query": "site:youtube.com beginner game dev mistakes"
+    },
+    {
+      "id": "a5-y05",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "help-seeking",
+      "query": "site:youtube.com \"why I quit\" game development"
+    },
+    {
+      "id": "a5-y06",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "showcase",
+      "query": "site:youtube.com \"made a game\" \"no experience\""
+    },
+    {
+      "id": "a5-y07",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "showcase",
+      "query": "site:youtube.com modding \"no coding\""
+    },
+    {
+      "id": "a5-y08",
+      "group": "community",
+      "platform": "youtube",
+      "direction": "neutral",
+      "query": "site:youtube.com \"game engine\" for beginners"
+    },
+    {
+      "id": "a5-d01",
+      "group": "disconfirm",
+      "query": "easiest game engine for complete beginners"
+    },
+    {
+      "id": "a5-d02",
+      "group": "disconfirm",
+      "query": "is modding easy to learn forum"
+    },
+    {
+      "id": "a5-d03",
+      "group": "disconfirm",
+      "query": "made my first game with no coding experience"
+    },
+    {
+      "id": "a5-d04",
+      "group": "disconfirm",
+      "query": "how long does it take to learn to make mods"
+    },
+    {
+      "id": "a5-d05",
+      "group": "disconfirm",
+      "query": "beginner friendly modding tools forum"
+    },
+    {
+      "id": "a5-d06",
+      "group": "disconfirm",
+      "query": "learning Godot as a complete beginner forum"
+    },
+    {
+      "id": "a5-d07",
+      "group": "disconfirm",
+      "query": "Roblox Studio easy for beginners forum"
+    },
+    {
+      "id": "a5-d08",
+      "group": "disconfirm",
+      "query": "first mod with no programming experience forum"
+    },
+    {
+      "id": "a5-x01",
+      "group": "disconfirmer",
+      "addedBy": "Disconfirmer 2026-10-03, before running",
+      "query": "\"no coding experience\" \"made my first game\""
+    },
+    {
+      "id": "a5-x02",
+      "group": "disconfirmer",
+      "addedBy": "Disconfirmer 2026-10-03, before running",
+      "query": "no-code Minecraft mod maker beginner"
+    },
+    {
+      "id": "a5-x03",
+      "group": "disconfirmer",
+      "addedBy": "Disconfirmer 2026-10-03, before running",
+      "query": "free game assets for beginners game engine forum"
+    },
+    {
+      "id": "a5-x04",
+      "group": "disconfirmer",
+      "addedBy": "Disconfirmer 2026-10-03, before running",
+      "query": "\"just start with\" game engine beginner forum"
+    },
+    {
+      "id": "a5-x05",
+      "group": "disconfirmer",
+      "addedBy": "Disconfirmer 2026-10-03, before running",
+      "query": "AI game generator \"no experience\" made a game"
+    },
+    {
+      "id": "a5-x06",
+      "group": "disconfirmer",
+      "addedBy": "Disconfirmer 2026-10-03, before running",
+      "query": "modding \"easier than you think\" forum"
+    }
+  ]
+}

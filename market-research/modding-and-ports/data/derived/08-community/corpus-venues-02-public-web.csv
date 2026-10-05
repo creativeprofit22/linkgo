@@ -1,0 +1,11 @@
+venue,records_citing,share,records_citing_excl_own_platform,share_excl_own_platform,from_facebook_posts,from_instagram_posts,from_reddit_posts,from_scrape,from_tiktok_posts,from_x_posts,from_youtube_comments,from_youtube_videos
+discord,14,0.292,12,0.286,0,0,1,10,0,1,0,2
+reddit,9,0.188,6,0.143,0,0,3,6,0,0,0,0
+forum,8,0.167,8,0.19,0,0,0,8,0,0,0,0
+youtube,4,0.083,3,0.071,0,0,0,3,0,0,0,1
+tiktok,1,0.021,1,0.024,0,0,0,1,0,0,0,0
+x,8,0.167,8,0.19,0,0,0,7,0,0,0,1
+twitch,1,0.021,1,0.024,0,0,0,1,0,0,0,0
+steam,3,0.063,3,0.071,0,0,0,3,0,0,0,0
+telegram,0,0,0,0,0,0,0,0,0,0,0,0
+guilded,0,0,0,0,0,0,0,0,0,0,0,0

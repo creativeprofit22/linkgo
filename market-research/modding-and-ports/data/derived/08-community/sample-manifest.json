@@ -1,0 +1,138 @@
+{
+  "platforms": [
+    {
+      "platform": "reddit",
+      "method": "reddit_posts",
+      "quota": 16,
+      "perQuery": 2,
+      "candidates": 66,
+      "eligible": 55,
+      "selected": 16,
+      "selectedByQuery": {
+        "p8-g01": 2,
+        "p8-g02": 2,
+        "p8-g03": 2,
+        "p8-g04": 2,
+        "p8-g05": 2,
+        "p8-g06": 2,
+        "p8-g07": 2,
+        "p8-g08": 2
+      },
+      "recordIds": [
+        "31f88648c6b2ebea",
+        "15cd5aebca4aada6",
+        "2a83578fd76a60b4",
+        "0e3fc774a332a512",
+        "5079812610d5a90d",
+        "2a7e49430c121a5c",
+        "2d1bcb37668943eb",
+        "4ff00e08a41cc72d",
+        "4fce9dbcc7ba685f",
+        "565e9a3a606b090f",
+        "30fe9741482e439e",
+        "3ce7371a855f858a",
+        "8e1ef84f7afe3a3b",
+        "4fff73c64a7b8ef4",
+        "2e628310d801d496",
+        "5bda4e4bfbfd123d"
+      ]
+    },
+    {
+      "platform": "youtube",
+      "method": "youtube_videos",
+      "quota": 8,
+      "perQuery": 2,
+      "candidates": 40,
+      "eligible": 39,
+      "selected": 8,
+      "selectedByQuery": {
+        "p8-g09": 2,
+        "p8-g10": 2,
+        "p8-g11": 2,
+        "p8-g12": 2
+      },
+      "recordIds": [
+        "5d08091b7ee5132d",
+        "085030cd0c236e16",
+        "0d83dc917a139679",
+        "2e6a8cb5de3758fd",
+        "632da8f32d7fac2b",
+        "08b048fbc6746c30",
+        "1e5776d1e5f12be0",
+        "31fb052c5fbf63f5"
+      ]
+    },
+    {
+      "platform": "tiktok",
+      "method": "tiktok_posts",
+      "quota": 8,
+      "perQuery": 2,
+      "candidates": 20,
+      "eligible": 15,
+      "selected": 4,
+      "selectedByQuery": {
+        "p8-g15": 2,
+        "p8-g16": 2
+      },
+      "recordIds": [
+        "191d7b025742b70d",
+        "13fc17bb82b71a2c",
+        "1aa68b5d8a218fe4",
+        "34f8e53089d131f6"
+      ]
+    },
+    {
+      "platform": "x",
+      "method": "x_posts",
+      "quota": 8,
+      "perQuery": 2,
+      "candidates": 40,
+      "eligible": 26,
+      "selected": 8,
+      "selectedByQuery": {
+        "p8-g17": 2,
+        "p8-g18": 2,
+        "p8-g19": 2,
+        "p8-g20": 2
+      },
+      "recordIds": [
+        "10f43c22ad525798",
+        "102126171e3faab9",
+        "0f9ea1609e03b491",
+        "95352934828b64be",
+        "62de0573648cf157",
+        "2dc7ca437b50a271",
+        "2cc8317569435746",
+        "da49eba7ae6b2544"
+      ]
+    },
+    {
+      "platform": "forum",
+      "method": "scrape",
+      "quota": 8,
+      "perQuery": 2,
+      "candidates": 20,
+      "eligible": 20,
+      "selected": 8,
+      "selectedByQuery": {
+        "p8-d01": 1,
+        "p8-d03": 2,
+        "p8-d05": 1,
+        "p8-d06": 1,
+        "p8-g21": 1,
+        "p8-g23": 1,
+        "p8-g24": 1
+      },
+      "recordIds": [
+        "4d1acb1516924dd6",
+        "408e120fccbffbde",
+        "2a470d520fa17ecf",
+        "608b296b4a536542",
+        "097c148125ba5f58",
+        "03c923391f1672ab",
+        "060504f90fa86b5a",
+        "6752f99eebb5fe51"
+      ]
+    }
+  ]
+}

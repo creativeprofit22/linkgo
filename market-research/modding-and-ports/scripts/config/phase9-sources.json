@@ -1,0 +1,208 @@
+{
+  "frozen": "2026-10-04 01-research-protocol.md section 10, Phase 9 addendum item 7, before any Phase 9 request. 20 frozen pages: hub official pages and stats endpoints, two directory/charts pages, and the GitHub releases API for 8 ports from the Phase 6 inventory. Up to 10 picks from p9-* search results are appended to `picks` under the pick rule (own domain, or a dated press/news page whose snippet shows a user, download, member, creator, payout or revenue number), each with its query id, before they are scraped. Total scrapes <= 30.",
+  "githubRule": "Releases API page 1 with per_page=100; downloads = sum of asset download_count across returned releases. This is a lower bound (older releases, source builds, mirrors and launchers are not counted). JSON text only; never assets.",
+  "sources": [
+    {
+      "id": "p9-s01",
+      "kind": "scrape",
+      "segment": "S1",
+      "url": "https://www.nexusmods.com/about"
+    },
+    {
+      "id": "p9-s02",
+      "kind": "scrape",
+      "segment": "S1",
+      "url": "https://www.nexusmods.com/premium"
+    },
+    {
+      "id": "p9-s03",
+      "kind": "scrape",
+      "segment": "S1",
+      "url": "https://www.curseforge.com/premium"
+    },
+    {
+      "id": "p9-s04",
+      "kind": "scrape",
+      "segment": "S2",
+      "url": "https://www.overwolf.com/"
+    },
+    {
+      "id": "p9-s05",
+      "kind": "scrape",
+      "segment": "S1",
+      "url": "https://mod.io/"
+    },
+    {
+      "id": "p9-s06",
+      "kind": "scrape",
+      "segment": "S1",
+      "url": "https://thunderstore.io/"
+    },
+    {
+      "id": "p9-s07",
+      "kind": "scrape",
+      "segment": "S2",
+      "url": "https://api.modrinth.com/v2/statistics"
+    },
+    {
+      "id": "p9-s08",
+      "kind": "scrape",
+      "segment": "S1",
+      "url": "https://gamebanana.com/"
+    },
+    {
+      "id": "p9-s09",
+      "kind": "scrape",
+      "segment": "S1",
+      "url": "https://www.moddb.com/"
+    },
+    {
+      "id": "p9-s10",
+      "kind": "scrape",
+      "segment": "S4",
+      "url": "https://itch.io/games/tag-fan-game"
+    },
+    {
+      "id": "p9-s11",
+      "kind": "scrape",
+      "segment": "S4",
+      "url": "https://gamejolt.com/about"
+    },
+    {
+      "id": "p9-s12",
+      "kind": "scrape",
+      "segment": "S2",
+      "url": "https://steamcharts.com/app/1281930"
+    },
+    {
+      "id": "p9-g01",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/HarbourMasters/Shipwright/releases?per_page=100"
+    },
+    {
+      "id": "p9-g02",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/HarbourMasters/2ship2harkinian/releases?per_page=100"
+    },
+    {
+      "id": "p9-g03",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/Zelda64Recomp/Zelda64Recomp/releases?per_page=100"
+    },
+    {
+      "id": "p9-g04",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/HarbourMasters/SpaghettiKart/releases?per_page=100"
+    },
+    {
+      "id": "p9-g05",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/open-goal/jak-project/releases?per_page=100"
+    },
+    {
+      "id": "p9-g06",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/OpenMW/openmw/releases?per_page=100"
+    },
+    {
+      "id": "p9-g07",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/diasurgical/devilutionX/releases?per_page=100"
+    },
+    {
+      "id": "p9-g08",
+      "kind": "scrape",
+      "segment": "S3",
+      "url": "https://api.github.com/repos/OpenRCT2/OpenRCT2/releases?per_page=100"
+    }
+  ],
+  "picks": [
+    {
+      "id": "p9-x01",
+      "kind": "scrape",
+      "fromQuery": "p9-h02",
+      "rank": 1,
+      "url": "https://www.nexusmods.com/about/stats",
+      "reason": "own domain (Nexus Mods); snippet shows network download and member counts (e.g. 4,507,922 downloads)"
+    },
+    {
+      "id": "p9-x02",
+      "kind": "scrape",
+      "fromQuery": "p9-h01",
+      "rank": 2,
+      "url": "https://www.nexusmods.com/vedrecure/news/13961",
+      "reason": "own domain (Nexus Mods news, 2018 review); snippet: 4,996,242 monthly unique users in 2018, 16.5M users"
+    },
+    {
+      "id": "p9-x03",
+      "kind": "scrape",
+      "fromQuery": "p9-p04",
+      "rank": 3,
+      "url": "https://www.nexusmods.com/about/mod-author-benefits",
+      "reason": "own domain (Nexus Mods); snippet: 4,728+ creators earned over $200 (payouts)"
+    },
+    {
+      "id": "p9-x04",
+      "kind": "scrape",
+      "fromQuery": "p9-p05",
+      "rank": 2,
+      "url": "https://authors.curseforge.com/welcome/",
+      "reason": "own domain (CurseForge); snippet: $36.2M paid out to authors (also 20M monthly users, 56,208 authors in p9-h03 r6 / p9-c01 r6)"
+    },
+    {
+      "id": "p9-x05",
+      "kind": "scrape",
+      "fromQuery": "p9-h03",
+      "rank": 9,
+      "url": "https://blog.overwolf.com/overwolf-tebex-curseforge-for-studios-are-coming-to-gamesbeat-summit-2026/",
+      "reason": "own domain (Overwolf blog, 2026); snippet: $800M paid out to creators, 113M monthly active gamers"
+    },
+    {
+      "id": "p9-x06",
+      "kind": "scrape",
+      "fromQuery": "p9-h05",
+      "rank": 4,
+      "url": "https://mod.io/blog/2025-year-in-review",
+      "reason": "own domain (mod.io blog, 2025 review); snippet: 300k unique creators, close to 1B mod downloads in 12 months"
+    },
+    {
+      "id": "p9-x07",
+      "kind": "scrape",
+      "fromQuery": "p9-h08",
+      "rank": 4,
+      "url": "https://www.moddb.com/groups/20th-anniversary-of-moddb",
+      "reason": "own domain (ModDB); snippet: 5M+ members joined, 500M+ downloads, 5M+ monthly visitors"
+    },
+    {
+      "id": "p9-x08",
+      "kind": "scrape",
+      "fromQuery": "p9-p07",
+      "rank": 5,
+      "url": "https://www.gamespot.com/articles/valve-removes-paid-mods-from-steam/1100-6426931/",
+      "reason": "dated news page (2015, paid-mods history); snippet: creator 25% revenue share, users earned over $57 million"
+    },
+    {
+      "id": "p9-x09",
+      "kind": "scrape",
+      "fromQuery": "p9-m01",
+      "rank": 1,
+      "url": "https://dataintelo.com/report/game-modding-tools-market",
+      "reason": "dated third-party report page (context table only); snippet: market size USD 1.45 billion in 2024 (revenue)"
+    },
+    {
+      "id": "p9-x10",
+      "kind": "scrape",
+      "fromQuery": "p9-m01",
+      "rank": 2,
+      "url": "https://growthmarketreports.com/report/moddingplaces-market",
+      "reason": "dated third-party report page (context table only); snippet: USD 3.62 billion in 2024, USD 12.13 billion by 2033 (revenue)"
+    }
+  ]
+}

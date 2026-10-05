@@ -1,0 +1,12 @@
+[
+  {
+    "id": "a5-l16",
+    "kind": "search",
+    "query": "site:astrocade.com \"getting started\" OR tutorial OR pricing OR terms"
+  },
+  {
+    "id": "a5-l17",
+    "kind": "search",
+    "query": "site:rosebud.ai \"getting started\" OR tutorial OR pricing OR terms"
+  }
+]

@@ -1,0 +1,9 @@
+companyId,company,crunchbaseSlug,status,employeeBand,lastFundingType,fundingRounds,totalFundingUsd,foundedYear,country,monthlyVisits,monthlyVisitsQuality,cbRank,sourceRecordId,snapshotDate
+p9-cb01,Nexus Mods,nexus-sites,ok,11-50,unknown,unknown,unknown,unknown,United Kingdom,130233692,D,219640,pipeline/p9-cb01,2026-10-04
+p9-cb02,Overwolf (CurseForge),overwolf,ok,251-500,series_d,5,unknown,unknown,United States,7019659,D,9578,pipeline/p9-cb02,2026-10-04
+p9-cb03,mod.io,mod-io,interrupted,unknown,unknown,unknown,unknown,unknown,unknown,unknown,,unknown,none,2026-10-04
+p9-cb04,Thunderstore,thunderstore,unrun,unknown,unknown,unknown,unknown,unknown,unknown,unknown,,unknown,none,2026-10-04
+p9-cb05,itch.io,itch-io,unrun,unknown,unknown,unknown,unknown,unknown,unknown,unknown,,unknown,none,2026-10-04
+p9-cb06,DBolical (ModDB),dbolical,unrun,unknown,unknown,unknown,unknown,unknown,unknown,unknown,,unknown,none,2026-10-04
+p9-cb07,GameBanana,gamebanana,unrun,unknown,unknown,unknown,unknown,unknown,unknown,unknown,,unknown,none,2026-10-04
+p9-cb08,Game Jolt,game-jolt,ok,11-50,seed,2,unknown,unknown,United States,12530004,D,210551,pipeline/p9-cb08,2026-10-04
