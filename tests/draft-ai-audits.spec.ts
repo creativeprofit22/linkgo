@@ -30,7 +30,7 @@ const findings = RULE_KEYS.map((ruleKey) => ({
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () =>
       "__LINKGO_DRAFTS_TEST_API__" in

@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 test("shows local-only first-use guidance and opt-in controls", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
 
   await expect(
@@ -27,7 +27,7 @@ test("shows local-only first-use guidance and opt-in controls", async ({
 test("materializes eligible work on the immediate tick after Start planner", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Started planner", true);
   await setCampaignStatus(page, 1, "active");
   await seedAutopilotBatch(page, 1);
@@ -57,7 +57,7 @@ test("materializes eligible work on the immediate tick after Start planner", asy
 test("materializes one linked plan, backlog item, and score-first workflow exactly once", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Planner launch", true);
   await setCampaignStatus(page, 1, "active");
   await seedAutopilotBatch(page, 1);
@@ -112,7 +112,7 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
 test("stores one durable skipped outcome when accepted candidates no longer exist", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Deleted candidates", true);
   await setCampaignStatus(page, 1, "active");
   await seedAutopilotBatch(page, 1, { currentCandidate: false });
@@ -140,7 +140,7 @@ test("stores one durable skipped outcome when accepted candidates no longer exis
 test("blocks starts and manual materialization behind the global kill switch", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Blocked planner", true);
   await setCampaignStatus(page, 1, "active");
   await seedAutopilotBatch(page, 1);
@@ -161,7 +161,7 @@ test("blocks starts and manual materialization behind the global kill switch", a
 test("stops later batches when the kill switch changes during a bounded tick", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Mid-tick pause", true);
   await setCampaignStatus(page, 1, "active");
   await seedAutopilotBatch(page, 1, {
@@ -221,7 +221,7 @@ test("stops later batches when the kill switch changes during a bounded tick", a
 test("attributes rollback failures to the campaign filter and recovers on retry", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Rollback planner", true);
   await setCampaignStatus(page, 1, "active");
   await seedAutopilotBatch(page, 1);
@@ -261,7 +261,7 @@ test("attributes rollback failures to the campaign filter and recovers on retry"
 test("starts and stops once while duplicate planner actions are guarded", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
 
   await page.getByRole("button", { name: "Start Autopilot" }).click();
@@ -293,7 +293,7 @@ test("starts and stops once while duplicate planner actions are guarded", async 
 test("keeps a successful start when its dashboard refresh fails", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
   await setAutopilotDashboardFailure(page, true);
 
@@ -311,7 +311,7 @@ test("keeps a successful start when its dashboard refresh fails", async ({
 test("keeps a successful stop when its dashboard refresh fails", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
   await page.getByRole("button", { name: "Start Autopilot" }).click();
   await expect(
@@ -331,7 +331,7 @@ test("keeps a successful stop when its dashboard refresh fails", async ({
 test("keeps a successful tick result when its dashboard refresh fails", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Committed tick", true);
   await setCampaignStatus(page, 1, "active");
   await seedAutopilotBatch(page, 1);
@@ -360,7 +360,7 @@ test("keeps a successful tick result when its dashboard refresh fails", async ({
 test("rejects invalid native status data and recovers with Retry", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as { __LINKGO_AUTOPILOT_STATUS_RESULT__?: unknown }
@@ -385,7 +385,7 @@ test("rejects invalid native status data and recovers with Retry", async ({
 test("keeps the latest campaign filter when an older response resolves last", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "First planner campaign", true);
   await createCampaign(page, "Second planner campaign", true);
   await setCampaignStatus(page, 1, "active");
@@ -427,7 +427,7 @@ test("reflows at 320 pixels with forced colors, reduced motion, and keyboard foc
 }) => {
   await page.setViewportSize({ width: 320, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openAutopilot(page);
 
   await expect(page.getByRole("button", { name: "Check now" })).toBeVisible();

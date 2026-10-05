@@ -31,7 +31,7 @@ test("keeps Xiaomi docs URL in frontend and native provider catalogs", () => {
 test("connects API-key provider without rendering secrets", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   await expect(
@@ -71,7 +71,7 @@ test("connects API-key provider without rendering secrets", async ({
 test("requires Base URL before saving Other AI service key", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
@@ -99,7 +99,7 @@ test("requires Base URL before saving Other AI service key", async ({
 test("rejects direct Other AI service key save without Base URL", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => "__LINKGO_INTEGRATIONS_TEST_API__" in window,
   );
@@ -145,7 +145,7 @@ test("rejects direct Other AI service key save without Base URL", async ({
 test("starts LinkedIn OAuth manual code flow and disconnects", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const linkedinCard = page
@@ -181,7 +181,7 @@ test("shows a failed-copy message when OAuth URL copy is unavailable", async ({
     document.queryCommandSupported = () => false;
   });
 
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const linkedinCard = page
@@ -202,7 +202,7 @@ test("shows a failed-copy message when OAuth URL copy is unavailable", async ({
 test("rejects plain-HTTP public Base URL even with local consent", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
@@ -238,7 +238,7 @@ test("rejects plain-HTTP public Base URL even with local consent", async ({
 test("requires explicit consent before saving a localhost Base URL", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
@@ -276,7 +276,7 @@ test("shows reauth status and a reconnect path for a disallowed saved Base URL",
 }) => {
   const reauthMessage =
     "Base URL points to this computer or a private network. Reconnect the provider and allow the local endpoint to use it";
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
@@ -319,7 +319,7 @@ test("shows reauth status and a reconnect path for a disallowed saved Base URL",
 test("offers local consent when the native policy flags a Base URL the renderer hint missed", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
 
   const customCard = page
@@ -364,7 +364,7 @@ async function openAccountSignIn(
   page: import("@playwright/test").Page,
   label: "OpenAI" | "Anthropic",
 ): Promise<import("@playwright/test").Locator> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
   await aiCard(page, label).getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: `${label} connection` });
@@ -607,7 +607,7 @@ test("expired AI sign-in access token shows automatic renewal, not reconnect", a
 test("confirms before sign-in replaces a saved API key and vice versa", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
   await aiCard(page, "OpenAI").getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: "OpenAI connection" });

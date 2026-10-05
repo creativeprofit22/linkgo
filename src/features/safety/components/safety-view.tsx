@@ -9,6 +9,11 @@ import { ErrorQueueCard } from "@/features/safety/components/error-queue-card";
 import { RateLimitEventList } from "@/features/safety/components/rate-limit-event-list";
 import { SafetyEventList } from "@/features/safety/components/safety-event-list";
 import { useSafety } from "@/features/safety/hooks/use-safety";
+import { safetyRoute } from "@/features/safety/schemas";
+import {
+  navigateTo,
+  useRouteParams,
+} from "@/lib/navigation/use-hash-navigation";
 
 export function SafetyView(): React.ReactNode {
   const {
@@ -24,6 +29,11 @@ export function SafetyView(): React.ReactNode {
     changeErrorStatus,
   } = useSafety();
   const [reason, setReason] = useState("");
+  const { params: linkParams, linkIssue } = useRouteParams(safetyRoute);
+  // Drop the link param (replace) so refresh doesn't reopen the dialog.
+  const clearLink = (): void => {
+    navigateTo(safetyRoute, {}, { replace: true });
+  };
 
   useEffect(() => {
     setReason(dashboard?.settings.kill_switch_reason ?? "");
@@ -67,6 +77,19 @@ export function SafetyView(): React.ReactNode {
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {linkIssue && (
+        <div
+          role="status"
+          data-testid="safety-link-notice"
+          className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+        >
+          <span>That link doesn't point to a valid post. Showing Safety.</span>
+          <Button type="button" variant="outline" size="sm" onClick={clearLink}>
+            OK
+          </Button>
+        </div>
       )}
 
       {loading || dashboard === null ? (
@@ -173,6 +196,8 @@ export function SafetyView(): React.ReactNode {
 
           <PublishReconciliationCard
             onReconciled={() => selectCampaign(selectedCampaignId)}
+            linkedExecutionId={linkParams?.executionId}
+            onLinkDone={clearLink}
           />
 
           {campaigns.length === 0 && <EmptyNoCampaigns />}

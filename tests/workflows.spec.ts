@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 test.setTimeout(90_000);
 
 test("creates and starts a workflow run", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
 
@@ -38,7 +38,7 @@ test("creates and starts a workflow run", async ({ page }) => {
 });
 
 test("shows executor-created agent run artifact chips", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
@@ -55,7 +55,7 @@ test("shows executor-created agent run artifact chips", async ({ page }) => {
 test("updates duplicate executor-created agent run artifacts in place", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
@@ -1832,7 +1832,7 @@ test("cancels a failed workflow-linked schedule continuation", async ({
 test("keeps whitespace-only workflow titles client-side disabled", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
 
@@ -1850,7 +1850,7 @@ test("keeps whitespace-only workflow titles client-side disabled", async ({
 });
 
 test("advances steps and records progress events", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
@@ -1890,7 +1890,7 @@ test("advances steps and records progress events", async ({ page }) => {
 });
 
 test("persists manual step error context after refetch", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
@@ -1913,7 +1913,7 @@ test("persists manual step error context after refetch", async ({ page }) => {
 test("hides step mutations after cancelling a workflow run", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
@@ -1952,7 +1952,7 @@ test("hides step mutations after cancelling a workflow run", async ({
 });
 
 test("blocks archived campaign mutations", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openWorkflows(page);
   await createWorkflowRun(page);
@@ -2084,7 +2084,7 @@ async function setWorkflowStepState(
 }
 
 async function prepareWorkflowLinkedScheduleAgent(page: Page): Promise<void> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await seedWorkflowApproval(page);
   await openWorkflows(page);
@@ -2334,7 +2334,7 @@ async function preparePlannerScoringWorkflow(
   page: Page,
   options: { connectProvider?: boolean; candidateContent?: string } = {},
 ): Promise<void> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, true);
   await page.evaluate((candidateContent) => {
     const testWindow = window as unknown as {

@@ -58,6 +58,12 @@ Public data functions include:
 - `getMetricRefreshStatus()`
 - `startMetricRefresh()`
 - `stopMetricRefresh()`
+- `listPostsMissingResults({ signal? })` — read-only: published posts with no
+  recorded results, newest first, with a plain post title, as
+  `{ items, totalCount }`. `items` holds at most 50 posts; `totalCount` is the
+  uncapped total. Backed by `linkgo_metrics_posts_missing_results`, so a post
+  with any metric row is never reported missing, however many refreshes other
+  posts have. Used by [Today](today.md).
 - `runMetricRefreshTick()`
 
 Native commands:
@@ -75,6 +81,7 @@ Validation uses Zod schemas in `src/features/metrics/schemas.ts`; the native com
 Reads are native too (`src-tauri/src/metrics_reads.rs`); the renderer has no direct SQL access to metrics tables. Each read takes an optional positive `campaignId` and rejects unknown fields.
 
 - `linkgo_metrics_eligible_approvals`, `linkgo_metrics_post_metrics_list`, `linkgo_metrics_campaign_memory_list` and `linkgo_metrics_learning_events_list` return up to 500 rows each.
+- `linkgo_metrics_posts_missing_results` returns `{ items, totalCount }`: eligible published approvals (latest successful attempt, campaign not archived) with no `post_metrics` row at all (`NOT EXISTS`), newest publish first, up to 50 items, plus the uncapped count, both read in one transaction.
 - `linkgo_metrics_refresh_dashboard` returns the refresh settings, up to 500 jobs, the 20 newest events and the summary counts, all read in one transaction.
 
 Response shapes are checked by strict schemas in `src/features/metrics/record-schemas.ts`. Tests: `src-tauri/src/metrics_reads_tests.rs`.
@@ -107,7 +114,8 @@ The Analytics tab includes:
 - Summary cards for manual metrics, API refresh state, due jobs, unavailable jobs, and API snapshots.
 - Start/stop controls (`Turn on auto-update` / `Turn off auto-update`) for opt-in metric refresh.
 - Manual `Update from LinkedIn now` tick control.
-- Add results dialog for published posts.
+- Add results dialog for published posts. `#/metrics?campaignId=C&approvalId=A`
+  opens it with that post picked ([navigation](navigation.md#metrics-links)).
 - Metric cards with source badge: `Added by you` or `From LinkedIn`.
 - Clear API limitation copy for API snapshots.
 - Updates from LinkedIn section with refresh jobs (`Posts being tracked`) and recent refresh events (`Recent activity`).

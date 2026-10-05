@@ -37,7 +37,7 @@ for (const state of ["running", "failed"] as const) {
   test(`latest quality ${state} overrides an older pass in display and approval eligibility`, async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createReadyDraft(page, cleanVariant());
     await makeDraftApprovalEligible(page);
     await page.evaluate(async (state) => {
@@ -166,7 +166,7 @@ for (const initiallyApproved of [false, true]) {
   test(`content edits revoke ${initiallyApproved ? "approved" : "pending"} review readiness across reload`, async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createReadyDraft(page, cleanVariant());
     await makeDraftApprovalEligible(page);
     await openApprovals(page);
@@ -223,7 +223,7 @@ for (const initiallyApproved of [false, true]) {
 test("normalized no-op edits preserve the reviewed revision and approval", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -250,7 +250,7 @@ test("normalized no-op edits preserve the reviewed revision and approval", async
 test("creates, previews, approves, schedules, and publishes an approval", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, reservedCharacterVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -301,7 +301,7 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
 test("publishes an approved approval through mocked LinkedIn OAuth action", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, reservedCharacterVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -337,7 +337,7 @@ test("publishes an approved approval through mocked LinkedIn OAuth action", asyn
 test("records a failed LinkedIn OAuth publish attempt and error queue item", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as Record<string, unknown>
@@ -369,7 +369,7 @@ test("records a failed LinkedIn OAuth publish attempt and error queue item", asy
 test("unreadable LinkedIn publish result shows outcome unknown and needs reconciliation", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as Record<string, unknown>
@@ -444,7 +444,7 @@ for (const [status, label] of [
         },
       ];
     }, status);
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createReadyDraft(page, cleanVariant());
     await makeDraftApprovalEligible(page);
     await openApprovals(page);
@@ -461,7 +461,7 @@ for (const [status, label] of [
 test("global kill switch hides LinkedIn OAuth publish action", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -490,7 +490,7 @@ test("global kill switch hides LinkedIn OAuth publish action", async ({
 test("LinkedIn OAuth publish rechecks approval state before submitting", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await countLinkedInPublishInvokes(page);
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
@@ -518,7 +518,7 @@ test("LinkedIn OAuth publish rechecks approval state before submitting", async (
 test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await countLinkedInPublishInvokes(page);
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
@@ -578,7 +578,7 @@ test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness"
 test("LinkedIn OAuth publish preflight blocks duplicate successes and stale schedules", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await countLinkedInPublishInvokes(page);
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
@@ -628,7 +628,7 @@ test("LinkedIn OAuth publish preflight blocks duplicate successes and stale sche
 test("LinkedIn OAuth publish rechecks kill switch before submitting", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await countLinkedInPublishInvokes(page);
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
@@ -700,7 +700,7 @@ test("LinkedIn OAuth publish rechecks kill switch before submitting", async ({
 test("successful publish attempts require a LinkedIn URL or platform ID", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -756,7 +756,7 @@ test("publish attempt schema trims evidence and rejects non-LinkedIn URLs", () =
 test("mark published rejects a non-LinkedIn URL and records nothing", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -806,7 +806,7 @@ test("mark published rejects a non-LinkedIn URL and records nothing", async ({
 });
 
 test("failed publish attempts require a failure reason", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -829,7 +829,7 @@ test("failed publish attempts require a failure reason", async ({ page }) => {
 test("published approvals reject duplicate successful publish attempts", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -963,7 +963,7 @@ test("published approvals reject duplicate successful publish attempts", async (
 test("cancelled schedules can be rescheduled with new details", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -995,7 +995,7 @@ test("cancelled schedules can be rescheduled with new details", async ({
 test("failed scheduled publish attempts can be rescheduled with new details", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -1029,7 +1029,7 @@ for (const { state, eligible } of approvalAiAuditCases) {
   test(`${state} AI audit enforces approval query and creation readiness`, async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createReadyDraft(page, cleanVariant());
     await setApprovalAiAuditState(page, state);
     if (state === "passing") await makeDraftApprovalEligible(page);
@@ -1049,7 +1049,7 @@ for (const { state, eligible } of approvalAiAuditCases) {
 test("blocked variant is not listed as an approval candidate", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -1068,7 +1068,7 @@ test("blocked variant is not listed as an approval candidate", async ({
 test("flags capped approval and eligible-draft lists with the uncapped total", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   // The mock reports these uncapped totals instead of seeding 500+ rows.
@@ -1100,7 +1100,7 @@ test("flags capped approval and eligible-draft lists with the uncapped total", a
 test("request changes moves the linked draft back to needs revision", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -1116,7 +1116,7 @@ test("request changes moves the linked draft back to needs revision", async ({
 test("archived campaign approvals hide mutation controls with restore guidance", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);
@@ -1301,7 +1301,7 @@ test.describe("approval campaign selection ownership", () => {
 async function setupTwoCampaigns(
   page: Page,
 ): Promise<{ first: number; second: number }> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page, cleanVariant());
   await makeDraftApprovalEligible(page);
   await openApprovals(page);

@@ -10,7 +10,7 @@ test.setTimeout(90_000);
 test("creates a required-metadata calendar slot from an approved post", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedPost(page);
   await openCalendar(page);
   await createCalendarSlot(page, {
@@ -44,7 +44,7 @@ test("creates a required-metadata calendar slot from an approved post", async ({
 test("schedules a planned calendar slot through approval scheduling", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedPost(page);
   await openCalendar(page);
   await createCalendarSlot(page, {
@@ -70,7 +70,7 @@ test("schedules a planned calendar slot through approval scheduling", async ({
 test("hides schedule action when approval has a completed schedule job", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedPost(page);
   await openCalendar(page);
   await createCalendarSlot(page, { slotFor: "2026-07-17T09:00" });
@@ -88,7 +88,7 @@ test("hides schedule action when approval has a completed schedule job", async (
 test("edits calendar slot metadata and keeps it after refresh", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedPost(page);
   await openCalendar(page);
   await createCalendarSlot(page, { slotFor: "2026-07-17T11:00" });
@@ -120,7 +120,7 @@ test("edits calendar slot metadata and keeps it after refresh", async ({
 });
 
 test("archives a slot and hides the schedule action", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedPost(page);
   await openCalendar(page);
   await createCalendarSlot(page, { slotFor: "2026-07-18T10:00" });
@@ -139,7 +139,7 @@ test("archives a slot and hides the schedule action", async ({ page }) => {
 test("archived campaigns block new slots and slot changes", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedPost(page);
   await openCalendar(page);
   await createCalendarSlot(page, { slotFor: "2026-07-19T10:00" });

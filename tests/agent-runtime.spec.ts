@@ -10,7 +10,7 @@ test.setTimeout(90_000);
 test("renders six typed tool contracts with approval metadata", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
 
@@ -34,7 +34,7 @@ test("renders six typed tool contracts with approval metadata", async ({
 test("persists a completed dry-run with tool calls and events", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
   await createDryRun(page);
@@ -61,7 +61,7 @@ test("persists a completed dry-run with tool calls and events", async ({
 test("failed quality-owned agent offers no Start and points to Drafts", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await page.evaluate(async () => {
     const w = window as unknown as {
@@ -108,7 +108,7 @@ test("failed quality-owned agent offers no Start and points to Drafts", async ({
 test("dry-run researcher persists discovery items through research_posts", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
   await createDryRun(page);
@@ -123,7 +123,7 @@ test("dry-run researcher persists discovery items through research_posts", async
 test("dry-run scorer applies candidate scores through score_relevance", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await insertCandidateForScoring(page);
   await openAgentRuntime(page);
@@ -161,7 +161,7 @@ test("dry-run scorer applies candidate scores through score_relevance", async ({
 test("dry-run auditor persists exact identities and echoes provider-authored findings", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
   await createDryRun(page, "auditor");
@@ -202,7 +202,7 @@ test("dry-run auditor persists exact identities and echoes provider-authored fin
 test("starts a provider-backed run through the native command boundary", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -313,7 +313,7 @@ test("starts a provider-backed run through the native command boundary", async (
 test("feeds a validated tool result into a second provider turn before completion", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -461,7 +461,7 @@ test("feeds a validated tool result into a second provider turn before completio
 test("provider-backed score_relevance calls persist model-supplied scores", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -571,7 +571,7 @@ test("provider-backed score_relevance calls persist model-supplied scores", asyn
 test("provider duplicate research_posts calls are rejected before local writes", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -663,7 +663,7 @@ test("provider duplicate research_posts calls are rejected before local writes",
 test("rejects research_posts writes for a different campaign", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -733,7 +733,7 @@ for (const approvalPosition of ["first", "second"] as const) {
   test(`fails closed before tool execution when approval is ${approvalPosition} in a two-call turn`, async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await installMixedApprovalTurnProvider(page, approvalPosition);
     await connectCustomProvider(page);
     await page.getByRole("button", { name: /Campaigns/ }).click();
@@ -765,7 +765,7 @@ for (const approvalPosition of ["first", "second"] as const) {
 test("starts an Anthropic provider-backed run through the native command boundary", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -838,7 +838,7 @@ test("starts an Anthropic provider-backed run through the native command boundar
 test("starts an OpenAI run after the account sign-in access token expired", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installSuccessfulContinuationProvider(page, "OpenAI renewed run.");
   await signInOpenAiAccount(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
@@ -859,7 +859,7 @@ test("starts an OpenAI run after the account sign-in access token expired", asyn
 test("keeps a revoked OpenAI account sign-in blocked as not connected", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installSuccessfulContinuationProvider(page, "Must not run.");
   await signInOpenAiAccount(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
@@ -907,7 +907,7 @@ test("keeps a revoked OpenAI account sign-in blocked as not connected", async ({
 test("selects the LinkedIn writer playbook for drafter runs", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
 
@@ -963,7 +963,7 @@ test("selects the LinkedIn writer playbook for drafter runs", async ({
 test("hides disabled runtime playbooks from new agent runs", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Brand voice/ }).click();
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
   await writerCard
@@ -993,7 +993,7 @@ test("hides disabled runtime playbooks from new agent runs", async ({
 test("stops schedule dry-run at waiting approval without publishing", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1021,7 +1021,7 @@ test("stops schedule dry-run at waiting approval without publishing", async ({
 test("rejects checkpoint tool results without a preceding assistant call ID", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1060,7 +1060,7 @@ test("rejects checkpoint tool results without a preceding assistant call ID", as
 test("approves and explicitly resumes a durable schedule metadata continuation", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1100,7 +1100,7 @@ test("approves and explicitly resumes a durable schedule metadata continuation",
 test("rejects custom continuation without a Base URL before checkpoint mutation", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installScheduleApprovalProvider(page, 1, "provider-schedule-custom");
   await connectCustomProvider(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
@@ -1148,7 +1148,7 @@ test("rejects custom continuation without a Base URL before checkpoint mutation"
 test("reports a second approval interrupt without claiming continuation completion", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installScheduleApprovalProvider(page, 1, "provider-schedule-first");
   await connectCustomProvider(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
@@ -1193,7 +1193,7 @@ test("reports a second approval interrupt without claiming continuation completi
 test("reports recoverable provider failure with the saved continuation", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installScheduleApprovalProvider(page, 1, "provider-schedule-first");
   await connectCustomProvider(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
@@ -1242,7 +1242,7 @@ test("reports recoverable provider failure with the saved continuation", async (
 test("rejecting through Approvals cancels the linked run without continuation", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1292,7 +1292,7 @@ test("rejecting through Approvals cancels the linked run without continuation", 
 test("reload recovery skips an approved tool after a continuation provider failure", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await enableReloadPersistence(page);
   await installScheduleApprovalProvider(page, 1, "provider-schedule-recovery");
   await connectCustomProvider(page);
@@ -1382,7 +1382,7 @@ test("reload recovery skips an approved tool after a continuation provider failu
 test("resume rejects unapproved, mismatched, and missing approvals without publishing", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1428,7 +1428,7 @@ test("resume rejects unapproved, mismatched, and missing approvals without publi
 test("double resume handles the approved tool once and keeps one history row", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1468,7 +1468,7 @@ test("double resume handles the approved tool once and keeps one history row", a
 });
 
 test("blocks archived campaign agent runtime mutations", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openAgentRuntime(page);
   await createDryRun(page);
@@ -1529,7 +1529,7 @@ test("blocks archived campaign agent runtime mutations", async ({ page }) => {
 test("mock SQLite rejects invalid agent run playbook keys and keeps empty valid", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   await expect(
     executeSql(page, {

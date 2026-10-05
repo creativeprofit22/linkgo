@@ -4,6 +4,9 @@ import { z } from "zod";
 import { approvalsRoute } from "../src/features/approvals/schemas";
 import { contentCalendarRoute } from "../src/features/content-calendar/schemas";
 import { draftsRoute } from "../src/features/drafts/schemas";
+import { metricsRoute } from "../src/features/metrics/schemas";
+import { safetyRoute } from "../src/features/safety/schemas";
+import { todayRoute } from "../src/features/today/schemas";
 import {
   defineRoute,
   emptyRouteSearch,
@@ -165,6 +168,44 @@ test.describe("route contract", () => {
     ).toBe("#/calendar?approvalId=9&campaignId=3");
   });
 
+  test("validates Metrics link params", () => {
+    const parse = (search: Record<string, string>) =>
+      metricsRoute.search.safeParse(search);
+    expect(parse({}).success).toBe(true);
+    expect(parse({ campaignId: "3", approvalId: "9" })).toEqual({
+      success: true,
+      data: { campaignId: 3, approvalId: 9 },
+    });
+    // A post needs its campaign.
+    expect(parse({ approvalId: "9" }).success).toBe(false);
+    expect(parse({ campaignId: "3", approvalId: "x" }).success).toBe(false);
+    expect(
+      formatRouteHash(metricsRoute, { campaignId: 3, approvalId: 9 }),
+    ).toBe("#/metrics?approvalId=9&campaignId=3");
+  });
+
+  test("validates Safety and Today link params", () => {
+    const parse = (search: Record<string, string>) =>
+      safetyRoute.search.safeParse(search);
+    expect(parse({}).success).toBe(true);
+    expect(parse({ executionId: "41" })).toEqual({
+      success: true,
+      data: { executionId: 41 },
+    });
+    expect(parse({ executionId: "0" }).success).toBe(false);
+    expect(parse({ executionId: "x" }).success).toBe(false);
+    expect(formatRouteHash(safetyRoute, { executionId: 41 })).toBe(
+      "#/safety?executionId=41",
+    );
+    expect(todayRoute.search.safeParse({}).success).toBe(true);
+    // Today takes no params; unknown ones are dropped.
+    expect(todayRoute.search.safeParse({ x: "1" })).toEqual({
+      success: true,
+      data: {},
+    });
+    expect(formatRouteHash(todayRoute, {})).toBe("#/today");
+  });
+
   test("refuses to format links the destination would reject", () => {
     expect(() => formatRouteHash(draftsRoute, { campaignId: 0 })).toThrow(
       /"drafts"/,
@@ -184,7 +225,7 @@ test.describe("screen links", () => {
   });
 
   test("every menu screen has its own address", async ({ page }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/#\/campaigns$/);
 
     const nav = page.getByRole("navigation", { name: "Main menu" });
@@ -250,7 +291,7 @@ test.describe("screen links", () => {
   test("Ideas opens Drafts for one idea and Back returns to Ideas", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createCampaign(page);
     await openScreen(page, "Ideas");
     await addCandidate(page, "Jane Operator", "123");
@@ -304,7 +345,7 @@ test.describe("screen links", () => {
   test("Back to an idea link while Drafts stays open reselects its campaign", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createCampaign(page, "Campaign A");
     await createCampaign(page, "Campaign B");
 
@@ -383,7 +424,7 @@ test.describe("screen links", () => {
   test("a link to an idea that is gone shows all drafts with a message", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createCampaign(page);
     const campaignHash = await page.evaluate(() => {
       window.location.hash = "#/drafts?campaignId=1&candidateId=9999";
@@ -408,15 +449,15 @@ test.describe("screen links", () => {
     await expect(page.getByTestId("drafts-link-not-found")).toBeVisible();
   });
 
-  test("an unknown screen opens Campaigns with a message", async ({ page }) => {
+  test("an unknown screen opens Today with a message", async ({ page }) => {
     await page.goto("/#/nope", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("navigation-unknown-screen")).toHaveText(
-      "That link didn’t match a screen, so we opened Campaigns.",
+      "That link didn’t match a screen, so we opened Today.",
     );
     await expect(
       page
         .getByRole("navigation", { name: "Main menu" })
-        .getByRole("button", { name: /^Campaigns/ }),
+        .getByRole("button", { name: /^Today/ }),
     ).toHaveAttribute("aria-current", "page");
 
     await openScreen(page, "Ideas");
@@ -449,13 +490,14 @@ test.describe("screen links", () => {
       window.localStorage.setItem("linkgo.navigation.last-screen", "removed");
     });
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(page).toHaveURL(/#\/campaigns$/);
+    await expect(page).toHaveURL(/#\/today$/);
     await expect(page.getByTestId("navigation-unknown-screen")).toHaveCount(0);
   });
 });
 
 /** Main-menu labels and the address id each one must open (see home.tsx). */
 const menuScreens = [
+  { label: "Today", id: "today" },
   { label: "Campaigns", id: "campaigns" },
   { label: "Autopilot", id: "autopilot" },
   { label: "Tasks", id: "backlog" },

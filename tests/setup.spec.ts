@@ -59,7 +59,7 @@ async function backToSetup(page: Page): Promise<void> {
 test("fresh start shows the checklist with LinkedIn first", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   const card = checklist(page);
   await expect(card).toBeVisible();
@@ -92,7 +92,7 @@ test("fresh start shows the checklist with LinkedIn first", async ({
 });
 
 test("each setup step opens the exact dialog or field", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   // AI: other services live under "More AI services".
   await step(page, "ai")
@@ -136,7 +136,7 @@ test("each setup step opens the exact dialog or field", async ({ page }) => {
 test("partial completion counts connected LinkedIn and Claude", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   await connectLinkedInFromSetup(page);
   await backToSetup(page);
@@ -265,7 +265,7 @@ test("connecting LinkedIn from its card updates progress without navigating", as
 });
 
 test("hide setup survives reload and can be resumed", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await expect(checklist(page)).toBeVisible();
 
   await page.getByRole("button", { name: "Hide setup" }).click();
@@ -288,7 +288,7 @@ test("hide setup survives reload and can be resumed", async ({ page }) => {
 });
 
 test("completing every step ends on find your first idea", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   await connectLinkedInFromSetup(page);
   await backToSetup(page);

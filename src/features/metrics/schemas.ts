@@ -1,4 +1,9 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import type { MetricsRouteParams } from "@/features/metrics/types";
+import {
+  defineRoute,
+  optionalRouteId,
+  routeId,
+} from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 const metricCountSchema = z.number().int().min(0).max(1_000_000_000);
@@ -167,4 +172,23 @@ export const metricsMutationResultSchema = z
   .strict();
 
 /** Address of the Analytics screen (`#/metrics`). See docs/features/navigation.md. */
-export const metricsRoute = defineRoute("metrics", emptyRouteSearch());
+/**
+ * Link params for Analytics. `approvalId` opens Add results with that post
+ * picked and needs its campaign. Mirrors `MetricsRouteParams`.
+ */
+export const metricsRouteSearchSchema = z.union([
+  z.object({
+    campaignId: optionalRouteId(),
+    approvalId: z.undefined().optional(),
+  }),
+  z.object({
+    campaignId: routeId(),
+    approvalId: routeId(),
+  }),
+]);
+
+/** Address of the Analytics screen (`#/metrics`). See docs/features/navigation.md. */
+export const metricsRoute = defineRoute<"metrics", MetricsRouteParams>(
+  "metrics",
+  metricsRouteSearchSchema,
+);

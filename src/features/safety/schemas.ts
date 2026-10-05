@@ -1,4 +1,5 @@
-import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
+import type { SafetyRouteParams } from "@/features/safety/types";
+import { defineRoute, optionalRouteId } from "@/lib/navigation/route-contract";
 import { z } from "zod";
 
 const positiveIdSchema = z.number().int().positive();
@@ -143,5 +144,16 @@ export const errorQueueItemStatusResultSchema = z
   })
   .strict();
 
+/**
+ * Safety links may name one publish attempt to check. Mirrors
+ * `SafetyRouteParams`.
+ */
+export const safetyRouteSearchSchema = z.object({
+  executionId: optionalRouteId(),
+});
+
 /** Address of the Safety screen (`#/safety`). See docs/features/navigation.md. */
-export const safetyRoute = defineRoute("safety", emptyRouteSearch());
+export const safetyRoute = defineRoute<"safety", SafetyRouteParams>(
+  "safety",
+  safetyRouteSearchSchema,
+);

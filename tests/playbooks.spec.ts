@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("renders Playbooks tab and five built-in playbooks", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openPlaybooks(page);
 
   for (const label of [
@@ -23,7 +23,7 @@ test("renders Playbooks tab and five built-in playbooks", async ({ page }) => {
 test("edits custom instructions and persists override row", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openPlaybooks(page);
 
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
@@ -47,7 +47,7 @@ test("edits custom instructions and persists override row", async ({
 });
 
 test("disables a runtime playbook and marks it disabled", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openPlaybooks(page);
 
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
@@ -69,7 +69,7 @@ test("disables a runtime playbook and marks it disabled", async ({ page }) => {
 test("shows commenter as operator guidance only without autonomous posting", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openPlaybooks(page);
 
   const commenterCard = getPlaybookCard(page, "LinkedIn Commenter");
@@ -98,7 +98,7 @@ test("focus link scrolls to and focuses a guidance-only guide heading", async ({
 test("native override command rejects invalid playbook overrides", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   await expect(
     upsertOverride(page, {

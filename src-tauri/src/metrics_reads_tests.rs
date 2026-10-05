@@ -61,6 +61,9 @@ async fn invalid_campaign_is_rejected_by_every_read() {
     let f = migrated().await;
     assert!(list_eligible_approvals(&f.pool, campaign(0)).await.is_err());
     assert!(list_post_metrics(&f.pool, campaign(-1)).await.is_err());
+    assert!(list_posts_missing_results(&f.pool, campaign(0))
+        .await
+        .is_err());
     assert!(list_campaign_memory(&f.pool, campaign(0)).await.is_err());
     assert!(list_learning_events(&f.pool, campaign(0)).await.is_err());
     assert!(refresh_dashboard(&f.pool, campaign(0)).await.is_err());
@@ -134,6 +137,75 @@ async fn lists_are_capped() {
     assert_eq!(events.len() as i64, METRICS_LIST_LIMIT);
     let dashboard = refresh_dashboard(&f.pool, all()).await.unwrap();
     assert_eq!(dashboard.events.len() as i64, REFRESH_EVENTS_LIMIT);
+}
+
+#[tokio::test]
+async fn missing_results_skips_measured_and_archived() {
+    let f = fixture().await;
+    // Approvals 1 and 3 have metrics; 2 is archived. Add an unmeasured one.
+    seed(
+        &f.pool,
+        "WITH RECURSIVE n(i) AS (SELECT 4 UNION ALL SELECT i + 1 FROM n WHERE i < 4)
+         INSERT INTO target_posts (id,url,normalized_url,content,content_hash) SELECT i,'https://e.com/'||i,'https://e.com/'||i,'x','h'||i FROM n;
+         INSERT INTO candidate_posts (id,campaign_id,target_post_id) SELECT id,1,id FROM target_posts WHERE id >= 4;
+         INSERT INTO drafts (id,campaign_id,candidate_post_id,status) SELECT id,1,id,'ready_for_review' FROM candidate_posts WHERE id >= 4;
+         INSERT INTO draft_variants (id,draft_id,variant_number,hook,body,status) SELECT id,id,1,'  ','b','selected' FROM drafts WHERE id >= 4;
+         INSERT INTO approvals (id,campaign_id,draft_id,draft_variant_id,status) SELECT id,1,id,id,'published' FROM drafts WHERE id >= 4;
+         INSERT INTO publish_attempts (approval_id,status,created_at) SELECT id,'succeeded','2026-04-01 00:00:00' FROM approvals WHERE id >= 4;",
+    )
+    .await;
+    let page = list_posts_missing_results(&f.pool, all()).await.unwrap();
+    assert_eq!(ids(&page.items, "approval_id"), vec![4]);
+    assert_eq!(page.total_count, 1);
+    assert_eq!(page.items[0]["campaign_name"], "Live");
+    assert_eq!(page.items[0]["variant_hook"], "  ");
+    assert_eq!(page.items[0]["publish_created_at"], "2026-04-01 00:00:00");
+    let other = list_posts_missing_results(&f.pool, campaign(3))
+        .await
+        .unwrap();
+    assert!(other.items.is_empty());
+    assert_eq!(other.total_count, 0);
+}
+
+#[tokio::test]
+async fn missing_results_ignores_metric_list_cap() {
+    let f = fixture().await;
+    // Approval 3 (newest) gets more metric rows than the list cap; approval 1
+    // (older) keeps its single metric. It must not resurface as missing.
+    seed(
+        &f.pool,
+        "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 520)
+         INSERT INTO post_metrics (campaign_id,approval_id,publish_attempt_id,measured_at)
+           SELECT 3,3,4,'2026-09-01T00:00' FROM n;",
+    )
+    .await;
+    let metrics = list_post_metrics(&f.pool, all()).await.unwrap();
+    assert_eq!(metrics.len() as i64, METRICS_LIST_LIMIT);
+    assert!(!ids(&metrics, "approval_id").contains(&1));
+    let page = list_posts_missing_results(&f.pool, all()).await.unwrap();
+    assert!(page.items.is_empty());
+    assert_eq!(page.total_count, 0);
+}
+
+#[tokio::test]
+async fn missing_results_caps_items_but_counts_all() {
+    let f = fixture().await;
+    seed(
+        &f.pool,
+        "WITH RECURSIVE n(i) AS (SELECT 101 UNION ALL SELECT i + 1 FROM n WHERE i < 160)
+         INSERT INTO target_posts (id,url,normalized_url,content,content_hash) SELECT i,'https://e.com/'||i,'https://e.com/'||i,'x','h'||i FROM n;
+         INSERT INTO candidate_posts (id,campaign_id,target_post_id) SELECT id,1,id FROM target_posts WHERE id >= 101;
+         INSERT INTO drafts (id,campaign_id,candidate_post_id,status) SELECT id,1,id,'ready_for_review' FROM candidate_posts WHERE id >= 101;
+         INSERT INTO draft_variants (id,draft_id,variant_number,hook,body,status) SELECT id,id,1,'  ','b','selected' FROM drafts WHERE id >= 101;
+         INSERT INTO approvals (id,campaign_id,draft_id,draft_variant_id,status) SELECT id,1,id,id,'published' FROM drafts WHERE id >= 101;
+         INSERT INTO publish_attempts (approval_id,status,created_at) SELECT id,'succeeded','2026-05-01 00:00:00' FROM approvals WHERE id >= 101;",
+    )
+    .await;
+    let page = list_posts_missing_results(&f.pool, all()).await.unwrap();
+    assert_eq!(page.items.len() as i64, MISSING_RESULTS_LIMIT);
+    assert_eq!(page.total_count, 60);
+    // Same publish time: newest approval id first.
+    assert_eq!(page.items[0]["approval_id"], 160);
 }
 
 #[tokio::test]

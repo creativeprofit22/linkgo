@@ -132,6 +132,22 @@ export interface ApprovalEligibleDraftPage {
   totalCount: number;
 }
 
+/** A post waiting for the user's OK, named in plain words. */
+export interface ApprovalWaitingForReview {
+  approvalId: number;
+  campaignId: number;
+  campaignName: string;
+  /** The post's hook, or "Untitled post". */
+  postTitle: string;
+  createdAt: string;
+}
+
+/** Optional preloaded approvals so callers can share one read. */
+export interface ApprovalSummaryInput {
+  approvals?: readonly ApprovalWithDetails[];
+  signal?: AbortSignal;
+}
+
 export interface CreateApprovalInput {
   draftId: number;
   reviewerNotes?: string;

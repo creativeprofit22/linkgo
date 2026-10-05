@@ -32,6 +32,22 @@ export interface OpenPublishExecution {
   updatedAt: string;
 }
 
+/** An execution only a person can settle: we don't know if it went out. */
+export interface UnclearPublishOutcome {
+  executionId: number;
+  kind: PublishExecutionKind;
+  /** Approval id for posts; comment id for comments. */
+  subjectId: number;
+  campaignId: number;
+  campaignName: string;
+  sentAt: string | null;
+  updatedAt: string;
+}
+
+export interface UnclearPublishOutcomesInput {
+  signal?: AbortSignal;
+}
+
 export type ReconcileResolution = "posted" | "not_posted";
 
 export interface ReconcilePublishExecutionInput {

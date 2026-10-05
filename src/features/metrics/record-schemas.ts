@@ -55,6 +55,24 @@ export const metricEligibleApprovalListSchema = z
   )
   .max(METRICS_LIST_LIMIT);
 
+/** Native `MISSING_RESULTS_LIMIT`: the most rows the missing-results read returns. */
+export const MISSING_RESULTS_LIMIT = 50;
+
+export const postsMissingResultsRecordSchema = z.strictObject({
+  items: z
+    .array(
+      z.strictObject({
+        approval_id: idSchema,
+        campaign_id: idSchema,
+        campaign_name: z.string(),
+        variant_hook: z.string(),
+        publish_created_at: z.string(),
+      }),
+    )
+    .max(MISSING_RESULTS_LIMIT),
+  totalCount: countSchema,
+});
+
 export const postMetricDetailListSchema = z
   .array(
     z.strictObject({

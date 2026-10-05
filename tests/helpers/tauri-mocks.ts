@@ -20415,6 +20415,31 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           );
         if (cmd === "linkgo_metrics_post_metrics_list")
           return metricsRead("FROM post_metrics pm", 500);
+        if (cmd === "linkgo_metrics_posts_missing_results") {
+          // Mirrors `MISSING_RESULTS_SQL`: eligible approvals with no metric
+          // row at all (not a capped list), 50 rows plus the uncapped total.
+          const input = nativeInput<{ campaignId?: number }>(args);
+          const values =
+            input.campaignId === undefined ? [] : [input.campaignId];
+          const measured = new Set(
+            postMetrics.map((metric) => metric.approval_id),
+          );
+          const missing = (
+            selectMetricEligibleApprovals(values) as Array<
+              Record<string, unknown>
+            >
+          ).filter((row) => !measured.has(Number(row.approval_id)));
+          return Promise.resolve({
+            items: missing.slice(0, 50).map((row) => ({
+              approval_id: row.approval_id,
+              campaign_id: row.campaign_id,
+              campaign_name: row.campaign_name,
+              variant_hook: row.variant_hook,
+              publish_created_at: row.publish_created_at,
+            })),
+            totalCount: missing.length,
+          });
+        }
         if (cmd === "linkgo_metrics_campaign_memory_list")
           return metricsRead("FROM campaign_memory cm", 500);
         if (cmd === "linkgo_metrics_learning_events_list")

@@ -3,6 +3,11 @@ import type {
   PublishAttempt,
 } from "@/features/approvals/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
+
+/** Link params for `#/metrics`; `approvalId` always comes with its campaign. */
+export type MetricsRouteParams =
+  | { campaignId?: number | undefined; approvalId?: undefined }
+  | { campaignId: number; approvalId: number };
 import type { DraftVariantStatus } from "@/features/drafts/types";
 
 export type MemorySignal = "winner" | "underperformer" | "insight" | "avoid";
@@ -122,6 +127,26 @@ export interface MetricEligibleApproval {
   variant: MetricVariantSnapshot;
   source: MetricSourceSnapshot;
   latestPublishAttempt: MetricPublishSnapshot;
+}
+
+/** A posted LinkedIn post that has no results recorded yet. */
+export interface PostMissingResults {
+  approvalId: number;
+  campaignId: number;
+  campaignName: string;
+  /** The post's hook, or "Untitled post". */
+  postTitle: string;
+  publishedAt: string;
+}
+
+/** The newest posts missing results (capped) plus the uncapped total. */
+export interface PostsMissingResultsPage {
+  items: PostMissingResults[];
+  totalCount: number;
+}
+
+export interface PostsMissingResultsInput {
+  signal?: AbortSignal;
 }
 
 export interface CampaignMemory {

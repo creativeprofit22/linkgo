@@ -167,7 +167,7 @@ test("preserves dialog values after storage failure and blocks archived mutation
 test("campaign switching cannot display a stale candidate policy", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Policy Campaign A");
   await createCampaign(page, "Policy Campaign B");
   await openQueue(page);
@@ -367,7 +367,7 @@ async function expectReflow(page: Page): Promise<void> {
 }
 
 async function openQueueWithCampaign(page: Page): Promise<void> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Candidate policy campaign");
   await openQueue(page);
 }

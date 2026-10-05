@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 test.setTimeout(90_000);
 
 test("records manual metrics for a published approval", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(page);
   await openMetrics(page);
 
@@ -29,7 +29,7 @@ test("records manual metrics for a published approval", async ({ page }) => {
 });
 
 test("starts and stops metric refresh from Metrics tab", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(
     page,
     "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
@@ -46,7 +46,7 @@ test("starts and stops metric refresh from Metrics tab", async ({ page }) => {
 test("shows enabled metric refresh when worker is not running", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(
     page,
     "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
@@ -63,7 +63,7 @@ test("shows enabled metric refresh when worker is not running", async ({
 test("runs LinkedIn metric refresh and records API-sourced reactions and comments", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(
     page,
     "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
@@ -84,7 +84,7 @@ test("runs LinkedIn metric refresh and records API-sourced reactions and comment
 test("shows backend string error when metric refresh tick rejects", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as Record<string, unknown>
@@ -107,7 +107,7 @@ test("shows backend string error when metric refresh tick rejects", async ({
 test("marks metric refresh unavailable when LinkedIn target URN is missing", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(
     page,
     "https://www.linkedin.com/posts/manual-success/",
@@ -130,7 +130,7 @@ test("marks metric refresh unavailable when LinkedIn target URN is missing", asy
 test("global kill switch blocks metric refresh without inserting API snapshot", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(
     page,
     "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
@@ -147,7 +147,7 @@ test("global kill switch blocks metric refresh without inserting API snapshot", 
 });
 
 test("saves campaign memory from a metric", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(page);
   await openMetrics(page);
   await recordMetrics(page);
@@ -177,7 +177,7 @@ test("saves campaign memory from a metric", async ({ page }) => {
 });
 
 test("archives and restores campaign memory", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(page);
   await openMetrics(page);
   await recordMetrics(page);
@@ -197,7 +197,7 @@ test("archives and restores campaign memory", async ({ page }) => {
 test("shows empty published-post state before anything is published", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createReadyDraft(page);
   await openMetrics(page);
 
@@ -213,7 +213,7 @@ test("shows empty published-post state before anything is published", async ({
 test("archived campaign hides mutation controls and rejects metric data mutations", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createPublishedApproval(page);
   await openMetrics(page);
   await recordMetrics(page);

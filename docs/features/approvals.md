@@ -60,6 +60,11 @@ Data API:
 - `scheduleApproval(input)`
 - `cancelSchedule(input)`
 - `recordPublishAttempt(input)`
+- `listApprovalsWaitingForReview({ approvals?, signal? })` — read-only: live
+  `needs_review` approvals, newest first, with campaign name and post title.
+  Pass an already loaded list to avoid a second read. Used by
+  [Today](today.md).
+- `approvalPostTitle(approval)` — the post's hook, or "Untitled post".
 
 Reads are native too (`src-tauri/src/approval_reads.rs`); the renderer has no direct SQL access to approval tables.
 

@@ -29,7 +29,8 @@ async function createCampaign(
   page: Page,
   { navigate = true }: { navigate?: boolean } = {},
 ): Promise<void> {
-  if (navigate) await page.goto("/", { waitUntil: "domcontentloaded" });
+  if (navigate)
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "New campaign" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await dialog.getByLabel("Name").fill("Founder playbook");

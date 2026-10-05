@@ -49,6 +49,13 @@ GG AI providers exposed in Linkgo:
   renews itself; custom services also need their address. It is the single
   readiness rule: the setup checklist, agent-run readiness and the default AI
   service in drafting dialogs (`useAgentAccounts`) all use it.
+- `getConnectionHealth({ status?, signal? })` (public, `data.ts`) is a
+  read-only list of services that need reconnecting: every account for that
+  service is expired, needs signing in again or errored (or LinkedIn is
+  disconnected after having an account), and none is usable. Self-renewing AI
+  sign-ins and never-connected services are left out. LinkedIn comes first.
+  [Today](today.md) shows each as a **Reconnect** row linking to
+  `?connect=<provider key>`.
 
 ## Provider destinations and local-provider consent
 

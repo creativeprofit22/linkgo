@@ -10,7 +10,11 @@ import {
   schedulerStatusPayloadSchema,
   schedulerTickResultSchema,
 } from "@/features/scheduler/schemas";
+import { approvalPostTitle, listApprovals } from "@/features/approvals/data";
+import type { ApprovalWithDetails } from "@/features/approvals/types";
 import type {
+  NextScheduledPost,
+  NextScheduledPostInput,
   SchedulerDashboard,
   SchedulerStatusPayload,
   SchedulerTickResult,
@@ -111,6 +115,54 @@ export async function listSchedulerDashboard(
         parsedCampaignId === undefined ? {} : { campaignId: parsedCampaignId },
     }),
   );
+}
+
+/**
+ * Pure: the earliest still-scheduled job on an approval that is still
+ * scheduled (and ready), or `null` when nothing is queued.
+ */
+export function deriveNextScheduledPost(
+  approvals: readonly ApprovalWithDetails[],
+): NextScheduledPost | null {
+  let next: NextScheduledPost | null = null;
+  let nextTime = Number.POSITIVE_INFINITY;
+  for (const approval of approvals) {
+    const job = approval.scheduleJob;
+    if (approval.status !== "scheduled" || job?.status !== "scheduled") {
+      continue;
+    }
+    // `scheduled_for` is a naive wall time in `job.timezone`; this orders by
+    // the browser's zone, so mixed-zone schedules may order imprecisely.
+    const time = Date.parse(job.scheduled_for);
+    if (Number.isNaN(time)) continue;
+    if (
+      time < nextTime ||
+      (time === nextTime && next !== null && approval.id < next.approvalId)
+    ) {
+      nextTime = time;
+      next = {
+        approvalId: approval.id,
+        campaignId: approval.campaign_id,
+        campaignName: approval.draft.campaign_name,
+        postTitle: approvalPostTitle(approval),
+        scheduledFor: job.scheduled_for,
+        timezone: job.timezone,
+      };
+    }
+  }
+  return next;
+}
+
+/**
+ * Read-only: the next post due to go out. Pass `approvals` to reuse a list
+ * already read; otherwise reads every campaign's approvals (capped).
+ */
+export async function getNextScheduledPost(
+  input: NextScheduledPostInput = {},
+): Promise<NextScheduledPost | null> {
+  const approvals = input.approvals ?? (await listApprovals());
+  input.signal?.throwIfAborted();
+  return deriveNextScheduledPost(approvals);
 }
 
 if (IS_TEST && typeof window !== "undefined") {

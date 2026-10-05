@@ -38,7 +38,7 @@ async function rendererTransactionCallsSince(
 }
 
 test("creates a campaign then adds and shows a candidate", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -65,7 +65,7 @@ test("creates a campaign then adds and shows a candidate", async ({ page }) => {
 });
 
 test("candidate intake fields expose schema max lengths", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -103,7 +103,7 @@ test("candidate intake fields expose schema max lengths", async ({ page }) => {
 test("duplicate candidate add shows toast and keeps one candidate", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -131,7 +131,7 @@ test("duplicate candidate add shows toast and keeps one candidate", async ({
 });
 
 test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -184,7 +184,7 @@ test("failed dedupe insert rolls back candidate intake", async ({ page }) => {
 test("archived campaigns disable discovery and scoring actions", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await archiveCampaign(page, "Founder-led growth");
   await createCampaign(page, "Active funnel");
@@ -206,7 +206,7 @@ test("archived campaigns disable discovery and scoring actions", async ({
 test("keeps the latest campaign candidates when an earlier load resolves last", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Campaign A");
   await createCampaign(page, "Campaign B");
   await openQueue(page);
@@ -299,7 +299,7 @@ test("keeps the latest campaign candidates when an earlier load resolves last", 
 test("candidate status actions move through triage states", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -324,7 +324,7 @@ test("candidate status actions move through triage states", async ({
 });
 
 test("candidate deletion requires confirmation", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -344,7 +344,7 @@ test("candidate deletion requires confirmation", async ({ page }) => {
 test("linked draft deletion blocks its workflow and rolls back atomically", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -486,7 +486,7 @@ test("linked draft deletion blocks its workflow and rolls back atomically", asyn
 });
 
 test("queue renders no-campaign empty state", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openQueue(page);
 
   await expect(
@@ -506,7 +506,7 @@ test("queue renders no-campaign empty state", async ({ page }) => {
 test("discovery blocks seed keywords over schema max length", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -534,7 +534,7 @@ test("discovery blocks seed keywords over schema max length", async ({
 });
 
 test("find topics defaults to the connected AI service", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
 
   // With no AI connected, Practice mode is the default.
@@ -580,7 +580,7 @@ test("find topics defaults to the connected AI service", async ({ page }) => {
 test("dry-run discovery creates, promotes, and dismisses suggestions", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -628,7 +628,7 @@ test("dry-run discovery creates, promotes, and dismisses suggestions", async ({
 test("failed discovery promotion rolls back generated keyword", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 
@@ -688,7 +688,7 @@ test("failed discovery promotion rolls back generated keyword", async ({
 test("dry-run scoring applies rationale and can auto-reject new low scores", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page, {
@@ -721,7 +721,7 @@ test("dry-run scoring applies rationale and can auto-reject new low scores", asy
 test("shows the uncapped total and a notice when the list is truncated", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await page.evaluate(() => {
     (

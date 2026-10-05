@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("app root renders campaigns by default", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   await expect(page).toHaveTitle("Linkgo");
   await expect(
@@ -27,7 +27,7 @@ test("sidebar sections scroll vertically when the window is short", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 600 });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   const nav = page.getByRole("navigation", { name: "Main menu" });
   const metrics = await nav.evaluate((element) => ({
@@ -48,7 +48,7 @@ test("sidebar sections scroll vertically when the window is short", async ({
 });
 
 test("renderer shell does not load GG AI provider code", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/#/campaigns", { waitUntil: "networkidle" });
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();
@@ -73,7 +73,7 @@ test("renderer shell does not load GG AI provider code", async ({ page }) => {
 test("autopilot, backlog, queue, drafts, approvals, metrics, workflows, and agent runtime render real views", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: /^Autopilot/ }).click();
   await expect(

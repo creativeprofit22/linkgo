@@ -42,7 +42,7 @@ async function setMock(
 }
 
 async function openPanel(page: Page): Promise<Locator> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "New campaign" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await dialog.getByLabel("Name").fill("Bright Data campaign");

@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 test("creates a draft with two variants and shows audit output", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -48,7 +48,7 @@ test("creates a draft with two variants and shows audit output", async ({
 test("generates distinct dry-run provider variants and saves their exact text", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -157,7 +157,7 @@ test("persists and saves distinct connected-provider authored variants", async (
       hashtags: ["#ProviderThree"],
     },
   ];
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await connectCustomProvider(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await createCampaign(page);
@@ -185,7 +185,7 @@ test("persists and saves distinct connected-provider authored variants", async (
 test("rejects count-mismatched and malformed provider arrays atomically", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await connectCustomProvider(page);
   await page.getByRole("button", { name: /Campaigns/ }).click();
   await createCampaign(page);
@@ -246,7 +246,7 @@ test("rejects count-mismatched and malformed provider arrays atomically", async 
 test("dismisses generated variants from the pending work area", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -266,7 +266,7 @@ test("dismisses generated variants from the pending work area", async ({
 test("persists a failed generation request and dismisses it", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -308,7 +308,7 @@ for (const { authMethod, expectedModel } of [
   test(`defaults the OpenAI model to ${expectedModel} for a ${authMethod} account`, async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await page.evaluate(
       (method) =>
         (
@@ -344,7 +344,7 @@ for (const { state, expectedProvider } of [
   test(`defaults the AI service to ${expectedProvider} for an Anthropic sign-in that is ${state}`, async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await page.evaluate((nextState) => {
       const hooks = window as unknown as {
         __LINKGO_AUTH_SEED_AI_ACCOUNT__: (
@@ -381,7 +381,7 @@ for (const { state, expectedProvider } of [
 test("creating a draft removes the drafted candidate from draft flows", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -404,7 +404,7 @@ test("creating a draft removes the drafted candidate from draft flows", async ({
 test("renders accessible AI audit states separately from deterministic checks", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -501,7 +501,7 @@ test("renders accessible AI audit states separately from deterministic checks", 
 });
 
 test("audit blocks external links and too many hashtags", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -521,7 +521,7 @@ test("audit blocks external links and too many hashtags", async ({ page }) => {
 });
 
 test("blocked variant cannot be selected", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -540,7 +540,7 @@ test("blocked variant cannot be selected", async ({ page }) => {
 test("clean variant can be selected and draft status becomes ready", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -556,7 +556,7 @@ test("clean variant can be selected and draft status becomes ready", async ({
 test("Send for approval stays disabled with the reason when native readiness blocks it", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -620,7 +620,7 @@ test("Send for approval stays disabled with the reason when native readiness blo
 test("editing a variant re-runs audit and clears an external link block", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -650,7 +650,7 @@ test("editing a variant re-runs audit and clears an external link block", async 
 test("rejected candidates are not available for draft flows", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -672,7 +672,7 @@ test("rejected candidates are not available for draft flows", async ({
 test("archived campaign candidates are not available for draft flows", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -696,7 +696,7 @@ test("archived campaign candidates are not available for draft flows", async ({
 test("an older campaign response cannot replace the newest draft workspace", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Alpha campaign");
   await createCampaign(page, "Beta campaign");
   await page.evaluate(() => {
@@ -842,7 +842,7 @@ test("drops a remembered automation that is no longer eligible", async ({
       }),
     );
   });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -962,7 +962,7 @@ function linkBlockedVariant(): VariantFormInput {
 test("generation controls remain accessible and usable at 320 pixels", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);

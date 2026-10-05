@@ -23,6 +23,9 @@ interface ReconcileExecutionDialogProps {
   execution: OpenPublishExecution;
   disabled: boolean;
   onReconcile: (input: ReconcilePublishExecutionInput) => Promise<void>;
+  /** Controlled open state, e.g. when a link opens this dialog. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const RESOLUTION_OPTIONS: {
@@ -46,8 +49,11 @@ export function ReconcileExecutionDialog({
   execution,
   disabled,
   onReconcile,
+  open: controlledOpen,
+  onOpenChange,
 }: ReconcileExecutionDialogProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
   const [resolution, setResolution] = useState<ReconcileResolution | null>(
     null,
   );
@@ -70,7 +76,8 @@ export function ReconcileExecutionDialog({
   };
 
   const handleOpenChange = (nextOpen: boolean): void => {
-    setOpen(nextOpen);
+    if (controlledOpen === undefined) setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
     if (!nextOpen) reset();
   };
 

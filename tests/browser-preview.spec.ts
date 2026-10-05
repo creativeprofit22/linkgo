@@ -20,14 +20,14 @@ async function expectPreviewBanner(page: Page): Promise<void> {
 test("browser preview identifies itself as a nonpersistent preview", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await expectPreviewBanner(page);
 });
 
 test("approvals explain the desktop requirement instead of a runtime TypeError", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Approvals/ }).click();
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
@@ -58,7 +58,7 @@ test("settings disables launch-on-login in the browser preview", async ({
 test("scheduler controls explain the desktop requirement and never fake success", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Auto-posting/ }).click();
   await expect(
     page.getByRole("heading", { name: "Auto-posting", exact: true }),
@@ -116,7 +116,7 @@ test("scheduler controls explain the desktop requirement and never fake success"
 test("integrations disable credential changes and never report fake success", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /^Connected accounts/ }).click();
   await expect(
     page.getByRole("heading", { name: "Connected accounts", exact: true }),

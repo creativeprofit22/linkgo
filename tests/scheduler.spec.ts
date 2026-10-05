@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 test.setTimeout(90_000);
 
 test("starts the scheduler from the Scheduler tab", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openScheduler(page);
 
   await expect(page.getByText("Off", { exact: true })).toBeVisible();
@@ -20,7 +20,7 @@ test("starts the scheduler from the Scheduler tab", async ({ page }) => {
 test("flags a scheduler that was on before Linkgo restarted", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
     (
       window as unknown as Record<string, unknown>
@@ -51,7 +51,7 @@ test("flags a scheduler that was on before Linkgo restarted", async ({
 test("runs a due scheduled post and records a successful publish", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
 
   await openScheduler(page);
@@ -83,7 +83,7 @@ test("runs a due scheduled post and records a successful publish", async ({
 });
 
 test("keeps a failed due publish scheduled for retry", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
   await page.evaluate(() => {
     (
@@ -110,7 +110,7 @@ test("keeps a failed due publish scheduled for retry", async ({ page }) => {
 test("moves a terminal scheduler failure to operator follow-up", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
   await page.evaluate(() => {
     const target = window as unknown as Record<string, unknown>;
@@ -140,7 +140,7 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
 test("global kill switch blocks due jobs without publishing", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
   await page.evaluate(() => {
     (

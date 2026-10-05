@@ -1,3 +1,8 @@
+/** Search params of `#/safety`: optionally one publish attempt to check. */
+export type SafetyRouteParams = {
+  executionId?: number | undefined;
+};
+
 export type SafetyAuditSubjectType =
   | "campaign"
   | "approval"

@@ -111,7 +111,7 @@ test("enforces lifecycle transitions through UI and the direct data boundary", a
 test("keeps recurring wall-clock time across DST boundaries", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => "__LINKGO_CAMPAIGN_BACKLOG_TEST_API__" in window,
   );
@@ -150,7 +150,7 @@ test("keeps recurring wall-clock time across DST boundaries", async ({
 test("coalesces recurring completion and rolls back a failed successor", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Recurring campaign");
   await seedBacklogItems(page, [
     {
@@ -216,7 +216,7 @@ test("coalesces recurring completion and rolls back a failed successor", async (
 test("confirms recurring cancellation and creates no successor", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Cancellation campaign");
   await seedBacklogItems(page, [
     {
@@ -384,7 +384,7 @@ test("does not report a committed create as failed when refresh reads fail", asy
 test("keeps archived campaign history readable and rejects every mutation", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Archived campaign");
   const now = new Date().toISOString();
   await seedBacklogItems(page, [
@@ -453,7 +453,7 @@ test("keeps archived campaign history readable and rejects every mutation", asyn
 test("ignores out-of-order campaign and owner filter responses", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Backlog Campaign A");
   await createCampaign(page, "Backlog Campaign B");
   await seedBacklogItems(page, [
@@ -493,7 +493,7 @@ test("ignores out-of-order campaign and owner filter responses", async ({
 test("refreshes the latest filters after a delayed mutation", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Mutation Campaign A");
   await createCampaign(page, "Mutation Campaign B");
   const completedAt = new Date().toISOString();
@@ -549,7 +549,7 @@ test("refreshes the latest filters after a delayed mutation", async ({
 test("supports keyboard focus return, narrow reflow, zoom, reduced motion, and forced colors", async ({
   page,
 }, testInfo: TestInfo) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Accessibility campaign with a long name");
   await seedBacklogItems(page, [
     {
@@ -625,7 +625,7 @@ test.describe("stored recurrence zone under device travel", () => {
   test("keeps New York wall-clock time when completion runs in Los Angeles", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createCampaign(page, "Travel-safe campaign");
     await seedBacklogItems(page, [
       {
@@ -752,7 +752,7 @@ async function openBacklogWithCampaign(
   page: Page,
   name: string,
 ): Promise<void> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, name);
   await openBacklog(page);
 }

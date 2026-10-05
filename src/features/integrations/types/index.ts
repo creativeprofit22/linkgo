@@ -128,6 +128,29 @@ export interface AuthProgressEvent {
   authUrl?: string | null | undefined;
 }
 
+/** Why a saved connection stopped working, in the order we check it. */
+export type ConnectionProblem =
+  | "expired"
+  | "reauth_required"
+  | "error"
+  | "disconnected";
+
+/** A service the user connected before that now needs reconnecting. */
+export interface ConnectionNeedingAttention {
+  providerKey: AuthProviderKey;
+  /** Plain service name, e.g. "LinkedIn" or "Claude". */
+  providerLabel: string;
+  /** "linkedin" for posting, "ai" for writing help, "other" otherwise. */
+  kind: "linkedin" | "ai" | "other";
+  problem: ConnectionProblem;
+}
+
+export interface ConnectionHealthInput {
+  /** Reuse a status already read instead of reading it again. */
+  status?: Pick<AuthStatus, "accounts">;
+  signal?: AbortSignal;
+}
+
 /** Link params for Connected accounts; `connect` opens that service's dialog. */
 export type IntegrationsRouteParams = {
   connect?: AuthProviderKey | undefined;

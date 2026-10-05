@@ -35,7 +35,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("new campaign dialog opens and creates a campaign", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
   await createCampaign(page);
 
@@ -69,7 +69,7 @@ test("new campaign dialog opens and creates a campaign", async ({ page }) => {
 });
 
 test("campaign card edit action updates campaign context", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
 
   await page
@@ -114,7 +114,7 @@ test("campaign card edit action updates campaign context", async ({ page }) => {
 test("creating a campaign with an existing name shows the duplicate-name error", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
 
   const dialog = await submitNewCampaign(page, "Founder-led growth");
@@ -136,7 +136,7 @@ test("creating a campaign with an existing name shows the duplicate-name error",
 test("renaming a campaign to an existing name shows the duplicate-name error", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await createCampaign(page, "Second campaign");
 
@@ -162,7 +162,7 @@ test("renaming a campaign to an existing name shows the duplicate-name error", a
 test("campaign text inputs cap length at the schema limits", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "New campaign" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
 
@@ -177,7 +177,7 @@ test("campaign text inputs cap length at the schema limits", async ({
 test("too many keywords shows a readable error without calling native", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "New campaign" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
 
@@ -209,7 +209,7 @@ test("too many keywords shows a readable error without calling native", async ({
 test("campaign card status actions activate pause archive and restore", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
 
   await expectCampaignStatus(page, "Draft");

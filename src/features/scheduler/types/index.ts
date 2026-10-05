@@ -1,4 +1,25 @@
-import type { PublishAttempt, ScheduleJob } from "@/features/approvals/types";
+import type {
+  ApprovalWithDetails,
+  PublishAttempt,
+  ScheduleJob,
+} from "@/features/approvals/types";
+
+/** The next post due to go out, named in plain words. */
+export interface NextScheduledPost {
+  approvalId: number;
+  campaignId: number;
+  campaignName: string;
+  /** The post's hook, or "Untitled post". */
+  postTitle: string;
+  scheduledFor: string;
+  timezone: string;
+}
+
+/** Optional preloaded approvals so callers can share one read. */
+export interface NextScheduledPostInput {
+  approvals?: readonly ApprovalWithDetails[];
+  signal?: AbortSignal;
+}
 
 export interface SchedulerSettings {
   id: 1;

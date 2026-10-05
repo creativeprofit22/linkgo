@@ -206,6 +206,7 @@ pub fn run() {
             metrics::linkgo_metrics_set_campaign_memory_status,
             metrics_reads::linkgo_metrics_eligible_approvals,
             metrics_reads::linkgo_metrics_post_metrics_list,
+            metrics_reads::linkgo_metrics_posts_missing_results,
             metrics_reads::linkgo_metrics_campaign_memory_list,
             metrics_reads::linkgo_metrics_learning_events_list,
             metrics_reads::linkgo_metrics_refresh_dashboard,

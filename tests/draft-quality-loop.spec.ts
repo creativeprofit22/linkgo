@@ -40,7 +40,7 @@ const settlement = JSON.parse(
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
-  await page.goto("/");
+  await page.goto("/#/campaigns");
   await page.getByRole("button", { name: "Drafts" }).click();
 });
 

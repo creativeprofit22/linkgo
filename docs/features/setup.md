@@ -28,6 +28,8 @@ recommended AI service.
 
 ## Where it shows
 
+- **Today** (the landing screen): a single "Finish setting up" row (n of 4)
+  at the top while setup is incomplete and not hidden ([today](today.md)).
 - **Campaigns**, when there are no campaigns and setup isn't hidden: the
   checklist replaces the empty card (the **New campaign** button stays).
 - **Get started** screen (`#/setup`): not in the Main menu; reached from the

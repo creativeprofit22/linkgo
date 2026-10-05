@@ -26,6 +26,9 @@ import type {
   AuthProgressEvent,
   AuthStatus,
   ConnectedAccount,
+  ConnectionHealthInput,
+  ConnectionNeedingAttention,
+  ConnectionProblem,
   LogoutInput,
   OAuthCodeInput,
   OAuthStartInput,
@@ -111,6 +114,89 @@ export function isUsableAiAccount(
   if (account.provider_key === "custom" && !account.has_base_url_override)
     return false;
   return account.status === "connected" || isAutoRenewingAiSignIn(account);
+}
+
+const BROKEN_STATUSES: readonly ConnectionProblem[] = [
+  "reauth_required",
+  "expired",
+  "error",
+];
+
+function isWorkingAccount(
+  account: Pick<
+    ConnectedAccount,
+    "provider_key" | "auth_method" | "status" | "has_base_url_override"
+  >,
+): boolean {
+  if (AI_ACCOUNT_KEYS.has(account.provider_key)) {
+    return isUsableAiAccount(account);
+  }
+  return account.status === "connected";
+}
+
+/**
+ * Pure: services the user connected before that no longer work, one per
+ * service. A service with any working account (including an AI sign-in that
+ * renews itself) is skipped. LinkedIn also counts when it was disconnected,
+ * because posting needs it; never-connected services stay the setup
+ * checklist's job. Sorted LinkedIn first, then by name.
+ */
+export function deriveConnectionHealth(
+  accounts: readonly Pick<
+    ConnectedAccount,
+    | "provider_key"
+    | "provider_label"
+    | "auth_method"
+    | "status"
+    | "has_base_url_override"
+  >[],
+): ConnectionNeedingAttention[] {
+  const byProvider = new Map<string, typeof accounts>();
+  for (const account of accounts) {
+    byProvider.set(account.provider_key, [
+      ...(byProvider.get(account.provider_key) ?? []),
+      account,
+    ]);
+  }
+  const result: ConnectionNeedingAttention[] = [];
+  for (const group of byProvider.values()) {
+    const first = group[0];
+    if (first === undefined || group.some(isWorkingAccount)) continue;
+    const problem =
+      BROKEN_STATUSES.find((status) =>
+        group.some((account) => account.status === status),
+      ) ??
+      (first.provider_key === "linkedin" &&
+      group.some((account) => account.status === "disconnected")
+        ? "disconnected"
+        : null);
+    if (problem === null) continue;
+    result.push({
+      providerKey: first.provider_key,
+      providerLabel: first.provider_label,
+      kind:
+        first.provider_key === "linkedin"
+          ? "linkedin"
+          : AI_ACCOUNT_KEYS.has(first.provider_key)
+            ? "ai"
+            : "other",
+      problem,
+    });
+  }
+  return result.sort((a, b) => {
+    if (a.kind === "linkedin" && b.kind !== "linkedin") return -1;
+    if (b.kind === "linkedin" && a.kind !== "linkedin") return 1;
+    return a.providerLabel.localeCompare(b.providerLabel);
+  });
+}
+
+/** Read-only: services that need reconnecting before Linkgo can use them. */
+export async function getConnectionHealth(
+  input: ConnectionHealthInput = {},
+): Promise<ConnectionNeedingAttention[]> {
+  const status = input.status ?? (await getAuthStatus());
+  input.signal?.throwIfAborted();
+  return deriveConnectionHealth(status.accounts);
 }
 
 export async function getAuthStatus(): Promise<AuthStatus> {

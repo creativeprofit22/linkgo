@@ -36,6 +36,11 @@ interface RecordPostMetricDialogProps {
   selectedCampaignArchived: boolean;
   disabled: boolean;
   onRecord: (input: RecordPostMetricInput) => Promise<void>;
+  /** Controlled open state, e.g. when a link opens the dialog. */
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  /** Post picked when the dialog opens; must be in `eligibleApprovals`. */
+  initialApprovalId?: number | undefined;
 }
 
 function getLocalDateTimeValue(): string {
@@ -99,8 +104,16 @@ export function RecordPostMetricDialog({
   selectedCampaignArchived,
   disabled,
   onRecord,
+  open: openProp,
+  onOpenChange,
+  initialApprovalId,
 }: RecordPostMetricDialogProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = (next: boolean): void => {
+    if (openProp === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<RecordMetricFormState>(() =>
     getInitialFormState(eligibleApprovals),
@@ -113,17 +126,31 @@ export function RecordPostMetricDialog({
     [eligibleApprovals, form.approvalId],
   );
 
+  // Opening from a link picks that post; nothing is saved until submit.
+  useEffect(() => {
+    if (!open || initialApprovalId === undefined) return;
+    setForm((current) => ({
+      ...current,
+      approvalId: String(initialApprovalId),
+    }));
+  }, [open, initialApprovalId]);
+
   useEffect(() => {
     const approvalStillEligible = eligibleApprovals.some(
       (approval) => approval.approval.id === Number(form.approvalId),
     );
     if (!approvalStillEligible) {
+      // Keep a linked post picked when it is eligible; else the first one.
+      const linked = eligibleApprovals.find(
+        (approval) => approval.approval.id === initialApprovalId,
+      );
+      const fallback = linked ?? eligibleApprovals[0];
       setForm((current) => ({
         ...current,
-        approvalId: String(eligibleApprovals[0]?.approval.id ?? ""),
+        approvalId: String(fallback?.approval.id ?? ""),
       }));
     }
-  }, [eligibleApprovals, form.approvalId]);
+  }, [eligibleApprovals, form.approvalId, initialApprovalId]);
 
   const validationMessage = getValidationMessage(form);
   const disabledReason = selectedCampaignArchived

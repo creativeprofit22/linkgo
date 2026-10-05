@@ -15,7 +15,7 @@ Why it is hand-rolled rather than a router library:
 - Only the hash changes. `location.pathname` still picks the window in
   `src/main.tsx` (`/` main window, `/settings` Settings window), so the
   Settings window, title bar and browser-preview banner are unaffected.
-- Screen ids match the old tab ids: `campaigns`, `autopilot`, `backlog`,
+- Screen ids match the old tab ids: `today`, `campaigns`, `autopilot`, `backlog`,
   `queue` (Ideas), `drafts`, `approvals`, `calendar`, `scheduler`, `comments`,
   `metrics`, `workflows`, `agents`, `playbooks`, `integrations`, `safety`.
   `setup` (Get started) is linkable but not in the Main menu; the sidebar
@@ -79,9 +79,9 @@ const { params, linkIssue } = useRouteParams(draftsRoute);
   each click is a history entry and Back/Forward move between screens.
 - Opening the app with no hash restores the last screen from
   `localStorage["linkgo.navigation.last-screen"]` (screen id only, checked
-  against the known ids) using a replace, else Campaigns.
-- Unknown screen: Campaigns opens with the notice "That link didn't match a
-  screen, so we opened Campaigns." It clears on the next navigation and the
+  against the known ids) using a replace, else Today ([today](today.md)).
+- Unknown screen: Today opens with the notice "That link didn't match a
+  screen, so we opened Today." It clears on the next navigation and the
   unknown id is not saved as the last screen.
 
 ### Drafts links
@@ -120,6 +120,31 @@ draft** / **Open drafts**.
   combined. After sending, the link is replaced with the new `approvalId`.
 - No link can approve, schedule or post: `send` only opens the dialog, and
   the human still submits it and then clicks Approve.
+
+### Metrics links
+
+`#/metrics?campaignId=C&approvalId=A`
+
+- `campaignId` selects that campaign when it exists; otherwise "We couldn't
+  find that campaign. Showing your analytics."
+- `approvalId` (needs `campaignId`) opens **Add results** with that post
+  picked, if it is published there. Otherwise "We couldn't find that post
+  here. It may not have gone out yet." Nothing saves until the user submits.
+  Closing the dialog replaces the link without `approvalId`.
+
+Today's **Add results** rows open this link.
+
+### Safety links
+
+`#/safety?executionId=E`
+
+- Scrolls to and highlights that execution in **Check what happened to these
+  posts** and opens its confirm dialog, if it is still unclear. Otherwise
+  "We couldn't find that post here. It may already be sorted out."
+- The typed `RECONCILE` confirmation stays; the link never reconciles.
+  Closing the dialog drops `executionId` from the link.
+
+Today's **Check what happened** rows open this link.
 
 ### Calendar links
 
@@ -166,7 +191,7 @@ Unknown provider or playbook keys and any value other than `1` are
 ## Verification
 
 - `tests/navigation.spec.ts` — pure format/parse round-trips, unknown screens,
-  bad params and Drafts/Approvals/Calendar param rules; browser tests for
+  bad params and Drafts/Approvals/Calendar/Metrics/Safety param rules; browser tests for
   every screen's address, Back/Forward, Ideas → Open draft → filtered Drafts
   → Back, broken-link fallbacks and last-screen restore.
 - `tests/post-flow.spec.ts` — the full idea → calendar chain through these

@@ -10,7 +10,7 @@ test.setTimeout(90_000);
 test("Safety tab renders settings, summaries, and empty states", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openSafety(page);
 
   await expect(
@@ -34,7 +34,7 @@ test("Safety tab renders settings, summaries, and empty states", async ({
 test("Global kill switch hides approval scheduling and agent dry-run start actions", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await createReadyDraftOnCurrentCampaign(
     page,
@@ -118,7 +118,7 @@ test("Global kill switch hides approval scheduling and agent dry-run start actio
 test("Daily post scheduling cap blocks a second same-day schedule", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await createReadyDraftOnCurrentCampaign(page, cleanVariant(), "first");
   await openApprovals(page);
@@ -160,7 +160,7 @@ test("Daily post scheduling cap blocks a second same-day schedule", async ({
 test("Failed publish attempt creates an open error queue item", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await createReadyDraftOnCurrentCampaign(
     page,
@@ -195,7 +195,7 @@ test("Failed publish attempt creates an open error queue item", async ({
 test("Error queue item moves open to in progress to awaiting review to resolved", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await createReadyDraftOnCurrentCampaign(
     page,
@@ -370,7 +370,7 @@ test("Safety reconciles an outcome-unknown publish only after typed confirmation
       },
     ];
   });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openSafety(page);
 
   await expect(

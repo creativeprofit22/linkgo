@@ -143,7 +143,7 @@ Rules:
 - `not_posted` records a failed attempt and releases the subject. It can then be published again.
 - Both resolve the "outcome unknown" error-queue item. Nothing is deleted, and the note is stored on the execution.
 
-UI: the Safety view shows a **Check what happened to these posts** card (`src/features/publish-reconciliation`). Rows that are still in progress show "In progress". `outcome_unknown` rows (badge: **Couldn't confirm**) get a **Check what happened** button that opens a "Confirm what happened to this post" (or "…this comment") dialog with the resolution choice, a URL field required for "posted", an optional note, and a typed `RECONCILE` confirmation. The dialog warns that marking something "not posted" when it really posted can lead to a duplicate on the next publish.
+UI: the Safety view shows a **Check what happened to these posts** card (`src/features/publish-reconciliation`). Rows that are still in progress show "In progress". `outcome_unknown` rows (badge: **Couldn't confirm**) get a **Check what happened** button that opens a "Confirm what happened to this post" (or "…this comment") dialog with the resolution choice, a URL field required for "posted", an optional note, and a typed `RECONCILE` confirmation. The dialog warns that marking something "not posted" when it really posted can lead to a duplicate on the next publish. `#/safety?executionId=E` highlights one row and opens its dialog ([navigation](navigation.md#safety-links)); the typed confirmation still applies. `listUnclearPublishOutcomes()` (public `data.ts`) is a read-only list of `outcome_unknown` executions only, which [Today](today.md) shows as **Check what happened** rows.
 
 ### Operator runbook
 

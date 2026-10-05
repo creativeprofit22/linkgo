@@ -14,6 +14,7 @@ import {
   NotebookTabs,
   Route,
   ShieldAlert,
+  Sun,
   Target,
   Workflow,
 } from "lucide-react";
@@ -42,6 +43,7 @@ import {
   SetupView,
 } from "@/features/setup";
 import { setupRoute } from "@/features/setup/schemas";
+import { todayRoute } from "@/features/today/schemas";
 import { workflowsRoute } from "@/features/workflows/schemas";
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
 import {
@@ -127,6 +129,11 @@ const SchedulerView = lazy(() =>
     default: SchedulerView,
   })),
 );
+const TodayView = lazy(() =>
+  import("@/features/today").then(({ TodayView }) => ({
+    default: TodayView,
+  })),
+);
 const WorkflowsView = lazy(() =>
   import("@/features/workflows").then(({ WorkflowsView }) => ({
     default: WorkflowsView,
@@ -145,6 +152,7 @@ if (import.meta.env.VITE_PLAYWRIGHT) {
 
 /** Every main-window screen, in menu order. Each feature owns its route. */
 const homeRoutes = [
+  todayRoute,
   campaignsRoute,
   autopilotPlannerRoute,
   campaignBacklogRoute,
@@ -168,7 +176,7 @@ type HomeTab = (typeof homeRoutes)[number]["id"];
 type HomeRoute = RouteDefinition<HomeTab>;
 
 const homeRouteIds: readonly HomeTab[] = homeRoutes.map((route) => route.id);
-const defaultHomeRoute = campaignsRoute;
+const defaultHomeRoute = todayRoute;
 
 type RoadmapTab = {
   route: HomeRoute;
@@ -180,6 +188,14 @@ type RoadmapTab = {
 };
 
 const tabs: RoadmapTab[] = [
+  {
+    route: todayRoute,
+    label: "Today",
+    description: "What needs you now.",
+    icon: Sun,
+    enabled: true,
+    docHref: "docs/features/today.md",
+  },
   {
     route: campaignsRoute,
     label: "Campaigns",
@@ -440,6 +456,8 @@ export function HomePage(): React.ReactNode {
                   <SetupEmptyCampaigns fallback={defaultEmpty} />
                 )}
               />
+            ) : activeRoadmapTab.route.id === "today" ? (
+              <TodayView />
             ) : activeRoadmapTab.route.id === "setup" ? (
               <SetupView />
             ) : activeRoadmapTab.route.id === "autopilot" ? (

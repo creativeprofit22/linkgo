@@ -533,7 +533,7 @@ test("rejects invalid JSON and more than 50 rows while preserving input", async 
 test("keeps the latest campaign import history when an earlier load resolves last", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page, "Import Campaign A");
   await createCampaign(page, "Import Campaign B");
   await openQueue(page);
@@ -1139,7 +1139,7 @@ function sourceJson(rows: unknown[]): string {
 }
 
 async function openQueueWithCampaign(page: Page): Promise<void> {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createCampaign(page);
   await openQueue(page);
 }

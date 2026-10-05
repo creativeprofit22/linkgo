@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-linkgo-metrics-posts-missing-results"
+description = "Enables the linkgo_metrics_posts_missing_results command without any pre-configured scope."
+commands.allow = ["linkgo_metrics_posts_missing_results"]
+
+[[permission]]
+identifier = "deny-linkgo-metrics-posts-missing-results"
+description = "Denies the linkgo_metrics_posts_missing_results command without any pre-configured scope."
+commands.deny = ["linkgo_metrics_posts_missing_results"]

@@ -1,4 +1,4 @@
-import { AlertCircle, BarChart3, RefreshCw, Target } from "lucide-react";
+import { AlertCircle, BarChart3, Info, RefreshCw, Target } from "lucide-react";
 import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,15 +7,23 @@ import { LearningEventList } from "@/features/metrics/components/learning-event-
 import { MetricCard } from "@/features/metrics/components/metric-card";
 import { RecordPostMetricDialog } from "@/features/metrics/components/record-post-metric-dialog";
 import { useMetrics } from "@/features/metrics/hooks/use-metrics";
+import { metricsRoute } from "@/features/metrics/schemas";
 import type {
   CampaignMemory,
+  MetricEligibleApproval,
   MetricRefreshDashboard,
   MetricRefreshEventSeverity,
   MetricRefreshEventType,
   MetricRefreshJobStatus,
   NativeMetricRefreshStatus,
+  MetricsRouteParams,
   PostMetricWithDetails,
 } from "@/features/metrics/types";
+import type { CampaignWithKeywords } from "@/features/campaigns/types";
+import {
+  navigateTo,
+  useRouteParams,
+} from "@/lib/navigation/use-hash-navigation";
 import { toPlainMessage } from "@/lib/plain-message";
 
 const refreshJobStatusLabels: Record<MetricRefreshJobStatus, string> = {
@@ -45,9 +53,11 @@ const refreshEventSeverityLabels: Record<MetricRefreshEventSeverity, string> = {
 };
 
 export function MetricsView(): React.ReactNode {
+  const { params: linkParams, linkIssue } = useRouteParams(metricsRoute);
   const {
     campaigns,
     selectedCampaignId,
+    loadedCampaignId,
     eligibleApprovals,
     metrics,
     memory,
@@ -64,11 +74,29 @@ export function MetricsView(): React.ReactNode {
     startRefresh,
     stopRefresh,
     refreshNow,
-  } = useMetrics();
+  } = useMetrics({ initialCampaignId: linkParams?.campaignId });
 
   const selectedCampaign =
     campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
   const selectedCampaignArchived = selectedCampaign?.status === "archived";
+  const link = resolveMetricsLink({
+    linkParams,
+    linkIssue,
+    ready: !loading && error === null,
+    campaigns,
+    loadedCampaignId,
+    selectedCampaignArchived,
+    eligibleApprovals,
+  });
+  // Closing a dialog a link opened drops `approvalId` from the address
+  // (replace), so refresh doesn't reopen it while Back/Forward still work.
+  const clearLink = (): void => {
+    navigateTo(
+      metricsRoute,
+      selectedCampaignId === null ? {} : { campaignId: selectedCampaignId },
+      { replace: true },
+    );
+  };
   const summary = getMetricsSummary(metrics, memory);
   const refreshStatusLabel = getMetricRefreshStatusLabel(refreshStatus);
   const refreshControlStops =
@@ -134,9 +162,34 @@ export function MetricsView(): React.ReactNode {
             selectedCampaignArchived={selectedCampaignArchived}
             disabled={campaigns.length === 0 || eligibleApprovals.length === 0}
             onRecord={recordMetric}
+            {...(link.kind === "record"
+              ? {
+                  open: true,
+                  initialApprovalId: link.approvalId,
+                  onOpenChange: (next: boolean) => {
+                    if (!next) clearLink();
+                  },
+                }
+              : {})}
           />
         </div>
       </div>
+
+      {link.kind === "notice" && (
+        <div
+          role="status"
+          data-testid="metrics-link-notice"
+          className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+        >
+          <span className="flex items-center gap-2">
+            <Info aria-hidden="true" className="size-4 shrink-0" />
+            {link.message}
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={clearLink}>
+            OK
+          </Button>
+        </div>
+      )}
 
       {error && (
         <Card className="border-destructive/50 bg-destructive/5">
@@ -180,6 +233,13 @@ export function MetricsView(): React.ReactNode {
               onChange={(event) => {
                 const nextId = Number(event.target.value);
                 selectCampaign(Number.isFinite(nextId) ? nextId : null);
+                // Keep the address in step so Back returns to this campaign.
+                if (linkParams?.campaignId !== undefined)
+                  navigateTo(
+                    metricsRoute,
+                    Number.isFinite(nextId) ? { campaignId: nextId } : {},
+                    { replace: true },
+                  );
               }}
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 min-w-60 rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
@@ -303,6 +363,59 @@ export function MetricsView(): React.ReactNode {
       )}
     </div>
   );
+}
+
+type MetricsLinkState =
+  | { kind: "none" }
+  | { kind: "record"; approvalId: number }
+  | { kind: "notice"; message: string };
+
+/**
+ * Link params are untrusted: the post must have gone out in the linked
+ * campaign before Add results opens with it picked. Nothing saves until the
+ * person submits the form.
+ */
+function resolveMetricsLink(input: {
+  linkParams: MetricsRouteParams | null;
+  linkIssue: boolean;
+  ready: boolean;
+  campaigns: CampaignWithKeywords[];
+  loadedCampaignId: number | null;
+  selectedCampaignArchived: boolean;
+  eligibleApprovals: MetricEligibleApproval[];
+}): MetricsLinkState {
+  if (input.linkIssue)
+    return {
+      kind: "notice",
+      message: "That link doesn't point to a valid post. Showing analytics.",
+    };
+  const { linkParams } = input;
+  if (!linkParams || linkParams.campaignId === undefined || !input.ready)
+    return { kind: "none" };
+  if (!input.campaigns.some((c) => c.id === linkParams.campaignId))
+    return {
+      kind: "notice",
+      message: "We couldn't find that campaign. Showing your analytics.",
+    };
+  // Wait for the linked campaign's posts to load.
+  if (input.loadedCampaignId !== linkParams.campaignId) return { kind: "none" };
+  if (linkParams.approvalId === undefined) return { kind: "none" };
+  const approvalId = linkParams.approvalId;
+  if (input.selectedCampaignArchived)
+    return {
+      kind: "notice",
+      message:
+        "This campaign is archived, so you can't add results. Restore it first.",
+    };
+  return input.eligibleApprovals.some(
+    (approval) => approval.approval.id === approvalId,
+  )
+    ? { kind: "record", approvalId }
+    : {
+        kind: "notice",
+        message:
+          "We couldn't find that post here. It may not have gone out yet.",
+      };
 }
 
 function getMetricRefreshStatusLabel(

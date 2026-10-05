@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 test.setTimeout(90_000);
 
 test("Comments tab renders no-campaign and empty states", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await openComments(page);
 
   await expect(
@@ -31,7 +31,7 @@ test("Comments tab renders no-campaign and empty states", async ({ page }) => {
 test("A shortlisted candidate can become a comment thread with variants and audits", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createShortlistedCandidate(page, "first");
   await openComments(page);
 
@@ -54,7 +54,7 @@ test("A shortlisted candidate can become a comment thread with variants and audi
 test("Comment thread notes can be edited and persist after reopening Comments", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createShortlistedCandidate(page, "notes");
   await openComments(page);
   await createCommentThread(page, cleanComment());
@@ -77,7 +77,7 @@ test("Comment thread notes can be edited and persist after reopening Comments", 
 test("A blocked comment variant cannot be selected or submitted for review", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createShortlistedCandidate(page, "blocked");
   await openComments(page);
   await createCommentThread(
@@ -98,7 +98,7 @@ test("A blocked comment variant cannot be selected or submitted for review", asy
 test("A rejected comment thread moves to History with Cancel disabled", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createShortlistedCandidate(page, "rejected");
   await openComments(page);
   await createCommentThread(page, cleanComment());
@@ -124,7 +124,7 @@ test("A rejected comment thread moves to History with Cancel disabled", async ({
 test("Approved comment posts through mocked LinkedIn API and records success", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "api-success");
 
   await page.getByRole("button", { name: "Post to LinkedIn" }).click();
@@ -177,7 +177,7 @@ test("Open outcome_unknown publish execution locks comment API posting", async (
       },
     ];
   });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "locked-by-execution");
 
   await expect(
@@ -192,7 +192,7 @@ test("Open outcome_unknown publish execution locks comment API posting", async (
 test("LinkedIn API comment failure records failed attempt and Safety error", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "api-failure");
   await page.evaluate(() => {
     (
@@ -220,7 +220,7 @@ test("LinkedIn API comment failure records failed attempt and Safety error", asy
 test("A clean variant can be reviewed approved and manually recorded posted", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "posted");
 
   await page.getByRole("button", { name: "Mark as posted" }).click();
@@ -260,7 +260,7 @@ test("A clean variant can be reviewed approved and manually recorded posted", as
 test("Duplicate comment attempt returns a stable domain error", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "duplicate-attempt");
   const attempt = {
     commentThreadId: 1,
@@ -280,7 +280,7 @@ test("Duplicate comment attempt returns a stable domain error", async ({
 test("Daily comment cap blocks a second same-day successful posted attempt", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createShortlistedCandidate(page, "cap-one");
   await openComments(page);
 
@@ -324,7 +324,7 @@ test("Daily comment cap blocks a second same-day successful posted attempt", asy
 test("Global kill switch hides API posting and direct publish blocks before native", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "kill-switch");
   await openSafety(page);
   await page
@@ -362,7 +362,7 @@ test("Global kill switch hides API posting and direct publish blocks before nati
 test("Daily comment cap blocks API posting before native invoke", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "api-cap-one");
   await page.getByRole("button", { name: "Mark as posted" }).click();
   await page
@@ -399,7 +399,7 @@ test("Daily comment cap blocks API posting before native invoke", async ({
 test("Unresolvable target hides API posting and keeps manual fallback", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createShortlistedCandidate(page, "unresolved", {
     unresolvableUrl: true,
   });
@@ -425,7 +425,7 @@ test("Unresolvable target hides API posting and keeps manual fallback", async ({
 test("Stale status preflight prevents direct API comment posting", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "stale");
   await page.getByRole("button", { name: "Cancel" }).click();
 
@@ -442,7 +442,7 @@ test("Stale status preflight prevents direct API comment posting", async ({
 test("Failed comment attempt creates an open error queue item visible in Safety", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "failed");
 
   await page.getByRole("button", { name: "Mark as not posted" }).click();
@@ -473,7 +473,7 @@ test("Failed comment attempt creates an open error queue item visible in Safety"
 test("Archived campaign blocks comment mutations while history remains visible", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedComment(page, "archived");
   await openCampaigns(page);
   await page

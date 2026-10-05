@@ -115,6 +115,7 @@ permissions = [
   "allow-linkgo-metrics-eligible-approvals",
   "allow-linkgo-metrics-learning-events-list",
   "allow-linkgo-metrics-post-metrics-list",
+  "allow-linkgo-metrics-posts-missing-results",
   "allow-linkgo-metrics-record-post-metric",
   "allow-linkgo-metrics-refresh-dashboard",
   "allow-linkgo-metrics-set-campaign-memory-status",

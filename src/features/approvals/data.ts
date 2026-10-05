@@ -21,7 +21,9 @@ import type {
   ApprovalEligibleDraft,
   ApprovalEligibleDraftPage,
   ApprovalListPage,
+  ApprovalSummaryInput,
   ApprovalVariantSnapshot,
+  ApprovalWaitingForReview,
   ApprovalWithDetails,
   AssertApprovalCanPublishViaLinkedInInput,
   CancelScheduleInput,
@@ -180,6 +182,57 @@ export async function listApprovalPage(
     ),
   }));
   return { items, totalCount };
+}
+
+/** Plain title for a post: its hook, or "Untitled post". */
+export function approvalPostTitle(approval: ApprovalWithDetails): string {
+  const hook = approval.variant.hook.trim();
+  return hook.length > 0 ? hook : "Untitled post";
+}
+
+function newestFirst(
+  a: { created_at: string; id: number },
+  b: { created_at: string; id: number },
+): number {
+  if (a.created_at !== b.created_at) {
+    return a.created_at < b.created_at ? 1 : -1;
+  }
+  return b.id - a.id;
+}
+
+/**
+ * Pure: approvals still waiting for a human OK (`needs_review`) in campaigns
+ * that are not archived, newest first.
+ */
+export function deriveApprovalsWaitingForReview(
+  approvals: readonly ApprovalWithDetails[],
+): ApprovalWaitingForReview[] {
+  return approvals
+    .filter(
+      (approval) =>
+        approval.status === "needs_review" &&
+        approval.draft.campaign_status !== "archived",
+    )
+    .sort(newestFirst)
+    .map((approval) => ({
+      approvalId: approval.id,
+      campaignId: approval.campaign_id,
+      campaignName: approval.draft.campaign_name,
+      postTitle: approvalPostTitle(approval),
+      createdAt: approval.created_at,
+    }));
+}
+
+/**
+ * Read-only: posts waiting for the user's OK. Pass `approvals` to reuse a
+ * list already read; otherwise reads every campaign's approvals (capped).
+ */
+export async function listApprovalsWaitingForReview(
+  input: ApprovalSummaryInput = {},
+): Promise<ApprovalWaitingForReview[]> {
+  const approvals = input.approvals ?? (await listApprovals());
+  input.signal?.throwIfAborted();
+  return deriveApprovalsWaitingForReview(approvals);
 }
 
 /**

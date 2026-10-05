@@ -21,6 +21,7 @@ Native commands:
 - `linkgo_scheduler_stop`
 - `linkgo_scheduler_tick`
 - `linkgo_scheduler_dashboard_get` (`src-tauri/src/scheduler_store.rs`): the renderer's only scheduler read. It takes an optional positive `campaignId` and rejects unknown fields. It recreates a missing settings row and returns the settings, the kill switch (on screen: "Emergency pause"), summary counts, up to 20 due jobs, 50 recent events and 25 recent attempts, all from one transaction. The renderer has no direct SQL access to scheduler tables. Tests: `src-tauri/src/scheduler_store_tests.rs`.
+- `getNextScheduledPost({ approvals?, signal? })` (`data.ts`, read-only): the earliest `scheduled` job on an approval that is still `scheduled`, or `null`. It reads approvals through the approvals feature's public `listApprovalPage` (or reuses a list passed in). Used by [Today](today.md) under "Coming up".
 
 ## Schema
 

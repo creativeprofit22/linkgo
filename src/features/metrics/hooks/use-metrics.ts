@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
@@ -29,9 +29,19 @@ import type {
   SetCampaignMemoryStatusInput,
 } from "@/features/metrics/types";
 
+export interface UseMetricsOptions {
+  /**
+   * Campaign requested by a link. Selected when it exists, on first load and
+   * whenever a new link arrives while Analytics stays open.
+   */
+  initialCampaignId?: number | undefined;
+}
+
 interface UseMetricsState {
   campaigns: CampaignWithKeywords[];
   selectedCampaignId: number | null;
+  /** Campaign whose posts are currently loaded; lags a new selection. */
+  loadedCampaignId: number | null;
   eligibleApprovals: MetricEligibleApproval[];
   metrics: PostMetricWithDetails[];
   memory: CampaignMemory[];
@@ -69,11 +79,14 @@ function getDefaultCampaignId(
   );
 }
 
-export function useMetrics(): UseMetricsState {
+export function useMetrics(options: UseMetricsOptions = {}): UseMetricsState {
+  const { initialCampaignId } = options;
   const [campaigns, setCampaigns] = useState<CampaignWithKeywords[]>([]);
+  // A linked campaign starts selected; loadMetrics falls back if it is gone.
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(
-    null,
+    initialCampaignId ?? null,
   );
+  const [loadedCampaignId, setLoadedCampaignId] = useState<number | null>(null);
   const [eligibleApprovals, setEligibleApprovals] = useState<
     MetricEligibleApproval[]
   >([]);
@@ -95,6 +108,7 @@ export function useMetrics(): UseMetricsState {
         setMemory([]);
         setEvents([]);
         setRefreshDashboard(null);
+        setLoadedCampaignId(null);
         return;
       }
 
@@ -119,6 +133,7 @@ export function useMetrics(): UseMetricsState {
       setEvents(loadedEvents);
       setRefreshDashboard(loadedRefreshDashboard);
       setRefreshStatus(loadedRefreshStatus);
+      setLoadedCampaignId(campaignId);
     },
     [],
   );
@@ -156,6 +171,20 @@ export function useMetrics(): UseMetricsState {
     },
     [loadMetricsForCampaign],
   );
+
+  // A new link while Analytics stays open selects its campaign when it exists.
+  const requestedCampaignIdRef = useRef(initialCampaignId);
+  useEffect(() => {
+    if (requestedCampaignIdRef.current === initialCampaignId) return;
+    requestedCampaignIdRef.current = initialCampaignId;
+    if (
+      initialCampaignId === undefined ||
+      initialCampaignId === selectedCampaignId ||
+      !campaigns.some((campaign) => campaign.id === initialCampaignId)
+    )
+      return;
+    selectCampaign(initialCampaignId);
+  }, [initialCampaignId, campaigns, selectedCampaignId, selectCampaign]);
 
   const recordMetric = useCallback(
     async (input: RecordPostMetricInput) => {
@@ -256,6 +285,7 @@ export function useMetrics(): UseMetricsState {
     () => ({
       campaigns,
       selectedCampaignId,
+      loadedCampaignId,
       eligibleApprovals,
       metrics,
       memory,
@@ -276,6 +306,7 @@ export function useMetrics(): UseMetricsState {
     [
       campaigns,
       selectedCampaignId,
+      loadedCampaignId,
       eligibleApprovals,
       metrics,
       memory,

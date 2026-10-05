@@ -6,6 +6,7 @@ import {
   metricEligibleApprovalListSchema,
   metricRefreshDashboardRecordSchema,
   postMetricDetailListSchema,
+  postsMissingResultsRecordSchema,
 } from "@/features/metrics/record-schemas";
 import { IS_TEST } from "@/lib/env";
 import {
@@ -33,6 +34,8 @@ import type {
   NativeMetricRefreshTickResult,
   PostMetric,
   PostMetricWithDetails,
+  PostsMissingResultsPage,
+  PostsMissingResultsInput,
   RecordPostMetricInput,
   SetCampaignMemoryStatusInput,
 } from "@/features/metrics/types";
@@ -293,6 +296,36 @@ export async function listPostMetrics(
     }),
   );
   return rows.map(mapPostMetricWithDetails);
+}
+
+/**
+ * Read-only: posted LinkedIn posts (campaign not archived) with no recorded
+ * metric, newest publish first. The native read decides "has any metric?"
+ * itself, so capped metric lists never resurface measured posts. `items` is
+ * capped; `totalCount` is the uncapped total.
+ */
+export async function listPostsMissingResults(
+  input: PostsMissingResultsInput = {},
+): Promise<PostsMissingResultsPage> {
+  const record = postsMissingResultsRecordSchema.parse(
+    await invokeCommand("linkgo_metrics_posts_missing_results", {
+      input: campaignInput(undefined),
+    }),
+  );
+  input.signal?.throwIfAborted();
+  return {
+    items: record.items.map((row) => {
+      const hook = row.variant_hook.trim();
+      return {
+        approvalId: row.approval_id,
+        campaignId: row.campaign_id,
+        campaignName: row.campaign_name,
+        postTitle: hook.length > 0 ? hook : "Untitled post",
+        publishedAt: row.publish_created_at,
+      };
+    }),
+    totalCount: record.totalCount,
+  };
 }
 
 /** Campaign memory, active before archived; capped at 500. */

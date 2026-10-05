@@ -1,5 +1,5 @@
 //! Native metrics reads: published approvals eligible for metrics, recorded
-//! post metrics, campaign memory, learning events and the metric-refresh
+//! post metrics, posts still missing results, campaign memory, learning events and the metric-refresh
 //! dashboard. Each command owns fixed SQL with a campaign filter and a cap;
 //! the dashboard reads all of its parts from one transaction.
 
@@ -13,6 +13,7 @@ use crate::row_json::{row_to_json, rows_to_json};
 const READ_ERROR: &str = "Could not load metrics";
 pub(crate) const METRICS_LIST_LIMIT: i64 = 500;
 const REFRESH_EVENTS_LIMIT: i64 = 20;
+pub(crate) const MISSING_RESULTS_LIMIT: i64 = 50;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -30,6 +31,15 @@ pub struct RefreshSummary {
     pub unavailable_jobs: i64,
     pub failed_jobs: i64,
     pub api_snapshots: i64,
+}
+
+/// Published posts with no recorded metric. `items` is capped; `total_count`
+/// is the uncapped count, read in the same transaction.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PostsMissingResults {
+    pub items: Vec<Value>,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -131,6 +141,36 @@ const POST_METRICS_SQL: &str = "SELECT
   ORDER BY datetime(pm.measured_at) DESC, pm.id DESC
   LIMIT ?2";
 
+/// Same eligibility as `ELIGIBLE_SQL` (published, latest successful attempt,
+/// campaign not archived) minus any approval with at least one metric row.
+/// Answering "has any metric?" here keeps it independent of list caps.
+macro_rules! missing_results_from {
+    () => {
+        " FROM approvals a
+  INNER JOIN campaigns c ON c.id = a.campaign_id
+  INNER JOIN draft_variants dv ON dv.id = a.draft_variant_id
+  INNER JOIN publish_attempts pa ON pa.id = (
+    SELECT latest_pa.id FROM publish_attempts latest_pa
+    WHERE latest_pa.approval_id = a.id AND latest_pa.status = 'succeeded'
+    ORDER BY datetime(latest_pa.created_at) DESC, latest_pa.id DESC LIMIT 1
+  )
+  WHERE a.status = 'published' AND c.status <> 'archived'
+    AND (?1 IS NULL OR a.campaign_id = ?1)
+    AND NOT EXISTS (SELECT 1 FROM post_metrics pm WHERE pm.approval_id = a.id)"
+    };
+}
+
+const MISSING_RESULTS_SQL: &str = concat!(
+    "SELECT a.id AS approval_id, c.id AS campaign_id, c.name AS campaign_name,
+    dv.hook AS variant_hook, pa.created_at AS publish_created_at",
+    missing_results_from!(),
+    "
+  ORDER BY datetime(pa.created_at) DESC, a.id DESC
+  LIMIT ?2"
+);
+
+const MISSING_RESULTS_COUNT_SQL: &str = concat!("SELECT COUNT(*)", missing_results_from!());
+
 const MEMORY_SQL: &str = "SELECT id, campaign_id, post_metric_id, signal, summary,
     evidence, confidence, status, created_at, updated_at
   FROM campaign_memory
@@ -183,6 +223,28 @@ pub(crate) async fn list_post_metrics(
     input: MetricsListInput,
 ) -> Result<Vec<Value>, String> {
     read_list(pool, input, POST_METRICS_SQL).await
+}
+
+pub(crate) async fn list_posts_missing_results(
+    pool: &SqlitePool,
+    input: MetricsListInput,
+) -> Result<PostsMissingResults, String> {
+    let campaign_id = validate(&input)?;
+    let mut transaction = pool.begin().await.map_err(read_error)?;
+    let items = list(
+        &mut transaction,
+        MISSING_RESULTS_SQL,
+        campaign_id,
+        MISSING_RESULTS_LIMIT,
+    )
+    .await?;
+    let (total_count,): (i64,) = sqlx::query_as(MISSING_RESULTS_COUNT_SQL)
+        .bind(campaign_id)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(read_error)?;
+    transaction.commit().await.map_err(read_error)?;
+    Ok(PostsMissingResults { items, total_count })
 }
 
 pub(crate) async fn list_campaign_memory(
@@ -258,6 +320,14 @@ pub async fn linkgo_metrics_post_metrics_list(
     input: MetricsListInput,
 ) -> Result<Vec<Value>, String> {
     list_post_metrics(pool.inner(), input).await
+}
+
+#[tauri::command]
+pub async fn linkgo_metrics_posts_missing_results(
+    pool: State<'_, SqlitePool>,
+    input: MetricsListInput,
+) -> Result<PostsMissingResults, String> {
+    list_posts_missing_results(pool.inner(), input).await
 }
 
 #[tauri::command]
