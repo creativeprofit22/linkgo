@@ -103,7 +103,7 @@ The Auto-posting tab shows:
 - An "Emergency pause is on" banner when the global kill switch is enabled.
 - Due and pending schedule cards ("Coming up").
 - Recent scheduler events ("Recent activity").
-- Scheduler-linked publish attempts ("Recent posting attempts"). Each row leads with the post's opening line (the approved variant's `hook`, returned as `variant_hook`; "Approved post" when it is empty), then the campaign name ("Campaign removed" when it is gone) and the outcome.
+- Scheduler-linked publish attempts ("Recent posting attempts"). Each row leads with the post's opening line (the approved variant's `hook`, returned as `variant_hook`; "Approved post" when it is empty), then the campaign name ("Campaign removed" when it is gone) and the outcome. Each row also returns the live `schedule_job_status`, `approval_status` and `campaign_status` (null when the row is gone). A failed attempt shows **Schedule again** only when its job is still `failed`, the approval is `approved` and the campaign is not archived (`canScheduleAgain`, mirroring the native `approval_scheduling` gate; the due-job card uses the same rule). A failed attempt whose job was already rescheduled says "Scheduled again." instead.
 
 ## Restart and crash behavior
 

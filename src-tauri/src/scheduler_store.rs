@@ -97,6 +97,11 @@ pub struct SchedulerPublishAttemptRow {
     pub campaign_name: Option<String>,
     /// The approved variant's opening line; empty when the variant is gone.
     pub variant_hook: String,
+    /// Live state (not attempt-time history) so the renderer can mirror the
+    /// `approval_scheduling` gate before offering "Schedule again".
+    pub schedule_job_status: Option<String>,
+    pub approval_status: Option<String>,
+    pub campaign_status: Option<String>,
 }
 
 /// Mirrors the renderer `SchedulerDashboard` shape.
@@ -222,6 +227,9 @@ fn attempt(row: &SqliteRow) -> SchedulerPublishAttemptRow {
         campaign_id: row.get("campaign_id"),
         campaign_name: row.get("campaign_name"),
         variant_hook: row.get("variant_hook"),
+        schedule_job_status: row.get("schedule_job_status"),
+        approval_status: row.get("approval_status"),
+        campaign_status: row.get("campaign_status"),
     }
 }
 
@@ -317,8 +325,11 @@ pub(crate) async fn get_scheduler_dashboard(
                 "SELECT pa.id, pa.approval_id, pa.schedule_job_id, pa.platform, pa.status,
                         pa.external_post_url, pa.platform_post_id, pa.error_message,
                         pa.created_at, a.campaign_id, c.name AS campaign_name,
-                        COALESCE(dv.hook, '') AS variant_hook
+                        COALESCE(dv.hook, '') AS variant_hook,
+                        sj.status AS schedule_job_status, a.status AS approval_status,
+                        c.status AS campaign_status
                  FROM publish_attempts pa
+                 LEFT JOIN schedule_jobs sj ON sj.id = pa.schedule_job_id
                  LEFT JOIN approvals a ON a.id = pa.approval_id
                  LEFT JOIN campaigns c ON c.id = a.campaign_id
                  LEFT JOIN draft_variants dv ON dv.id = a.draft_variant_id

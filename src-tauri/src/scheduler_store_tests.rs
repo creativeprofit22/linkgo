@@ -126,6 +126,38 @@ async fn dashboard_filters_to_one_campaign() {
 }
 
 #[tokio::test]
+async fn attempts_carry_live_job_approval_and_campaign_status() {
+    let f = fixture().await;
+    seed(
+        &f.pool,
+        "UPDATE schedule_jobs SET status = 'failed' WHERE id = 1;
+         UPDATE campaigns SET status = 'archived' WHERE id = 2;",
+    )
+    .await;
+    let dashboard = get_scheduler_dashboard(&f.pool, SchedulerDashboardInput::default())
+        .await
+        .unwrap();
+    let live: Vec<(Option<&str>, Option<&str>, Option<&str>)> = dashboard
+        .recent_attempts
+        .iter()
+        .map(|a| {
+            (
+                a.schedule_job_status.as_deref(),
+                a.approval_status.as_deref(),
+                a.campaign_status.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        live,
+        vec![
+            (Some("scheduled"), Some("scheduled"), Some("archived")),
+            (Some("failed"), Some("scheduled"), Some("active")),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn attempt_hook_is_empty_when_the_variant_is_gone() {
     let f = fixture().await;
     seed(

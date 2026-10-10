@@ -16,7 +16,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:build:rctest": "tauri build --config src-tauri/tauri.rc-test.conf.json",
-    "test": "VITE_PLAYWRIGHT=true bun run build && playwright test",
+    "test": "playwright test",
     "test:desktop": "playwright test --config playwright.desktop.config.ts",
     "test:ui": "playwright test --ui",
     "test:rust": "cd src-tauri && cargo test",

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { approvalsRoute } from "@/features/approvals/schemas";
 import type { ScheduleJobStatus } from "@/features/approvals/types";
+import { canScheduleAgain } from "@/features/scheduler/schedule-again";
 import type { DueScheduleCardItem } from "@/features/scheduler/types";
 import { formatRouteHash } from "@/lib/navigation/route-contract";
 import { toPlainMessage } from "@/lib/plain-message";
@@ -84,7 +85,11 @@ export function DueScheduleCard({
           </div>
         )}
 
-        {job.status === "failed" && (
+        {canScheduleAgain({
+          scheduleJobStatus: job.status,
+          approvalStatus: job.approval_status,
+          campaignStatus: job.campaign_status,
+        }) && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-muted-foreground text-sm">
               This post didn't go out. Pick a new time on its approval.

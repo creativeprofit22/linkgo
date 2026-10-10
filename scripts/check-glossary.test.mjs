@@ -62,6 +62,36 @@ test("flags JSON wording", () => {
   assert.equal(violation?.say, "a guided form");
 });
 
+test("flags outcome unknown in JSX text but not in support details", () => {
+  const [violation] = findViolations(
+    "a.tsx",
+    "export const A = () => <p>Outcome unknown</p>;",
+  );
+  assert.equal(violation?.say, "Couldn't confirm");
+  assert.deepEqual(
+    findViolations(
+      "a.tsx",
+      "export const A = () => <SupportDetails>Outcome unknown</SupportDetails>;",
+    ),
+    [],
+  );
+});
+
+test("flags request id in JSX text but not in support details", () => {
+  const [violation] = findViolations(
+    "a.tsx",
+    "export const A = () => <p>Request id copied</p>;",
+  );
+  assert.equal(violation?.say, "Details for support");
+  assert.deepEqual(
+    findViolations(
+      "a.tsx",
+      "export const A = () => <SupportDetails>Request id: abc</SupportDetails>;",
+    ),
+    [],
+  );
+});
+
 test("skips imports, non-visible attributes and support details", () => {
   const source = `
     import { workflowRoute } from "@/features/workflows";
@@ -133,9 +163,31 @@ test("allowances suppress exact matches and stale ones are reported", (t) => {
   const root = fixture(t, {
     "src/components/x.tsx": "export const X = () => <p>Open the playbook</p>;",
   });
-  const used = { file: "src/components/x.tsx", text: "Open the playbook" };
-  const unused = { file: "src/components/x.tsx", text: "Gone" };
-  const { violations, stale } = checkGlossary(root, [used, unused]);
+  const used = {
+    file: "src/components/x.tsx",
+    text: "Open the playbook",
+    reason: "test fixture",
+  };
+  const unused = {
+    file: "src/components/x.tsx",
+    text: "Gone",
+    reason: "test fixture",
+  };
+  const { violations, stale, missingReason } = checkGlossary(root, [
+    used,
+    unused,
+  ]);
   assert.deepEqual(violations, []);
   assert.deepEqual(stale, [unused]);
+  assert.deepEqual(missingReason, []);
+});
+
+test("allowances without a non-empty reason are reported", (t) => {
+  const root = fixture(t, {
+    "src/components/x.tsx": "export const X = () => <p>Open the playbook</p>;",
+  });
+  const noReason = { file: "src/components/x.tsx", text: "Open the playbook" };
+  const blank = { ...noReason, reason: "   " };
+  assert.deepEqual(checkGlossary(root, [noReason]).missingReason, [noReason]);
+  assert.deepEqual(checkGlossary(root, [blank]).missingReason, [blank]);
 });

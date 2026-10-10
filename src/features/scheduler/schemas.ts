@@ -110,6 +110,11 @@ export const schedulerPublishAttemptSchema = z
     campaign_id: idSchema.nullable(),
     campaign_name: z.string().nullable(),
     variant_hook: z.string(),
+    schedule_job_status: z
+      .enum(["scheduled", "cancelled", "completed", "failed"])
+      .nullable(),
+    approval_status: z.string().nullable(),
+    campaign_status: z.string().nullable(),
   })
   .strict();
 

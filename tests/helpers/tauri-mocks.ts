@@ -19386,26 +19386,34 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             campaign_name: string | null;
           }
         >
-      ).map((attempt) => ({
-        id: attempt.id,
-        approval_id: attempt.approval_id,
-        schedule_job_id: attempt.schedule_job_id,
-        platform: attempt.platform,
-        status: attempt.status,
-        external_post_url: attempt.external_post_url,
-        platform_post_id: attempt.platform_post_id,
-        error_message: attempt.error_message,
-        created_at: attempt.created_at,
-        campaign_id: attempt.campaign_id,
-        campaign_name: attempt.campaign_name,
-        variant_hook:
-          draftVariants.find(
-            (row) =>
-              row.id ===
-              approvals.find((approval) => approval.id === attempt.approval_id)
-                ?.draft_variant_id,
-          )?.hook ?? "",
-      }));
+      ).map((attempt) => {
+        const approval = approvals.find(
+          (row) => row.id === attempt.approval_id,
+        );
+        return {
+          id: attempt.id,
+          approval_id: attempt.approval_id,
+          schedule_job_id: attempt.schedule_job_id,
+          platform: attempt.platform,
+          status: attempt.status,
+          external_post_url: attempt.external_post_url,
+          platform_post_id: attempt.platform_post_id,
+          error_message: attempt.error_message,
+          created_at: attempt.created_at,
+          campaign_id: attempt.campaign_id,
+          campaign_name: attempt.campaign_name,
+          variant_hook:
+            draftVariants.find((row) => row.id === approval?.draft_variant_id)
+              ?.hook ?? "",
+          schedule_job_status:
+            scheduleJobs.find((job) => job.id === attempt.schedule_job_id)
+              ?.status ?? null,
+          approval_status: approval?.status ?? null,
+          campaign_status:
+            campaigns.find((row) => row.id === approval?.campaign_id)?.status ??
+            null,
+        };
+      });
       return Promise.resolve({
         settings: { ...schedulerSettings },
         summary: {

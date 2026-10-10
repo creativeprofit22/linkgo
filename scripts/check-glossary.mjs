@@ -6,7 +6,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-/** Mirrors the "Don't say" column of docs/glossary.md. */
+/**
+ * Mirrors the "Don't say" column of docs/glossary.md, except the
+ * context-dependent cells the glossary marks as not machine-checked.
+ */
 export const BANNED_TERMS = [
   { pattern: /\bcandidates?\b/i, say: "idea" },
   { pattern: /\bvariants?\b/i, say: "version" },
@@ -19,7 +22,10 @@ export const BANNED_TERMS = [
   { pattern: /\bkill switch\b/i, say: "emergency pause" },
   { pattern: /\bidempotency\b/i, say: "Details for support" },
   { pattern: /\breconciliation\b/i, say: "Couldn't confirm" },
+  { pattern: /\boutcome unknown\b/i, say: "Couldn't confirm" },
+  { pattern: /\brequest id\b/i, say: "Details for support" },
   { pattern: /\battempt #/i, say: "a posting try (no number)" },
+  { pattern: /\bexecution #/i, say: "a posting try (no number)" },
   { pattern: /\bJSON\b/, say: "a guided form" },
   { pattern: /#\$\{|#\{|#\d/, say: "a name instead of an id" },
 ];
@@ -180,7 +186,10 @@ function listFiles(root) {
   return files;
 }
 
+const hasReason = (a) => typeof a.reason === "string" && a.reason.trim() !== "";
+
 export function checkGlossary(root, allowances = ALLOWANCES) {
+  const missingReason = allowances.filter((a) => !hasReason(a));
   const used = new Set();
   const violations = [];
   for (const file of listFiles(root)) {
@@ -194,19 +203,21 @@ export function checkGlossary(root, allowances = ALLOWANCES) {
     }
   }
   const stale = allowances.filter((a) => !used.has(a));
-  return { violations, stale };
+  return { violations, stale, missingReason };
 }
 
 function main() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const { violations, stale } = checkGlossary(root);
+  const { violations, stale, missingReason } = checkGlossary(root);
   for (const v of violations)
     console.error(`${v.file}:${v.line}: "${v.text}" → say ${v.say}`);
   for (const a of stale)
     console.error(`stale glossary allowance: ${a.file}: "${a.text}"`);
-  if (violations.length || stale.length) {
+  for (const a of missingReason)
+    console.error(`glossary allowance missing reason: ${a.file}: "${a.text}"`);
+  if (violations.length || stale.length || missingReason.length) {
     console.error(
-      `\n${violations.length} glossary violation(s), ${stale.length} stale allowance(s). See docs/glossary.md.`,
+      `\n${violations.length} glossary violation(s), ${stale.length} stale allowance(s), ${missingReason.length} allowance(s) missing a reason. See docs/glossary.md.`,
     );
     return 1;
   }

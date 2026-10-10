@@ -9,6 +9,10 @@ string uses a **Don't say** word, an id pattern such as `#${id}`, or "JSON".
 Support-only details belong inside `<SupportDetails>` ("Details for support"),
 which the check skips.
 
+Not machine-checked (context-dependent, so review by hand): "succeeded /
+failed" for LinkedIn outcomes, and "Reference" in prose (field labels such as
+"LinkedIn reference" are fine).
+
 | Say                                        | Don't say                                         | Internal name                                    |
 | ------------------------------------------ | ------------------------------------------------- | ------------------------------------------------ |
 | post idea / idea                           | candidate                                         | `candidate`, `candidate_queue`                   |

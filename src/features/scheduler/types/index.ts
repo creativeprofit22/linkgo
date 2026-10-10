@@ -2,6 +2,7 @@ import type {
   ApprovalWithDetails,
   PublishAttempt,
   ScheduleJob,
+  ScheduleJobStatus,
 } from "@/features/approvals/types";
 
 /** The next post due to go out, named in plain words. */
@@ -92,6 +93,10 @@ export type SchedulerPublishAttempt = PublishAttempt & {
   campaign_name: string | null;
   /** The approved post's opening line; empty when the variant is gone. */
   variant_hook: string;
+  /** Live job/approval/campaign status (null when the row is gone), not attempt-time history. */
+  schedule_job_status: ScheduleJobStatus | null;
+  approval_status: string | null;
+  campaign_status: string | null;
 };
 
 export interface SchedulerDashboardSummary {

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DueScheduleCard } from "@/features/scheduler/components/due-schedule-card";
 import { SchedulerEventList } from "@/features/scheduler/components/scheduler-event-list";
 import { useScheduler } from "@/features/scheduler/hooks/use-scheduler";
+import { canScheduleAgain } from "@/features/scheduler/schedule-again";
 import { approvalsRoute } from "@/features/approvals/schemas";
 import { formatRouteHash } from "@/lib/navigation/route-contract";
 import type { PublishAttemptStatus } from "@/features/approvals/types";
@@ -285,8 +286,12 @@ export function SchedulerView(): React.ReactNode {
                             : toPlainMessage(attempt.error_message)}
                         </p>
                         {attempt.status === "failed" &&
-                        attempt.schedule_job_id !== null &&
-                        attempt.campaign_id !== null ? (
+                        attempt.campaign_id !== null &&
+                        canScheduleAgain({
+                          scheduleJobStatus: attempt.schedule_job_status,
+                          approvalStatus: attempt.approval_status,
+                          campaignStatus: attempt.campaign_status,
+                        }) ? (
                           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                             <p className="text-muted-foreground text-xs">
                               Pick a new time on its approval.
@@ -302,6 +307,11 @@ export function SchedulerView(): React.ReactNode {
                               </a>
                             </Button>
                           </div>
+                        ) : attempt.status === "failed" &&
+                          attempt.schedule_job_status === "scheduled" ? (
+                          <p className="text-muted-foreground mt-2 text-xs">
+                            Scheduled again.
+                          </p>
                         ) : null}
                       </li>
                     ))}

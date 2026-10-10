@@ -156,6 +156,48 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
   await expect(page.getByLabel("Date and time")).toBeVisible();
 });
 
+test("hides Schedule again on a failed attempt once its post is rescheduled", async ({
+  page,
+}) => {
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createApprovedScheduledPost(page, "2020-01-01T09:00");
+  await page.evaluate(() => {
+    const target = window as unknown as Record<string, unknown>;
+    target.__LINKGO_LINKEDIN_PUBLISH_ERROR__ =
+      "LinkedIn terminal scheduler failure.";
+    target.__LINKGO_SCHEDULER_FORCE_TERMINAL_FAILURE__ = true;
+  });
+
+  await openScheduler(page);
+  await page.getByRole("button", { name: "Post what's due now" }).click();
+  await expect(
+    page.getByText("Scheduled LinkedIn publish failed permanently."),
+  ).toBeVisible();
+  const attempts = page.getByRole("list", { name: "Recent posting attempts" });
+  await expect(
+    attempts.getByRole("link", { name: "Schedule again", exact: true }),
+  ).toBeVisible();
+
+  await openApprovals(page);
+  await page
+    .getByRole("button", { name: "Schedule again", exact: true })
+    .click();
+  await page.getByLabel("Date and time").fill("2099-01-01T09:00");
+  await page.getByLabel("Time zone").fill("local");
+  const dialog = page.getByRole("dialog", { name: "Schedule post" });
+  await dialog.getByRole("button", { name: "Schedule post" }).click();
+  await expect(dialog).toBeHidden();
+  const [schedule] = await getScheduleJobs(page);
+  expect(schedule.status).toBe("scheduled");
+
+  await openScheduler(page);
+  await expect(attempts.getByText("Didn't post")).toBeVisible();
+  await expect(attempts.getByText("Scheduled again.")).toBeVisible();
+  await expect(
+    attempts.getByRole("link", { name: "Schedule again", exact: true }),
+  ).toHaveCount(0);
+});
+
 test("global kill switch blocks due jobs without publishing", async ({
   page,
 }) => {

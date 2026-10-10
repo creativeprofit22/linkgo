@@ -1237,6 +1237,11 @@ async function fillImportRows(
   for (const [index, row] of rows.entries()) {
     if ((await rowLocators.count()) <= index) {
       await dialog.getByRole("button", { name: "Add another post" }).click();
+      // Adding a row moves focus to its Link field on the next frame; wait
+      // for it so that deferred focus cannot steal a later field's typing.
+      await expect(
+        rowLocators.nth(index).getByLabel("Link", { exact: true }),
+      ).toBeFocused();
     }
     const rowLocator = rowLocators.nth(index);
     await rowLocator.getByLabel("Link", { exact: true }).fill(row.url);
