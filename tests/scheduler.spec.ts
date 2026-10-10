@@ -129,12 +129,31 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
   const counts = await getStateCounts(page);
   expect(schedule.status).toBe("failed");
   expect(counts.errorQueueItems).toBe(1);
+  // The failed attempt links to its approval to pick a new time.
+  const scheduleAgain = page
+    .getByRole("list", { name: "Recent posting attempts" })
+    .getByRole("link", { name: "Schedule again", exact: true });
+  await expect(scheduleAgain).toHaveAttribute("href", /^#\/approvals\?/u);
+  const scheduleAgainParams = new URLSearchParams(
+    ((await scheduleAgain.getAttribute("href")) ?? "").split("?")[1],
+  );
+  expect(scheduleAgainParams.get("approvalId")).toBe(
+    String(schedule.approval_id),
+  );
+  expect(scheduleAgainParams.get("campaignId")).toMatch(/^\d+$/u);
 
   await openApprovals(page);
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(
     getBadge(page, "Didn't post").filter({ visible: true }).first(),
   ).toBeVisible();
+  await expect(
+    page.getByText("LinkedIn terminal scheduler failure.").first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Schedule again", exact: true })
+    .click();
+  await expect(page.getByLabel("Date and time")).toBeVisible();
 });
 
 test("global kill switch blocks due jobs without publishing", async ({
@@ -150,7 +169,7 @@ test("global kill switch blocks due jobs without publishing", async ({
 
   await openSafety(page);
   await page.getByLabel("Reason for pausing").fill("Pause scheduler tests.");
-  await page.getByRole("button", { name: "Pause everything" }).click();
+  await page.getByRole("button", { name: "Turn on emergency pause" }).click();
   await expect(
     page.getByText("On — everything is paused", { exact: true }),
   ).toBeVisible();

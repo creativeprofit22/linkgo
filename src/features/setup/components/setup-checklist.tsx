@@ -64,8 +64,8 @@ const STEP_COPY: Record<SetupStepKey, StepCopy> = {
 const NOTE_COPY: Record<SetupStepNote, Omit<StepCopy, "title">> = {
   "writer-guide-off": {
     description:
-      "Your style is saved, but the LinkedIn Writer guide is off. Turn it on so drafts use your style.",
-    action: "Turn on the guide",
+      "Your style is saved, but the LinkedIn Writer brand voice is off. Turn it on so drafts use your style.",
+    action: "Turn on the brand voice",
   },
 };
 

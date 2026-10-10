@@ -46,6 +46,15 @@ export function CampaignCard({
   const [editOpen, setEditOpen] = useState(false);
   const isAutoPilot = campaign.auto_pilot === 1;
   const visibleKeywords = campaign.keywords.slice(0, 8);
+  const confirmArchive = (): void => {
+    if (
+      window.confirm(
+        "Archive this campaign? Its posts, drafts and schedules freeze until you restore it.",
+      )
+    ) {
+      void onArchive(campaign.id);
+    }
+  };
 
   return (
     <Card className="linkgo-card bg-card/82 overflow-hidden">
@@ -101,7 +110,7 @@ export function CampaignCard({
                 </DropdownMenuItem>
               )}
               {campaign.status !== "archived" && (
-                <DropdownMenuItem onClick={() => void onArchive(campaign.id)}>
+                <DropdownMenuItem onClick={confirmArchive}>
                   <Archive className="mr-2 size-4" /> Archive
                 </DropdownMenuItem>
               )}
@@ -180,7 +189,7 @@ export function CampaignCard({
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => void onArchive(campaign.id)}
+            onClick={confirmArchive}
           >
             Archive
           </Button>

@@ -81,7 +81,12 @@ export function buildTodayItems(sources: TodaySources): TodaySnapshot {
   }
 
   if (sources.unclearOutcomes === null) failed.push("outcomes");
-  for (const outcome of sources.unclearOutcomes ?? []) {
+  const outcomes = capped(
+    sources.unclearOutcomes ?? [],
+    { kind: "unclear-outcome", href: formatRouteHash(safetyRoute) },
+    overflow,
+  );
+  for (const outcome of outcomes) {
     needsYou.push({
       kind: "unclear-outcome",
       key: `unclear-outcome-${outcome.executionId}`,

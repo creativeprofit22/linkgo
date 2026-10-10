@@ -9,6 +9,10 @@ import {
   UserRound,
 } from "lucide-react";
 
+import {
+  SupportDetails,
+  type SupportDetail,
+} from "@/components/support-details";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -102,9 +106,14 @@ export function CampaignBacklogItemCard({
     item.linked_score_step_status != null;
   const mutationDisabled =
     pending || archived || terminal || workflowControlled;
-  const plannerOrigin = plannerLinked
-    ? `Created by Autopilot plan #${item.autopilot_plan_id} · import #${item.source_import_batch_id} · automation #${item.workflow_run_id}.`
-    : "";
+  const plannerOrigin = plannerLinked ? "Created by Autopilot." : "";
+  const plannerSupportItems: SupportDetail[] = plannerLinked
+    ? [
+        { label: "Plan id", value: item.autopilot_plan_id ?? "—" },
+        { label: "Import id", value: item.source_import_batch_id ?? "—" },
+        { label: "Automation id", value: item.workflow_run_id ?? "—" },
+      ]
+    : [];
 
   return (
     <Card className="bg-card/82 overflow-hidden">
@@ -172,6 +181,9 @@ export function CampaignBacklogItemCard({
             {plannerOrigin} Its automation is no longer available, so you can
             update this task yourself.
           </p>
+        ) : null}
+        {plannerLinked ? (
+          <SupportDetails className="mt-2" items={plannerSupportItems} />
         ) : item.owner_type === "linkgo" ? (
           <p className="text-muted-foreground mt-4 border-s-2 ps-3 text-xs leading-relaxed">
             You marked Linkgo as the owner. This is just a label. It isn't part

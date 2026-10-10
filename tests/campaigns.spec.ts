@@ -220,6 +220,16 @@ test("campaign card status actions activate pause archive and restore", async ({
   await page.getByRole("button", { name: "Pause", exact: true }).click();
   await expectCampaignStatus(page, "Paused");
 
+  let archivePrompt = "";
+  page.once("dialog", (dialog) => {
+    archivePrompt = dialog.message();
+    void dialog.dismiss();
+  });
+  await page.getByRole("button", { name: "Archive" }).click();
+  expect(archivePrompt).toContain("Archive this campaign?");
+  await expectCampaignStatus(page, "Paused");
+
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Archive" }).click();
   await expectCampaignStatus(page, "Archived");
 

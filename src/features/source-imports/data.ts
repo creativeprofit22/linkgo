@@ -1,7 +1,8 @@
 import { invokeCommand } from "@/lib/tauri";
 import {
-  parseSourceImportText,
+  prepareSourceImportBatch,
   sourceImportBatchResultSchema,
+  sourceImportFormRowsToRawRows,
 } from "@/features/source-imports/schemas";
 import { sourceImportDashboardSchema } from "@/features/source-imports/record-schemas";
 import type {
@@ -11,7 +12,7 @@ import type {
 } from "@/features/source-imports/types";
 
 /**
- * Imports a pasted JSON batch. Parsing and row validation happen here; the
+ * Imports the posts typed into the guided form. Row validation happens here; the
  * native `linkgo_source_import_write_batch` command then enforces the
  * candidate intake policy (WHATWG URL + NFKC topic matching), dedupes, and
  * settles each row with its item outcome in one pinned transaction.
@@ -19,7 +20,10 @@ import type {
 export async function createSourceImportBatch(
   input: CreateSourceImportBatchInput,
 ): Promise<SourceImportBatchResult> {
-  const prepared = parseSourceImportText(input.campaignId, input.sourceText);
+  const prepared = prepareSourceImportBatch(
+    input.campaignId,
+    sourceImportFormRowsToRawRows(input.rows),
+  );
   return sourceImportBatchResultSchema.parse(
     await invokeCommand("linkgo_source_import_write_batch", {
       input: prepared,

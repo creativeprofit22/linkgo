@@ -8,6 +8,7 @@ import { CreateCommentThreadDialog } from "@/features/comments/components/create
 import { useComments } from "@/features/comments/hooks/use-comments";
 import type { CommentThreadWithDetails } from "@/features/comments/types";
 import {
+  findOutcomeUnknownExecution,
   findPublishLock,
   type OpenPublishExecution,
 } from "@/features/publish-reconciliation";
@@ -286,7 +287,7 @@ function ThreadGroup({
   openPublishExecutions: OpenPublishExecution[];
 } & Omit<
   React.ComponentProps<typeof CommentThreadCard>,
-  "thread" | "publishLock"
+  "thread" | "publishLock" | "outcomeUnknownExecution"
 >): React.ReactNode {
   if (threads.length === 0) return null;
   return (
@@ -299,6 +300,11 @@ function ThreadGroup({
           killSwitchEnabled={killSwitchEnabled}
           killSwitchReason={killSwitchReason}
           publishLock={findPublishLock(
+            openPublishExecutions,
+            "comment",
+            thread.id,
+          )}
+          outcomeUnknownExecution={findOutcomeUnknownExecution(
             openPublishExecutions,
             "comment",
             thread.id,

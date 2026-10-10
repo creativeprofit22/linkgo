@@ -140,7 +140,7 @@ test("form validation and the kill switch block runs", async ({ page }) => {
     .getByRole("switch", { name: "Fetch posts with Bright Data" })
     .click();
   await expect(
-    panel.getByText("Pause everything is on, so fetching is paused."),
+    panel.getByText("Emergency pause is on, so fetching is paused."),
   ).toBeVisible();
   await expect(
     panel.getByRole("button", { name: "Fetch posts" }),

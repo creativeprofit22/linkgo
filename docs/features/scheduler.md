@@ -83,7 +83,7 @@ Ambiguous outcome (timeout after send, 5xx, unreadable success):
 
 - Records no attempt row; the execution becomes `outcome_unknown`.
 - Leaves the approval `scheduled` and the job unfinished, with its lock cleared.
-- Is **never retried automatically**. The job stays excluded until an operator reconciles it in Safety (on screen: "Check what happened to these posts").
+- Is **never retried automatically**. (A plain `failed` job is different: its Auto-posting card says "This post didn't go out. Pick a new time on its approval." with a **Schedule again** link to the approval, whose existing schedule dialog may reschedule it.) The job stays excluded until an operator reconciles it in Safety (on screen: "Check what happened to these posts").
 - Creates a warning error queue item and a `job_blocked` scheduler event.
 
 Retries happen only after a definite failure (4xx including 429, connect failure, or a credential/scope failure before send).

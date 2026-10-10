@@ -2,6 +2,7 @@ import { CalendarDays, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SupportDetails } from "@/components/support-details";
 import {
   ApprovalStatusBadge,
   PublishAttemptStatusBadge,
@@ -24,10 +25,15 @@ import type {
   SetApprovalStatusInput,
 } from "@/features/approvals/types";
 import {
+  OutcomeUnknownResolver,
   PublishLockNotice,
+  type OpenPublishExecution,
   type PublishLock,
 } from "@/features/publish-reconciliation";
+import { campaignsRoute } from "@/features/campaigns/schemas";
 import { contentCalendarRoute } from "@/features/content-calendar/schemas";
+import { draftsRoute } from "@/features/drafts/schemas";
+import { formatRouteHash } from "@/lib/navigation/route-contract";
 import { PostStageTracker, type PostStage } from "@/features/post-stages";
 import { navigateTo } from "@/lib/navigation/use-hash-navigation";
 import { cn } from "@/lib/utils";
@@ -42,6 +48,8 @@ interface ApprovalCardProps {
   killSwitchReason: string;
   /** Open native publish execution for this approval; the native gate decides. */
   publishLock: PublishLock | null;
+  /** Open execution whose LinkedIn outcome is unknown; shows the resolver. */
+  outcomeUnknownExecution?: OpenPublishExecution | null;
   onSetStatus: (input: SetApprovalStatusInput) => Promise<void>;
   onSchedule: (input: ScheduleApprovalInput) => Promise<void>;
   onCancelSchedule: (input: CancelScheduleInput) => Promise<void>;
@@ -56,6 +64,7 @@ export function ApprovalCard({
   killSwitchEnabled,
   killSwitchReason,
   publishLock,
+  outcomeUnknownExecution = null,
   onSetStatus,
   onSchedule,
   onCancelSchedule,
@@ -116,6 +125,8 @@ export function ApprovalCard({
   const canSeeOnCalendar =
     approval.status === "scheduled" &&
     approval.scheduleJob?.status === "scheduled";
+  const scheduleFailed = approval.scheduleJob?.status === "failed";
+  const readinessNoteId = `approval-${approval.id}-readiness`;
   const linkedAgentRunConsequence =
     approval.linkedAgentRunCount === 1
       ? "1 waiting AI assistant task will be cancelled and can't be continued."
@@ -175,8 +186,13 @@ export function ApprovalCard({
           <div className="flex flex-wrap justify-end gap-2">
             {isArchivedCampaign && (
               <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                This campaign is archived, so its approvals can't change.
-                Restore the campaign first.
+                This campaign is archived, so its approvals can't change.{" "}
+                <a
+                  href={formatRouteHash(campaignsRoute)}
+                  className="text-primary focus-visible:ring-ring -my-2 inline-flex min-h-8 items-center rounded-sm px-1 font-medium underline underline-offset-4 outline-none hover:no-underline focus-visible:ring-2"
+                >
+                  Restore it in Campaigns
+                </a>
               </p>
             )}
             {canApprove && (
@@ -184,6 +200,9 @@ export function ApprovalCard({
                 type="button"
                 size="sm"
                 disabled={!approval.readyForApproval}
+                aria-describedby={
+                  approval.readyForApproval ? undefined : readinessNoteId
+                }
                 onClick={() =>
                   void onSetStatus({
                     id: approval.id,
@@ -221,6 +240,7 @@ export function ApprovalCard({
               <ScheduleApprovalDialog
                 approvalId={approval.id}
                 onSchedule={onSchedule}
+                triggerLabel={scheduleFailed ? "Schedule again" : "Pick a time"}
               />
             )}
             {canSeeOnCalendar && (
@@ -240,7 +260,7 @@ export function ApprovalCard({
             )}
             {scheduleBlockedByKillSwitch && (
               <p className="bg-muted/60 text-muted-foreground max-w-72 rounded-md border px-3 py-2 text-right text-sm">
-                Pause everything is on, so posts can't be scheduled.
+                Emergency pause is on, so posts can't be scheduled.
                 {killSwitchReason ? ` ${killSwitchReason}` : ""}
               </p>
             )}
@@ -272,9 +292,11 @@ export function ApprovalCard({
                 secondary={canSchedule || canSeeOnCalendar}
               />
             )}
-            {canPublishViaLinkedIn && publishLock !== null && (
-              <PublishLockNotice lock={publishLock} />
-            )}
+            {canPublishViaLinkedIn &&
+              publishLock !== null &&
+              outcomeUnknownExecution === null && (
+                <PublishLockNotice lock={publishLock} />
+              )}
             {canRecordFailure && (
               <RecordPublishAttemptDialog
                 approvalId={approval.id}
@@ -289,15 +311,38 @@ export function ApprovalCard({
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {outcomeUnknownExecution !== null && (
+          <OutcomeUnknownResolver
+            execution={outcomeUnknownExecution}
+            onSettled={onPublished}
+          />
+        )}
         {stage !== null && <PostStageTracker stage={stage} />}
         {(!approval.readyForApproval || approval.contentChanged) && (
-          <p role="status" className="text-muted-foreground text-sm">
+          <p
+            id={readinessNoteId}
+            role="status"
+            className="text-muted-foreground text-sm"
+          >
             {approval.contentChanged
               ? "This post changed after it was reviewed, or we can't tell which version was reviewed. It is not approved. "
               : "This version isn't ready for approval yet. "}
             {approval.readyForApproval
               ? "Its checks pass. Read it again and approve it if you're happy."
               : "In Drafts, run an AI review and a quality check on this version before approving."}
+            {!approval.readyForApproval && (
+              <>
+                {" "}
+                <a
+                  href={formatRouteHash(draftsRoute, {
+                    campaignId: approval.draft.campaign_id,
+                  })}
+                  className="text-primary focus-visible:ring-ring -my-2 inline-flex min-h-8 items-center rounded-sm px-1 font-medium underline underline-offset-4 outline-none hover:no-underline focus-visible:ring-2"
+                >
+                  Go to Drafts
+                </a>
+              </>
+            )}
           </p>
         )}
         <div className="grid gap-4 lg:grid-cols-2">
@@ -338,9 +383,28 @@ export function ApprovalCard({
               {approval.scheduleJob.scheduled_for} ·{" "}
               {approval.scheduleJob.timezone}
             </p>
-            <p className="text-muted-foreground mt-1 text-xs break-all">
-              Reference: {approval.scheduleJob.idempotency_key}
-            </p>
+            {scheduleFailed && (
+              <p
+                role="status"
+                className="text-linkgo-amber mt-2 text-sm whitespace-pre-line"
+              >
+                {(approval.scheduleJob.last_error ?? "").trim()
+                  ? toPlainMessage(approval.scheduleJob.last_error ?? "")
+                  : "The automatic post didn't go out."}{" "}
+                {canSchedule
+                  ? "Use “Schedule again” to pick a new time."
+                  : null}
+              </p>
+            )}
+            <SupportDetails
+              className="mt-1"
+              items={[
+                {
+                  label: "Schedule reference",
+                  value: approval.scheduleJob.idempotency_key,
+                },
+              ]}
+            />
           </div>
         )}
 

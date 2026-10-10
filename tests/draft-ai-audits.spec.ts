@@ -1197,6 +1197,7 @@ test.describe("draft AI audit action", () => {
         .getByRole("definition")
         .filter({ hasText: "Practice mode (no AI used)" }),
     ).toBeVisible();
+    await panel.getByText("Details for support", { exact: true }).click();
     await expect(
       panel.getByText("dry-run-local", { exact: true }),
     ).toBeVisible();
@@ -1238,6 +1239,7 @@ test.describe("draft AI audit action", () => {
     const panel = await openSeededAuditPanel(page);
 
     await panel.getByLabel("AI service").selectOption("custom");
+    await panel.getByText("AI settings (optional)", { exact: true }).click();
     await panel.getByLabel("AI model").fill("custom-audit-model");
     await panel.getByRole("button", { name: "Review with AI" }).click();
 
@@ -1245,6 +1247,7 @@ test.describe("draft AI audit action", () => {
     await expect(
       panel.getByRole("definition").filter({ hasText: "Other AI service" }),
     ).toBeVisible();
+    await panel.getByText("Details for support", { exact: true }).click();
     await expect(
       panel.getByRole("definition").filter({ hasText: "custom-audit-model" }),
     ).toBeVisible();

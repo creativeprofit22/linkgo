@@ -186,7 +186,7 @@ test("saving the writer guide updates progress without navigating", async ({
   await instructions.fill("Short, concrete lessons from building products.");
   await instructions
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]")
-    .getByRole("button", { name: "Save guide" })
+    .getByRole("button", { name: "Save brand voice" })
     .click();
 
   await expect(
@@ -206,7 +206,7 @@ test("a saved style only counts while the writer guide is on", async ({
   const toggle = page.locator("#linkedin_writer-enabled");
   const save = instructions
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]")
-    .getByRole("button", { name: "Save guide" });
+    .getByRole("button", { name: "Save brand voice" });
 
   // Style written but the guide is off: drafts would ignore it.
   await instructions.fill("Short, concrete lessons from building products.");
@@ -219,9 +219,9 @@ test("a saved style only counts while the writer guide is on", async ({
   await page.goto("/#/setup", { waitUntil: "domcontentloaded" });
   const voice = step(page, "voice");
   await expect(voice).toHaveAttribute("data-state", "todo");
-  await expect(voice).toContainText("the LinkedIn Writer guide is off");
+  await expect(voice).toContainText("the LinkedIn Writer brand voice is off");
   await expect(launcher(page)).toContainText("0 of 4");
-  await voice.getByRole("link", { name: "Turn on the guide" }).click();
+  await voice.getByRole("link", { name: "Turn on the brand voice" }).click();
   await expect(page).toHaveURL(/#\/playbooks\?focus=linkedin_writer$/);
 
   // Turning the guide back on finishes the step.
@@ -304,7 +304,7 @@ test("completing every step ends on find your first idea", async ({ page }) => {
   await page
     .locator("#linkedin_writer-custom")
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]")
-    .getByRole("button", { name: "Save guide" })
+    .getByRole("button", { name: "Save brand voice" })
     .click();
   await expect(instructions).toHaveValue(
     "Short, concrete lessons from building products.",

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bot, Plus } from "lucide-react";
+import { AiSettingsDisclosure } from "@/components/ai-settings-disclosure";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -211,25 +212,29 @@ export function CreateAgentRunDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="agent-playbook">Brand voice guide</Label>
+            <Label htmlFor="agent-playbook">Brand voice</Label>
             <select
               id="agent-playbook"
               value={playbookKey}
               onChange={(event) =>
                 setPlaybookKey(event.target.value as AgentPlaybookKey | "")
               }
+              aria-describedby="agent-playbook-hint"
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
-              <option value="">No guide</option>
+              <option value="">No brand voice</option>
               {compatiblePlaybooks.map((playbook) => (
                 <option key={playbook.key} value={playbook.key}>
                   {playbook.label}
                 </option>
               ))}
             </select>
-            <p className="text-muted-foreground text-xs">
-              Only guides that are on and fit “{roleLabels[agentRole]}” are
-              shown.
+            <p
+              id="agent-playbook-hint"
+              className="text-muted-foreground text-xs"
+            >
+              Only brand voices that are on and fit “{roleLabels[agentRole]}”
+              are shown.
             </p>
           </div>
 
@@ -243,6 +248,7 @@ export function CreateAgentRunDialog({
                   const nextValue = event.target.value;
                   setWorkflowRunId(nextValue === "" ? null : Number(nextValue));
                 }}
+                aria-describedby="agent-workflow-run-hint"
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
                 <option value="">Not linked to an automation</option>
@@ -252,6 +258,12 @@ export function CreateAgentRunDialog({
                   </option>
                 ))}
               </select>
+              <p
+                id="agent-workflow-run-hint"
+                className="text-muted-foreground text-xs"
+              >
+                Link this task to an automation so its result shows up there.
+              </p>
             </div>
           )}
 
@@ -283,7 +295,7 @@ export function CreateAgentRunDialog({
             )}
           </div>
 
-          <div className="space-y-2">
+          <AiSettingsDisclosure>
             <Label htmlFor="agent-model-name">AI model</Label>
             <Input
               id="agent-model-name"
@@ -291,7 +303,7 @@ export function CreateAgentRunDialog({
               maxLength={120}
               onChange={(event) => setModelName(event.target.value)}
             />
-          </div>
+          </AiSettingsDisclosure>
 
           <div className="space-y-2">
             <Label htmlFor="agent-input-summary">Instructions</Label>

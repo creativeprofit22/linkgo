@@ -9,6 +9,9 @@ import {
 import {
   MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH,
   MAX_SOURCE_IMPORT_REASON_LENGTH,
+  MAX_SOURCE_IMPORT_ROWS,
+  prepareSourceImportBatch,
+  sourceImportFormRowsToRawRows,
 } from "../src/features/source-imports/schemas";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
@@ -22,14 +25,10 @@ test("imports two valid rows into candidates and a completed batch", async ({
   await openQueueWithCampaign(page);
 
   const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("one", "First imported source post", "Ada One"),
-        sourceRow("two", "Second imported source post", "Ben Two"),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("one", "First imported source post", "Ada One"),
+    formRow("two", "Second imported source post", "Ben Two"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
@@ -60,21 +59,58 @@ test("imports two valid rows into candidates and a completed batch", async ({
   expect(state.items.every((item) => item.status === "accepted")).toBe(true);
 });
 
+test("guided import never asks for JSON and keeps optional details folded", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  const dialog = await openImportDialog(page);
+
+  await expect(dialog.getByText(/JSON/u)).toHaveCount(0);
+  await expect(dialog.locator("pre, code")).toHaveCount(0);
+  const row = dialog.getByTestId("source-import-row").first();
+  await expect(row.getByLabel("Link", { exact: true })).toBeVisible();
+  await expect(row.getByLabel("Post text", { exact: true })).toBeVisible();
+  await expect(row.getByLabel("Post date", { exact: true })).toBeVisible();
+  await expect(row.getByLabel("Author name")).toBeHidden();
+  await row.getByText("More details (optional)").click();
+  await expect(row.getByLabel("Author name")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Add another post" }).click();
+  await expect(dialog.getByTestId("source-import-row")).toHaveCount(2);
+  await expect(
+    dialog
+      .getByTestId("source-import-row")
+      .nth(1)
+      .getByLabel("Link", { exact: true }),
+  ).toBeFocused();
+  await dialog.getByRole("button", { name: "Remove post 2" }).click();
+  await expect(dialog.getByTestId("source-import-row")).toHaveCount(1);
+});
+
+test("submitting an empty guided form explains what to add", async ({
+  page,
+}) => {
+  await openQueueWithCampaign(page);
+  const dialog = await openImportDialog(page);
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "Add the link and text of at least one post.",
+  );
+  const state = await getSourceImportState(page);
+  expect(state.batches).toHaveLength(0);
+});
+
 test("reports duplicate URL and content rows without extra candidates", async ({
   page,
 }) => {
   await openQueueWithCampaign(page);
   const duplicateContent = "The same imported source text.";
   const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("duplicate", duplicateContent, "First Author"),
-        sourceRow("duplicate", "Different text, same URL", "Second Author"),
-        sourceRow("other-url", duplicateContent, "Third Author"),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("duplicate", duplicateContent, "First Author"),
+    formRow("duplicate", "Different text, same URL", "Second Author"),
+    formRow("other-url", duplicateContent, "Third Author"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
@@ -102,18 +138,10 @@ test("preserves valid rows and field-specific reasons in a mixed batch", async (
 }, testInfo) => {
   await openQueueWithCampaign(page);
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      sourceRow("valid", "A valid source post", "Valid Author"),
-      {
-        url: " ",
-        content: "x".repeat(3001),
-        authorName: "a".repeat(161),
-        authorProfileUrl: "p".repeat(1001),
-        postedAt: "2".repeat(81),
-      },
-    ]),
-  );
+  await fillImportRows(dialog, [
+    formRow("valid", "A valid source post", "Valid Author"),
+    { ...formRow("no-link", "Text without a link", "No Link"), url: " " },
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
@@ -139,31 +167,96 @@ test("preserves valid rows and field-specific reasons in a mixed batch", async (
   }
 });
 
+test("contract keeps field-specific reasons for over-long rows", () => {
+  const prepared = prepareSourceImportBatch(1, [
+    sourceRow("valid", "A valid source post", "Valid Author"),
+    {
+      url: " ",
+      content: "x".repeat(3001),
+      authorName: "a".repeat(161),
+      authorProfileUrl: "p".repeat(1001),
+      postedAt: "2".repeat(81),
+    },
+  ]);
+
+  expect(prepared.connectorKey).toBe("local_json");
+  expect(prepared.rows[0]?.validationError).toBe("");
+  expect(prepared.rows[0]?.value).not.toBeNull();
+  expect(prepared.rows[1]?.value).toBeNull();
+  for (const field of ["Link", "Post text"]) {
+    expect(prepared.rows[1]?.validationError).toContain(field);
+  }
+  expect(prepared.rows[1]?.validationError).toContain(
+    "Add the LinkedIn post link",
+  );
+});
+
+test("contract rejects empty and over-limit batches before writing", () => {
+  expect(() => prepareSourceImportBatch(1, [])).toThrow();
+  expect(() =>
+    prepareSourceImportBatch(
+      1,
+      Array.from({ length: MAX_SOURCE_IMPORT_ROWS + 1 }, (_, index) =>
+        sourceRow(`row-${index}`, `Content ${index}`, `Author ${index}`),
+      ),
+    ),
+  ).toThrow("Import up to 50 posts at a time");
+});
+
+test("form rows map to contract rows without inventing data", () => {
+  const [mapped, blankOptional] = sourceImportFormRowsToRawRows([
+    {
+      url: "https://www.linkedin.com/posts/source-map",
+      content: "Mapped text",
+      postedAt: "2026-07-20T14:30",
+      authorName: "Map Author",
+      authorProfileUrl: "https://www.linkedin.com/in/map",
+      sourceKeyword: "founder content",
+    },
+    {
+      url: "https://www.linkedin.com/posts/source-blank",
+      content: "Blank optional fields",
+      postedAt: "",
+      authorName: "  ",
+      authorProfileUrl: "",
+      sourceKeyword: "",
+    },
+  ]);
+
+  expect(mapped).toEqual({
+    url: "https://www.linkedin.com/posts/source-map",
+    content: "Mapped text",
+    postedAt: new Date("2026-07-20T14:30").toISOString(),
+    authorName: "Map Author",
+    authorProfileUrl: "https://www.linkedin.com/in/map",
+    sourceKeyword: "founder content",
+  });
+  expect(blankOptional).toEqual({
+    url: "https://www.linkedin.com/posts/source-blank",
+    content: "Blank optional fields",
+    postedAt: null,
+  });
+});
+
 test("bounds validation reasons while preserving valid neighboring rows", async ({
   page,
 }) => {
   await openQueueWithCampaign(page);
-  const dialog = await openImportDialog(page);
   const unexpectedFields = Object.fromEntries(
     Array.from({ length: 150 }, (_, index) => [
       `unexpected_field_${index}_${"x".repeat(24)}`,
       true,
     ]),
   );
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      sourceRow("reason-valid", "A valid neighboring row", "Valid Neighbor"),
-      {
-        ...sourceRow("reason-invalid", "Invalid unknown fields", "Invalid Row"),
-        ...unexpectedFields,
-      },
-    ]),
-  );
-  await dialog.getByRole("button", { name: "Import posts" }).click();
+  const result = await importContractRows(page, [
+    sourceRow("reason-valid", "A valid neighboring row", "Valid Neighbor"),
+    {
+      ...sourceRow("reason-invalid", "Invalid unknown fields", "Invalid Row"),
+      ...unexpectedFields,
+    },
+  ]);
 
-  await expect(
-    dialog.getByText("1 added, 0 already saved, 1 skipped."),
-  ).toBeVisible();
+  expect(result).toMatchObject({ acceptedCount: 1, rejectedCount: 1 });
   const state = await getSourceImportState(page);
   expect(state.candidates).toHaveLength(1);
   expect(state.items.map((item) => item.status)).toEqual([
@@ -179,24 +272,16 @@ test("preserves valid rows when an invalid scalar exceeds the audit limit", asyn
   page,
 }) => {
   await openQueueWithCampaign(page);
-  const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("bounded", "A valid bounded source post", "Bounded Author"),
-        "x".repeat(MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH + 5_000),
-      ]),
-    );
-  await dialog.getByRole("button", { name: "Import posts" }).click();
+  const result = await importContractRows(page, [
+    sourceRow("bounded", "A valid bounded source post", "Bounded Author"),
+    "x".repeat(MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH + 5_000),
+  ]);
 
-  await expect(
-    dialog.getByText("Import finished. Some posts need a look"),
-  ).toBeVisible();
-  await expect(
-    dialog.getByText("1 added, 0 already saved, 1 skipped."),
-  ).toBeVisible();
-  await dialog.getByRole("button", { name: "Done" }).click();
+  expect(result).toMatchObject({
+    status: "completed_with_errors",
+    acceptedCount: 1,
+    rejectedCount: 1,
+  });
 
   const state = await getSourceImportState(page);
   expect(state.candidates).toHaveLength(1);
@@ -224,46 +309,30 @@ test("policy rejects unsafe sources and timestamp failures without writing candi
   page,
 }) => {
   await openQueueWithCampaign(page);
-  const valid = sourceRow(
-    "policy-valid",
-    "Safe neighboring post",
-    "Safe Author",
-  );
-  const stale = {
-    ...sourceRow("stale", "Stale post", "Stale"),
-    postedAt: new Date(Date.now() - 31 * 86_400_000).toISOString(),
-  };
-  const future = {
-    ...sourceRow("future", "Future post", "Future"),
-    postedAt: new Date(Date.now() + 60 * 60_000).toISOString(),
-  };
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      valid,
-      {
-        ...sourceRow("http", "HTTP source", "HTTP"),
-        url: "http://www.linkedin.com/posts/http",
-      },
-      {
-        ...sourceRow("other", "Other host", "Other"),
-        url: "https://example.com/post",
-      },
-      {
-        ...sourceRow("missing", "Missing timestamp", "Missing"),
-        postedAt: null,
-      },
-      {
-        ...sourceRow("invalid-time", "Invalid timestamp", "Invalid"),
-        postedAt: "2026-07-27",
-      },
-      stale,
-      future,
-    ]),
-  );
+  await fillImportRows(dialog, [
+    formRow("policy-valid", "Safe neighboring post", "Safe Author"),
+    {
+      ...formRow("http", "HTTP source", "HTTP"),
+      url: "http://www.linkedin.com/posts/http",
+    },
+    {
+      ...formRow("other", "Other host", "Other"),
+      url: "https://example.com/post",
+    },
+    { ...formRow("missing", "Missing timestamp", "Missing"), postedAt: null },
+    {
+      ...formRow("stale", "Stale post", "Stale"),
+      postedAt: new Date(Date.now() - 31 * 86_400_000),
+    },
+    {
+      ...formRow("future", "Future post", "Future"),
+      postedAt: new Date(Date.now() + 60 * 60_000),
+    },
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
-    dialog.getByText("1 added, 0 already saved, 6 skipped."),
+    dialog.getByText("1 added, 0 already saved, 5 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(page.getByText("Filter: Link").first()).toBeVisible();
@@ -277,7 +346,6 @@ test("policy rejects unsafe sources and timestamp failures without writing candi
     "age",
     "age",
     "age",
-    "age",
   ]);
   expect(state.counts).toMatchObject({
     targetPosts: 1,
@@ -287,7 +355,7 @@ test("policy rejects unsafe sources and timestamp failures without writing candi
   expect(state.batches[0]).toMatchObject({
     status: "completed_with_errors",
     accepted_count: 1,
-    rejected_count: 6,
+    rejected_count: 5,
   });
 });
 
@@ -297,14 +365,13 @@ test("age policy accepts a post inside the exact configured boundary", async ({
   await openQueueWithCampaign(page);
   await setPolicy(page, "1", "");
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      {
-        ...sourceRow("boundary", "Boundary post", "Boundary"),
-        postedAt: new Date(Date.now() - 86_400_000 + 10_000).toISOString(),
-      },
-    ]),
-  );
+  await fillImportRows(dialog, [
+    {
+      ...formRow("boundary", "Boundary post", "Boundary"),
+      // The form keeps minutes, so round up to stay inside the boundary.
+      postedAt: ceilToMinute(new Date(Date.now() - 86_400_000 + 10_000)),
+    },
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
     dialog.getByText("1 added, 0 already saved, 0 skipped."),
@@ -316,26 +383,24 @@ test("age policy allows five minutes of future clock skew", async ({
 }) => {
   await openQueueWithCampaign(page);
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      {
-        ...sourceRow(
-          "future-inside-allowance",
-          "Future post inside clock-skew allowance",
-          "Inside Allowance",
-        ),
-        postedAt: new Date(Date.now() + 4 * 60_000).toISOString(),
-      },
-      {
-        ...sourceRow(
-          "future-beyond-allowance",
-          "Future post beyond clock-skew allowance",
-          "Beyond Allowance",
-        ),
-        postedAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-      },
-    ]),
-  );
+  await fillImportRows(dialog, [
+    {
+      ...formRow(
+        "future-inside-allowance",
+        "Future post inside clock-skew allowance",
+        "Inside Allowance",
+      ),
+      postedAt: new Date(Date.now() + 4 * 60_000),
+    },
+    {
+      ...formRow(
+        "future-beyond-allowance",
+        "Future post beyond clock-skew allowance",
+        "Beyond Allowance",
+      ),
+      postedAt: new Date(Date.now() + 10 * 60_000),
+    },
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
     dialog.getByText("1 added, 0 already saved, 1 skipped."),
@@ -350,7 +415,7 @@ test("age policy allows five minutes of future clock skew", async ({
   expect(state.candidates).toHaveLength(1);
 });
 
-test("age policy rejects calendar dates normalized by Date", async ({
+test("age policy rejects date-only and calendar dates normalized by Date", async ({
   page,
 }) => {
   await openQueueWithCampaign(page);
@@ -358,23 +423,24 @@ test("age policy rejects calendar dates normalized by Date", async ({
   const now = new Date();
   const invalidYear =
     now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
-  const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      {
-        ...sourceRow("invalid-calendar", "Invalid calendar date", "Calendar"),
-        postedAt: `${invalidYear}-02-30T10:00:00Z`,
-      },
-    ]),
-  );
 
-  await dialog.getByRole("button", { name: "Import posts" }).click();
+  const result = await importContractRows(page, [
+    {
+      ...sourceRow("invalid-calendar", "Invalid calendar date", "Calendar"),
+      postedAt: `${invalidYear}-02-30T10:00:00Z`,
+    },
+    {
+      ...sourceRow("invalid-time", "Invalid timestamp", "Invalid"),
+      postedAt: "2026-07-27",
+    },
+  ]);
 
-  await expect(
-    dialog.getByText("0 added, 0 already saved, 1 skipped."),
-  ).toBeVisible();
+  expect(result).toMatchObject({ acceptedCount: 0, rejectedCount: 2 });
   const state = await getSourceImportState(page);
-  expect(state.items[0]?.policy_rule_key).toBe("age");
+  expect(state.items.map((item) => item.policy_rule_key)).toEqual([
+    "age",
+    "age",
+  ]);
   expect(state.candidates).toHaveLength(0);
 });
 
@@ -384,20 +450,14 @@ test("banned topics use normalized whole-word and phrase matching", async ({
   await openQueueWithCampaign(page);
   await setPolicy(page, "30", "AI\nclimate change");
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      sourceRow(
-        "substring",
-        "She said the launch went well.",
-        "Substring Safe",
-      ),
-      sourceRow("ai", "Practical AI, governance guidance.", "AI Blocked"),
-      {
-        ...sourceRow("phrase", "A neutral update", "Phrase Blocked"),
-        sourceKeyword: "CLIMATE   CHANGE",
-      },
-    ]),
-  );
+  await fillImportRows(dialog, [
+    formRow("substring", "She said the launch went well.", "Substring Safe"),
+    formRow("ai", "Practical AI, governance guidance.", "AI Blocked"),
+    {
+      ...formRow("phrase", "A neutral update", "Phrase Blocked"),
+      sourceKeyword: "CLIMATE   CHANGE",
+    },
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
     dialog.getByText("1 added, 0 already saved, 2 skipped."),
@@ -449,48 +509,45 @@ test("URL, URN, and normalized profile contacts block while failed and same-name
   });
   const before = await getSourceImportState(page);
   const dialog = await openImportDialog(page);
-  await dialog.getByLabel("Posts (JSON)").fill(
-    sourceJson([
-      {
-        ...sourceRow("contact-url", "Same URL", "Different Name"),
-        url: "https://www.linkedin.com/posts/contact-url",
-      },
-      {
-        ...sourceRow("new-urn", "Same URN", "Different Name"),
-        platformResourceUrn: "urn:li:activity:contact-urn",
-      },
-      {
-        ...sourceRow("new-profile", "Same profile", "Different Name"),
-        authorProfileUrl: "https://www.linkedin.com/in/contact-profile",
-      },
-      {
-        ...sourceRow(
-          "failed-contact",
-          "Failed contact can retry",
-          "Prior contact",
-        ),
-        url: "https://www.linkedin.com/posts/failed-contact",
-      },
-      {
-        ...sourceRow("same-name", "Same name alone is safe", "Prior contact"),
-      },
-    ]),
-  );
+  await fillImportRows(dialog, [
+    {
+      ...formRow("contact-url", "Same URL", "Different Name"),
+      url: "https://www.linkedin.com/posts/contact-url",
+    },
+    {
+      ...formRow("new-profile", "Same profile", "Different Name"),
+      authorProfileUrl: "https://www.linkedin.com/in/contact-profile",
+    },
+    {
+      ...formRow("failed-contact", "Failed contact can retry", "Prior contact"),
+      url: "https://www.linkedin.com/posts/failed-contact",
+    },
+    formRow("same-name", "Same name alone is safe", "Prior contact"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await expect(
-    dialog.getByText("2 added, 0 already saved, 3 skipped."),
+    dialog.getByText("2 added, 0 already saved, 2 skipped."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(
     page.getByText("Filter: Already contacted").first(),
   ).toBeVisible();
+
+  // The form has no URN field; URN matching stays enforced on the contract.
+  await importContractRows(page, [
+    {
+      ...sourceRow("new-urn", "Same URN", "Different Name"),
+      platformResourceUrn: "urn:li:activity:contact-urn",
+    },
+  ]);
+
   const after = await getSourceImportState(page);
   expect(after.items.map((item) => item.policy_rule_key)).toEqual([
     "already_contacted",
     "already_contacted",
+    "",
+    "",
     "already_contacted",
-    "",
-    "",
   ]);
   expect(after.counts.candidatePosts - before.counts.candidatePosts).toBe(2);
   expect(page.getByRole("button", { name: "Add idea" })).toBeEnabled();
@@ -499,35 +556,52 @@ test("URL, URN, and normalized profile contacts block while failed and same-name
   );
 });
 
-test("rejects invalid JSON and more than 50 rows while preserving input", async ({
+test("caps the guided form at 50 posts and explains the limit", async ({
   page,
 }) => {
   await openQueueWithCampaign(page);
   const dialog = await openImportDialog(page);
-  const textarea = dialog.getByLabel("Posts (JSON)");
+  const addRow = dialog.getByRole("button", { name: "Add another post" });
 
-  await textarea.fill("[{invalid json]");
-  await dialog.getByRole("button", { name: "Import posts" }).click();
-  await expect(dialog.getByRole("alert")).toHaveText(
-    "This doesn't look like a valid JSON list. Check it matches the example.",
+  for (let index = 1; index < MAX_SOURCE_IMPORT_ROWS; index += 1) {
+    await addRow.click();
+  }
+  await expect(dialog.getByTestId("source-import-row")).toHaveCount(50);
+  await expect(addRow).toBeDisabled();
+  await expect(addRow).toHaveAccessibleDescription(
+    "You can import up to 50 posts at a time. Import these, then add more.",
   );
-  await expect(textarea).toHaveValue("[{invalid json]");
-
-  const tooManyRows = sourceJson(
-    Array.from({ length: 51 }, (_, index) =>
-      sourceRow(`row-${index}`, `Content ${index}`, `Author ${index}`),
-    ),
-  );
-  await textarea.fill(tooManyRows);
-  await dialog.getByRole("button", { name: "Import posts" }).click();
-  await expect(dialog.getByRole("alert")).toContainText(
-    "Import up to 50 posts at a time",
-  );
-  await expect(textarea).toHaveValue(tooManyRows);
 
   const state = await getSourceImportState(page);
   expect(state.batches).toHaveLength(0);
   expect(state.candidates).toHaveLength(0);
+});
+
+test("keeps typed rows when the import is refused", async ({ page }) => {
+  await openQueueWithCampaign(page);
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __LINKGO_SQL_SET_CAMPAIGN_STATUS__?: (
+          campaignId: number,
+          status: string,
+        ) => void;
+      }
+    ).__LINKGO_SQL_SET_CAMPAIGN_STATUS__?.(1, "archived");
+  });
+  const dialog = await openImportDialog(page);
+  await fillImportRows(dialog, [
+    formRow("kept", "Typed text survives", "Kept Author"),
+  ]);
+  await dialog.getByRole("button", { name: "Import posts" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText("Campaign is archived");
+  const row = dialog.getByTestId("source-import-row").first();
+  await expect(row.getByLabel("Link", { exact: true })).toHaveValue(
+    "https://www.linkedin.com/posts/source-kept",
+  );
+  await expect(row.getByLabel("Post text", { exact: true })).toHaveValue(
+    "Typed text survives",
+  );
 });
 
 test("keeps the latest campaign import history when an earlier load resolves last", async ({
@@ -541,25 +615,17 @@ test("keeps the latest campaign import history when an earlier load resolves las
   const campaignSelector = page.getByRole("combobox");
   await campaignSelector.selectOption({ label: "Import Campaign A" });
   let dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("campaign-a", "Campaign A source post", "Campaign A Author"),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("campaign-a", "Campaign A source post", "Campaign A Author"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await dialog.getByRole("button", { name: "Done" }).click();
 
   await campaignSelector.selectOption({ label: "Import Campaign B" });
   dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("campaign-b", "Campaign B source post", "Campaign B Author"),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("campaign-b", "Campaign B source post", "Campaign B Author"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await dialog.getByRole("button", { name: "Done" }).click();
 
@@ -629,13 +695,9 @@ test("archived campaigns block UI and data mutations while keeping history", asy
     stateWindow.__LINKGO_SQL_ENABLE_RELOAD_PERSISTENCE__?.();
   });
   const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("history", "Archived history post", "History Author"),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("history", "Archived history post", "History Author"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await dialog.getByRole("button", { name: "Done" }).click();
 
@@ -652,11 +714,9 @@ test("archived campaigns block UI and data mutations while keeping history", asy
   });
 
   const archivedDialog = await openImportDialog(page);
-  await archivedDialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([sourceRow("blocked", "Blocked archived row", "Blocked")]),
-    );
+  await fillImportRows(archivedDialog, [
+    formRow("blocked", "Blocked archived row", "Blocked"),
+  ]);
   await archivedDialog.getByRole("button", { name: "Import posts" }).click();
   await expect(archivedDialog.getByRole("alert")).toHaveText(
     "Campaign is archived",
@@ -687,14 +747,10 @@ test("a forced candidate failure rolls back only that row and records a safe fai
   });
 
   const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("accepted", "Accepted before failure", "Accepted Author"),
-        sourceRow("failed", "This candidate insert fails", "Failed Author"),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("accepted", "Accepted before failure", "Accepted Author"),
+    formRow("failed", "This candidate insert fails", "Failed Author"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
@@ -742,18 +798,10 @@ test("terminalizes the batch when an item outcome write fails", async ({
   });
 
   const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        { url: "https://www.linkedin.com/posts/outcome-failure", content: "" },
-        sourceRow(
-          "skipped-after-outcome",
-          "This row is not processed",
-          "Later",
-        ),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    { url: "https://www.linkedin.com/posts/outcome-failure", content: "" },
+    formRow("skipped-after-outcome", "This row is not processed", "Later"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
@@ -805,13 +853,9 @@ test("terminalizes the batch when the final batch outcome write fails", async ({
   });
 
   const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("batch-outcome", "Accepted before batch write", "Accepted"),
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("batch-outcome", "Accepted before batch write", "Accepted"),
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
 
   await expect(
@@ -894,14 +938,10 @@ test("batch outcomes and reasons survive reload", async ({ page }) => {
   });
 
   const dialog = await openImportDialog(page);
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([
-        sourceRow("reload", "Reload-safe valid row", "Reload Author"),
-        { url: "https://www.linkedin.com/posts/reload-invalid", content: "" },
-      ]),
-    );
+  await fillImportRows(dialog, [
+    formRow("reload", "Reload-safe valid row", "Reload Author"),
+    { url: "https://www.linkedin.com/posts/reload-invalid", content: "" },
+  ]);
   await dialog.getByRole("button", { name: "Import posts" }).click();
   await dialog.getByRole("button", { name: "Done" }).click();
 
@@ -925,11 +965,11 @@ test("keyboard flow returns focus and announces completion", async ({
   await page.keyboard.press("Enter");
 
   const dialog = page.getByRole("dialog", { name: "Import posts" });
-  const textarea = dialog.getByLabel("Posts (JSON)");
-  await expect(textarea).toBeVisible();
-  await expect(textarea).toHaveAttribute(
+  const linkInput = dialog.getByLabel("Link", { exact: true });
+  await expect(linkInput).toBeVisible();
+  await expect(linkInput).toHaveAttribute(
     "aria-describedby",
-    /source-import-help/,
+    /source-import-url-hint-/u,
   );
 
   await page.keyboard.press("Escape");
@@ -937,11 +977,9 @@ test("keyboard flow returns focus and announces completion", async ({
   await expect(trigger).toBeFocused();
 
   await page.keyboard.press("Enter");
-  await textarea.fill(
-    sourceJson([
-      sourceRow("keyboard", "Keyboard imported row", "Keyboard Author"),
-    ]),
-  );
+  await fillImportRows(dialog, [
+    formRow("keyboard", "Keyboard imported row", "Keyboard Author"),
+  ]);
   const submit = dialog.getByRole("button", { name: "Import posts" });
   await submit.focus();
   await page.keyboard.press("Enter");
@@ -964,7 +1002,8 @@ test("keeps source-import controls operable with reduced motion and forced color
 
   const trigger = page.getByRole("button", { name: "Import posts" });
   const dialog = await openImportDialog(page);
-  const textarea = dialog.getByLabel("Posts (JSON)");
+  const linkInput = dialog.getByLabel("Link", { exact: true });
+  const addRow = dialog.getByRole("button", { name: "Add another post" });
   const cancel = dialog.getByRole("button", { name: "Cancel" });
   const submit = dialog.getByRole("button", { name: "Import posts" });
   const close = dialog.getByRole("button", { name: "Close" });
@@ -975,14 +1014,12 @@ test("keeps source-import controls operable with reduced motion and forced color
     ),
   ).toBe(true);
 
-  await textarea.fill(
-    sourceJson([
-      {
-        ...sourceRow("forced-colors", "Rejected source", "Policy Author"),
-        url: "http://www.linkedin.com/posts/forced-colors",
-      },
-    ]),
-  );
+  await fillImportRows(dialog, [
+    {
+      ...formRow("forced-colors", "Rejected source", "Policy Author"),
+      url: "http://www.linkedin.com/posts/forced-colors",
+    },
+  ]);
   await submit.click();
   await expect(
     dialog.getByText("0 added, 0 already saved, 1 skipped."),
@@ -1013,13 +1050,11 @@ test("keeps source-import controls operable with reduced motion and forced color
   await expectForcedColorsFocusIndicator(trigger);
   await page.keyboard.press("Enter");
   await expect(dialog).toBeVisible();
-  await textarea.fill(
-    sourceJson([
-      sourceRow("forced-colors-valid", "Visible controls", "Control Author"),
-    ]),
-  );
+  await fillImportRows(dialog, [
+    formRow("forced-colors-valid", "Visible controls", "Control Author"),
+  ]);
 
-  for (const control of [close, textarea, cancel, submit]) {
+  for (const control of [close, linkInput, addRow, cancel, submit]) {
     await expect(control).toBeVisible();
     await expect(control).toBeEnabled();
     await expectForcedColorsFocusIndicator(control);
@@ -1047,11 +1082,9 @@ async function captureSourceImportVisualEvidence(
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: "Import posts" });
-  await dialog
-    .getByLabel("Posts (JSON)")
-    .fill(
-      sourceJson([sourceRow("narrow", "Narrow dialog input", "Narrow Author")]),
-    );
+  await fillImportRows(dialog, [
+    formRow("narrow", "Narrow dialog input", "Narrow Author"),
+  ]);
   await page.screenshot({
     path: testInfo.outputPath("source-import-narrow-dialog-320x800.png"),
   });
@@ -1134,8 +1167,102 @@ function sourceRow(
   };
 }
 
-function sourceJson(rows: unknown[]): string {
-  return JSON.stringify(rows, null, 2);
+/**
+ * Writes rows through the same contract preparation and native command the
+ * app uses, for row shapes the guided form cannot produce (URNs, unknown
+ * fields, scalars, raw timestamp strings).
+ */
+async function importContractRows(
+  page: Page,
+  rows: unknown[],
+): Promise<Record<string, unknown>> {
+  const prepared = prepareSourceImportBatch(1, rows);
+  return page.evaluate((input) => {
+    const internals = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: {
+          invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    if (internals === undefined) throw new Error("Tauri mocks unavailable");
+    return internals.invoke("linkgo_source_import_write_batch", {
+      input,
+    }) as Promise<Record<string, unknown>>;
+  }, prepared);
+}
+
+/** Rounds up to the next whole minute (the form's date input keeps minutes). */
+function ceilToMinute(date: Date): Date {
+  return new Date(Math.ceil(date.getTime() / 60_000) * 60_000);
+}
+
+interface ImportFormRowInput {
+  url: string;
+  content: string;
+  /** A Date is typed in local time; `null` leaves the date empty. */
+  postedAt?: string | Date | null;
+  authorName?: string;
+  authorProfileUrl?: string;
+  sourceKeyword?: string;
+}
+
+/** A guided-form row; `postedAt` is a `datetime-local` value one day ago. */
+function formRow(
+  suffix: string,
+  content: string,
+  authorName: string,
+): ImportFormRowInput {
+  return {
+    url: `https://www.linkedin.com/posts/source-${suffix}`,
+    content,
+    authorName,
+    authorProfileUrl: `https://www.linkedin.com/in/${suffix}`,
+    postedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    sourceKeyword: "approved source",
+  };
+}
+
+function toDateTimeLocal(date: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** Fills the guided import form, adding rows as needed. */
+async function fillImportRows(
+  dialog: Locator,
+  rows: readonly ImportFormRowInput[],
+): Promise<void> {
+  const rowLocators = dialog.getByTestId("source-import-row");
+  for (const [index, row] of rows.entries()) {
+    if ((await rowLocators.count()) <= index) {
+      await dialog.getByRole("button", { name: "Add another post" }).click();
+    }
+    const rowLocator = rowLocators.nth(index);
+    await rowLocator.getByLabel("Link", { exact: true }).fill(row.url);
+    await rowLocator.getByLabel("Post text", { exact: true }).fill(row.content);
+    await rowLocator
+      .getByLabel("Post date", { exact: true })
+      .fill(
+        row.postedAt instanceof Date
+          ? toDateTimeLocal(row.postedAt)
+          : (row.postedAt ?? ""),
+      );
+    const optional = [
+      ["Author name", row.authorName],
+      ["Author profile link", row.authorProfileUrl],
+      ["Where you found it", row.sourceKeyword],
+    ] as const;
+    if (optional.some(([, value]) => value)) {
+      const disclosure = rowLocator.locator("details");
+      if ((await disclosure.getAttribute("open")) === null) {
+        await rowLocator.getByText("More details (optional)").click();
+      }
+      for (const [label, value] of optional) {
+        if (value) await rowLocator.getByLabel(label).fill(value);
+      }
+    }
+  }
 }
 
 async function openQueueWithCampaign(page: Page): Promise<void> {

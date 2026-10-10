@@ -531,6 +531,7 @@ async function saveDefaultMemory(page: Page): Promise<void> {
 
 async function archiveSelectedCampaign(page: Page): Promise<void> {
   await openCampaigns(page);
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Archive" }).first().click();
   await expect(getBadge(page, "Archived")).toBeVisible();
 }

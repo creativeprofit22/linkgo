@@ -1,4 +1,4 @@
-import type { CandidateWithTarget } from "@/features/candidate-queue";
+import type { CandidateWithTarget } from "@/features/candidate-queue/types";
 import type { CandidatePolicyRuleKey } from "@/features/candidate-policy";
 import type { SourceConnectorKey } from "@/features/source-imports/connectors";
 
@@ -66,9 +66,20 @@ export interface SourceImportInputRow {
   notes?: string;
 }
 
+/** One post as typed into the guided import form. */
+export interface SourceImportFormRow {
+  url: string;
+  content: string;
+  /** `datetime-local` value in the operator's time zone. */
+  postedAt: string;
+  authorName: string;
+  authorProfileUrl: string;
+  sourceKeyword: string;
+}
+
 export interface CreateSourceImportBatchInput {
   campaignId: number;
-  sourceText: string;
+  rows: SourceImportFormRow[];
 }
 
 export interface PreparedSourceImportRow {

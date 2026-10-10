@@ -114,7 +114,10 @@ export function ContentCalendarSlotCard({
                 size="sm"
                 onClick={() => void onSchedule({ id: slot.id })}
               >
-                <CalendarClock className="size-4" /> Schedule post
+                <CalendarClock className="size-4" />{" "}
+                {slot.scheduleJob?.status === "failed"
+                  ? "Schedule again"
+                  : "Schedule post"}
               </Button>
             )}
             <Button

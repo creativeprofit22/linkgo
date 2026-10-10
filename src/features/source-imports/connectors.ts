@@ -36,7 +36,7 @@ export const SOURCE_CONNECTORS: Readonly<
 > = {
   local_json: {
     key: "local_json",
-    label: "Local operator-supplied JSON",
+    label: "Added by you",
     mode: "local",
     available: true,
     mayFetchExternally: false,

@@ -1,8 +1,11 @@
 import { AlertTriangle, CalendarClock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { approvalsRoute } from "@/features/approvals/schemas";
 import type { ScheduleJobStatus } from "@/features/approvals/types";
 import type { DueScheduleCardItem } from "@/features/scheduler/types";
+import { formatRouteHash } from "@/lib/navigation/route-contract";
 import { toPlainMessage } from "@/lib/plain-message";
 
 const jobStatusLabels: Record<ScheduleJobStatus, string> = {
@@ -78,6 +81,24 @@ export function DueScheduleCard({
           <div className="text-linkgo-amber border-linkgo-amber/30 bg-linkgo-amber/10 flex items-start gap-2 rounded-lg border p-3 text-sm">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <p>{toPlainMessage(job.last_error ?? "")}</p>
+          </div>
+        )}
+
+        {job.status === "failed" && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-muted-foreground text-sm">
+              This post didn't go out. Pick a new time on its approval.
+            </p>
+            <Button asChild size="sm" variant="outline">
+              <a
+                href={formatRouteHash(approvalsRoute, {
+                  campaignId: job.campaign_id,
+                  approvalId: job.approval_id,
+                })}
+              >
+                Schedule again
+              </a>
+            </Button>
           </div>
         )}
       </CardContent>

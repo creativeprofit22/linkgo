@@ -25,7 +25,7 @@ Current candidate links determine the outcome after selection, not whether a bat
 
 ## Atomic lifecycle
 
-For every selected batch, the native planner opens one immediate SQLite transaction, re-reads `safety_settings`, and only then revalidates campaign state, autopilot eligibility, batch state, current candidate count, and absence of an existing plan. If the global kill switch (on screen: Safety → **Emergency pause**, button **Pause everything**) was enabled after selection or an earlier batch, the transaction records one batch-linked `planner_blocked` event, creates no plan/backlog/workflow records, and stops the tick.
+For every selected batch, the native planner opens one immediate SQLite transaction, re-reads `safety_settings`, and only then revalidates campaign state, autopilot eligibility, batch state, current candidate count, and absence of an existing plan. If the global kill switch (on screen: Safety → **Emergency pause**, button **Turn on emergency pause**) was enabled after selection or an earlier batch, the transaction records one batch-linked `planner_blocked` event, creates no plan/backlog/workflow records, and stops the tick.
 
 A planned transaction creates:
 
@@ -61,7 +61,7 @@ The global kill switch blocks start and tick materialization. Every selected bat
 
 `src/features/source-imports/connectors.ts` declares the closed source registry, connector keys, local/remote mode, availability, and external-fetch permission.
 
-`local_json` is the only key. It is available, local, operator-supplied, and cannot fetch externally. Local JSON parsing passes a normalized connector batch into the existing policy-enforced candidate writer. The planner reads terminal batches by connector key and does not call connector-specific code.
+`local_json` is the local key (shown on screen as **Added by you**). It is available, local, operator-supplied, and cannot fetch externally. The guided import form passes a normalized connector batch into the existing policy-enforced candidate writer. The planner reads terminal batches by connector key and does not call connector-specific code.
 
 A production connector is not enabled by changing the TypeScript registry alone. It requires API-access, terms, permission, and permitted-use approval plus a migration that expands the SQLite `source_type` constraint.
 
@@ -85,6 +85,8 @@ The Autopilot tab sits between Campaigns and Tasks. It provides:
 Tasks cards distinguish manually created Linkgo responsibility labels from planner-linked rows. Live planner-linked scoring items are read-only projections of the score step and direct recovery to Automations. Automations cards show a `Started by Autopilot from your imported ideas.` origin and aggregate current/unscored/scored/removed candidate artifacts. Autopilot and Tasks never start the model.
 
 The hook guards duplicate actions and uses monotonically increasing request IDs so an older campaign-filter response cannot overwrite the latest selection. Native responses are parsed with Zod. Controls fail clearly outside the Tauri desktop runtime.
+
+Plan cards are titled by campaign ("Plan for …"); plan, import, task and automation ids and the AI service status are under **Details for support**.
 
 ## Safety and exclusions
 

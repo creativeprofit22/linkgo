@@ -2,6 +2,10 @@ import { Link2, Workflow } from "lucide-react";
 import { AGENT_PROVIDER_LABELS } from "@/agent";
 
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  SupportDetails,
+  type SupportDetail,
+} from "@/components/support-details";
 import type { AutopilotPlanDashboardItem } from "@/features/autopilot-planner/types";
 import { getSourceConnector } from "@/features/source-imports/connectors";
 
@@ -61,16 +65,16 @@ export function AutopilotPlanCard({
         ? "Not created"
         : "Task was deleted"
       : plan.backlog_status === null
-        ? `Task #${plan.campaign_backlog_item_id} was deleted`
-        : `Task #${plan.campaign_backlog_item_id} · ${formatStatus(plan.backlog_status)}`;
+        ? "Task was deleted"
+        : formatStatus(plan.backlog_status);
   const workflowLink =
     plan.workflow_run_id === null
       ? plan.status === "skipped"
         ? "Not created"
         : "Automation was deleted"
       : plan.workflow_status === null
-        ? `Automation #${plan.workflow_run_id} was deleted`
-        : `Automation #${plan.workflow_run_id} · ${formatStatus(plan.workflow_status)}`;
+        ? "Automation was deleted"
+        : formatStatus(plan.workflow_status);
   const scoringState =
     plan.score_step_status === null
       ? "Scoring status not available"
@@ -78,18 +82,39 @@ export function AutopilotPlanCard({
   const scorerState =
     plan.latest_scorer_provider_key === null
       ? "The AI hasn't scored these ideas yet"
-      : `${AGENT_PROVIDER_LABELS[plan.latest_scorer_provider_key]} · ${formatStatus(plan.latest_scorer_run_status ?? "unknown")}`;
+      : `AI scoring: ${formatStatus(plan.latest_scorer_run_status ?? "unknown")}`;
+  const supportItems: SupportDetail[] = [
+    { label: "Plan id", value: plan.id },
+    { label: "Import id", value: plan.source_import_batch_id },
+    ...(plan.campaign_backlog_item_id === null
+      ? []
+      : [{ label: "Task id", value: plan.campaign_backlog_item_id }]),
+    ...(plan.workflow_run_id === null
+      ? []
+      : [{ label: "Automation id", value: plan.workflow_run_id }]),
+    ...(plan.latest_scorer_provider_key === null
+      ? []
+      : [
+          {
+            label: "AI service",
+            value: AGENT_PROVIDER_LABELS[plan.latest_scorer_provider_key],
+          },
+        ]),
+  ];
 
   return (
-    <Card className="bg-card/70 forced-colors:border">
+    <Card
+      data-testid="autopilot-plan-card"
+      className="bg-card/70 forced-colors:border"
+    >
       <CardContent className="space-y-4 p-4 sm:p-5">
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
           <div className="min-w-0">
             <p className="font-semibold break-words">
-              Plan #{plan.id} · {plan.campaign_name}
+              Plan for {plan.campaign_name}
             </p>
             <p className="text-muted-foreground mt-1 text-sm break-words">
-              {connector.label} · import #{plan.source_import_batch_id}
+              {connector.label}
             </p>
           </div>
           <p className="shrink-0 text-sm font-medium">
@@ -161,6 +186,7 @@ export function AutopilotPlanCard({
           Created {formatDate(plan.created_at)} · Campaign status:{" "}
           {formatStatus(plan.campaign_status)}
         </p>
+        <SupportDetails items={supportItems} />
       </CardContent>
     </Card>
   );

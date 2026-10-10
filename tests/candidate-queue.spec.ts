@@ -774,6 +774,7 @@ async function createCampaign(
 
 async function archiveCampaign(page: Page, name: string): Promise<void> {
   await page.getByRole("button", { name: `Open ${name} actions` }).click();
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await expect(page.getByText("Archived", { exact: true })).toBeVisible();
 }

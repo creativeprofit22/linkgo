@@ -428,6 +428,28 @@ test("See all counts every post missing results, not only the loaded ones", asyn
   ).toContainText("115 more posts need results.");
 });
 
+test("unclear outcomes cap at five with See all to Safety", async ({
+  page,
+}) => {
+  await installFixture(page, {
+    ...EMPTY,
+    executions: [1, 2, 3, 4, 5, 6, 7].map((id) =>
+      unclearExecution(40 + id, id),
+    ),
+  });
+  await openToday(page);
+
+  await expect(row(page, "unclear-outcome")).toHaveCount(5);
+  const overflow = page.getByTestId("today-overflow-unclear-outcome");
+  await expect(overflow).toContainText(
+    "2 more posts or comments may not have gone out.",
+  );
+  await expect(overflow.getByRole("link", { name: "See all" })).toHaveAttribute(
+    "href",
+    "#/safety",
+  );
+});
+
 test("the next scheduled post shows under Coming up and links to it", async ({
   page,
 }) => {

@@ -292,9 +292,14 @@ test("disabled next steps explain why and link to the fix", async ({
   await expect(writeButton).toHaveAccessibleDescription(
     /Create a campaign first/,
   );
-  await expect(
-    page.getByRole("link", { name: "Go to Campaigns" }),
-  ).toHaveAttribute("href", "#/campaigns");
+  // Write with AI and Add draft are both blocked; each links to Campaigns.
+  const campaignLinks = page.getByRole("link", { name: "Go to Campaigns" });
+  await expect(campaignLinks.first()).toBeVisible();
+  expect(
+    await campaignLinks.evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href")),
+    ),
+  ).toEqual(["#/campaigns", "#/campaigns"]);
 
   await page.getByRole("button", { name: /^Campaigns/ }).click();
   await createCampaign(page, { navigate: false });
@@ -302,10 +307,15 @@ test("disabled next steps explain why and link to the fix", async ({
   await expect(writeButton).toHaveAccessibleDescription(
     /No ideas left to write/,
   );
-  await expect(page.getByRole("link", { name: "Go to Ideas" })).toHaveAttribute(
-    "href",
-    "#/queue",
-  );
+  // Write with AI and Add draft both need an idea; each links to Ideas.
+  for (const reasonId of [
+    "#generate-draft-disabled-reason",
+    "#draft-disabled-reason",
+  ]) {
+    await expect(
+      page.locator(reasonId).getByRole("link", { name: "Go to Ideas" }),
+    ).toHaveAttribute("href", "#/queue");
+  }
 
   await page.getByRole("button", { name: /^Approvals/ }).click();
   const sendButton = page.getByRole("button", { name: "Send for approval" });

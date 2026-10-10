@@ -38,6 +38,8 @@ const SOURCE_LABEL: Record<TodaySourceKey, string> = {
 };
 
 const OVERFLOW_LABEL: Partial<Record<TodayItemKind, (n: number) => string>> = {
+  "unclear-outcome": (n) =>
+    `${n} more ${n === 1 ? "post or comment" : "posts or comments"} may not have gone out.`,
   waiting: (n) =>
     `${n} more ${n === 1 ? "post is" : "posts are"} waiting for your OK.`,
   "results-missing": (n) =>

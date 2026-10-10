@@ -25,8 +25,10 @@ opens the screen where the user fixes it, with that item already picked.
   appended unless it is "local" — e.g. "Tue, Oct 6, 9:00 AM
   (America/New_York)", matching the Approvals card. Ordering across posts in
   different zones is not zone-aware.
-- At most 5 rows per kind (`TODAY_ROWS_PER_KIND`); extra rows become a "See
-  all" link to that kind's full screen.
+- Unclear outcomes, waiting posts and missing results each show at most 5
+  rows (`TODAY_ROWS_PER_KIND`); extra rows become a "See all" link to that
+  kind's full screen (unclear outcomes open `#/safety`). Connections are not
+  capped: they are bounded by the provider list.
 - Unclear outcomes for comments read "Did your comment go out?". A post
   missing from the loaded approvals still shows, as "Did your post go out?".
 - No button approves, schedules, posts or reconciles. Every link only opens a

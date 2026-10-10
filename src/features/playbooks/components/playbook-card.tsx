@@ -137,8 +137,8 @@ export function PlaybookCard({
                   Use with the AI assistant
                 </Label>
                 <p className="text-muted-foreground text-xs">
-                  When this is off, the guide stays here but isn't used for new
-                  assistant tasks.
+                  When this is off, this brand voice stays here but isn't used
+                  for new assistant tasks.
                 </p>
               </div>
               <Switch
@@ -157,7 +157,7 @@ export function PlaybookCard({
                 id={`${playbook.key}-custom`}
                 value={customInstructions}
                 maxLength={2000}
-                placeholder="Add your own rules for this guide."
+                placeholder="Add your own rules for this brand voice."
                 onChange={(event) => setCustomInstructions(event.target.value)}
               />
               <p className="text-muted-foreground text-xs">
@@ -170,7 +170,7 @@ export function PlaybookCard({
               disabled={saving || !dirty}
               onClick={() => void handleSave()}
             >
-              {saving ? "Saving…" : "Save guide"}
+              {saving ? "Saving…" : "Save brand voice"}
             </Button>
           </div>
         ) : (
@@ -179,7 +179,7 @@ export function PlaybookCard({
             <div>
               <p className="font-medium">Tips for you only</p>
               <p className="text-muted-foreground mt-1">
-                These commenting tips are here to guide you. The AI assistant
+                These commenting tips are here to help you. The AI assistant
                 can't use them to comment or post on its own.
               </p>
             </div>

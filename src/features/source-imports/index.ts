@@ -20,6 +20,7 @@ export type {
   SourceImportBatchDetail,
   SourceImportBatchResult,
   SourceImportBatchStatus,
+  SourceImportFormRow,
   SourceImportInputRow,
   SourceImportItem,
   SourceImportItemStatus,

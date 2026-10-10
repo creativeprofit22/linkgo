@@ -25,7 +25,7 @@ export function PlaybooksView(): React.ReactNode {
                 Brand voice
               </h2>
               <p className="text-muted-foreground text-sm">
-                Writing guides that shape how the AI writes for you.
+                Brand voices that shape how the AI writes for you.
               </p>
             </div>
           </div>
@@ -61,16 +61,17 @@ export function PlaybooksView(): React.ReactNode {
       {loading ? (
         <Card className="bg-card/70">
           <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading brand voice guides…
+            Loading brand voices…
           </CardContent>
         </Card>
       ) : (
         <>
           <Card className="bg-card/70">
             <CardContent className="text-muted-foreground p-4 text-sm">
-              These guides only shape how the AI writes and the tips you see.
-              They never let Linkgo copy data from other sites, post or comment
-              on its own, control your browser, or send your data anywhere.
+              Your brand voices only shape how the AI writes and the tips you
+              see. They never let Linkgo copy data from other sites, post or
+              comment on its own, control your browser, or send your data
+              anywhere.
             </CardContent>
           </Card>
           <div className="grid gap-4 xl:grid-cols-2">

@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { DisabledReason } from "@/components/disabled-reason";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { CandidateWithTarget } from "@/features/candidate-queue/types";
+import { campaignsRoute } from "@/features/campaigns/schemas";
+import { candidateQueueRoute } from "@/features/candidate-queue/schemas";
+import { formatRouteHash } from "@/lib/navigation/route-contract";
 import { DRAFT_PROMPT_ROUTES } from "@/features/drafts/prompt-routing";
 import {
   DRAFT_CONTENT_INTENTS,
@@ -107,9 +111,34 @@ export function AddDraftDialog({
     getInitialFormState(candidateOptions),
   );
   const createDisabled = disabled || candidateOptions.length === 0;
-  const archivedDisabledReason = selectedCampaignArchived
-    ? "This campaign is archived, so you can't add drafts. Restore the campaign first."
-    : null;
+  const blocker: {
+    reason: string;
+    fix: { href: string; label: string };
+  } | null = selectedCampaignArchived
+    ? {
+        reason: "This campaign is archived, so you can't add drafts.",
+        fix: {
+          href: formatRouteHash(campaignsRoute),
+          label: "Restore it in Campaigns",
+        },
+      }
+    : disabled
+      ? {
+          reason: "Create a campaign first.",
+          fix: {
+            href: formatRouteHash(campaignsRoute),
+            label: "Go to Campaigns",
+          },
+        }
+      : candidateOptions.length === 0
+        ? {
+            reason: "Save a post idea first, then write a draft for it.",
+            fix: {
+              href: formatRouteHash(candidateQueueRoute),
+              label: "Go to Ideas",
+            },
+          }
+        : null;
 
   useEffect(() => {
     if (!open) setForm(getInitialFormState(candidateOptions));
@@ -173,11 +202,8 @@ export function AddDraftDialog({
             type="button"
             disabled={createDisabled}
             aria-describedby={
-              archivedDisabledReason
-                ? "draft-archived-disabled-reason"
-                : undefined
+              createDisabled && blocker ? "draft-disabled-reason" : undefined
             }
-            title={archivedDisabledReason ?? undefined}
           >
             <Plus className="size-4" /> Create draft
           </Button>
@@ -343,13 +369,13 @@ export function AddDraftDialog({
           </form>
         </DialogContent>
       </Dialog>
-      {archivedDisabledReason && (
-        <p
-          id="draft-archived-disabled-reason"
-          className="text-muted-foreground max-w-72 text-right text-xs"
-        >
-          {archivedDisabledReason}
-        </p>
+      {createDisabled && blocker && (
+        <DisabledReason
+          id="draft-disabled-reason"
+          reason={blocker.reason}
+          fix={blocker.fix}
+          className="sm:text-right"
+        />
       )}
     </div>
   );

@@ -4,7 +4,6 @@ import { toPlainMessage } from "@/lib/plain-message";
 interface OutcomeUnknownAlertProps {
   itemLabel: string;
   message: string;
-  executionId: number;
 }
 
 export const OUTCOME_UNKNOWN_TITLE =
@@ -13,7 +12,6 @@ export const OUTCOME_UNKNOWN_TITLE =
 export function OutcomeUnknownAlert({
   itemLabel,
   message,
-  executionId,
 }: OutcomeUnknownAlertProps): React.ReactNode {
   return (
     <div
@@ -28,9 +26,9 @@ export function OutcomeUnknownAlert({
         {OUTCOME_UNKNOWN_TITLE}
       </p>
       <p className="mt-2">
-        This {itemLabel} may already be on LinkedIn. Don't post it again. Check
-        LinkedIn, then go to Safety → Check what happened to these posts and
-        confirm attempt #{executionId}.
+        This {itemLabel} may already be on LinkedIn. Don't post it again. Close
+        this, check LinkedIn, then use &ldquo;I checked LinkedIn&rdquo; on the{" "}
+        {itemLabel}.
       </p>
       {message && (
         <p className="text-muted-foreground mt-2 break-words">

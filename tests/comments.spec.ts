@@ -184,8 +184,33 @@ test("Open outcome_unknown publish execution locks comment API posting", async (
     page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeDisabled();
   await expect(
-    page.getByText("We couldn't confirm it posted. Check it in Safety."),
+    page.getByText(
+      "We couldn't confirm it posted. Check LinkedIn, then tell us below.",
+    ),
   ).toBeVisible();
+  await expect.poll(() => getCommentPublishInvokeCount(page)).toBe(0);
+
+  const resolver = page.getByRole("region", {
+    name: "We couldn't confirm it posted. Check LinkedIn, then tell us below.",
+  });
+  await resolver
+    .getByRole("button", { name: "I checked LinkedIn: it didn't post" })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Confirm what happened to this comment",
+  });
+  await expect(
+    dialog.getByRole("radio", { name: /^Didn't post/ }),
+  ).toBeChecked();
+  const submit = dialog.getByRole("button", { name: "Confirm result" });
+  await expect(submit).toBeDisabled();
+  await dialog.getByLabel("Type “RECONCILE” to confirm").fill("RECONCILE");
+  await submit.click();
+
+  await expect(resolver).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Post to LinkedIn" }),
+  ).toBeEnabled();
   await expect.poll(() => getCommentPublishInvokeCount(page)).toBe(0);
 });
 
@@ -330,7 +355,7 @@ test("Global kill switch hides API posting and direct publish blocks before nati
   await page
     .getByLabel("Reason for pausing")
     .fill("Pause comments for review.");
-  await page.getByRole("button", { name: "Pause everything" }).click();
+  await page.getByRole("button", { name: "Turn on emergency pause" }).click();
 
   await openComments(page);
   await expect(
@@ -479,6 +504,7 @@ test("Archived campaign blocks comment mutations while history remains visible",
   await page
     .getByRole("button", { name: "Open Founder-led growth actions" })
     .click();
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await expect(getBadge(page, "Archived")).toBeVisible();
 

@@ -28,9 +28,9 @@ export function AgentToolContractList({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-muted-foreground text-sm">
-          These are the actions the AI assistant can take. Your brand voice
-          guides shape how it writes, but they can never let it post or comment
-          on its own.
+          These are the actions the AI assistant can take. Your brand voices
+          shape how it writes, but they can never let it post or comment on its
+          own.
         </p>
         <div className="grid gap-3 lg:grid-cols-2">
           {toolContracts.map((tool) => (

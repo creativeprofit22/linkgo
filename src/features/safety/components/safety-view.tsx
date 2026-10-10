@@ -52,8 +52,8 @@ export function SafetyView(): React.ReactNode {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">Safety</h2>
               <p className="text-muted-foreground text-sm">
-                Pause everything in an emergency, keep posting limits low, and
-                fix problems.
+                Use the emergency pause to stop everything, keep posting limits
+                low, and fix problems.
               </p>
             </div>
           </div>
@@ -169,7 +169,7 @@ export function SafetyView(): React.ReactNode {
                     ? "Saving…"
                     : killSwitchEnabled
                       ? "Turn off emergency pause"
-                      : "Pause everything"}
+                      : "Turn on emergency pause"}
                 </Button>
               </div>
             </CardContent>

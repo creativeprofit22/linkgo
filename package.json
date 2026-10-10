@@ -26,6 +26,8 @@
     "test:csp": "node --test scripts/check-csp.test.mjs",
     "check:architecture": "bun run test:architecture && bun run test:csp && node scripts/check-architecture.mjs",
     "test:deps": "node --test scripts/check-dependency-audit.test.mjs",
+    "test:glossary": "node --test scripts/check-glossary.test.mjs",
+    "check:glossary": "bun run test:glossary && node scripts/check-glossary.mjs",
     "check:deps": "bun run test:deps && node scripts/check-dependency-audit.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -33,7 +35,7 @@
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
     "lint": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts --fix",
-    "check": "bun run check:renderer-transactions && bun run check:architecture && bun run format:check && bun run format:rust:check && bun run lint && bun run lint:rust && bun run build && bun run test && bun run test:rust"
+    "check": "bun run check:renderer-transactions && bun run check:architecture && bun run check:glossary && bun run format:check && bun run format:rust:check && bun run lint && bun run lint:rust && bun run build && bun run test && bun run test:rust"
   },
   "dependencies": {
     "@tailwindcss/vite": "4.2.4",

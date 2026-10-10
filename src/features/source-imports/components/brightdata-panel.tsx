@@ -90,7 +90,7 @@ function runBadgeVariant(
 function blockedReason(status: BrightDataStatus): string | null {
   if (!status.enabled) return "Turn on Bright Data to fetch posts.";
   if (status.killSwitchActive)
-    return "Pause everything is on, so fetching is paused.";
+    return "Emergency pause is on, so fetching is paused.";
   if (!status.apiKeyConfigured) {
     return "Add your Bright Data key in Connected accounts.";
   }

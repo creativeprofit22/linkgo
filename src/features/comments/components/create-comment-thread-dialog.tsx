@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { DisabledReason } from "@/components/disabled-reason";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,10 +14,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { campaignsRoute } from "@/features/campaigns/schemas";
+import { candidateQueueRoute } from "@/features/candidate-queue/schemas";
 import type {
   CommentEligibleCandidate,
   CreateCommentThreadInput,
 } from "@/features/comments/types";
+import { formatRouteHash } from "@/lib/navigation/route-contract";
 
 interface CreateCommentThreadDialogProps {
   candidates: CommentEligibleCandidate[];
@@ -81,9 +85,34 @@ export function CreateCommentThreadDialog({
     getInitialFormState(candidateOptions),
   );
   const createDisabled = disabled || candidateOptions.length === 0;
-  const archivedReason = selectedCampaignArchived
-    ? "This campaign is archived. Restore it before you write comments."
-    : null;
+  const blocker: {
+    reason: string;
+    fix: { href: string; label: string };
+  } | null = selectedCampaignArchived
+    ? {
+        reason: "This campaign is archived, so you can't write comments.",
+        fix: {
+          href: formatRouteHash(campaignsRoute),
+          label: "Restore it in Campaigns",
+        },
+      }
+    : disabled
+      ? {
+          reason: "Create a campaign first.",
+          fix: {
+            href: formatRouteHash(campaignsRoute),
+            label: "Go to Campaigns",
+          },
+        }
+      : candidateOptions.length === 0
+        ? {
+            reason: "Save a post idea first, then write a comment on it.",
+            fix: {
+              href: formatRouteHash(candidateQueueRoute),
+              label: "Go to Ideas",
+            },
+          }
+        : null;
 
   useEffect(() => {
     if (!open) setForm(getInitialFormState(candidateOptions));
@@ -135,7 +164,9 @@ export function CreateCommentThreadDialog({
           <Button
             type="button"
             disabled={createDisabled}
-            title={archivedReason ?? undefined}
+            aria-describedby={
+              createDisabled && blocker ? "comment-disabled-reason" : undefined
+            }
           >
             <Plus className="size-4" /> Write a comment
           </Button>
@@ -250,10 +281,13 @@ export function CreateCommentThreadDialog({
           </form>
         </DialogContent>
       </Dialog>
-      {archivedReason && (
-        <p className="text-muted-foreground max-w-xs text-xs">
-          {archivedReason}
-        </p>
+      {createDisabled && blocker && (
+        <DisabledReason
+          id="comment-disabled-reason"
+          reason={blocker.reason}
+          fix={blocker.fix}
+          className="sm:text-right"
+        />
       )}
     </div>
   );

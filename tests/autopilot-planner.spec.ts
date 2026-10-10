@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { expectSupportDetail } from "./helpers/support-details";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -36,11 +37,19 @@ test("materializes eligible work on the immediate tick after Start planner", asy
   await expectMetric(page, "Ready now", "1");
   await page.getByRole("button", { name: "Start Autopilot" }).click();
 
-  await expect(page.getByText("Plan #1 · Started planner")).toBeVisible();
-  await expect(page.getByText("Task #1 · Not started")).toBeVisible();
+  const planCard = page.getByTestId("autopilot-plan-card").filter({
+    hasText: "Plan for Started planner",
+  });
+  await expect(planCard).toBeVisible();
   await expect(
-    page.getByText("Automation #1 · Waiting to start"),
+    planCard.getByText("Not started", { exact: true }),
   ).toBeVisible();
+  await expect(
+    planCard.getByText("Waiting to start", { exact: true }),
+  ).toBeVisible();
+  await expectSupportDetail(planCard, "Plan id", 1);
+  await expectSupportDetail(planCard, "Task id", 1);
+  await expectSupportDetail(planCard, "Automation id", 1);
   const state = await getPlannerState(page);
   expect(state.plans).toHaveLength(1);
   expect(state.backlog).toHaveLength(1);
@@ -66,11 +75,19 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
   await expectMetric(page, "Ready now", "1");
   await page.getByRole("button", { name: "Check now" }).click();
 
-  await expect(page.getByText("Plan #1 · Planner launch")).toBeVisible();
-  await expect(page.getByText("Task #1 · Not started")).toBeVisible();
+  const planCard = page.getByTestId("autopilot-plan-card").filter({
+    hasText: "Plan for Planner launch",
+  });
+  await expect(planCard).toBeVisible();
   await expect(
-    page.getByText("Automation #1 · Waiting to start"),
+    planCard.getByText("Not started", { exact: true }),
   ).toBeVisible();
+  await expect(
+    planCard.getByText("Waiting to start", { exact: true }),
+  ).toBeVisible();
+  await expectSupportDetail(planCard, "Plan id", 1);
+  await expectSupportDetail(planCard, "Task id", 1);
+  await expectSupportDetail(planCard, "Automation id", 1);
   await expect(page.getByText("Current step: Score ideas")).toBeVisible();
   await expectMetric(page, "Tasks created", "1");
   await capturePlannerScreenshot(
@@ -93,12 +110,10 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
   expect(state.runs[0]?.current_step_key).toBe("score");
 
   await page.getByRole("button", { name: /^Tasks/u }).click();
-  await expect(
-    page.getByText(
-      "Created by Autopilot plan #1 · import #1 · automation #1.",
-      { exact: false },
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Created by Autopilot.")).toBeVisible();
+  await expectSupportDetail(page, "Plan id", 1);
+  await expectSupportDetail(page, "Import id", 1);
+  await expectSupportDetail(page, "Automation id", 1);
 
   await page.getByRole("button", { name: /^Automations/u }).click();
   await expect(
@@ -147,7 +162,7 @@ test("blocks starts and manual materialization behind the global kill switch", a
   await setKillSwitch(page, true, "Operator pause");
   await openAutopilot(page);
 
-  await expect(page.getByText("Pause everything is on")).toBeVisible();
+  await expect(page.getByText("Emergency pause is on")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Start Autopilot" }),
   ).toBeDisabled();
@@ -413,13 +428,13 @@ test("keeps the latest campaign filter when an older response resolves last", as
   );
   await page.getByLabel("Campaign", { exact: true }).selectOption("2");
   await expect(
-    page.getByText("Plan #2 · Second planner campaign"),
+    page.getByText("Plan for Second planner campaign"),
   ).toBeVisible();
   await releaseCampaignSelects(page, 1);
   await expect(
-    page.getByText("Plan #2 · Second planner campaign"),
+    page.getByText("Plan for Second planner campaign"),
   ).toBeVisible();
-  await expect(page.getByText("Plan #1 · First planner campaign")).toBeHidden();
+  await expect(page.getByText("Plan for First planner campaign")).toBeHidden();
 });
 
 test("reflows at 320 pixels with forced colors, reduced motion, and keyboard focus", async ({

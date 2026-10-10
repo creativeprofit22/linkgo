@@ -19,6 +19,8 @@ import { useSessionFormState } from "@/hooks/use-session-form-state";
 interface ScheduleApprovalDialogProps {
   approvalId: number;
   onSchedule: (input: ScheduleApprovalInput) => Promise<void>;
+  /** Trigger text; "Schedule again" after a failed auto-post. */
+  triggerLabel?: string;
 }
 
 const scheduleApprovalFormSchema = z.object({
@@ -35,6 +37,7 @@ function getInitialFormState(): ScheduleApprovalFormState {
 export function ScheduleApprovalDialog({
   approvalId,
   onSchedule,
+  triggerLabel = "Pick a time",
 }: ScheduleApprovalDialogProps): React.ReactNode {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -71,7 +74,7 @@ export function ScheduleApprovalDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" size="sm">
-          <CalendarClock aria-hidden="true" className="size-4" /> Pick a time
+          <CalendarClock aria-hidden="true" className="size-4" /> {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent>

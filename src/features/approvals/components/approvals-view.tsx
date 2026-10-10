@@ -14,7 +14,10 @@ import type {
   ApprovalWithDetails,
 } from "@/features/approvals/types";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
-import { findPublishLock } from "@/features/publish-reconciliation";
+import {
+  findOutcomeUnknownExecution,
+  findPublishLock,
+} from "@/features/publish-reconciliation";
 import {
   navigateTo,
   useRouteParams,
@@ -278,6 +281,11 @@ export function ApprovalsView(): React.ReactNode {
                       killSwitchEnabled={killSwitchEnabled}
                       killSwitchReason={killSwitchReason}
                       publishLock={findPublishLock(
+                        openPublishExecutions,
+                        "post",
+                        approval.id,
+                      )}
+                      outcomeUnknownExecution={findOutcomeUnknownExecution(
                         openPublishExecutions,
                         "post",
                         approval.id,

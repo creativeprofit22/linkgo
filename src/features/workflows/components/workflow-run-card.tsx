@@ -1,4 +1,8 @@
 import { useState } from "react";
+import {
+  SupportDetails,
+  type SupportDetail,
+} from "@/components/support-details";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,7 +105,7 @@ function getArtifactChipLabel(
         : labelFor(draftStatusLabels, artifact.draft_status);
     return `Draft · ${intent} · ${status}`;
   }
-  const baseLabel = `AI assistant task #${artifact.artifact_id}`;
+  const baseLabel = "AI task";
   const details = [
     artifact.agent_role === null
       ? null
@@ -152,6 +156,12 @@ export function WorkflowRunCard({
     run.currentStep?.step_key === "score" && run.candidateScope === null;
   const visibleArtifacts = run.artifacts.filter((artifact) =>
     ["agent_run", "draft"].includes(artifact.artifact_type),
+  );
+  const artifactSupportItems: SupportDetail[] = visibleArtifacts.map(
+    (artifact) => ({
+      label: artifact.artifact_type === "agent_run" ? "AI task id" : "Draft id",
+      value: artifact.artifact_id,
+    }),
   );
   const autopilotOrigin =
     run.autopilot_plan_id == null
@@ -239,6 +249,9 @@ export function WorkflowRunCard({
                 ))}
               </div>
             ) : null}
+            {artifactSupportItems.length > 0 ? (
+              <SupportDetails items={artifactSupportItems} />
+            ) : null}
           </div>
           {!selectedCampaignArchived && (
             <div className="flex shrink-0 flex-wrap gap-2">
@@ -313,7 +326,15 @@ export function WorkflowRunCard({
                   size="sm"
                   variant="outline"
                   disabled={actionPending}
-                  onClick={() => void onCancelRun({ id: run.id })}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Stop this automation? It stops now and can't be continued.",
+                      )
+                    ) {
+                      void onCancelRun({ id: run.id });
+                    }
+                  }}
                 >
                   Stop automation
                 </Button>

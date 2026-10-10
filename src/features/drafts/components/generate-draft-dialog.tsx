@@ -2,6 +2,8 @@ import { FlaskConical, Sparkles } from "lucide-react";
 import { useMemo, useState, type SyntheticEvent } from "react";
 import { z } from "zod";
 import { AGENT_PROVIDER_KEYS, PROVIDER_LABELS } from "@/agent";
+import { AiSettingsDisclosure } from "@/components/ai-settings-disclosure";
+import { getSubmitBlockedReason } from "@/features/drafts/components/generate-draft-blocked-reason";
 import { DisabledReason } from "@/components/disabled-reason";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,7 +95,9 @@ const SELECT_CLASS =
   "border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
 
 const DISABLED_REASON_ID = "generate-draft-disabled-reason";
+const SUBMIT_BLOCKED_ID = "generate-draft-submit-blocked";
 
+/** Plain reason the "Write versions" button can't be used yet, or null. */
 function getCandidateLabel(candidate: CandidateWithTarget): string {
   const author = candidate.target.author_name || "Author not known";
   const excerpt = candidate.target.content.trim().slice(0, 70);
@@ -236,6 +240,11 @@ export function GenerateDraftDialog({
     (candidateId === null
       ? "adhoc"
       : getDefaultWorkflowSelection(candidateId, eligibleWorkflowOptions));
+  const submitBlockedReason = getSubmitBlockedReason({
+    candidateId,
+    workflowRunId,
+    aiLoaded: ai.loaded,
+  });
   const disabledReason = getDisabledReason({
     hasCampaigns,
     selectedCampaignId,
@@ -332,7 +341,7 @@ export function GenerateDraftDialog({
               </Field>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
               <Field label="AI service" htmlFor="generate-draft-provider">
                 <select
                   id="generate-draft-provider"
@@ -356,16 +365,18 @@ export function GenerateDraftDialog({
                   ))}
                 </select>
               </Field>
-              <Field label="AI model" htmlFor="generate-draft-model">
-                <Input
-                  id="generate-draft-model"
-                  value={modelName}
-                  onChange={(event) =>
-                    updateField("modelName", event.target.value)
-                  }
-                  maxLength={120}
-                />
-              </Field>
+              <AiSettingsDisclosure>
+                <Field label="AI model" htmlFor="generate-draft-model">
+                  <Input
+                    id="generate-draft-model"
+                    value={modelName}
+                    onChange={(event) =>
+                      updateField("modelName", event.target.value)
+                    }
+                    maxLength={120}
+                  />
+                </Field>
+              </AiSettingsDisclosure>
             </div>
 
             {isPractice && (
@@ -499,8 +510,8 @@ export function GenerateDraftDialog({
                   id="generate-draft-workflow-help"
                   className="text-muted-foreground text-xs"
                 >
-                  The automation waits at the Draft step until you save the AI
-                  versions.
+                  Pick the automation this idea belongs to. It waits until you
+                  keep a version as a draft.
                 </p>
               </Field>
             ) : null}
@@ -539,14 +550,22 @@ export function GenerateDraftDialog({
                 disabled={
                   submitting ||
                   disabledReason !== null ||
-                  candidateId === null ||
-                  workflowRunId === "" ||
-                  !ai.loaded
+                  submitBlockedReason !== null
+                }
+                aria-describedby={
+                  submitBlockedReason ? SUBMIT_BLOCKED_ID : undefined
                 }
               >
                 {submitting ? "Writing…" : "Write versions"}
               </Button>
             </DialogFooter>
+            {submitBlockedReason && (
+              <DisabledReason
+                id={SUBMIT_BLOCKED_ID}
+                reason={submitBlockedReason}
+                className="max-w-none sm:text-right"
+              />
+            )}
           </form>
         </DialogContent>
       </Dialog>

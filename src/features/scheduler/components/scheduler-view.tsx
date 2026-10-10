@@ -4,6 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DueScheduleCard } from "@/features/scheduler/components/due-schedule-card";
 import { SchedulerEventList } from "@/features/scheduler/components/scheduler-event-list";
 import { useScheduler } from "@/features/scheduler/hooks/use-scheduler";
+import { approvalsRoute } from "@/features/approvals/schemas";
+import { formatRouteHash } from "@/lib/navigation/route-contract";
 import type { PublishAttemptStatus } from "@/features/approvals/types";
 import { toPlainMessage } from "@/lib/plain-message";
 
@@ -282,6 +284,25 @@ export function SchedulerView(): React.ReactNode {
                               attempt.platform_post_id
                             : toPlainMessage(attempt.error_message)}
                         </p>
+                        {attempt.status === "failed" &&
+                        attempt.schedule_job_id !== null &&
+                        attempt.campaign_id !== null ? (
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-muted-foreground text-xs">
+                              Pick a new time on its approval.
+                            </p>
+                            <Button asChild size="sm" variant="outline">
+                              <a
+                                href={formatRouteHash(approvalsRoute, {
+                                  campaignId: attempt.campaign_id,
+                                  approvalId: attempt.approval_id,
+                                })}
+                              >
+                                Schedule again
+                              </a>
+                            </Button>
+                          </div>
+                        ) : null}
                       </li>
                     ))}
                   </ul>

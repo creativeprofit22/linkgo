@@ -7,6 +7,7 @@ import {
   type AgentProviderKey,
 } from "@/agent";
 import { defaultAgentModelFor } from "@/agent/provider-catalog";
+import { AiSettingsDisclosure } from "@/components/ai-settings-disclosure";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -208,7 +209,7 @@ export function ScoreWorkflowDialog({
                 </p>
               </div>
 
-              <div className="space-y-2">
+              <AiSettingsDisclosure>
                 <Label htmlFor={`score-model-${run.id}`}>AI model</Label>
                 <Input
                   id={`score-model-${run.id}`}
@@ -217,7 +218,7 @@ export function ScoreWorkflowDialog({
                   disabled={pending}
                   onChange={(event) => setModelName(event.target.value)}
                 />
-              </div>
+              </AiSettingsDisclosure>
 
               <div className="space-y-2">
                 <Label htmlFor={`score-minimum-${run.id}`}>

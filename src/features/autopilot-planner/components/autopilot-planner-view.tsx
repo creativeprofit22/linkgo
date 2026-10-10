@@ -171,7 +171,7 @@ export function AutopilotPlannerView(): React.ReactNode {
                   className="text-destructive mt-0.5 size-5 shrink-0"
                 />
                 <div>
-                  <p className="font-medium">Pause everything is on</p>
+                  <p className="font-medium">Emergency pause is on</p>
                   <p className="text-muted-foreground text-sm break-words">
                     Autopilot can't start or create new tasks. Your existing
                     tasks and automations stay as they are.

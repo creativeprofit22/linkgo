@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { AiSettingsDisclosure } from "@/components/ai-settings-disclosure";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -219,7 +220,7 @@ export function RunCandidateDiscoveryDialog({
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-3">
             <Field label="AI service" htmlFor="discovery-provider">
               <select
                 id="discovery-provider"
@@ -236,22 +237,24 @@ export function RunCandidateDiscoveryDialog({
                 ))}
               </select>
             </Field>
-            <Field label="AI model" htmlFor="discovery-model">
-              <Input
-                id="discovery-model"
-                value={modelName}
-                onChange={(event) => {
-                  const nextModelName = event.target.value;
-                  // A typed model pins the provider it was typed for.
-                  setForm((current) => ({
-                    ...current,
-                    providerKey: current.providerKey ?? providerKey,
-                    modelName: nextModelName,
-                  }));
-                }}
-                maxLength={120}
-              />
-            </Field>
+            <AiSettingsDisclosure>
+              <Field label="AI model" htmlFor="discovery-model">
+                <Input
+                  id="discovery-model"
+                  value={modelName}
+                  onChange={(event) => {
+                    const nextModelName = event.target.value;
+                    // A typed model pins the provider it was typed for.
+                    setForm((current) => ({
+                      ...current,
+                      providerKey: current.providerKey ?? providerKey,
+                      modelName: nextModelName,
+                    }));
+                  }}
+                  maxLength={120}
+                />
+              </Field>
+            </AiSettingsDisclosure>
           </div>
 
           <input type="hidden" value={form.playbookKey} readOnly />

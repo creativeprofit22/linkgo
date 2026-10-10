@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Info } from "lucide-react";
+import { SupportDetails } from "@/components/support-details";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -228,17 +229,17 @@ function ExecutionRow({
       className={`bg-card/70 space-y-2 rounded-xl border p-3 text-sm ${
         linked ? "border-linkgo-blue ring-linkgo-blue/30 ring-2" : ""
       }`}
-      aria-label={`${kindLabel} attempt ${execution.id}`}
+      data-execution-id={execution.id}
+      aria-label={`${kindLabel} in ${execution.campaignName || "an unknown campaign"}`}
     >
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
         <div className="space-y-1">
           <p className="font-medium">
-            {kindLabel} #{execution.subjectId} ·{" "}
-            {execution.campaignName || "Campaign not known"}
+            {kindLabel} · {execution.campaignName || "Campaign not known"}
           </p>
           <p className="text-muted-foreground text-xs">
-            Attempt #{execution.id} · Started by:{" "}
-            {CALLER_LABELS[execution.caller]} · LinkedIn reply: {remote}
+            Started by: {CALLER_LABELS[execution.caller]} · LinkedIn reply:{" "}
+            {remote}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -276,6 +277,12 @@ function ExecutionRow({
         {execution.sentAt ? ` · Sent ${execution.sentAt}` : ""} · Updated{" "}
         {execution.updatedAt}
       </p>
+      <SupportDetails
+        items={[
+          { label: `${kindLabel} id`, value: execution.subjectId },
+          { label: "Posting try id", value: execution.id },
+        ]}
+      />
     </li>
   );
 }

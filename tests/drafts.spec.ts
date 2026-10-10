@@ -1,9 +1,41 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { getSubmitBlockedReason } from "../src/features/drafts/components/generate-draft-blocked-reason";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
+});
+
+test("Write versions explains why it is blocked", () => {
+  expect(
+    getSubmitBlockedReason({
+      candidateId: null,
+      workflowRunId: "adhoc",
+      aiLoaded: true,
+    }),
+  ).toBe("Pick a post idea above first.");
+  expect(
+    getSubmitBlockedReason({
+      candidateId: 1,
+      workflowRunId: "",
+      aiLoaded: true,
+    }),
+  ).toBe("Choose an automation or a one-off draft above.");
+  expect(
+    getSubmitBlockedReason({
+      candidateId: 1,
+      workflowRunId: "adhoc",
+      aiLoaded: false,
+    }),
+  ).toBe("Loading AI settings…");
+  expect(
+    getSubmitBlockedReason({
+      candidateId: 1,
+      workflowRunId: "adhoc",
+      aiLoaded: true,
+    }),
+  ).toBeNull();
 });
 
 test("creates a draft with two variants and shows audit output", async ({
@@ -56,7 +88,11 @@ test("generates distinct dry-run provider variants and saves their exact text", 
 
   await generateDraftVariants(page);
 
-  await expect(page.getByText("AI draft #1")).toBeVisible();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeVisible();
   await expect(
     page.getByText("Accepted 3 provider-authored draft variants."),
   ).toBeVisible();
@@ -111,7 +147,11 @@ test("generates distinct dry-run provider variants and saves their exact text", 
   await expect(
     page.getByRole("heading", { name: "AI drafts to review" }),
   ).toBeHidden();
-  await expect(page.getByText("AI draft #1")).toBeHidden();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeHidden();
 
   const savedVariants = await getSavedDraftVariants(page);
   expect(
@@ -170,7 +210,11 @@ test("persists and saves distinct connected-provider authored variants", async (
 
   expect(await getGeneratedVariants(page, 1)).toEqual(authoredVariants);
   await page.getByRole("button", { name: "Save as draft" }).click();
-  await expect(page.getByText("AI draft #1")).toBeHidden();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeHidden();
   const savedVariants = await getSavedDraftVariants(page);
   expect(
     savedVariants.map(({ hook, body, cta, hashtags }) => ({
@@ -253,14 +297,22 @@ test("dismisses generated variants from the pending work area", async ({
   await openDrafts(page);
 
   await generateDraftVariants(page);
-  await expect(page.getByText("AI draft #1")).toBeVisible();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Dismiss" }).click();
 
   await expect(
     page.getByRole("heading", { name: "AI drafts to review" }),
   ).toBeHidden();
-  await expect(page.getByText("AI draft #1")).toBeHidden();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeHidden();
 });
 
 test("persists a failed generation request and dismisses it", async ({
@@ -287,7 +339,11 @@ test("persists a failed generation request and dismisses it", async ({
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("AI draft #1")).toBeVisible();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeVisible();
   await expect(getBadge(page, "Didn't finish")).toBeVisible();
   await expect(
     page.locator("p").filter({ hasText: "Your AI service isn't connected" }),
@@ -298,7 +354,11 @@ test("persists a failed generation request and dismisses it", async ({
   await expect(
     page.getByRole("heading", { name: "AI drafts to review" }),
   ).toBeHidden();
-  await expect(page.getByText("AI draft #1")).toBeHidden();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeHidden();
 });
 
 for (const { authMethod, expectedModel } of [
@@ -889,7 +949,11 @@ test("drops a remembered automation that is no longer eligible", async ({
     workflowRunId: null,
     angle: "Remembered operator angle",
   });
-  await expect(page.getByText("AI draft #1")).toBeVisible();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeVisible();
 });
 
 interface GeneratedVariantRecord {
@@ -1278,6 +1342,7 @@ async function createCampaign(
 
 async function archiveCampaign(page: Page, name: string): Promise<void> {
   await page.getByRole("button", { name: `Open ${name} actions` }).click();
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await expect(page.getByText("Archived", { exact: true })).toBeVisible();
 }

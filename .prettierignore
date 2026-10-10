@@ -5,9 +5,6 @@ playwright-report
 test-results
 bun.lock
 Cargo.lock
-# Raw Bright Data output for the market research; git-ignored via a nested
-# .gitignore that Prettier does not read.
-market-research/modding-and-ports/data/raw
-
-# Generated market-research reading site.
-market-research/modding-and-ports/site
+# Market research notes, scripts, raw Bright Data output and the generated
+# reading site are not app code; keep them out of the app's format gate.
+market-research

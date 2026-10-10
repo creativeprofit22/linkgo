@@ -10,24 +10,13 @@ Source import lets an operator paste approved post metadata into Linkgo without 
 
 Import is local only. It does not scrape LinkedIn, use browser automation, call a model provider, run discovery, draft content, create approvals, comment, schedule, or publish. A completed batch can later be consumed by the opt-in local planner, which creates only linked backlog/workflow records (shown as **Tasks** and **Automations**).
 
-## JSON format
+## Guided form
 
-Paste a JSON array with 1–50 objects:
+The Import posts dialog is a list of post rows, not a JSON box. Each row has **Link** and **Post text** (required) and **Post date**, plus **Author name** under a per-row "More details (optional)" disclosure. "Add another post" adds rows up to 50 (`MAX_SOURCE_IMPORT_ROWS`); "Remove" deletes a row and moves focus to a neighbour. Nothing is fetched or scraped: the operator types or pastes what they already have.
 
-```json
-[
-  {
-    "url": "https://www.linkedin.com/posts/example",
-    "content": "Post text or a useful excerpt",
-    "authorName": "Jane Doe",
-    "authorProfileUrl": "https://www.linkedin.com/in/jane-doe",
-    "postedAt": "2026-07-27T10:00:00Z",
-    "platformResourceUrn": "urn:li:activity:123",
-    "sourceKeyword": "founder content",
-    "notes": "Approved local source"
-  }
-]
-```
+The form rows go through `sourceImportFormRowsToRawRows` and `prepareSourceImportBatch(campaignId, rawRows)` in `schemas.ts`, which reuse the unchanged `createSourceImportBatchSchema`/`sourceImportRowSchema` validation and the `local_json` connector key, so the native contract below is the same as before. `CreateSourceImportBatchInput` is `{ campaignId, rows: SourceImportFormRow[] }`. The connector shows as **Added by you** on screen.
+
+Normalized row fields (the native contract):
 
 Required for enforced intake:
 
@@ -47,7 +36,7 @@ Unknown fields are rejected and not retained. Source text is capped at 400,000 c
 
 ## Lifecycle
 
-1. The source text must be valid JSON and a non-empty array with at most 50 rows.
+1. The form must hold 1–50 post rows.
 2. The campaign must exist and must not be archived. This check happens before a batch or candidate is written.
 3. Linkgo creates one `source_import_batches` row and one bounded `source_import_items` row for every supplied row.
 4. Rows are processed sequentially.
@@ -91,7 +80,7 @@ See `docs/DATA_MODEL.md` for column constraints and indexes.
 - `createSourceImportBatch(input)`
 - `listSourceImportBatches(campaignId)`
 
-`createSourceImportBatch` parses the bounded local text into the `local_json` connector contract, then invokes the native `linkgo_source_import_write_batch` command (`src-tauri/src/source_imports.rs`). Native re-validates the rows (connector, 1–50 rows numbered in order, bounded audit JSON and reasons, unknown fields rejected), enforces the candidate intake policy natively, and settles each row with its item outcome in one pinned `BEGIN IMMEDIATE` transaction. It checks campaign eligibility, persists batch/items, and returns accepted, duplicate, and rejected totals. Public behavior is unchanged and it makes no external request.
+`createSourceImportBatch` turns the form rows into the `local_json` connector contract, then invokes the native `linkgo_source_import_write_batch` command (`src-tauri/src/source_imports.rs`). Native re-validates the rows (connector, 1–50 rows numbered in order, bounded audit JSON and reasons, unknown fields rejected), enforces the candidate intake policy natively, and settles each row with its item outcome in one pinned `BEGIN IMMEDIATE` transaction. It checks campaign eligibility, persists batch/items, and returns accepted, duplicate, and rejected totals. Public behavior is unchanged and it makes no external request.
 
 `listSourceImportBatches` first calls `linkgo_source_import_recover_interrupted`, which terminalizes every interrupted `processing` batch for the campaign when no in-flight native import owns it (the check runs after the recovery transaction holds the write lock), then calls `linkgo_source_import_dashboard` (`src-tauri/src/source_import_reads.rs`), which returns up to ten recent batches with item outcomes ordered by row number (at most 50 items per batch), read in one transaction. Response shapes are checked by the strict schemas in `src/features/source-imports/record-schemas.ts`, which is kept out of the feature's UI/type import cycle. The renderer has no direct SQL access to source-import tables. Recovery is transactional and retryable: if recovery storage fails, the history request fails instead of presenting stale processing as live work.
 
@@ -100,7 +89,7 @@ See `docs/DATA_MODEL.md` for column constraints and indexes.
 The Ideas tab adds:
 
 - `Import posts` beside discovery, scoring, and manual add actions.
-- A labeled JSON textarea with format example and limits.
+- A guided row form (Link, Post text, Post date; Author name under "More details (optional)"), with "Add another post" up to 50 rows.
 - Local-only and no-scraping safety copy.
 - Preserved input after validation errors.
 - Pending protection against duplicate submission.

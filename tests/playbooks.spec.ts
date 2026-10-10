@@ -30,7 +30,7 @@ test("edits custom instructions and persists override row", async ({
   await writerCard
     .getByLabel("Your own instructions")
     .fill("Prefer punchy operator lessons with one concrete metric.");
-  await writerCard.getByRole("button", { name: "Save guide" }).click();
+  await writerCard.getByRole("button", { name: "Save brand voice" }).click();
   await expect(writerCard.getByLabel("Your own instructions")).toHaveValue(
     "Prefer punchy operator lessons with one concrete metric.",
   );
@@ -54,7 +54,7 @@ test("disables a runtime playbook and marks it disabled", async ({ page }) => {
   await writerCard
     .getByRole("switch", { name: "Use with the AI assistant" })
     .click();
-  await writerCard.getByRole("button", { name: "Save guide" }).click();
+  await writerCard.getByRole("button", { name: "Save brand voice" }).click();
 
   await expect(writerCard.getByText("Off", { exact: true })).toBeVisible();
   const overrides = await getPlaybookOverrides(page);

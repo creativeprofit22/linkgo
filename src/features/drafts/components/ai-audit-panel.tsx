@@ -12,6 +12,8 @@ import {
   PROVIDER_LABELS,
 } from "@/agent/provider-catalog";
 import type { AgentProviderKey } from "@/agent/types";
+import { AiSettingsDisclosure } from "@/components/ai-settings-disclosure";
+import { SupportDetails } from "@/components/support-details";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -183,7 +185,7 @@ export function AiAuditPanel({
         </Badge>
       </div>
 
-      <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+      <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <div className="space-y-2">
           <Label htmlFor={providerId}>AI service</Label>
           <select
@@ -204,16 +206,6 @@ export function AiAuditPanel({
             ))}
           </select>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor={modelId}>AI model</Label>
-          <Input
-            id={modelId}
-            value={modelName}
-            disabled={runActive}
-            maxLength={120}
-            onChange={(event) => setModelName(event.target.value)}
-          />
-        </div>
         <Button
           type="button"
           size="sm"
@@ -229,6 +221,18 @@ export function AiAuditPanel({
             "Review with AI"
           )}
         </Button>
+        <div className="sm:col-span-2">
+          <AiSettingsDisclosure>
+            <Label htmlFor={modelId}>AI model</Label>
+            <Input
+              id={modelId}
+              value={modelName}
+              disabled={runActive}
+              maxLength={120}
+              onChange={(event) => setModelName(event.target.value)}
+            />
+          </AiSettingsDisclosure>
+        </div>
       </div>
 
       {attemptError !== null && (
@@ -242,20 +246,21 @@ export function AiAuditPanel({
 
       {audit.run !== null && (
         <div className="mt-4 space-y-4 border-t pt-4">
-          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <AuditMetadata
               label="AI service"
               value={PROVIDER_LABELS[audit.run.provider_key]}
-            />
-            <AuditMetadata
-              label="AI model"
-              value={audit.run.model_name || "Not saved"}
             />
             <AuditMetadata
               label="Edit number"
               value={String(audit.run.content_revision)}
             />
           </dl>
+          <SupportDetails
+            items={[
+              { label: "AI model", value: audit.run.model_name || "Not saved" },
+            ]}
+          />
 
           {audit.status === "completed" && (
             <>

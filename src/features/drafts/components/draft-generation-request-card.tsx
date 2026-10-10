@@ -1,4 +1,5 @@
 import { CheckCircle2, Sparkles, XCircle } from "lucide-react";
+import { SupportDetails } from "@/components/support-details";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PROVIDER_LABELS } from "@/agent/provider-catalog";
@@ -24,17 +25,18 @@ export function DraftGenerationRequestCard({
     .slice(0, 140);
 
   return (
-    <Card className="bg-card/70">
+    <Card
+      className="bg-card/70"
+      data-testid="draft-generation-request"
+      data-request-id={request.id}
+    >
       <CardHeader className="space-y-2">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="text-linkgo-blue size-4" /> AI draft #
-              {request.id}
+              <Sparkles className="text-linkgo-blue size-4" /> AI draft
             </CardTitle>
             <p className="text-muted-foreground mt-1 text-xs">
-              {PROVIDER_LABELS[request.provider_key]} ·{" "}
-              {request.model_name || "default model"} ·{" "}
               {request.playbook_key ? "Brand voice on" : "No brand voice"} ·{" "}
               {DRAFT_PROMPT_ROUTES[request.content_intent].label} post
             </p>
@@ -56,7 +58,7 @@ export function DraftGenerationRequestCard({
           <p className="font-medium">
             {request.workflow_run_id === null
               ? "One-off draft"
-              : `From automation #${request.workflow_run_id}`}
+              : "From an automation"}
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
             {request.workflow_run_id === null
@@ -64,6 +66,20 @@ export function DraftGenerationRequestCard({
               : "The automation waits at the Draft step until you save these versions."}
           </p>
         </div>
+
+        <SupportDetails
+          items={[
+            { label: "AI draft id", value: request.id },
+            {
+              label: "AI service",
+              value: PROVIDER_LABELS[request.provider_key],
+            },
+            { label: "AI model", value: request.model_name || "Default" },
+            ...(request.workflow_run_id === null
+              ? []
+              : [{ label: "Automation id", value: request.workflow_run_id }]),
+          ]}
+        />
 
         {request.summary && (
           <p className="text-muted-foreground text-sm">{request.summary}</p>

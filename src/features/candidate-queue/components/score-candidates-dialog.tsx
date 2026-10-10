@@ -1,5 +1,6 @@
 import { Gauge } from "lucide-react";
 import { useState, type SyntheticEvent } from "react";
+import { AiSettingsDisclosure } from "@/components/ai-settings-disclosure";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -150,19 +151,21 @@ export function ScoreCandidatesDialog({
             </Field>
           </div>
 
-          <Field label="AI model" htmlFor="score-model">
-            <Input
-              id="score-model"
-              value={form.modelName}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  modelName: event.target.value,
-                }))
-              }
-              maxLength={120}
-            />
-          </Field>
+          <AiSettingsDisclosure>
+            <Field label="AI model" htmlFor="score-model">
+              <Input
+                id="score-model"
+                value={form.modelName}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    modelName: event.target.value,
+                  }))
+                }
+                maxLength={120}
+              />
+            </Field>
+          </AiSettingsDisclosure>
 
           <label className="flex items-center gap-2 text-sm">
             <input

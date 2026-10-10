@@ -26,6 +26,10 @@ interface ReconcileExecutionDialogProps {
   /** Controlled open state, e.g. when a link opens this dialog. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Pre-selects an answer; the person still confirms every field. */
+  initialResolution?: ReconcileResolution;
+  /** Replaces the default "Check what happened" trigger button. */
+  trigger?: React.ReactElement;
 }
 
 const RESOLUTION_OPTIONS: {
@@ -40,7 +44,7 @@ const RESOLUTION_OPTIONS: {
   },
   {
     value: "not_posted",
-    label: "Not posted",
+    label: "Didn't post",
     help: "I checked LinkedIn and it isn't there. Let me post it again.",
   },
 ];
@@ -51,11 +55,13 @@ export function ReconcileExecutionDialog({
   onReconcile,
   open: controlledOpen,
   onOpenChange,
+  initialResolution,
+  trigger,
 }: ReconcileExecutionDialogProps): React.ReactNode {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const [resolution, setResolution] = useState<ReconcileResolution | null>(
-    null,
+    initialResolution ?? null,
   );
   const [externalUrl, setExternalUrl] = useState("");
   const [note, setNote] = useState("");
@@ -69,7 +75,7 @@ export function ReconcileExecutionDialog({
     resolution !== null && !urlMissing && confirmationMatches && !submitting;
 
   const reset = (): void => {
-    setResolution(null);
+    setResolution(initialResolution ?? null);
     setExternalUrl("");
     setNote("");
     setConfirmation("");
@@ -108,10 +114,12 @@ export function ReconcileExecutionDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline" disabled={disabled}>
-          Check what happened
-        </Button>
+      <DialogTrigger asChild disabled={disabled}>
+        {trigger ?? (
+          <Button type="button" size="sm" variant="outline" disabled={disabled}>
+            Check what happened
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -152,7 +160,7 @@ export function ReconcileExecutionDialog({
           </fieldset>
 
           <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-3 text-sm">
-            If you choose “Not posted” but the {itemLabel} is really on
+            If you choose “Didn't post” but the {itemLabel} is really on
             LinkedIn, it could be posted twice. Only choose it after you check
             LinkedIn.
           </div>

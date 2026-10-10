@@ -1,4 +1,5 @@
 import { Bot, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
+import { SupportDetails } from "@/components/support-details";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -146,11 +147,20 @@ export function AgentRunCard({
             <p className="text-muted-foreground text-sm">
               {run.campaign.name} ·{" "}
               {campaignStatusLabels[run.campaign.status] ?? run.campaign.status}{" "}
-              campaign · {run.model_name}
+              campaign
             </p>
             <p className="text-muted-foreground text-sm">
               Rounds: {run.iteration_count} · Created {run.created_at}
             </p>
+            <SupportDetails
+              items={[
+                { label: "AI task id", value: run.id },
+                { label: "AI model", value: run.model_name },
+                ...(checkpoint === null
+                  ? []
+                  : [{ label: "Approval id", value: checkpoint.approval_id }]),
+              ]}
+            />
             {run.input_summary && (
               <p className="max-w-3xl text-sm whitespace-pre-wrap">
                 {run.input_summary}
@@ -174,9 +184,7 @@ export function AgentRunCard({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <ShieldCheck className="text-linkgo-blue size-4" />
-                  <span className="font-medium">
-                    Approval needed · reference {checkpoint.approval_id}
-                  </span>
+                  <span className="font-medium">Approval needed</span>
                   <Badge variant="outline">
                     {approvalStatusLabels[checkpoint.approval_status]}
                   </Badge>
@@ -255,7 +263,15 @@ export function AgentRunCard({
                   size="sm"
                   variant="outline"
                   disabled={resuming}
-                  onClick={() => void onCancelRun({ id: run.id })}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Cancel this AI task? It stops now and can't be continued.",
+                      )
+                    ) {
+                      void onCancelRun({ id: run.id });
+                    }
+                  }}
                 >
                   Cancel task
                 </Button>
@@ -287,11 +303,6 @@ export function AgentRunCard({
                       <span className="font-medium">
                         {getAssistantActionLabel(toolCall.tool_name)}
                       </span>
-                      {toolCall.provider_tool_call_id && (
-                        <Badge variant="outline">
-                          {toolCall.provider_tool_call_id}
-                        </Badge>
-                      )}
                       <AgentToolCallStatusBadge status={toolCall.status} />
                       {toolCall.requires_approval === 1 && (
                         <Badge variant="secondary" className="gap-1">
@@ -308,6 +319,11 @@ export function AgentRunCard({
                       <summary className="text-muted-foreground cursor-pointer text-xs font-medium uppercase">
                         Technical details
                       </summary>
+                      {toolCall.provider_tool_call_id && (
+                        <p className="text-muted-foreground text-xs break-all">
+                          AI service reference: {toolCall.provider_tool_call_id}
+                        </p>
+                      )}
                       <pre className="bg-background/80 mt-2 overflow-auto rounded-lg border p-3 text-xs">
                         {formatJson({
                           input: toolCall.input,

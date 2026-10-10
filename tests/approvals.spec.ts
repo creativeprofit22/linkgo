@@ -280,6 +280,10 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   await page.getByRole("button", { name: "Schedule post" }).click();
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
   await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
+  const scheduleReference = page.getByText("Schedule reference");
+  await expect(scheduleReference).toBeHidden();
+  await page.getByText("Details for support", { exact: true }).first().click();
+  await expect(scheduleReference).toBeVisible();
   expect(await getSchedulingInvokeCount(page)).toBe(1);
   expect(await getLinkedInPublishInvokeCount(page)).toBe(0);
 
@@ -409,12 +413,17 @@ test("unreadable LinkedIn publish result shows outcome unknown and needs reconci
     page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeDisabled();
   await expect(
-    page.getByText("We couldn't confirm it posted. Check it in Safety."),
+    page.getByText(
+      "We couldn't confirm it posted. Check LinkedIn, then tell us below.",
+    ),
   ).toBeVisible();
 });
 
 for (const [status, label] of [
-  ["outcome_unknown", "We couldn't confirm it posted. Check it in Safety."],
+  [
+    "outcome_unknown",
+    "We couldn't confirm it posted. Check LinkedIn, then tell us below.",
+  ],
   ["in_flight", "Posting…"],
 ] as const) {
   test(`open ${status} publish execution locks the approval publish action`, async ({
@@ -458,6 +467,97 @@ for (const [status, label] of [
   });
 }
 
+for (const resolution of ["posted", "not_posted"] as const) {
+  test(`inline resolver settles an unclear post as ${resolution} with typed confirmation`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const now = new Date().toISOString();
+      (
+        window as unknown as Record<string, unknown>
+      ).__LINKGO_PUBLISH_EXECUTIONS__ = [
+        {
+          id: 41,
+          kind: "post",
+          subjectId: 1,
+          campaignId: 1,
+          campaignName: "Launch",
+          scheduleJobId: null,
+          caller: "manual",
+          status: "outcome_unknown",
+          fence: 3,
+          remoteOutcome: "ambiguous",
+          remoteStatusCode: 503,
+          errorMessage: "LinkedIn API request failed with HTTP 503",
+          reservedAt: now,
+          sentAt: now,
+          updatedAt: now,
+        },
+      ];
+    });
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+    await createReadyDraft(page, cleanVariant());
+    await makeDraftApprovalEligible(page);
+    await openApprovals(page);
+    await createReview(page);
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+
+    const resolver = page.getByRole("region", {
+      name: "We couldn't confirm it posted. Check LinkedIn, then tell us below.",
+    });
+    await expect(resolver).toBeVisible();
+    await expect(resolver.getByText(/Safety/)).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Post to LinkedIn" }),
+    ).toBeDisabled();
+
+    await resolver
+      .getByRole("button", {
+        name:
+          resolution === "posted"
+            ? "I checked LinkedIn: it posted"
+            : "I checked LinkedIn: it didn't post",
+      })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Confirm what happened to this post",
+    });
+    await expect(
+      dialog.getByRole("radio", {
+        name: resolution === "posted" ? /^Posted on LinkedIn/ : /^Didn't post/,
+      }),
+    ).toBeChecked();
+    const submit = dialog.getByRole("button", { name: "Confirm result" });
+    if (resolution === "posted") {
+      await dialog.getByLabel("Type “RECONCILE” to confirm").fill("RECONCILE");
+      await expect(submit).toBeDisabled();
+      await dialog
+        .getByLabel("LinkedIn link")
+        .fill("https://www.linkedin.com/feed/update/urn:li:share:41/");
+    }
+    await dialog.getByLabel("Type “RECONCILE” to confirm").fill("reconcile");
+    await expect(submit).toBeDisabled();
+    await dialog.getByLabel("Type “RECONCILE” to confirm").fill("RECONCILE");
+    await submit.click();
+
+    await expect(dialog).toBeHidden();
+    await expect(resolver).toHaveCount(0);
+    const inputs = await page.evaluate(
+      () =>
+        (window as unknown as Record<string, unknown>)
+          .__LINKGO_PUBLISH_EXECUTION_RECONCILE_INPUTS__,
+    );
+    expect(inputs).toEqual([
+      expect.objectContaining({
+        executionId: 41,
+        fence: 3,
+        resolution,
+        confirmation: "RECONCILE",
+      }),
+    ]);
+  });
+}
+
 test("global kill switch hides LinkedIn OAuth publish action", async ({
   page,
 }) => {
@@ -476,7 +576,7 @@ test("global kill switch hides LinkedIn OAuth publish action", async ({
   await page
     .getByLabel("Reason for pausing")
     .fill("Pause LinkedIn publishing during review.");
-  await page.getByRole("button", { name: "Pause everything" }).click();
+  await page.getByRole("button", { name: "Turn on emergency pause" }).click();
   await expect(
     page.getByText("On — everything is paused", { exact: true }),
   ).toBeVisible();
@@ -559,6 +659,23 @@ test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness"
   await expect(
     page.getByText("This version isn't ready for approval yet."),
   ).toBeVisible();
+  // The blocked Approve button says why and links to the fix.
+  const blockedApprove = page.getByRole("button", {
+    name: "Approve",
+    exact: true,
+  });
+  await expect(blockedApprove).toBeDisabled();
+  await expect(blockedApprove).toHaveAccessibleDescription(
+    /isn't ready for approval yet/,
+  );
+  // Each blocked control (Approve and the review trigger) links to Drafts.
+  const draftsLinks = page.getByRole("link", { name: "Go to Drafts" });
+  await expect(draftsLinks.first()).toBeVisible();
+  for (const href of await draftsLinks.evaluateAll((links) =>
+    links.map((link) => link.getAttribute("href")),
+  )) {
+    expect(href).toMatch(/^#\/drafts\?campaignId=\d+$/u);
+  }
 
   // A real failed outcome is still recordable and revokes the approval.
   await page.getByRole("button", { name: "Mark as not posted" }).click();
@@ -1014,10 +1131,15 @@ test("failed scheduled publish attempts can be rescheduled with new details", as
     getBadge(page, "Didn't post").filter({ visible: true }).first(),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Pick a time", exact: true }),
+    page.getByRole("button", { name: "Schedule again", exact: true }),
   ).toBeVisible();
 
-  await scheduleApproval(page, "2026-06-27T10:45", "Europe/London");
+  await scheduleApproval(
+    page,
+    "2026-06-27T10:45",
+    "Europe/London",
+    "Schedule again",
+  );
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
   await expect(
     page.getByText("2026-06-27T10:45 · Europe/London"),
@@ -1142,9 +1264,12 @@ test("archived campaign approvals hide mutation controls with restore guidance",
 
   await expect(
     page.getByText(
-      "This campaign is archived, so its approvals can't change. Restore the campaign first.",
+      "This campaign is archived, so its approvals can't change. Restore it in Campaigns",
     ),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Restore it in Campaigns" }),
+  ).toHaveAttribute("href", "#/campaigns");
   await expect(
     page.getByRole("button", { name: "Approve", exact: true }),
   ).toBeHidden();
@@ -1808,6 +1933,7 @@ async function openCampaigns(page: Page): Promise<void> {
 
 async function archiveSelectedCampaign(page: Page): Promise<void> {
   await openCampaigns(page);
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Archive" }).first().click();
   await expect(getBadge(page, "Archived")).toBeVisible();
 }
@@ -1898,8 +2024,9 @@ async function scheduleApproval(
   page: Page,
   scheduledFor: string,
   timezone: string,
+  triggerLabel = "Pick a time",
 ): Promise<void> {
-  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
+  await page.getByRole("button", { name: triggerLabel, exact: true }).click();
   await page.getByLabel("Date and time").fill(scheduledFor);
   await page.getByLabel("Time zone").fill(timezone);
   const dialog = page.getByRole("dialog", { name: "Schedule post" });

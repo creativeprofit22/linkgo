@@ -28,8 +28,28 @@ export function findPublishLock(
   return lock;
 }
 
+/**
+ * Returns the open execution for one subject whose LinkedIn outcome is
+ * unknown, so the post/comment card can offer an inline resolver. Native
+ * reconciliation still validates the fence and resolution.
+ */
+export function findOutcomeUnknownExecution(
+  executions: readonly OpenPublishExecution[],
+  kind: PublishExecutionKind,
+  subjectId: number,
+): OpenPublishExecution | null {
+  return (
+    executions.find(
+      (execution) =>
+        execution.kind === kind &&
+        execution.subjectId === subjectId &&
+        execution.status === "outcome_unknown",
+    ) ?? null
+  );
+}
+
 export function getPublishLockLabel(lock: PublishLock): string {
   return lock === "awaiting_reconciliation"
-    ? "We couldn't confirm it posted. Check it in Safety."
+    ? "We couldn't confirm it posted. Check LinkedIn, then tell us below."
     : "Posting…";
 }

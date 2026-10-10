@@ -51,7 +51,7 @@ test("Global kill switch hides approval scheduling and agent dry-run start actio
   await page
     .getByLabel("Reason for pausing")
     .fill("Pause local automation during review.");
-  await page.getByRole("button", { name: "Pause everything" }).click();
+  await page.getByRole("button", { name: "Turn on emergency pause" }).click();
   await expect(
     page.getByText("On — everything is paused", { exact: true }),
   ).toBeVisible();
@@ -61,7 +61,7 @@ test("Global kill switch hides approval scheduling and agent dry-run start actio
     page.getByRole("button", { name: "Pick a time", exact: true }),
   ).toBeHidden();
   await expect(
-    page.getByText("Pause everything is on, so posts can't be scheduled."),
+    page.getByText("Emergency pause is on, so posts can't be scheduled."),
   ).toBeVisible();
   await expect(
     page.getByText("Pause local automation during review."),
@@ -376,13 +376,13 @@ test("Safety reconciles an outcome-unknown publish only after typed confirmation
   await expect(
     page.getByText("Check what happened to these posts"),
   ).toBeVisible();
-  const inFlight = page.getByLabel("Comment attempt 8");
+  const inFlight = page.getByRole("listitem", { name: "Comment in Launch" });
   await expect(inFlight.getByText("In progress")).toBeVisible();
   await expect(
     inFlight.getByRole("button", { name: "Check what happened" }),
   ).toHaveCount(0);
 
-  const unknown = page.getByLabel("Post attempt 7");
+  const unknown = page.getByRole("listitem", { name: "Post in Launch" });
   await unknown.getByRole("button", { name: "Check what happened" }).click();
   const dialog = page.getByRole("dialog", {
     name: "Confirm what happened to this post",
@@ -398,7 +398,9 @@ test("Safety reconciles an outcome-unknown publish only after typed confirmation
   await dialog.getByLabel("Type “RECONCILE” to confirm").fill("RECONCILE");
   await submit.click();
 
-  await expect(page.getByLabel("Post attempt 7")).toHaveCount(0);
+  await expect(
+    page.getByRole("listitem", { name: "Post in Launch" }),
+  ).toHaveCount(0);
   const inputs = await page.evaluate(
     () =>
       (window as unknown as Record<string, unknown>)

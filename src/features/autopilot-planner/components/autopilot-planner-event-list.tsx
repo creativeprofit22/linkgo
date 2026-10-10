@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SupportDetails } from "@/components/support-details";
 import type {
   AutopilotPlannerEvent,
   AutopilotPlannerEventType,
@@ -75,13 +76,23 @@ export function AutopilotPlannerEventList({
                 </div>
                 <p className="text-muted-foreground mt-2 text-xs capitalize">
                   {formatEventType(event.event_type)}
-                  {event.source_import_batch_id === null
-                    ? ""
-                    : ` · import #${event.source_import_batch_id}`}
-                  {event.autopilot_plan_id === null
-                    ? ""
-                    : ` · plan #${event.autopilot_plan_id}`}
                 </p>
+                <SupportDetails
+                  className="mt-1"
+                  items={[
+                    ...(event.source_import_batch_id === null
+                      ? []
+                      : [
+                          {
+                            label: "Import id",
+                            value: event.source_import_batch_id,
+                          },
+                        ]),
+                    ...(event.autopilot_plan_id === null
+                      ? []
+                      : [{ label: "Plan id", value: event.autopilot_plan_id }]),
+                  ]}
+                />
               </li>
             ))}
           </ol>

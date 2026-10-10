@@ -20,6 +20,9 @@ exports when moving responsibilities; keep behavioral fixes separate.
   the capability changes those behaviors.
 - Preserve human approval for LinkedIn publishing/commenting, conservative safety
   defaults and the existing renderer transaction check.
+- Write visible text with the words in the [glossary](glossary.md); keep ids,
+  provider and model names inside the "Details for support" disclosure.
+  `bun run check:glossary` enforces it.
 
 ## Check before handing off
 

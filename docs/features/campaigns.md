@@ -63,7 +63,7 @@ The unreachable `getCampaign`, `addCampaignKeyword` and `deleteCampaign` functio
 - `CreateFirstCampaignButton` (public, from `@/features/campaigns`) — the fix
   button on every screen that needs a campaign; links to `#/campaigns?new=1`.
 - Campaign cards with status, explicit local-planner eligibility, product, audience, keywords, and limits.
-- Status actions for active, paused, draft restore, and archive.
+- Status actions for active, paused, draft restore, and archive. Archive (menu and button) asks first: "Archive this campaign? Its posts, drafts and schedules freeze until you restore it." Cancelling keeps the status.
 
 ## Verification
 

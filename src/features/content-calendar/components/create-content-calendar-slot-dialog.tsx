@@ -330,9 +330,14 @@ export function CreateContentCalendarSlotDialog({
                 }
               />
             </Field>
-            <Field label="Goal" htmlFor="calendar-purpose">
+            <Field
+              label="Goal"
+              htmlFor="calendar-purpose"
+              hint="What this post should do for you, like build trust or get replies."
+            >
               <OptionSelect
                 id="calendar-purpose"
+                describedBy="calendar-purpose-hint"
                 value={form.purpose}
                 options={purposeOptions}
                 labels={purposeLabels}
@@ -341,9 +346,14 @@ export function CreateContentCalendarSlotDialog({
                 }
               />
             </Field>
-            <Field label="Format" htmlFor="calendar-format">
+            <Field
+              label="Format"
+              htmlFor="calendar-format"
+              hint="The shape of the post, like a story, a list or a single tip."
+            >
               <OptionSelect
                 id="calendar-format"
+                describedBy="calendar-format-hint"
                 value={form.format}
                 options={formatOptions}
                 labels={formatLabels}
@@ -380,17 +390,20 @@ function OptionSelect<T extends string>({
   options,
   labels,
   onChange,
+  describedBy,
 }: {
   id: string;
   value: T;
   options: T[];
   labels: Record<T, string>;
   onChange: (value: T) => void;
+  describedBy?: string;
 }): React.ReactNode {
   return (
     <select
       id={id}
       value={value}
+      aria-describedby={describedBy}
       onChange={(event) => onChange(event.target.value as T)}
       className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
     >
@@ -465,16 +478,23 @@ function PlanningFields({
 function Field({
   label,
   htmlFor,
+  hint,
   children,
 }: {
   label: string;
   htmlFor: string;
+  hint?: string;
   children: React.ReactNode;
 }): React.ReactNode {
   return (
     <div className="space-y-2">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
+      {hint !== undefined && (
+        <p id={`${htmlFor}-hint`} className="text-muted-foreground text-xs">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { expectSupportDetail } from "./helpers/support-details";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -46,8 +47,9 @@ test("shows executor-created agent run artifact chips", async ({ page }) => {
   await page.getByRole("button", { name: "Do next step" }).click();
 
   await expect(page.getByLabel("Linked items")).toContainText(
-    /AI assistant task #\d+ · Finding ideas · Done/u,
+    "AI task · Finding ideas · Done",
   );
+  await expectSupportDetail(page, "AI task id", 1);
   await expect(page.getByText("Research completed")).toBeVisible();
   await expect(page.getByText("Ideas scored")).toHaveCount(0);
 });
@@ -65,7 +67,7 @@ test("updates duplicate executor-created agent run artifacts in place", async ({
   const artifactChip = page
     .getByLabel("Linked items")
     .locator("span")
-    .filter({ hasText: /AI assistant task #\d+/u });
+    .filter({ hasText: /^AI task/u });
   await expect(artifactChip).toHaveCount(1);
   await page.waitForFunction(
     () =>
@@ -154,9 +156,7 @@ test("updates duplicate executor-created agent run artifacts in place", async ({
   await openWorkflows(page);
 
   await expect(artifactChip).toHaveCount(1);
-  await expect(artifactChip).toContainText(
-    /AI assistant task #\d+ · Finding ideas · Done/u,
-  );
+  await expect(artifactChip).toContainText("AI task · Finding ideas · Done");
 });
 
 test("scores an exact planner scope through a connected provider and reconciles linked work", async ({
@@ -192,7 +192,7 @@ test("scores an exact planner scope through a connected provider and reconciles 
 
   await expect(page.getByText("Current step: Draft variants")).toBeVisible();
   await expect(page.getByLabel("Linked items")).toContainText(
-    /AI assistant task #\d+ · Scoring ideas · Done/u,
+    "AI task · Scoring ideas · Done",
   );
 
   const result = await page.evaluate(() => {
@@ -232,7 +232,7 @@ test("scores an exact planner scope through a connected provider and reconciles 
   );
   await page.getByRole("button", { name: /Autopilot/u }).click();
   await expect(page.getByText("Scoring in Automations: Done")).toBeVisible();
-  await expect(page.getByText("OpenAI · Done")).toBeVisible();
+  await expectSupportDetail(page, "AI service", "OpenAI");
 });
 
 test("linked draft advances to audit only after operator save", async ({
@@ -377,7 +377,7 @@ test("linked draft advances to audit only after operator save", async ({
     .getByRole("button", { name: "Write versions" })
     .click();
   await expect(generationDialog).toBeHidden();
-  await expect(page.getByText("From automation #1")).toBeVisible();
+  await expectSupportDetail(page, "Automation id", 1);
 
   const beforeSave = await page.evaluate(() => {
     const testWindow = window as unknown as {
@@ -428,7 +428,11 @@ test("linked draft advances to audit only after operator save", async ({
   expect(rolledBack.request?.status).toBe("generated");
 
   await page.getByRole("button", { name: "Save as draft" }).click();
-  await expect(page.getByText("AI draft #1")).toBeHidden();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeHidden();
   const afterSave = await page.evaluate(() => {
     const testWindow = window as unknown as {
       __LINKGO_SQL_WORKFLOW_RUNS__: () => Array<{ current_step_key: string }>;
@@ -914,7 +918,7 @@ test("blocks archived generated draft saves without mutating linked work", async
     .getByRole("button", { name: "Write versions" })
     .click();
   await expect(generationDialog).toBeHidden();
-  await expect(page.getByText("From automation #1")).toBeVisible();
+  await expectSupportDetail(page, "Automation id", 1);
 
   await archiveSelectedCampaign(page);
   await page.getByRole("button", { name: /^Drafts Write/u }).click();
@@ -991,7 +995,11 @@ test("blocks archived generated draft saves without mutating linked work", async
   );
 
   await dismissButton.click();
-  await expect(page.getByText("AI draft #1")).toBeHidden();
+  await expect(
+    page.locator(
+      `[data-testid="draft-generation-request"][data-request-id="1"]`,
+    ),
+  ).toBeHidden();
 });
 
 for (const withAgentRun of [false, true]) {
@@ -1023,13 +1031,19 @@ for (const withAgentRun of [false, true]) {
       page.getByRole("heading", { name: "Drafts", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(`AI draft #${fixture.requestId}`),
+      page.locator(
+        `[data-testid="draft-generation-request"][data-request-id="${fixture.requestId}"]`,
+      ),
     ).toBeVisible();
 
     await page
       .getByRole("button", { name: "Dismiss unfinished draft" })
       .click();
-    await expect(page.getByText(`AI draft #${fixture.requestId}`)).toBeHidden();
+    await expect(
+      page.locator(
+        `[data-testid="draft-generation-request"][data-request-id="${fixture.requestId}"]`,
+      ),
+    ).toBeHidden();
 
     const recovered = await page.evaluate((seeded) => {
       const testWindow = window as unknown as {
@@ -1476,6 +1490,7 @@ test("score dialog returns focus and reflows at 320 pixels with accessibility me
       fullPage: true,
     });
   }
+  await dialog.getByText("AI settings (optional)", { exact: true }).click();
   await dialog
     .getByLabel("AI model", { exact: true })
     .fill("model-".repeat(20));
@@ -1925,6 +1940,7 @@ test("hides step mutations after cancelling a workflow run", async ({
     researchCard.getByRole("button", { name: "Mark done" }),
   ).toBeVisible();
 
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Stop automation" }).click();
 
   await expect(getBadge(page, "Cancelled").first()).toBeVisible();
@@ -2373,7 +2389,7 @@ async function preparePlannerScoringWorkflow(
   }
   await page.getByRole("button", { name: /Autopilot/u }).click();
   await page.getByRole("button", { name: "Check now" }).click();
-  await expect(page.getByText("Plan #1 · Founder-led growth")).toBeVisible();
+  await expect(page.getByText("Plan for Founder-led growth")).toBeVisible();
   await openWorkflows(page);
 }
 
@@ -2716,6 +2732,7 @@ async function createWorkflowRun(page: Page): Promise<void> {
 
 async function archiveSelectedCampaign(page: Page): Promise<void> {
   await openCampaigns(page);
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Archive" }).first().click();
   await expect(getBadge(page, "Archived")).toBeVisible();
 }

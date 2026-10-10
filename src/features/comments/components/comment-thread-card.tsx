@@ -20,7 +20,9 @@ import { PublishLinkedInCommentDialog } from "@/features/comments/components/pub
 import { RecordCommentAttemptDialog } from "@/features/comments/components/record-comment-attempt-dialog";
 import { resolveLinkedInTargetUrn } from "@/features/linkedin-actions/urn";
 import {
+  OutcomeUnknownResolver,
   PublishLockNotice,
+  type OpenPublishExecution,
   type PublishLock,
 } from "@/features/publish-reconciliation";
 import type {
@@ -38,6 +40,8 @@ interface CommentThreadCardProps {
   killSwitchReason: string;
   /** Open native publish execution for this thread; the native gate decides. */
   publishLock: PublishLock | null;
+  /** Open execution whose LinkedIn outcome is unknown; shows the resolver. */
+  outcomeUnknownExecution?: OpenPublishExecution | null;
   onUpdateThread: (input: UpdateCommentThreadInput) => Promise<void>;
   onUpdateVariant: (input: UpdateCommentVariantInput) => Promise<void>;
   onSetVariantStatus: (input: SetCommentVariantStatusInput) => Promise<void>;
@@ -60,6 +64,7 @@ export function CommentThreadCard({
   killSwitchEnabled,
   killSwitchReason,
   publishLock,
+  outcomeUnknownExecution = null,
   onUpdateThread,
   onUpdateVariant,
   onSetVariantStatus,
@@ -158,6 +163,12 @@ export function CommentThreadCard({
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {outcomeUnknownExecution !== null && (
+          <OutcomeUnknownResolver
+            execution={outcomeUnknownExecution}
+            onSettled={onPublished}
+          />
+        )}
         <div className="bg-background/70 rounded-lg border p-4">
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             Post you're replying to
@@ -325,7 +336,7 @@ export function CommentThreadCard({
                   onPublished={onPublished}
                   disabled={!canPostViaLinkedIn}
                 />
-                {publishLock !== null && (
+                {publishLock !== null && outcomeUnknownExecution === null && (
                   <PublishLockNotice lock={publishLock} />
                 )}
               </>

@@ -2,10 +2,12 @@ import { z } from "zod";
 
 import { normalizedSourceConnectorBatchInputSchema } from "@/features/source-imports/connectors";
 import { sourceImportBatchStatusSchema } from "@/features/source-imports/record-schemas";
-import type { PreparedSourceImportBatchInput } from "@/features/source-imports/types";
+import type {
+  PreparedSourceImportBatchInput,
+  SourceImportFormRow,
+} from "@/features/source-imports/types";
 
 export const MAX_SOURCE_IMPORT_ROWS = 50;
-export const MAX_SOURCE_IMPORT_TEXT_LENGTH = 400_000;
 export const MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH = 20_000;
 export const MAX_SOURCE_IMPORT_REASON_LENGTH = 2_000;
 
@@ -160,29 +162,52 @@ function createBoundedInputJson(rawRow: unknown): string {
     : createTruncatedAuditJson(serializedJson, rawRow);
 }
 
-export function parseSourceImportText(
+/**
+ * Turns the guided form rows into contract rows. Empty optional fields are
+ * left out; the post date (a local `datetime-local` value) becomes an absolute
+ * ISO timestamp so the native age filter can read it. Unparseable dates pass
+ * through unchanged and the native filter rejects that row with a reason.
+ */
+export function sourceImportFormRowsToRawRows(
+  rows: readonly SourceImportFormRow[],
+): Record<string, string | null>[] {
+  return rows.map((row) => {
+    const rawRow: Record<string, string | null> = {
+      url: row.url,
+      content: row.content,
+      postedAt: toAbsoluteTimestamp(row.postedAt),
+    };
+    for (const field of [
+      "authorName",
+      "authorProfileUrl",
+      "sourceKeyword",
+    ] as const) {
+      if (row[field].trim().length > 0) rawRow[field] = row[field];
+    }
+    return rawRow;
+  });
+}
+
+function toAbsoluteTimestamp(localValue: string): string | null {
+  const trimmed = localValue.trim();
+  if (trimmed.length === 0) return null;
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toISOString();
+}
+
+/**
+ * Validates a batch against the normalized import contract. Batch-level
+ * problems (no rows, too many rows) throw; each row is validated on its own so
+ * one bad row is recorded with a reason instead of blocking its neighbours.
+ */
+export function prepareSourceImportBatch(
   campaignId: number,
-  sourceText: string,
+  rawRows: unknown,
 ): PreparedSourceImportBatchInput {
-  if (sourceText.length > MAX_SOURCE_IMPORT_TEXT_LENGTH) {
-    throw new Error(
-      `Paste up to ${MAX_SOURCE_IMPORT_TEXT_LENGTH.toLocaleString("en-US")} characters`,
-    );
-  }
-
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(sourceText);
-  } catch {
-    throw new Error(
-      "This doesn't look like a valid JSON list. Check it matches the example.",
-    );
-  }
-
   const batchResult = createSourceImportBatchSchema.safeParse({
     campaignId,
     connectorKey: "local_json",
-    rows: parsedJson,
+    rows: rawRows,
   });
   if (!batchResult.success) {
     throw new Error(

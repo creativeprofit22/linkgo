@@ -119,7 +119,7 @@ export function PublishLinkedInDialog({
         });
         toast.warning(OUTCOME_UNKNOWN_TITLE, {
           description:
-            "Don't post again. Check LinkedIn, then confirm what happened in Safety.",
+            "Don't post it again. Check LinkedIn, then use 'I checked LinkedIn' on the post.",
         });
         return;
     }
@@ -205,7 +205,6 @@ export function PublishLinkedInDialog({
           {unknownOutcome !== null && (
             <OutcomeUnknownAlert
               itemLabel="post"
-              executionId={unknownOutcome.executionId}
               message={toPlainMessage(unknownOutcome.message)}
             />
           )}

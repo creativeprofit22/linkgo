@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { expectSupportDetail } from "./helpers/support-details";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -249,7 +250,7 @@ test("starts a provider-backed run through the native command boundary", async (
   const customInstructions =
     "Prefer punchy operator lessons with one concrete metric.";
   await writerCard.getByLabel("Your own instructions").fill(customInstructions);
-  await writerCard.getByRole("button", { name: "Save guide" }).click();
+  await writerCard.getByRole("button", { name: "Save brand voice" }).click();
   await expect(writerCard.getByLabel("Your own instructions")).toHaveValue(
     customInstructions,
   );
@@ -969,7 +970,7 @@ test("hides disabled runtime playbooks from new agent runs", async ({
   await writerCard
     .getByRole("switch", { name: "Use with the AI assistant" })
     .click();
-  await writerCard.getByRole("button", { name: "Save guide" }).click();
+  await writerCard.getByRole("button", { name: "Save brand voice" }).click();
   await expect(writerCard.getByText("Off", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Campaigns/ }).click();
@@ -985,7 +986,7 @@ test("hides disabled runtime playbooks from new agent runs", async ({
     .selectOption("drafter");
   await expect(
     dialog
-      .getByLabel("Brand voice guide")
+      .getByLabel("Brand voice", { exact: true })
       .locator("option", { hasText: "LinkedIn Writer" }),
   ).toHaveCount(0);
 });
@@ -1177,8 +1178,9 @@ test("reports a second approval interrupt without claiming continuation completi
   ).toBeVisible();
   await expect(getBadge(page, "Waiting for approval").first()).toBeVisible();
   await expect(
-    page.getByText("Approval needed · reference 2", { exact: true }),
+    page.getByText("Approval needed", { exact: true }),
   ).toBeVisible();
+  await expectSupportDetail(page, "Approval id", 2);
   await expect(
     page.getByText("Paused until you approve", { exact: true }),
   ).toBeVisible();
@@ -2078,7 +2080,9 @@ async function createProviderRun(
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("What should the assistant do?").selectOption(role);
   if (playbookKey)
-    await dialog.getByLabel("Brand voice guide").selectOption(playbookKey);
+    await dialog
+      .getByLabel("Brand voice", { exact: true })
+      .selectOption(playbookKey);
   await dialog.getByLabel("AI service").selectOption(providerKey);
   await dialog
     .getByLabel("Instructions")
@@ -2106,7 +2110,9 @@ async function createDryRun(
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("What should the assistant do?").selectOption(role);
   if (playbookKey)
-    await dialog.getByLabel("Brand voice guide").selectOption(playbookKey);
+    await dialog
+      .getByLabel("Brand voice", { exact: true })
+      .selectOption(playbookKey);
   await dialog.getByLabel("Instructions").fill(inputSummary);
   await dialog.getByRole("button", { name: "Create task" }).click();
   await expect(dialog).toBeHidden();
@@ -2147,6 +2153,7 @@ async function archiveSelectedCampaign(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();
+  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Archive" }).first().click();
   await expect(getBadge(page, "Archived")).toBeVisible();
 }
