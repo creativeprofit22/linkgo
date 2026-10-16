@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { scheduleFromApprovalCard } from "./helpers/calendar-scheduling";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -58,7 +60,7 @@ test("Global kill switch hides approval scheduling and agent dry-run start actio
 
   await openApprovals(page);
   await expect(
-    page.getByRole("button", { name: "Pick a time", exact: true }),
+    page.getByRole("button", { name: "Schedule in Calendar", exact: true }),
   ).toBeHidden();
   await expect(
     page.getByText("Emergency pause is on, so posts can't be scheduled."),
@@ -130,10 +132,11 @@ test("Daily post scheduling cap blocks a second same-day schedule", async ({
   await openApprovals(page);
   await createReview(page);
   await page.getByRole("button", { name: "Approve", exact: true }).click();
-  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
-  await page.getByLabel("Date and time").fill("2026-06-25T18:00");
-  await page.getByLabel("Time zone").fill("local");
-  await page.getByRole("button", { name: "Schedule post" }).click();
+  await scheduleFromApprovalCard(page, {
+    scheduledFor: "2026-06-25T18:00",
+    timezone: "local",
+    expectScheduled: false,
+  });
 
   await expect
     .poll(async () => {
@@ -418,35 +421,35 @@ test("Safety reconciles an outcome-unknown publish only after typed confirmation
 });
 
 async function openSafety(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Safety/ }).click();
+  await openSection(page, "Settings", "Safety");
   await expect(
     page.getByRole("heading", { name: "Safety", exact: true }),
   ).toBeVisible();
 }
 
 async function openAgentRuntime(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^AI assistant/ }).click();
+  await openSection(page, "Settings", "AI assistant");
   await expect(
     page.getByRole("heading", { name: "AI assistant", exact: true }),
   ).toBeVisible();
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openDrafts(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
 }
 
 async function openApprovals(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
@@ -569,12 +572,9 @@ async function scheduleApproval(
   scheduledFor: string,
   timezone: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Schedule post" });
-  await dialog.getByLabel("Date and time").fill(scheduledFor);
-  await dialog.getByLabel("Time zone").fill(timezone);
-  await dialog.getByRole("button", { name: "Schedule post" }).click();
-  await expect(dialog).toBeHidden();
+  // Scheduling lives in the Calendar; return to Approvals afterwards.
+  await scheduleFromApprovalCard(page, { scheduledFor, timezone });
+  await openApprovals(page);
 }
 
 async function scheduleApprovalViaDataApi(

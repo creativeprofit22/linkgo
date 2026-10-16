@@ -110,6 +110,7 @@ export function CommentsView(): React.ReactNode {
               </p>
             </div>
             <select
+              aria-label="Campaign"
               value={selectedCampaignId ?? ""}
               onChange={(event) => {
                 const nextId = Number(event.target.value);

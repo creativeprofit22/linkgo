@@ -67,7 +67,7 @@ export function TitleBar({
   return (
     <div
       className={cn(
-        "border-border/60 bg-background/85 flex h-9 items-center justify-between border-b backdrop-blur select-none",
+        "border-border/60 bg-background/85 flex h-9 items-center justify-between border-b backdrop-blur select-none pointer-coarse:h-11",
         showMaximize && isMaximized ? "" : "rounded-t-lg",
       )}
     >

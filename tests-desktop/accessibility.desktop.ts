@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, openScreen, scenario, test } from "./rc-app";
+import { expect, MENU_SCREENS, openScreen, scenario, test } from "./rc-app";
 
 /**
  * axe-core scan of every main-window screen inside the real WebView2 app,
@@ -8,31 +8,13 @@ import { expect, openScreen, scenario, test } from "./rc-app";
  * review.
  */
 
-const SCREENS = [
-  "Campaigns",
-  "Autopilot",
-  "Backlog",
-  "Queue",
-  "Drafts",
-  "Approvals",
-  "Calendar",
-  "Scheduler",
-  "Comments",
-  "Metrics",
-  "Workflows",
-  "Agent Runtime",
-  "Playbooks",
-  "Integrations",
-  "Safety",
-] as const;
-
 test.skip(scenario() === undefined, "set LINKGO_DESKTOP_SCENARIO");
 
 test("every screen has no serious or critical WCAG A/AA violations", async ({
   app,
 }) => {
   const blocking: string[] = [];
-  for (const screen of SCREENS) {
+  for (const screen of MENU_SCREENS) {
     await openScreen(app, screen);
     await app.waitForLoadState("networkidle");
     const scan = await new AxeBuilder({ page: app })

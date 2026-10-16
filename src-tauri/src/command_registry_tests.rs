@@ -149,8 +149,9 @@ fn forbidden_secret_commands_are_not_registered_or_invoked() {
     }
 }
 
-/// Commands the settings window may call. Everything else is main-only.
-const SETTINGS_COMMANDS: [&str; 2] = [
+/// Launch-on-login commands used by in-app Settings (formerly the only
+/// commands of the removed settings window).
+const STARTUP_COMMANDS: [&str; 2] = [
     "linkgo_settings_launch_on_login_sync",
     "linkgo_settings_launch_on_login_error_record",
 ];
@@ -251,7 +252,7 @@ fn granted_commands(set_file: &str) -> BTreeSet<String> {
 }
 
 #[test]
-fn capability_files_are_exactly_main_and_settings() {
+fn capability_files_are_exactly_main() {
     let mut files: Vec<String> = fs::read_dir(manifest_dir().join("capabilities"))
         .expect("capabilities dir")
         .map(|entry| {
@@ -263,14 +264,10 @@ fn capability_files_are_exactly_main_and_settings() {
         })
         .collect();
     files.sort();
-    assert_eq!(files, ["main.json", "settings.json"]);
+    assert_eq!(files, ["main.json"]);
     assert_eq!(
         capability("main.json")["windows"],
         serde_json::json!(["main"])
-    );
-    assert_eq!(
-        capability("settings.json")["windows"],
-        serde_json::json!(["settings"])
     );
 }
 
@@ -278,15 +275,14 @@ fn capability_files_are_exactly_main_and_settings() {
 fn every_callable_command_is_granted_and_nothing_else() {
     let manifest = build_manifest_commands();
     let main = granted_commands("main-commands.toml");
-    let settings = granted_commands("settings-commands.toml");
 
-    for command in main.iter().chain(settings.iter()) {
+    for command in &main {
         assert!(
             manifest.contains(command),
             "{command} is granted but not registered in generate_handler!"
         );
     }
-    let granted: BTreeSet<String> = main.union(&settings).cloned().collect();
+    let granted = main;
     let expected: BTreeSet<String> = manifest
         .iter()
         .filter(|command| !UNGRANTED_COMMANDS.contains(&command.as_str()))
@@ -306,53 +302,47 @@ fn every_callable_command_is_granted_and_nothing_else() {
 }
 
 #[test]
-fn settings_window_grants_exactly_its_allowlist() {
-    let settings = granted_commands("settings-commands.toml");
-    let expected: BTreeSet<String> = SETTINGS_COMMANDS.iter().map(|c| c.to_string()).collect();
-    assert_eq!(settings, expected);
-
+fn main_window_grants_startup_controls() {
     let main = granted_commands("main-commands.toml");
-    for command in SETTINGS_COMMANDS {
-        assert!(!main.contains(command), "{command} is settings-only");
+    for command in STARTUP_COMMANDS {
+        assert!(main.contains(command), "main window needs {command}");
     }
-    // Sensitive commands stay main-only: the settings window cannot publish,
-    // save credentials or drive providers even if its renderer is compromised.
+    // The settings window is gone: nothing may open extra windows.
+    assert!(!main.contains("linkgo_window_open_settings"));
+    assert!(!build_manifest_commands().contains("linkgo_window_open_settings"));
     for sensitive in [
         "linkgo_linkedin_publish_post",
         "linkgo_linkedin_publish_comment",
         "linkgo_auth_api_key",
         "linkgo_agent_provider_stream",
-        "linkgo_window_open_settings",
     ] {
         assert!(main.contains(sensitive), "main window needs {sensitive}");
-        assert!(
-            !settings.contains(sensitive),
-            "settings must not get {sensitive}"
-        );
     }
 
-    let permissions = capability_permissions(&capability("settings.json"));
-    assert!(permissions.contains(&"settings-commands".to_string()));
-    assert!(!permissions.contains(&"main-commands".to_string()));
-    assert!(
-        permissions
-            .iter()
-            .all(|permission| !permission.starts_with("global-shortcut:")),
-        "settings window must not register global shortcuts"
-    );
     let main_permissions = capability_permissions(&capability("main.json"));
     assert!(main_permissions.contains(&"main-commands".to_string()));
-    assert!(
-        main_permissions
-            .iter()
-            .all(|permission| !permission.starts_with("autostart:")),
-        "main window must not toggle autostart"
+    let autostart: BTreeSet<String> = main_permissions
+        .iter()
+        .filter(|permission| permission.starts_with("autostart:"))
+        .cloned()
+        .collect();
+    let expected: BTreeSet<String> = [
+        "autostart:allow-disable",
+        "autostart:allow-enable",
+        "autostart:allow-is-enabled",
+    ]
+    .iter()
+    .map(|permission| permission.to_string())
+    .collect();
+    assert_eq!(
+        autostart, expected,
+        "main gets exactly the 3 autostart toggles"
     );
 }
 
 #[test]
 fn capabilities_exclude_forbidden_permissions() {
-    for file in ["main.json", "settings.json"] {
+    for file in ["main.json"] {
         for permission in capability_permissions(&capability(file)) {
             for prefix in FORBIDDEN_PERMISSION_PREFIXES {
                 assert!(

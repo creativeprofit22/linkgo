@@ -2980,7 +2980,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           return null;
         });
       }
-      if (cmd === "linkgo_window_open_settings") return Promise.resolve(null);
       if (cmd === "linkgo_settings_launch_on_login_sync") {
         return runNativeMutation(() => {
           const input = nativeInput<{

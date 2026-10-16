@@ -1,4 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { scheduleFromApprovalCard } from "./helpers/calendar-scheduling";
+import { openSection } from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 import {
   recordPublishAttemptSchema,
@@ -274,10 +276,7 @@ test("creates, previews, approves, schedules, and publishes an approval", async 
   await countSchedulingInvokes(page);
   await countLinkedInPublishInvokes(page);
 
-  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
-  await page.getByLabel("Date and time").fill("2026-06-25T14:30");
-  await page.getByLabel("Time zone").fill("local");
-  await page.getByRole("button", { name: "Schedule post" }).click();
+  await scheduleApproval(page, "2026-06-25T14:30", "local");
   await expect(getBadge(page, "Scheduled").first()).toBeVisible();
   await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
   const scheduleReference = page.getByText("Schedule reference");
@@ -651,7 +650,7 @@ test("LinkedIn OAuth publish is blocked when a newer AI audit revokes readiness"
     page.getByRole("button", { name: "Post to LinkedIn" }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Pick a time", exact: true }),
+    page.getByRole("button", { name: "Schedule in Calendar", exact: true }),
   ).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Mark as posted" }),
@@ -1077,76 +1076,6 @@ test("published approvals reject duplicate successful publish attempts", async (
     .toBe(invokesBeforeDuplicate + 2);
 });
 
-test("cancelled schedules can be rescheduled with new details", async ({
-  page,
-}) => {
-  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await createReadyDraft(page, cleanVariant());
-  await makeDraftApprovalEligible(page);
-  await openApprovals(page);
-  await createReview(page);
-
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect(getBadge(page, "Approved")).toBeVisible();
-  await scheduleApproval(page, "2026-06-25T14:30", "local");
-  await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
-
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
-  await page.getByRole("button", { name: "Cancel schedule" }).click();
-  await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(getBadge(page, "Cancelled").first()).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Pick a time", exact: true }),
-  ).toBeVisible();
-
-  await scheduleApproval(page, "2026-06-26T09:15", "America/New_York");
-  await expect(getBadge(page, "Scheduled").first()).toBeVisible();
-  await expect(
-    page.getByText("2026-06-26T09:15 · America/New_York"),
-  ).toBeVisible();
-  await expect(page.getByText("2026-06-25T14:30 · local")).toBeHidden();
-});
-
-test("failed scheduled publish attempts can be rescheduled with new details", async ({
-  page,
-}) => {
-  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await createReadyDraft(page, cleanVariant());
-  await makeDraftApprovalEligible(page);
-  await openApprovals(page);
-  await createReview(page);
-
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect(getBadge(page, "Approved")).toBeVisible();
-  await scheduleApproval(page, "2026-06-25T14:30", "local");
-  await expect(page.getByText("2026-06-25T14:30 · local")).toBeVisible();
-
-  await page.getByRole("button", { name: "Mark as not posted" }).click();
-  await page.getByLabel("What went wrong").fill("Local browser was offline.");
-  await page.getByRole("button", { name: "Save result" }).click();
-  await expect(getBadge(page, "Approved")).toBeVisible();
-  await expect(
-    getBadge(page, "Didn't post").filter({ visible: true }).first(),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Schedule again", exact: true }),
-  ).toBeVisible();
-
-  await scheduleApproval(
-    page,
-    "2026-06-27T10:45",
-    "Europe/London",
-    "Schedule again",
-  );
-  await expect(getBadge(page, "Scheduled").first()).toBeVisible();
-  await expect(
-    page.getByText("2026-06-27T10:45 · Europe/London"),
-  ).toBeVisible();
-  await expect(page.getByText("2026-06-25T14:30 · local")).toBeHidden();
-});
-
 for (const { state, eligible } of approvalAiAuditCases) {
   test(`${state} AI audit enforces approval query and creation readiness`, async ({
     page,
@@ -1247,7 +1176,7 @@ test("archived campaign approvals hide mutation controls with restore guidance",
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Pick a time", exact: true }),
+    page.getByRole("button", { name: "Schedule in Calendar", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Mark as posted" }),
@@ -1277,7 +1206,7 @@ test("archived campaign approvals hide mutation controls with restore guidance",
     page.getByRole("button", { name: "Request changes" }),
   ).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Pick a time", exact: true }),
+    page.getByRole("button", { name: "Schedule in Calendar", exact: true }),
   ).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Mark as posted" }),
@@ -1897,35 +1826,35 @@ async function makeDraftApprovalEligible(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openDrafts(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
 }
 
 async function openApprovals(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
 }
 
 async function openSafety(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Safety/ }).click();
+  await openSection(page, "Settings", "Safety");
   await expect(
     page.getByRole("heading", { name: "Safety", exact: true }),
   ).toBeVisible();
 }
 
 async function openCampaigns(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();
@@ -2024,12 +1953,8 @@ async function scheduleApproval(
   page: Page,
   scheduledFor: string,
   timezone: string,
-  triggerLabel = "Pick a time",
 ): Promise<void> {
-  await page.getByRole("button", { name: triggerLabel, exact: true }).click();
-  await page.getByLabel("Date and time").fill(scheduledFor);
-  await page.getByLabel("Time zone").fill(timezone);
-  const dialog = page.getByRole("dialog", { name: "Schedule post" });
-  await dialog.getByRole("button", { name: "Schedule post" }).click();
-  await expect(dialog).toBeHidden();
+  // Scheduling lives in the Calendar; the card links there, then come back.
+  await scheduleFromApprovalCard(page, { scheduledFor, timezone });
+  await openApprovals(page);
 }

@@ -4,15 +4,19 @@ import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 import {
   archiveContentCalendarSlot,
+  cancelContentCalendarSlotSchedule,
   createContentCalendarSlot,
   listContentCalendarEligibleApprovals,
   listContentCalendarSlots,
+  rescheduleContentCalendarSlot,
   scheduleContentCalendarSlot,
   updateContentCalendarSlot,
 } from "@/features/content-calendar/data";
 import { toPlainMessage } from "@/lib/plain-message";
 import type {
   ArchiveContentCalendarSlotInput,
+  CancelContentCalendarSlotScheduleInput,
+  RescheduleContentCalendarSlotInput,
   ContentCalendarEligibleApproval,
   ContentCalendarSlotWithDetails,
   CreateContentCalendarSlotInput,
@@ -29,11 +33,17 @@ interface UseContentCalendarState {
   saving: boolean;
   error: string | null;
   loadCalendar: () => Promise<void>;
+  /** Reloads slots for the current campaign without the loading screen or toasts. */
+  reloadSlots: () => Promise<void>;
   selectCampaign: (id: number | null) => void;
   createSlot: (input: CreateContentCalendarSlotInput) => Promise<void>;
   updateSlot: (input: UpdateContentCalendarSlotInput) => Promise<void>;
   archiveSlot: (input: ArchiveContentCalendarSlotInput) => Promise<void>;
   scheduleSlot: (input: ScheduleContentCalendarSlotInput) => Promise<void>;
+  rescheduleSlot: (input: RescheduleContentCalendarSlotInput) => Promise<void>;
+  cancelSlotSchedule: (
+    input: CancelContentCalendarSlotScheduleInput,
+  ) => Promise<void>;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -102,6 +112,13 @@ export function useContentCalendar(
   useEffect(() => {
     void loadCalendar();
   }, [loadCalendar]);
+
+  // Quiet: a failed background reload keeps the current slots; Refresh
+  // still surfaces load errors.
+  const reloadSlots = useCallback(
+    () => loadCalendarForCampaign(selectedCampaignId).catch(() => {}),
+    [loadCalendarForCampaign, selectedCampaignId],
+  );
 
   const selectCampaign = useCallback(
     (id: number | null) => {
@@ -196,6 +213,56 @@ export function useContentCalendar(
     [loadCalendarForCampaign, selectedCampaignId],
   );
 
+  const rescheduleSlot = useCallback(
+    async (input: RescheduleContentCalendarSlotInput) => {
+      setSaving(true);
+      try {
+        const result = await rescheduleContentCalendarSlot(input);
+        // Reload either way: earlier steps may have taken effect.
+        await loadCalendarForCampaign(selectedCampaignId).catch(() => {});
+        if (result.ok) {
+          toast.success("New time saved");
+          return;
+        }
+        const reason = getErrorMessage(result.error);
+        if (result.previousScheduleCancelled) {
+          toast.error("Old time cancelled; new time wasn't saved", {
+            description: `Pick a time again. ${reason}`,
+          });
+        } else {
+          toast.error("We couldn't change the time", { description: reason });
+        }
+        throw result.error instanceof Error
+          ? result.error
+          : new Error("We couldn't change the time.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [loadCalendarForCampaign, selectedCampaignId],
+  );
+
+  const cancelSlotSchedule = useCallback(
+    async (input: CancelContentCalendarSlotScheduleInput) => {
+      setSaving(true);
+      try {
+        await cancelContentCalendarSlotSchedule(input);
+        await loadCalendarForCampaign(selectedCampaignId);
+        toast.success("Schedule cancelled", {
+          description: "The post is still approved and won't go out.",
+        });
+      } catch (caught) {
+        toast.error("We couldn't cancel this schedule", {
+          description: getErrorMessage(caught),
+        });
+        throw caught;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [loadCalendarForCampaign, selectedCampaignId],
+  );
+
   return useMemo(
     () => ({
       campaigns,
@@ -206,11 +273,14 @@ export function useContentCalendar(
       saving,
       error,
       loadCalendar,
+      reloadSlots,
       selectCampaign,
       createSlot,
       updateSlot,
       archiveSlot,
       scheduleSlot,
+      rescheduleSlot,
+      cancelSlotSchedule,
     }),
     [
       campaigns,
@@ -221,11 +291,14 @@ export function useContentCalendar(
       saving,
       error,
       loadCalendar,
+      reloadSlots,
       selectCampaign,
       createSlot,
       updateSlot,
       archiveSlot,
       scheduleSlot,
+      rescheduleSlot,
+      cancelSlotSchedule,
     ],
   );
 }

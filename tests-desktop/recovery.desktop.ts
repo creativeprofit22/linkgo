@@ -71,7 +71,7 @@ test("operator reconciles the ambiguous execution from Safety", async ({
   });
   expect(wrong.ok).toBe(false);
 
-  await openScreen(app, "Safety");
+  await openScreen(app, "safety");
   const card = app.getByLabel(`Post execution ${ambiguous?.id}`);
   await expect(card).toBeVisible();
   await card.getByRole("button", { name: "Reconcile" }).click();

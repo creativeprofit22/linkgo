@@ -367,7 +367,7 @@ Delivered in this slice:
 - Opt-in worker loop that runs while Linkgo is open or hidden to tray.
 - Due approved scheduled LinkedIn posts publish through the shared native OAuth helper.
 - Retryable failures keep schedules active with backoff; terminal failures return approvals to `approved` and create error queue items.
-- Auto-posting tab with status, start/stop, manual tick, pending due jobs, recent events, and scheduler-linked attempts.
+- Auto-posting status, start/stop, manual tick, pending due jobs, recent events, and scheduler-linked attempts (originally a tab; now a side panel on the Calendar, see [scheduler](features/scheduler.md)).
 
 Launch-on-login can open Linkgo, but running after the Linkgo process quits, LinkedIn API commenting, scraping, and autonomous content generation are not implemented.
 

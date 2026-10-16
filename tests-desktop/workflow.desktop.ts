@@ -96,8 +96,8 @@ test("campaign to approved, scheduled post over real IPC", async ({ app }) => {
   });
 
   // Dry-run AI audit and quality loop through the real UI (no provider call).
-  await openScreen(app, "Campaigns");
-  await openScreen(app, "Drafts");
+  await openScreen(app, "campaigns");
+  await openScreen(app, "drafts");
   const audit = app.locator(
     `section[aria-labelledby="variant-${variantId}-ai-audit-title"]`,
   );

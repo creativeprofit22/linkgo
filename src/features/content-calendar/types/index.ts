@@ -146,6 +146,30 @@ export interface ScheduleContentCalendarSlotInput {
   id: number;
 }
 
+/** Slot plan fields stay as they are; only `slotFor`/`timezone` change. */
+export interface RescheduleContentCalendarSlotInput extends UpdateContentCalendarSlotInput {
+  /** Job still waiting to post, cancelled before the new time is set. */
+  activeScheduleJobId: number | null;
+}
+
+export interface CancelContentCalendarSlotScheduleInput {
+  /** Waiting job to cancel; native cancel is keyed by job id only. */
+  scheduleJobId: number;
+}
+
+/** Step of a reschedule that failed. Earlier steps already took effect. */
+export type RescheduleStage = "update" | "cancel" | "schedule";
+
+export type RescheduleContentCalendarSlotResult =
+  | { ok: true }
+  | {
+      ok: false;
+      stage: RescheduleStage;
+      /** True when the old time was cancelled but the new one wasn't set. */
+      previousScheduleCancelled: boolean;
+      error: unknown;
+    };
+
 /**
  * Validated params of a Calendar link. `approvalId` highlights that post's
  * plan slot (or offers to add one) and needs its campaign. A type alias so it

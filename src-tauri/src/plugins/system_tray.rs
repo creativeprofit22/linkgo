@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn should_allow_non_main_windows_to_close() {
-        assert!(!should_hide_to_tray("settings"));
         assert!(!should_hide_to_tray("dialog"));
+        assert!(!should_hide_to_tray(""));
     }
 }

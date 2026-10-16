@@ -34,16 +34,13 @@ import type {
   StartWorkflowRunInput,
 } from "@/workflows/types";
 import { HomePage } from "@/pages/home";
-import { SettingsPage } from "@/pages/settings";
 import "./index.css";
 
-const pageMap = {
-  "/": HomePage,
-  "/settings": SettingsPage,
-};
-
-const pathname = window.location.pathname;
-const PageComponent = pageMap[pathname as keyof typeof pageMap] ?? HomePage;
+// Settings used to be its own window at `/settings`; it now lives inside the
+// app, so an old `/settings` address opens the in-app Settings screen.
+if (window.location.pathname === "/settings") {
+  window.history.replaceState(null, "", "/#/settings");
+}
 
 type ApprovalTestApi = {
   createApproval: (input: CreateApprovalInput) => Promise<number>;
@@ -213,9 +210,6 @@ function RootShell(): React.ReactNode {
         .show()
         .catch(() => {});
     });
-    // The settings window's capability grants only launch-on-login commands;
-    // draft reconciliation runs once from the main window.
-    if (PageComponent === SettingsPage) return;
     void import("@/features/drafts/data")
       .then(({ reconcileStaleDraftQuality }) => reconcileStaleDraftQuality())
       .catch((error: unknown) => {
@@ -230,7 +224,7 @@ function RootShell(): React.ReactNode {
       });
   }, []);
 
-  return <PageComponent />;
+  return <HomePage />;
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

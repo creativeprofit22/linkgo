@@ -714,21 +714,6 @@
     },
     {
       "identity": {
-        "from": "src/pages/settings.tsx",
-        "to": "src/features/settings/hooks/use-settings.ts",
-        "kind": "value",
-        "form": "import",
-        "bindings": {
-          "useSettings": 1
-        },
-        "rule": "private-feature"
-      },
-      "owner": "app composition / settings",
-      "rationale": "Settings page imports its feature hook through a private path.",
-      "removeWhen": "Expose the required settings UI contract through its public entry point."
-    },
-    {
-      "identity": {
         "from": "src/workflows/executor.ts",
         "to": "src/agent/messages.ts",
         "kind": "value",

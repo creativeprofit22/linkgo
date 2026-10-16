@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
 import { z } from "zod";
 
 import { approvalsRoute } from "../src/features/approvals/schemas";
@@ -14,6 +15,18 @@ import {
   parseRouteHash,
   splitRouteHash,
 } from "../src/lib/navigation/route-contract";
+import { homeAreas, homeRoutes } from "../src/pages/home-areas";
+import {
+  areaButton,
+  areaLabels,
+  expectCurrentScreen,
+  mainMenu,
+  openScreen,
+  screenMenu,
+  sectionButton,
+  sectionsNav,
+  type MenuScreenId,
+} from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
 const listRoute = defineRoute("list", emptyRouteSearch());
@@ -224,47 +237,83 @@ test.describe("screen links", () => {
     await setupTauriMocks(page);
   });
 
+  test("every campaign picker is named after its visible label", async ({
+    page,
+  }) => {
+    await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+    await createCampaign(page);
+    const pickers = [
+      ["queue", "Selected campaign"],
+      ["drafts", "Selected campaign"],
+      ["comments", "Campaign"],
+      ["metrics", "Campaign"],
+      ["safety", "Show campaign"],
+      ["agents", "Selected campaign"],
+    ] as const satisfies readonly (readonly [MenuScreenId, string])[];
+    for (const [screen, label] of pickers) {
+      await openScreen(page, screen);
+      await expect(
+        page.getByRole("combobox", { name: label, exact: true }),
+        screen,
+      ).toBeVisible();
+      const scan = await new AxeBuilder({ page })
+        .withRules(["select-name"])
+        .analyze();
+      expect(scan.violations, screen).toEqual([]);
+    }
+  });
+
   test("every menu screen has its own address", async ({ page }) => {
     await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/#\/campaigns$/);
 
-    const nav = page.getByRole("navigation", { name: "Main menu" });
-    // A new menu entry without a row here fails instead of going untested.
-    await expect(nav.getByRole("button")).toHaveCount(menuScreens.length);
-    for (const { label, id } of menuScreens) {
-      const button = menuButton(page, label);
-      await button.click();
-      await expect(page, label).toHaveURL(new RegExp(`#/${id}$`));
-      await expect(button, label).toHaveAttribute("aria-current", "page");
+    // The Main menu holds exactly the five areas.
+    for (const area of areaLabels) {
+      await expect(areaButton(page, area), area).toHaveCount(1);
+    }
+    await expect(
+      mainMenu(page).getByRole("button", {
+        name: /^(Today|Create|Calendar|Results|Settings)$/,
+      }),
+    ).toHaveCount(areaLabels.length);
+
+    // Each area's section menu lists exactly its sub-views, so a new menu
+    // entry without a row in screenMenu fails instead of going untested.
+    for (const id of Object.keys(screenMenu) as MenuScreenId[]) {
+      const { area } = screenMenu[id];
+      await openScreen(page, id);
+      await expect(page, id).toHaveURL(new RegExp(`#/${id}$`));
+      await expectCurrentScreen(page, id);
+      const sectionCount = Object.values(screenMenu).filter(
+        (entry) => entry.area === area,
+      ).length;
+      if (sectionCount > 1) {
+        await expect(sectionsNav(page, area).getByRole("button")).toHaveCount(
+          sectionCount,
+        );
+      } else {
+        await expect(sectionsNav(page, area)).toHaveCount(0);
+      }
     }
 
     // A typed address opens its screen directly.
-    for (const { label, id } of [
-      { label: "Automations", id: "workflows" },
-      { label: "Tasks", id: "backlog" },
-    ]) {
+    for (const id of ["workflows", "backlog"] as const) {
       await page.goto(`/#/${id}`, { waitUntil: "domcontentloaded" });
       await expect(page).toHaveURL(new RegExp(`#/${id}$`));
-      await expect(menuButton(page, label), label).toHaveAttribute(
-        "aria-current",
-        "page",
-      );
+      await expectCurrentScreen(page, id);
       await expect(page.getByTestId("navigation-unknown-screen")).toHaveCount(
         0,
       );
     }
 
-    await nav.getByRole("button", { name: /^Ideas/ }).click();
+    await openScreen(page, "queue");
     await expect(page).toHaveURL(/#\/queue$/);
-    await nav.getByRole("button", { name: /^Analytics/ }).click();
+    await openScreen(page, "metrics");
     await expect(page).toHaveURL(/#\/metrics$/);
 
     await page.goBack();
     await expect(page).toHaveURL(/#\/queue$/);
-    await expect(nav.getByRole("button", { name: /^Ideas/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expectCurrentScreen(page, "queue");
     await page.goForward();
     await expect(page).toHaveURL(/#\/metrics$/);
   });
@@ -272,8 +321,7 @@ test.describe("screen links", () => {
   test("opening the screen already showing adds no history entry", async ({
     page,
   }) => {
-    const nav = page.getByRole("navigation", { name: "Main menu" });
-    const ideas = nav.getByRole("button", { name: /^Ideas/ });
+    const ideas = sectionButton(page, "Create", "Ideas");
     const historyLength = (): Promise<number> =>
       page.evaluate(() => window.history.length);
 
@@ -293,19 +341,19 @@ test.describe("screen links", () => {
   }) => {
     await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await createCampaign(page);
-    await openScreen(page, "Ideas");
+    await openScreen(page, "queue");
     await addCandidate(page, "Jane Operator", "123");
     await addCandidate(page, "Sam Builder", "456");
 
     // Write one draft per idea so the filter has something to hide.
-    await openScreen(page, "Drafts");
+    await openScreen(page, "drafts");
     await createDraftFor(page, "Jane Operator");
     await createDraftFor(page, "Sam Builder");
     await expect(
       page.getByRole("heading", { name: "Sam Builder" }),
     ).toBeVisible();
 
-    await openScreen(page, "Ideas");
+    await openScreen(page, "queue");
     const janeCard = page
       .locator(".linkgo-card")
       .filter({ has: page.getByText("Jane Operator", { exact: true }) });
@@ -326,11 +374,7 @@ test.describe("screen links", () => {
 
     await page.goBack();
     await expect(page).toHaveURL(/#\/queue$/);
-    await expect(
-      page
-        .getByRole("navigation", { name: "Main menu" })
-        .getByRole("button", { name: /^Ideas/ }),
-    ).toHaveAttribute("aria-current", "page");
+    await expectCurrentScreen(page, "queue");
 
     await page.goForward();
     await expect(page.getByTestId("drafts-idea-filter")).toBeVisible();
@@ -454,19 +498,15 @@ test.describe("screen links", () => {
     await expect(page.getByTestId("navigation-unknown-screen")).toHaveText(
       "That link didn’t match a screen, so we opened Today.",
     );
-    await expect(
-      page
-        .getByRole("navigation", { name: "Main menu" })
-        .getByRole("button", { name: /^Today/ }),
-    ).toHaveAttribute("aria-current", "page");
+    await expectCurrentScreen(page, "today");
 
-    await openScreen(page, "Ideas");
+    await openScreen(page, "queue");
     await expect(page.getByTestId("navigation-unknown-screen")).toHaveCount(0);
   });
 
   test("reopening the app restores the last screen", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await openScreen(page, "Safety");
+    await openScreen(page, "safety");
     await expect(page).toHaveURL(/#\/safety$/);
     await expect
       .poll(() =>
@@ -478,11 +518,7 @@ test.describe("screen links", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/#\/safety$/);
-    await expect(
-      page
-        .getByRole("navigation", { name: "Main menu" })
-        .getByRole("button", { name: /^Safety/ }),
-    ).toHaveAttribute("aria-current", "page");
+    await expectCurrentScreen(page, "safety");
   });
 
   test("a stored screen that no longer exists is ignored", async ({ page }) => {
@@ -493,51 +529,135 @@ test.describe("screen links", () => {
     await expect(page).toHaveURL(/#\/today$/);
     await expect(page.getByTestId("navigation-unknown-screen")).toHaveCount(0);
   });
+
+  test("every screen link opens with its area and section marked", async ({
+    page,
+  }) => {
+    for (const id of Object.keys(screenMenu) as MenuScreenId[]) {
+      await page.goto(`/#/${id}`, { waitUntil: "domcontentloaded" });
+      await expect(page, id).toHaveURL(new RegExp(`#/${id}$`));
+      await expectCurrentScreen(page, id);
+      await expect(page.getByTestId("navigation-unknown-screen")).toHaveCount(
+        0,
+      );
+    }
+  });
+
+  test("area links and the retired scheduler link replace to a screen", async ({
+    page,
+  }) => {
+    for (const { alias, id } of [
+      { alias: "create", id: "campaigns" },
+      { alias: "results", id: "metrics" },
+      { alias: "scheduler", id: "calendar" },
+    ] as const) {
+      await page.goto("/#/today", { waitUntil: "domcontentloaded" });
+      await expectCurrentScreen(page, "today");
+      await page.evaluate((hash) => {
+        window.location.hash = hash;
+      }, `#/${alias}`);
+      await expect(page, alias).toHaveURL(new RegExp(`#/${id}$`));
+      await expectCurrentScreen(page, id);
+      await expect(page.getByTestId("navigation-unknown-screen")).toHaveCount(
+        0,
+      );
+      // The alias was replaced, so Back skips it.
+      await page.goBack();
+      await expect(page, alias).toHaveURL(/#\/today$/);
+    }
+  });
+
+  test("an area reopens the sub-view last used in it", async ({ page }) => {
+    await page.goto("/#/drafts", { waitUntil: "domcontentloaded" });
+    await areaButton(page, "Results").click();
+    await expect(page).toHaveURL(/#\/metrics$/);
+    await areaButton(page, "Create").click();
+    await expect(page).toHaveURL(/#\/drafts$/);
+    await expectCurrentScreen(page, "drafts");
+  });
+
+  test("the old Settings window address opens Settings in the app", async ({
+    page,
+  }) => {
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/#\/settings$/);
+    await expect(
+      page.getByRole("heading", { name: "Settings", exact: true }),
+    ).toBeVisible();
+    await expectCurrentScreen(page, "settings");
+  });
+
+  test("the title-bar gear opens Settings", async ({ page }) => {
+    await page.goto("/#/today", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Open settings" }).click();
+    await expect(page).toHaveURL(/#\/settings$/);
+    await expect(
+      page.getByRole("heading", { name: "Settings", exact: true }),
+    ).toBeVisible();
+    await expectCurrentScreen(page, "settings");
+  });
+
+  test("the phone layout has no sideways scrolling and 44px menu targets", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const id of ["today", "drafts", "settings"] as const) {
+      await page.goto(`/#/${id}`, { waitUntil: "domcontentloaded" });
+      await expectCurrentScreen(page, id);
+      const page_ = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(page_.scrollWidth, id).toBeLessThanOrEqual(page_.clientWidth);
+      const menu = await mainMenu(page).evaluate((element) => ({
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+      }));
+      expect(menu.scrollWidth, id).toBeLessThanOrEqual(menu.clientWidth);
+
+      const { area } = screenMenu[id];
+      const buttons = [
+        ...(await mainMenu(page).getByRole("button").all()),
+        ...(await sectionsNav(page, area).getByRole("button").all()),
+      ];
+      expect(buttons.length, id).toBeGreaterThanOrEqual(areaLabels.length);
+      for (const button of buttons) {
+        const box = await button.boundingBox();
+        const name = await button.textContent();
+        expect(box, `${id}: ${name}`).not.toBeNull();
+        expect(box?.width ?? 0, `${id}: ${name}`).toBeGreaterThanOrEqual(44);
+        expect(box?.height ?? 0, `${id}: ${name}`).toBeGreaterThanOrEqual(44);
+      }
+    }
+  });
 });
 
-/** Main-menu labels and the address id each one must open (see home.tsx). */
-const menuScreens = [
-  { label: "Today", id: "today" },
-  { label: "Campaigns", id: "campaigns" },
-  { label: "Autopilot", id: "autopilot" },
-  { label: "Tasks", id: "backlog" },
-  { label: "Ideas", id: "queue" },
-  { label: "Drafts", id: "drafts" },
-  { label: "Approvals", id: "approvals" },
-  { label: "Calendar", id: "calendar" },
-  { label: "Auto-posting", id: "scheduler" },
-  { label: "Comments", id: "comments" },
-  { label: "Analytics", id: "metrics" },
-  { label: "Automations", id: "workflows" },
-  { label: "AI assistant", id: "agents" },
-  { label: "Brand voice", id: "playbooks" },
-  { label: "Connected accounts", id: "integrations" },
-  { label: "Safety", id: "safety" },
-] as const;
-
-function menuButton(page: Page, label: string): Locator {
-  return page
-    .getByRole("navigation", { name: "Main menu" })
-    .getByRole("button", { name: new RegExp(`^${label}`) });
-}
+test.describe("menu areas", () => {
+  test("every screen except Get started belongs to exactly one area", () => {
+    const sectionIds = homeAreas.flatMap((area) =>
+      area.sections.map((section) => section.route.id),
+    );
+    expect(new Set(sectionIds).size).toBe(sectionIds.length);
+    const screenIds = homeRoutes
+      .map((route) => route.id)
+      .filter((id) => id !== "setup");
+    expect([...sectionIds].sort()).toEqual([...screenIds].sort());
+    // The test helper's map mirrors the app's menu, in order.
+    expect(Object.keys(screenMenu)).toEqual(sectionIds);
+    expect(homeAreas.map((area) => area.label)).toEqual(areaLabels);
+  });
+});
 
 /** Opens a screen and waits until its campaign picker is the one on screen. */
 async function openLoadedScreen(
   page: Page,
   label: "Ideas" | "Drafts",
 ): Promise<void> {
-  await openScreen(page, label);
+  await openScreen(page, label === "Ideas" ? "queue" : "drafts");
   await expect(
     page.getByRole("heading", { level: 2, name: label, exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Selected campaign")).toBeVisible();
-}
-
-async function openScreen(page: Page, label: string): Promise<void> {
-  await page
-    .getByRole("navigation", { name: "Main menu" })
-    .getByRole("button", { name: new RegExp(`^${label}`) })
-    .click();
 }
 
 async function createCampaign(

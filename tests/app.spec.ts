@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import {
+  expectCurrentScreen,
+  openSection,
+  sectionButton,
+} from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
 test.beforeEach(async ({ page }) => {
@@ -12,10 +17,7 @@ test("app root renders campaigns by default", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Campaigns/ })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expectCurrentScreen(page, "campaigns");
   // A fresh start shows the setup checklist instead of the empty card.
   await expect(
     page.getByRole("region", { name: "Get started with Linkgo" }),
@@ -27,7 +29,8 @@ test("sidebar sections scroll vertically when the window is short", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 600 });
-  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  // Settings has the longest section list, nested under its area.
+  await page.goto("/#/settings", { waitUntil: "domcontentloaded" });
 
   const nav = page.getByRole("navigation", { name: "Main menu" });
   const metrics = await nav.evaluate((element) => ({
@@ -41,10 +44,11 @@ test("sidebar sections scroll vertically when the window is short", async ({
   await nav.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
-  const safety = nav.getByRole("button", { name: /^Safety/ });
-  await expect(safety).toBeInViewport();
-  await safety.click();
-  await expect(safety).toHaveAttribute("aria-current", "page");
+  // The last sub-view in the sidebar is reachable once scrolled.
+  const tasks = sectionButton(page, "Settings", "Tasks");
+  await expect(tasks).toBeInViewport();
+  await tasks.click();
+  await expect(tasks).toHaveAttribute("aria-current", "page");
 });
 
 test("renderer shell does not load GG AI provider code", async ({ page }) => {
@@ -75,57 +79,46 @@ test("autopilot, backlog, queue, drafts, approvals, metrics, workflows, and agen
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
 
-  await page.getByRole("button", { name: /^Autopilot/ }).click();
+  await openSection(page, "Settings", "Autopilot");
   await expect(
     page.getByRole("heading", { name: "Autopilot", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /^Autopilot/ }),
-  ).toHaveAttribute("aria-current", "page");
+  await expectCurrentScreen(page, "autopilot");
 
-  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await openSection(page, "Settings", "Tasks");
   await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
 
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Approvals/ })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expectCurrentScreen(page, "approvals");
 
-  await page.getByRole("button", { name: /^Analytics/ }).click();
+  await openSection(page, "Results");
   await expect(
     page.getByRole("heading", { name: "Analytics", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /^Analytics/ }),
-  ).toHaveAttribute("aria-current", "page");
+  await expectCurrentScreen(page, "metrics");
 
-  await page.getByRole("button", { name: /^Automations/ }).click();
+  await openSection(page, "Settings", "Automations");
   await expect(
     page.getByRole("heading", { name: "Automations", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /^Automations/ }),
-  ).toHaveAttribute("aria-current", "page");
+  await expectCurrentScreen(page, "workflows");
 
-  await page.getByRole("button", { name: /^AI assistant/ }).click();
+  await openSection(page, "Settings", "AI assistant");
   await expect(
     page.getByRole("heading", { name: "AI assistant", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /^AI assistant/ }),
-  ).toHaveAttribute("aria-current", "page");
+  await expectCurrentScreen(page, "agents");
 });

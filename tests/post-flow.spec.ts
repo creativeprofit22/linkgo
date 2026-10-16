@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 // Synthetic data only: every invoke is answered by the stateful Tauri mocks.
 test.beforeEach(async ({ page }) => {
@@ -44,7 +45,7 @@ async function createCampaign(
 }
 
 async function addIdea(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await page.getByRole("button", { name: "Add idea" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Add idea" });
   await dialog
@@ -80,7 +81,6 @@ test("walks one idea to a planned, scheduled post through next-step buttons", as
   await createCampaign(page);
   await addIdea(page);
   const counter = new FlowCounter();
-  const tabs = page.getByRole("navigation");
 
   // ---- 1. Idea → Write post: the idea is locked in, Practice is explicit.
   const ideaCard = page.locator(".linkgo-card", { hasText: "Jane Flow" });
@@ -168,34 +168,21 @@ test("walks one idea to a planned, scheduled post through next-step buttons", as
   await expect(approvalCard).toContainText("Jane Flow");
   await expectStage(approvalCard, "Waiting for your OK");
   await expect(
-    approvalCard.getByRole("button", { name: "Pick a time" }),
+    approvalCard.getByRole("button", { name: "Schedule in Calendar" }),
   ).toHaveCount(0);
   await expect(
     approvalCard.getByRole("button", { name: "See on calendar" }),
   ).toHaveCount(0);
 
-  // ---- 6. Approve → Pick a time → See on calendar → Add to plan.
+  // ---- 6. Approve → Schedule in Calendar → Add to plan → Schedule post.
+  // Times are only picked in the Calendar.
   await counter.click(
     approvalCard.getByRole("button", { name: "Approve", exact: true }),
   );
   await expectStage(approvalCard, "Scheduled");
   await expect(approvalCard).toContainText("Approved — pick a time");
-  const schedule = await counter.openDialog(
-    page,
-    approvalCard.getByRole("button", { name: "Pick a time" }),
-    "Schedule post",
-  );
-  await schedule.getByLabel("Date and time").fill("2026-11-02T09:30");
-  await schedule.getByLabel("Time zone").fill("Europe/London");
-  await counter.click(schedule.getByRole("button", { name: "Schedule post" }));
-  await expect(schedule).toBeHidden();
-  await expect(approvalCard).toContainText("Scheduled");
-  await expect(
-    approvalCard.getByRole("button", { name: "Pick a time" }),
-  ).toHaveCount(0);
-
   await counter.click(
-    approvalCard.getByRole("button", { name: "See on calendar" }),
+    approvalCard.getByRole("button", { name: "Schedule in Calendar" }),
   );
   await expect(page).toHaveURL(/#\/calendar\?.*approvalId=\d+/);
   const unplanned = page.getByTestId("calendar-link-unplanned");
@@ -205,11 +192,14 @@ test("walks one idea to a planned, scheduled post through next-step buttons", as
     unplanned.getByRole("button", { name: "Add to plan" }),
     "Plan a post",
   );
-  await expect(plan.getByLabel("Date and time")).toHaveValue(
-    "2026-11-02T09:30",
+  await plan.getByLabel("Time zone").fill("Europe/London");
+  await counter.click(plan.getByLabel("Date", { exact: true }));
+  const grid = page.getByRole("dialog", { name: "Choose a date" });
+  await counter.click(
+    grid.locator("td[data-day]:not([data-outside]) button").last(),
   );
-  await expect(plan.getByLabel("Time zone")).toHaveValue("Europe/London");
-  await plan.getByLabel("Angle").fill("Operator lesson");
+  await expect(grid).toBeHidden();
+  await plan.getByLabel("Time", { exact: true }).fill("09:30");
   await plan.getByLabel("Look and feel").fill("Text only");
   await plan.getByLabel("Call to action").fill("Save this");
   await counter.click(plan.getByRole("button", { name: "Plan post" }));
@@ -217,14 +207,18 @@ test("walks one idea to a planned, scheduled post through next-step buttons", as
   const slot = page.locator('[data-highlighted="true"]');
   await expect(slot).toContainText("Jane Flow");
   await expect(unplanned).toBeHidden();
+  await counter.click(slot.getByRole("button", { name: "Schedule post" }));
+  await expect(
+    slot.getByText("Scheduled", { exact: true }).first(),
+  ).toBeVisible();
 
   // ---- 7. Every card tells the same story.
-  await tabs.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expectStage(ideaCard, "Scheduled");
   await expect(
     ideaCard.getByRole("button", { name: "See on calendar" }),
   ).toBeVisible();
-  await tabs.getByRole("button", { name: /^Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expectStage(
     page.locator(".linkgo-card", { hasText: "Jane Flow" }).first(),
     "Scheduled",
@@ -232,8 +226,8 @@ test("walks one idea to a planned, scheduled post through next-step buttons", as
 
   // ---- 8. Documented in docs/features/post-flow.md ("After").
   expect({ clicks: counter.clicks, dialogs: counter.dialogs }).toEqual({
-    clicks: 15,
-    dialogs: 4,
+    clicks: 16,
+    dialogs: 3,
   });
 });
 
@@ -266,8 +260,8 @@ test("Practice mode is explicit and only the default without an AI account", asy
   });
   // Accounts are read when the screen mounts, so leave Drafts and come back
   // (a reload would wipe the in-page mock data).
-  await page.getByRole("button", { name: /^Ideas/ }).click();
-  await page.getByRole("button", { name: /^Drafts/ }).click();
+  await openSection(page, "Create", "Ideas");
+  await openSection(page, "Create", "Drafts");
   await page.getByRole("button", { name: "Write with AI" }).click();
   write = page.getByRole("dialog", { name: "Write versions with AI" });
   await expect(write.getByLabel("AI service")).toHaveValue("openai");
@@ -301,9 +295,9 @@ test("disabled next steps explain why and link to the fix", async ({
     ),
   ).toEqual(["#/campaigns", "#/campaigns"]);
 
-  await page.getByRole("button", { name: /^Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page, { navigate: false });
-  await page.getByRole("button", { name: /^Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(writeButton).toHaveAccessibleDescription(
     /No ideas left to write/,
   );
@@ -317,7 +311,7 @@ test("disabled next steps explain why and link to the fix", async ({
     ).toHaveAttribute("href", "#/queue");
   }
 
-  await page.getByRole("button", { name: /^Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   const sendButton = page.getByRole("button", { name: "Send for approval" });
   await expect(sendButton).toBeDisabled();
   await expect(sendButton).toHaveAccessibleDescription(

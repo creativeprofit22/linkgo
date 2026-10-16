@@ -7,6 +7,19 @@ import {
   type Page,
   test as base,
 } from "@playwright/test";
+import {
+  expectCurrentScreen,
+  type MenuScreenId,
+  openScreen as openMenuScreen,
+  screenMenu,
+} from "../tests/helpers/navigation";
+
+export type { MenuScreenId };
+
+/** Every screen reachable from the Main menu, in menu order. */
+export const MENU_SCREENS: readonly MenuScreenId[] = Object.keys(
+  screenMenu,
+).filter((id): id is MenuScreenId => id in screenMenu);
 
 /** Image name of the isolated release-candidate test build. */
 const RC_IMAGE = "linkgo-rctest.exe";
@@ -56,10 +69,11 @@ async function mainPage(browser: Browser): Promise<Page> {
   for (const context of browser.contexts()) {
     for (const page of context.pages()) {
       const url = page.url();
+      // Single window: it may legitimately sit at `#/settings` because the
+      // app restores the last screen, so match on the app origin only.
       if (
-        (url.startsWith("http://tauri.localhost") ||
-          url.startsWith("tauri://localhost")) &&
-        !url.includes("settings")
+        url.startsWith("http://tauri.localhost") ||
+        url.startsWith("tauri://localhost")
       ) {
         return page;
       }
@@ -113,13 +127,13 @@ export async function call<T>(
   return result.value as T;
 }
 
-/** Opens a main-window section from the sidebar and waits for it. */
-export async function openScreen(page: Page, label: string): Promise<void> {
-  const button = page
-    .getByRole("navigation", { name: "Linkgo sections" })
-    .getByRole("button", { name: new RegExp(`^${label}`) });
-  await button.click();
-  await expect(button).toHaveAttribute("aria-current", "page");
+/**
+ * Opens a screen through the Main menu (area, then section) and waits until
+ * it is marked current. Shares the menu map with the browser e2e suite.
+ */
+export async function openScreen(page: Page, id: MenuScreenId): Promise<void> {
+  await openMenuScreen(page, id);
+  await expectCurrentScreen(page, id);
 }
 
 export const test = base.extend<{ app: Page }>({

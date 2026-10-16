@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openSection } from "./helpers/navigation";
 
 /**
  * These specs deliberately skip `setupTauriMocks`: the page has no Tauri
@@ -28,7 +29,7 @@ test("approvals explain the desktop requirement instead of a runtime TypeError",
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
@@ -59,17 +60,16 @@ test("scheduler controls explain the desktop requirement and never fake success"
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Auto-posting/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Auto-posting", exact: true }),
-  ).toBeVisible();
+  await openSection(page, "Calendar");
+  const panel = page.getByRole("complementary", { name: "Auto-posting" });
+  await expect(panel).toBeVisible();
   await expect(page.getByText(DESKTOP_REQUIRED_TEXT).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Turn on auto-posting" }).click();
+  await panel.getByRole("button", { name: "Turn on auto-posting" }).click();
   await expect(
     page.getByText("We couldn't turn on auto-posting"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Post what's due now" }).click();
+  await panel.getByRole("button", { name: "Post what's due now" }).click();
   await expect(page.getByText("We couldn't check for due posts")).toBeVisible();
 
   await expect(page.getByText("Auto-posting is on")).toHaveCount(0);
@@ -117,7 +117,7 @@ test("integrations disable credential changes and never report fake success", as
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   await expect(
     page.getByRole("heading", { name: "Connected accounts", exact: true }),
   ).toBeVisible();

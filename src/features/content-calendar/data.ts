@@ -1,4 +1,4 @@
-import { scheduleApproval } from "@/features/approvals/data";
+import { cancelSchedule, scheduleApproval } from "@/features/approvals/data";
 import { invokeCommand } from "@/lib/tauri";
 import { z } from "zod";
 import {
@@ -11,12 +11,15 @@ import {
 } from "@/features/content-calendar/record-schemas";
 import {
   archiveContentCalendarSlotSchema,
+  cancelContentCalendarSlotScheduleSchema,
   createContentCalendarSlotSchema,
+  rescheduleContentCalendarSlotSchema,
   scheduleContentCalendarSlotSchema,
   updateContentCalendarSlotSchema,
 } from "@/features/content-calendar/schemas";
 import type {
   ArchiveContentCalendarSlotInput,
+  CancelContentCalendarSlotScheduleInput,
   ContentCalendarApprovalSnapshot,
   ContentCalendarDraftSnapshot,
   ContentCalendarEligibleApproval,
@@ -26,6 +29,8 @@ import type {
   ContentCalendarSlotWithDetails,
   ContentCalendarVariantSnapshot,
   CreateContentCalendarSlotInput,
+  RescheduleContentCalendarSlotInput,
+  RescheduleContentCalendarSlotResult,
   ScheduleContentCalendarSlotInput,
   UpdateContentCalendarSlotInput,
 } from "@/features/content-calendar/types";
@@ -269,4 +274,65 @@ export async function scheduleContentCalendarSlot(
     }),
   );
   await scheduleApproval(target);
+}
+
+/**
+ * Moves a slot to a new time: saves the time, cancels the job still waiting
+ * to post (if any), then schedules again through the same preflight. Native
+ * re-checks every step. Not atomic: a failure after the cancel leaves the
+ * post approved and unscheduled, reported as `previousScheduleCancelled`.
+ */
+export async function rescheduleContentCalendarSlot(
+  input: RescheduleContentCalendarSlotInput,
+): Promise<RescheduleContentCalendarSlotResult> {
+  const { activeScheduleJobId, ...slot } =
+    rescheduleContentCalendarSlotSchema.parse(input);
+
+  try {
+    await updateContentCalendarSlot(slot);
+  } catch (error) {
+    return {
+      ok: false,
+      stage: "update",
+      previousScheduleCancelled: false,
+      error,
+    };
+  }
+
+  if (activeScheduleJobId !== null) {
+    try {
+      await cancelSchedule({ id: activeScheduleJobId });
+    } catch (error) {
+      return {
+        ok: false,
+        stage: "cancel",
+        previousScheduleCancelled: false,
+        error,
+      };
+    }
+  }
+
+  try {
+    await scheduleContentCalendarSlot({ id: slot.id });
+  } catch (error) {
+    return {
+      ok: false,
+      stage: "schedule",
+      previousScheduleCancelled: activeScheduleJobId !== null,
+      error,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Cancels a waiting schedule job by id; native resets the post to approved.
+ * No slot ownership check: the native command takes a job id only.
+ */
+export async function cancelContentCalendarSlotSchedule(
+  input: CancelContentCalendarSlotScheduleInput,
+): Promise<void> {
+  const parsed = cancelContentCalendarSlotScheduleSchema.parse(input);
+  await cancelSchedule({ id: parsed.scheduleJobId });
 }

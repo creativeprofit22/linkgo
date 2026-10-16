@@ -1,22 +1,12 @@
-import { call, expect, invoke, openScreen, scenario, test } from "./rc-app";
-
-const SCREENS = [
-  "Campaigns",
-  "Autopilot",
-  "Backlog",
-  "Queue",
-  "Drafts",
-  "Approvals",
-  "Calendar",
-  "Scheduler",
-  "Comments",
-  "Metrics",
-  "Workflows",
-  "Agent Runtime",
-  "Playbooks",
-  "Integrations",
-  "Safety",
-] as const;
+import {
+  call,
+  expect,
+  invoke,
+  MENU_SCREENS,
+  openScreen,
+  scenario,
+  test,
+} from "./rc-app";
 
 test.skip(scenario() === undefined, "set LINKGO_DESKTOP_SCENARIO");
 
@@ -25,7 +15,7 @@ test("every screen loads over real IPC without an error state", async ({
 }) => {
   const errors: string[] = [];
   app.on("pageerror", (error) => errors.push(error.message));
-  for (const screen of SCREENS) {
+  for (const screen of MENU_SCREENS) {
     await openScreen(app, screen);
     await app.waitForLoadState("networkidle");
     await expect(app.getByText(/Could not load|Failed to load/i)).toHaveCount(
@@ -51,8 +41,12 @@ test("ACL rejects raw SQL and unknown commands from the main window", async ({
     });
     expect(result.ok, command).toBe(false);
   }
-  // Settings-only commands stay off the main window.
-  expect((await invoke(app, "plugin:autostart|enable")).ok).toBe(false);
+  // The in-app Settings screen reads autostart from the main window. Only the
+  // read-only check runs here; enable would add a Run entry (see lifecycle).
+  expect((await invoke(app, "plugin:autostart|is_enabled")).ok).toBe(true);
+  // The Settings window is gone, so its opener must not be callable (mirrors
+  // main_window_grants_startup_controls in command_registry_tests.rs).
+  expect((await invoke(app, "linkgo_window_open_settings")).ok).toBe(false);
 });
 
 test("safety settings are readable through the typed command API", async ({

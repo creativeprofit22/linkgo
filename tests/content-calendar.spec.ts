@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { pickDateTime } from "./helpers/calendar-scheduling";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -77,9 +79,9 @@ test("hides schedule action when approval has a completed schedule job", async (
 
   await page.getByRole("button", { name: "Schedule post" }).click();
   await markScheduleCompletedAndApprovalApproved(page, 1, 1);
-  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
 
-  await expect(page.getByText("2026-07-17T09:00 · local · Done")).toBeVisible();
+  await expect(page.getByText(/Jul.*2026.*09:00.*· Done$/)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Schedule post" }),
   ).toBeHidden();
@@ -106,7 +108,7 @@ test("edits calendar slot metadata and keeps it after refresh", async ({
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
 
-  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(getBadge(page, "Conversion")).toBeVisible();
   await expect(page.getByText("Video", { exact: true })).toBeVisible();
   await expect(
@@ -145,7 +147,7 @@ test("archived campaigns block new slots and slot changes", async ({
   await createCalendarSlot(page, { slotFor: "2026-07-19T10:00" });
   await archiveCampaignThroughMockSql(page, 1);
 
-  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await page.getByRole("combobox").selectOption("1");
   await expect(
     page.getByText("This campaign is archived", { exact: true }),
@@ -196,14 +198,14 @@ function getBadge(page: Page, label: string): Locator {
 }
 
 async function openCalendar(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Calendar/ }).click();
+  await openSection(page, "Calendar");
   await expect(
     page.getByRole("heading", { name: "Calendar", exact: true }),
   ).toBeVisible();
 }
 
 async function openApprovals(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
@@ -259,14 +261,14 @@ async function makeDraftApprovalEligible(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openDrafts(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
@@ -346,8 +348,8 @@ async function createCalendarSlot(
   await page.getByRole("button", { name: "Plan a post" }).click();
   const dialog = page.getByRole("dialog", { name: "Plan a post" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Date and time").fill(input.slotFor);
   await dialog.getByLabel("Time zone").fill(input.timezone ?? "local");
+  await pickDateTime(page, dialog, input.slotFor);
   await dialog.getByLabel("Goal").selectOption(input.purpose ?? "trust");
   await dialog.getByLabel("Format").selectOption(input.format ?? "text");
   await dialog

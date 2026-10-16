@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expectCurrentScreen } from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
 /**
@@ -517,11 +518,7 @@ test("a fresh start lands on Today with setup first", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expect(page).toHaveURL(/#\/today$/);
-  await expect(
-    page
-      .getByRole("navigation", { name: "Main menu" })
-      .getByRole("button", { name: /^Today/ }),
-  ).toHaveAttribute("aria-current", "page");
+  await expectCurrentScreen(page, "today");
   await expect(row(page, "setup")).toBeVisible();
 });
 

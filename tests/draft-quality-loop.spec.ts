@@ -4,6 +4,7 @@ import { setupTauriMocks } from "./helpers/tauri-mocks";
 import { readFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { createServer, type ViteDevServer } from "vite";
+import { openSection } from "./helpers/navigation";
 
 // Vite treats `port: 0` as its default (5173), which Windows may reserve
 // (EACCES). Ask the OS for a genuinely free loopback port instead.
@@ -41,7 +42,7 @@ const settlement = JSON.parse(
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
   await page.goto("/#/campaigns");
-  await page.getByRole("button", { name: "Drafts" }).click();
+  await openSection(page, "Create", "Drafts");
 });
 
 const deterministicFixtures = JSON.parse(
@@ -508,8 +509,8 @@ test("scored attempt renders native-shaped category scores in the scorecard", as
     ),
   );
 
-  await page.getByRole("button", { name: "Campaigns" }).click();
-  await page.getByRole("button", { name: "Drafts" }).click();
+  await openSection(page, "Create", "Campaigns");
+  await openSection(page, "Create", "Drafts");
   const panel = page.getByRole("region", { name: "Quality score" }).filter({
     has: page.locator(`#quality-${variantId}-title`),
   });
@@ -579,8 +580,8 @@ for (const scenario of [
       return scope.draftVariantId;
     }, scenario.settlementError);
 
-    await page.getByRole("button", { name: "Campaigns" }).click();
-    await page.getByRole("button", { name: "Drafts" }).click();
+    await openSection(page, "Create", "Campaigns");
+    await openSection(page, "Create", "Drafts");
     const panel = page.getByRole("region", { name: "Quality score" }).filter({
       has: page.locator(`#quality-${variantId}-title`),
     });
@@ -632,8 +633,8 @@ test("oversized provider error is bounded before failure settlement", async ({
     return scope.draftVariantId;
   });
 
-  await page.getByRole("button", { name: "Campaigns" }).click();
-  await page.getByRole("button", { name: "Drafts" }).click();
+  await openSection(page, "Create", "Campaigns");
+  await openSection(page, "Create", "Drafts");
   const panel = page.getByRole("region", { name: "Quality score" }).filter({
     has: page.locator(`#quality-${variantId}-title`),
   });

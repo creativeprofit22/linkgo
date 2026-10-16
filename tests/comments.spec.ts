@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -565,28 +566,28 @@ function secondCleanComment(): string {
 }
 
 async function openCampaigns(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openComments(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Comments/ }).click();
+  await openSection(page, "Create", "Replies");
   await expect(
     page.getByRole("heading", { name: "Comments", exact: true }),
   ).toBeVisible();
 }
 
 async function openSafety(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Safety/ }).click();
+  await openSection(page, "Settings", "Safety");
   await expect(
     page.getByRole("heading", { name: "Safety", exact: true }),
   ).toBeVisible();

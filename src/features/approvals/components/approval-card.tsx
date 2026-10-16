@@ -12,16 +12,13 @@ import { toPlainMessage } from "@/lib/plain-message";
 import { PublishLinkedInDialog } from "@/features/approvals/components/publish-linkedin-dialog";
 import { RecordPublishAttemptDialog } from "@/features/approvals/components/record-publish-attempt-dialog";
 import { RejectApprovalDialog } from "@/features/approvals/components/reject-approval-dialog";
-import { ScheduleApprovalDialog } from "@/features/approvals/components/schedule-approval-dialog";
 import {
   composeLinkedInCommentary,
   escapeLinkedInLittleText,
 } from "@/features/approvals/linkedin-format";
 import type {
   ApprovalWithDetails,
-  CancelScheduleInput,
   RecordPublishAttemptInput,
-  ScheduleApprovalInput,
   SetApprovalStatusInput,
 } from "@/features/approvals/types";
 import {
@@ -51,8 +48,6 @@ interface ApprovalCardProps {
   /** Open execution whose LinkedIn outcome is unknown; shows the resolver. */
   outcomeUnknownExecution?: OpenPublishExecution | null;
   onSetStatus: (input: SetApprovalStatusInput) => Promise<void>;
-  onSchedule: (input: ScheduleApprovalInput) => Promise<void>;
-  onCancelSchedule: (input: CancelScheduleInput) => Promise<void>;
   onRecordPublishAttempt: (input: RecordPublishAttemptInput) => Promise<void>;
   onPublished: () => Promise<void> | void;
 }
@@ -66,8 +61,6 @@ export function ApprovalCard({
   publishLock,
   outcomeUnknownExecution = null,
   onSetStatus,
-  onSchedule,
-  onCancelSchedule,
   onRecordPublishAttempt,
   onPublished,
 }: ApprovalCardProps): React.ReactNode {
@@ -96,10 +89,6 @@ export function ApprovalCard({
     approval.status === "approved" &&
     (!approval.scheduleJob ||
       ["cancelled", "failed"].includes(approval.scheduleJob.status));
-  const canCancelSchedule =
-    !isArchivedCampaign &&
-    approval.scheduleJob?.status === "scheduled" &&
-    approval.status === "scheduled";
   const hasSuccessfulPublishAttempt = approval.publishAttempts.some(
     (attempt) => attempt.status === "succeeded",
   );
@@ -132,16 +121,13 @@ export function ApprovalCard({
       ? "1 waiting AI assistant task will be cancelled and can't be continued."
       : `${approval.linkedAgentRunCount} waiting AI assistant tasks will be cancelled and can't be continued.`;
 
-  function cancelScheduleJob(): void {
-    const scheduleJob = approval.scheduleJob;
-    if (!scheduleJob) return;
-    if (
-      window.confirm(
-        "Cancel this scheduled post? It will go back to Approved and won't post.",
-      )
-    ) {
-      void onCancelSchedule({ id: scheduleJob.id });
-    }
+  // Scheduling, rescheduling and cancelling all happen in the Calendar; it
+  // opens on this post (or offers "Add to plan" when it isn't planned yet).
+  function openInCalendar(): void {
+    navigateTo(contentCalendarRoute, {
+      campaignId: approval.draft.campaign_id,
+      approvalId: approval.id,
+    });
   }
 
   return (
@@ -237,25 +223,17 @@ export function ApprovalCard({
               />
             )}
             {canSchedule && (
-              <ScheduleApprovalDialog
-                approvalId={approval.id}
-                onSchedule={onSchedule}
-                triggerLabel={scheduleFailed ? "Schedule again" : "Pick a time"}
-              />
+              <Button type="button" size="sm" onClick={openInCalendar}>
+                <CalendarDays aria-hidden="true" className="size-4" />
+                {scheduleFailed
+                  ? "Schedule again in Calendar"
+                  : "Schedule in Calendar"}
+              </Button>
             )}
             {canSeeOnCalendar && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() =>
-                  navigateTo(contentCalendarRoute, {
-                    campaignId: approval.draft.campaign_id,
-                    approvalId: approval.id,
-                  })
-                }
-              >
+              <Button type="button" size="sm" onClick={openInCalendar}>
                 <CalendarDays aria-hidden="true" className="size-4" />
-                See on calendar
+                Change time in Calendar
               </Button>
             )}
             {scheduleBlockedByKillSwitch && (
@@ -263,16 +241,6 @@ export function ApprovalCard({
                 Emergency pause is on, so posts can't be scheduled.
                 {killSwitchReason ? ` ${killSwitchReason}` : ""}
               </p>
-            )}
-            {canCancelSchedule && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={cancelScheduleJob}
-              >
-                Cancel schedule
-              </Button>
             )}
             {canRecordPublish && isReady && (
               <RecordPublishAttemptDialog
@@ -392,7 +360,7 @@ export function ApprovalCard({
                   ? toPlainMessage(approval.scheduleJob.last_error ?? "")
                   : "The automatic post didn't go out."}{" "}
                 {canSchedule
-                  ? "Use “Schedule again” to pick a new time."
+                  ? "Use “Schedule again in Calendar” to pick a new time."
                   : null}
               </p>
             )}

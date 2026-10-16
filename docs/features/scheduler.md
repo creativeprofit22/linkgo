@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The **Auto-posting** tab controls an opt-in native background worker (the scheduler) for approved scheduled LinkedIn posts.
+The **Auto-posting** panel, a side panel on the [Calendar](content-calendar.md), controls an opt-in native background worker (the scheduler) for approved scheduled LinkedIn posts.
 
 It runs only while Linkgo is running or hidden to the system tray. It does not run after the Linkgo process quits.
 
@@ -83,7 +83,7 @@ Ambiguous outcome (timeout after send, 5xx, unreadable success):
 
 - Records no attempt row; the execution becomes `outcome_unknown`.
 - Leaves the approval `scheduled` and the job unfinished, with its lock cleared.
-- Is **never retried automatically**. (A plain `failed` job is different: its Auto-posting card says "This post didn't go out. Pick a new time on its approval." with a **Schedule again** link to the approval, whose existing schedule dialog may reschedule it.) The job stays excluded until an operator reconciles it in Safety (on screen: "Check what happened to these posts").
+- Is **never retried automatically**. (A plain `failed` job is different: its Auto-posting card says "This post didn't go out. Pick a new time for it." with a **Reschedule** button that opens the Calendar's time picker.) The job stays excluded until an operator reconciles it in Safety (on screen: "Check what happened to these posts").
 - Creates a warning error queue item and a `job_blocked` scheduler event.
 
 Retries happen only after a definite failure (4xx including 429, connect failure, or a credential/scope failure before send).
@@ -96,14 +96,20 @@ Kill switch block:
 
 ## UI behavior
 
-The Auto-posting tab shows:
+There is no Auto-posting tab any more. `AutoPostingPanel` (`src/features/scheduler/components/auto-posting-panel.tsx`, exported from the feature's `index.ts`) renders as `<aside aria-label="Auto-posting">` beside the Calendar's slots and follows the Calendar's campaign filter. Old `#/scheduler` links open the Calendar ([navigation](navigation.md)). The panel shows:
 
 - Status: `Off`, `Off after restart`, `On`, or `Checking…`.
 - Turn on auto-posting, Turn off auto-posting, Post what's due now, and Refresh controls.
-- An "Emergency pause is on" banner when the global kill switch is enabled.
+- An "Emergency pause is on" banner when the global kill switch is enabled, and the "turned off when Linkgo restarted" notice.
+- Counts: Waiting, Due now, Didn't post.
 - Due and pending schedule cards ("Coming up").
-- Recent scheduler events ("Recent activity").
-- Scheduler-linked publish attempts ("Recent posting attempts"). Each row leads with the post's opening line (the approved variant's `hook`, returned as `variant_hook`; "Approved post" when it is empty), then the campaign name ("Campaign removed" when it is gone) and the outcome. Each row also returns the live `schedule_job_status`, `approval_status` and `campaign_status` (null when the row is gone). A failed attempt shows **Schedule again** only when its job is still `failed`, the approval is `approved` and the campaign is not archived (`canScheduleAgain`, mirroring the native `approval_scheduling` gate; the due-job card uses the same rule). A failed attempt whose job was already rescheduled says "Scheduled again." instead.
+- "Posts that didn't go out", each with **Reschedule** where the rules allow.
+- Recent scheduler events ("Recent activity", collapsed by default).
+- Scheduler-linked publish attempts ("Recent posting attempts"). Each row leads with the post's opening line (the approved variant's `hook`, returned as `variant_hook`; "Approved post" when it is empty), then the campaign name ("Campaign removed" when it is gone) and the outcome. Each row also returns the live `schedule_job_status`, `approval_status` and `campaign_status` (null when the row is gone). A failed attempt shows **Reschedule** only when its job is still `failed`, the approval is `approved` and the campaign is not archived (`canScheduleAgain`, mirroring the native `approval_scheduling` gate; the due-job card uses the same rule). A failed attempt whose job was already rescheduled says "Scheduled again." instead.
+
+Reschedule calls the panel's `onReschedule({ campaignId, approvalId })` prop. The Calendar supplies it: it opens that slot's "Pick a new time" dialog, or the Add to plan flow when the post has no slot, so the scheduler feature doesn't import the calendar. There is no native "retry now" command, so retrying a post that didn't go out means picking a new time; native rules re-check it.
+
+Refresh runs both ways. The Calendar bumps the panel's `refreshToken` after it changes a schedule. The panel calls its optional `onScheduleChanged()` prop after a successful Post what's due now and after its Refresh button reloads; the Calendar passes `reloadSlots()` from `useContentCalendar`, a quiet reload (no loading screen or toasts) of the current campaign's slots, so slot cards never keep a stale "Scheduled" state or job id.
 
 ## Restart and crash behavior
 
@@ -116,12 +122,12 @@ On startup Linkgo only runs the recovery sweep, which never contacts LinkedIn. T
 
 An execution interrupted less than 10 minutes before Linkgo restarted is not stale yet, so it still shows as "Posting…" rather than "Couldn't confirm". Its lease still blocks a duplicate publish with the same idempotency key.
 
-The Auto-posting tab makes this visible: when status is `enabled: true, running: false`, the status card reads **Off after restart** and a notice ("Auto-posting turned off when Linkgo restarted") says auto-posting was on when Linkgo last closed and asks the operator to check Safety before pressing Turn on auto-posting. Nothing starts automatically; the notice clears once the operator starts or stops the scheduler.
+The Auto-posting panel makes this visible: when status is `enabled: true, running: false`, the status card reads **Off after restart** and a notice ("Auto-posting turned off when Linkgo restarted") says auto-posting was on when Linkgo last closed and asks the operator to check Safety before pressing Turn on auto-posting. Nothing starts automatically; the notice clears once the operator starts or stops the scheduler.
 
 Operator recovery after a restart:
 
 1. Open **Safety** and, under "Check what happened to these posts", reconcile every publish marked "Couldn't confirm": press **Check what happened**, check LinkedIn, then choose Posted on LinkedIn (with the link) or Not posted, type the confirmation and press **Confirm result**. If Linkgo restarted less than 10 minutes after the interruption, a publish may still show as "Posting…"; wait and reopen Safety before pressing Turn on auto-posting.
-2. Review due jobs under "Coming up" on the Auto-posting screen.
+2. Review due jobs under "Coming up" in the Calendar's Auto-posting panel.
 3. Press Turn on auto-posting.
 
 Verified on the packaged Windows build with a hard kill (`docs/verification/2026-09-27-desktop-release-candidate.md`).
@@ -138,7 +144,7 @@ Verified on the packaged Windows build with a hard kill (`docs/verification/2026
 ## Verification commands
 
 ```bash
-bun run test -- tests/scheduler.spec.ts
+bun run test -- tests/scheduler.spec.ts tests/scheduling-calendar.spec.ts
 bun run test:rust
 bun run check
 ```

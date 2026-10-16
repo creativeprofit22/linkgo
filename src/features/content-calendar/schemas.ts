@@ -73,6 +73,20 @@ export const scheduleContentCalendarSlotSchema = z.object({
 });
 
 /**
+ * Moves a slot to a new time. Carries the slot's current plan fields so only
+ * the time changes; `activeScheduleJobId` is the job to cancel first (only a
+ * job still waiting to post), or null when nothing is waiting.
+ */
+export const rescheduleContentCalendarSlotSchema =
+  updateContentCalendarSlotSchema.extend({
+    activeScheduleJobId: idSchema.nullable(),
+  });
+
+export const cancelContentCalendarSlotScheduleSchema = z.object({
+  scheduleJobId: idSchema,
+});
+
+/**
  * Link params for Calendar. `approvalId` highlights that post's plan slot and
  * needs its campaign. Mirrors `ContentCalendarRouteParams`.
  */

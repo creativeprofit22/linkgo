@@ -1,5 +1,6 @@
 import { Pencil } from "lucide-react";
 import { useEffect, useState, type SyntheticEvent } from "react";
+import { DateTimePicker } from "@/components/date-time-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -84,6 +85,10 @@ export function EditContentCalendarSlotDialog({
   const [form, setForm] = useState<CalendarSlotFormState>(() =>
     getInitialFormState(slot),
   );
+  // The worker posts at the schedule job's time, not the slot's, so a
+  // scheduled post's time only changes through Reschedule.
+  const timeLocked = slot.scheduleJob?.status === "scheduled";
+  const timeLockedHintId = `calendar-time-locked-${slot.id}`;
 
   useEffect(() => {
     if (!open) return;
@@ -99,8 +104,8 @@ export function EditContentCalendarSlotDialog({
       await onUpdate({
         id: slot.id,
         purpose: form.purpose,
-        slotFor: form.slotFor,
-        timezone: form.timezone,
+        slotFor: timeLocked ? slot.slot_for : form.slotFor,
+        timezone: timeLocked ? slot.timezone : form.timezone,
         format: form.format,
         angle: form.angle,
         visualDirection: form.visualDirection,
@@ -136,29 +141,33 @@ export function EditContentCalendarSlotDialog({
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Date and time"
-              htmlFor={`calendar-slot-for-${slot.id}`}
-            >
-              <Input
-                id={`calendar-slot-for-${slot.id}`}
-                type="datetime-local"
-                value={form.slotFor}
-                required
-                maxLength={80}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    slotFor: event.target.value,
-                  }))
-                }
-              />
-            </Field>
+            {timeLocked && (
+              <p
+                id={timeLockedHintId}
+                className="text-muted-foreground text-sm sm:col-span-2"
+              >
+                This post is scheduled. Use Reschedule to change its time.
+              </p>
+            )}
+            <DateTimePicker
+              id={`calendar-slot-for-${slot.id}`}
+              className="sm:col-span-2"
+              value={form.slotFor}
+              timezone={form.timezone}
+              disabled={timeLocked}
+              onChange={(slotFor) =>
+                setForm((current) => ({ ...current, slotFor }))
+              }
+            />
             <Field label="Time zone" htmlFor={`calendar-timezone-${slot.id}`}>
               <Input
                 id={`calendar-timezone-${slot.id}`}
                 value={form.timezone}
                 maxLength={80}
+                disabled={timeLocked}
+                {...(timeLocked
+                  ? { "aria-describedby": timeLockedHintId }
+                  : {})}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,

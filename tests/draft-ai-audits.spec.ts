@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { DraftVariantWithAudits } from "../src/features/drafts/types";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 type DraftAuditTestApi = Pick<
   typeof import("../src/features/drafts/data"),
@@ -1083,7 +1084,7 @@ test("bounds each reconciliation candidate class", async ({ page }) => {
 
 async function openSeededAuditPanel(page: Page) {
   await seedVariant(page);
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();

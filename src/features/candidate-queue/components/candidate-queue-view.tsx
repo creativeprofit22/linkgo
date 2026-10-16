@@ -191,6 +191,7 @@ export function CandidateQueueView(): React.ReactNode {
               </p>
             </div>
             <select
+              aria-label="Selected campaign"
               value={selectedCampaignId ?? ""}
               onChange={(event) => {
                 const nextId = Number(event.target.value);

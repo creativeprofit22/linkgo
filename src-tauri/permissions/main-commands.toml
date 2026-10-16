@@ -1,10 +1,9 @@
 # Linkgo app commands granted to the `main` window.
 # Kept in sync with `tauri::generate_handler!` by command_registry_tests.rs.
-# Settings-window commands live in settings-commands.toml.
 
 [[set]]
 identifier = "main-commands"
-description = "Linkgo commands used by the main window. Excludes settings-window-only commands."
+description = "Linkgo commands used by the main window (the only window)."
 permissions = [
   "allow-linkgo-agent-provider-stream",
   "allow-linkgo-agent-run-cancel",
@@ -143,10 +142,11 @@ permissions = [
   "allow-linkgo-scheduler-status",
   "allow-linkgo-scheduler-stop",
   "allow-linkgo-scheduler-tick",
+  "allow-linkgo-settings-launch-on-login-error-record",
+  "allow-linkgo-settings-launch-on-login-sync",
   "allow-linkgo-source-import-dashboard",
   "allow-linkgo-source-import-recover-interrupted",
   "allow-linkgo-source-import-write-batch",
-  "allow-linkgo-window-open-settings",
   "allow-linkgo-workflow-add-note",
   "allow-linkgo-workflow-cancel-run",
   "allow-linkgo-workflow-create-artifact",

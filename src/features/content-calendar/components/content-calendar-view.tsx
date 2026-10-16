@@ -7,6 +7,7 @@ import {
   Target,
 } from "lucide-react";
 import { CreateFirstCampaignButton } from "@/features/campaigns";
+import { AutoPostingPanel, type RescheduleTarget } from "@/features/scheduler";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,12 +39,29 @@ export function ContentCalendarView(): React.ReactNode {
     saving,
     error,
     loadCalendar,
+    reloadSlots,
     selectCampaign,
     createSlot,
     updateSlot,
     archiveSlot,
     scheduleSlot,
+    rescheduleSlot,
+    cancelSlotSchedule,
   } = useContentCalendar({ initialCampaignId: linkParams?.campaignId });
+  // One reschedule dialog at a time; the side panel can open it too.
+  const [rescheduleSlotId, setRescheduleSlotId] = useState<number | null>(null);
+  // Bumped after any schedule change here so the side panel reloads too.
+  const [panelRefreshToken, setPanelRefreshToken] = useState(0);
+  const refreshPanel = (): void => setPanelRefreshToken((token) => token + 1);
+  const withPanelRefresh =
+    <Args extends unknown[]>(action: (...args: Args) => Promise<void>) =>
+    async (...args: Args): Promise<void> => {
+      try {
+        await action(...args);
+      } finally {
+        refreshPanel();
+      }
+    };
 
   const summary = getCalendarSummary(slots);
   const selectedCampaign =
@@ -72,6 +90,27 @@ export function ContentCalendarView(): React.ReactNode {
       { replace: true },
     );
 
+  // A post that didn't go out: open its slot's time picker, or fall back to
+  // the link flow, which offers "Add to plan" when it isn't planned yet.
+  const handlePanelReschedule = (target: RescheduleTarget): void => {
+    const slot = slots.find(
+      (candidate) =>
+        candidate.approval_id === target.approvalId &&
+        candidate.status !== "archived",
+    );
+    if (!slot) {
+      navigateTo(contentCalendarRoute, {
+        campaignId: target.campaignId,
+        approvalId: target.approvalId,
+      });
+      return;
+    }
+    setRescheduleSlotId(slot.id);
+    document
+      .getElementById(`calendar-slot-${slot.id}`)
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
   useEffect(() => {
     if (highlightedSlotId === null) return;
     document
@@ -80,215 +119,246 @@ export function ContentCalendarView(): React.ReactNode {
   }, [highlightedSlotId]);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="bg-linkgo-blue/10 text-linkgo-blue flex size-11 items-center justify-center rounded-xl">
-              <CalendarDays className="size-5" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                Calendar
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Plan when each approved post goes out.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={loading || saving}
-            onClick={() => void loadCalendar()}
-          >
-            <RefreshCw className="mr-2 size-4" />
-            Refresh
-          </Button>
-          <CreateContentCalendarSlotDialog
-            eligibleApprovals={eligibleApprovals}
-            disabled={
-              loading ||
-              saving ||
-              campaigns.length === 0 ||
-              selectedCampaignArchived
-            }
-            onCreate={createSlot}
-            open={planOpen}
-            onOpenChange={setPlanOpen}
-            presetApprovalId={presetApprovalId}
-          />
-        </div>
-      </div>
-
-      {link.kind === "unplanned" && (
-        <div
-          role="status"
-          data-testid="calendar-link-unplanned"
-          className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
-        >
-          <span className="flex items-center gap-2">
-            <Info aria-hidden="true" className="size-4 shrink-0" />
-            {getUnplannedMessage(link.approval)}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={saving || selectedCampaignArchived}
-              onClick={() => setPlanOpen(true)}
-            >
-              <CalendarPlus aria-hidden="true" className="size-4" />
-              Add to plan
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={dismissLink}
-            >
-              Not now
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {link.kind === "notice" && (
-        <div
-          role="status"
-          data-testid="calendar-link-notice"
-          className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
-        >
-          <span className="flex items-center gap-2">
-            <Info aria-hidden="true" className="size-4 shrink-0" />
-            {link.message}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={dismissLink}
-          >
-            OK
-          </Button>
-        </div>
-      )}
-
-      {error && (
-        <Card className="border-destructive/50 bg-destructive/5">
-          <CardContent className="flex items-center justify-between gap-4 p-4">
+    <div className="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+      <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <AlertCircle className="text-destructive size-5" />
-              <p className="text-sm">{error}</p>
+              <div className="bg-linkgo-blue/10 text-linkgo-blue flex size-11 items-center justify-center rounded-xl">
+                <CalendarDays className="size-5" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  Calendar
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Plan when each approved post goes out.
+                </p>
+              </div>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              disabled={loading || saving}
               onClick={() => void loadCalendar()}
             >
-              Try again
+              <RefreshCw className="mr-2 size-4" />
+              Refresh
             </Button>
-          </CardContent>
-        </Card>
-      )}
+            <CreateContentCalendarSlotDialog
+              eligibleApprovals={eligibleApprovals}
+              disabled={
+                loading ||
+                saving ||
+                campaigns.length === 0 ||
+                selectedCampaignArchived
+              }
+              onCreate={createSlot}
+              open={planOpen}
+              onOpenChange={setPlanOpen}
+              presetApprovalId={presetApprovalId}
+            />
+          </div>
+        </div>
 
-      {loading ? (
-        <Card className="bg-card/70">
-          <CardContent className="text-muted-foreground p-8 text-center text-sm">
-            Loading your calendar…
-          </CardContent>
-        </Card>
-      ) : campaigns.length === 0 ? (
-        <EmptyNoCampaigns />
-      ) : (
-        <>
-          <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-sm font-medium">Show posts from</p>
-              <p className="text-muted-foreground text-xs">
-                See every campaign, or focus on one.
-              </p>
+        {link.kind === "unplanned" && (
+          <div
+            role="status"
+            data-testid="calendar-link-unplanned"
+            className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+          >
+            <span className="flex items-center gap-2">
+              <Info aria-hidden="true" className="size-4 shrink-0" />
+              {getUnplannedMessage(link.approval)}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={saving || selectedCampaignArchived}
+                onClick={() => setPlanOpen(true)}
+              >
+                <CalendarPlus aria-hidden="true" className="size-4" />
+                Add to plan
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={dismissLink}
+              >
+                Not now
+              </Button>
             </div>
-            <select
-              value={selectedCampaignId ?? "all"}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                selectCampaign(nextValue === "all" ? null : Number(nextValue));
-                // Keep the address in step so Back returns to this campaign.
-                if (linkParams?.campaignId !== undefined)
-                  navigateTo(
-                    contentCalendarRoute,
-                    nextValue === "all"
-                      ? {}
-                      : { campaignId: Number(nextValue) },
-                    { replace: true },
-                  );
-              }}
-              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 min-w-60 rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+          </div>
+        )}
+
+        {link.kind === "notice" && (
+          <div
+            role="status"
+            data-testid="calendar-link-notice"
+            className="bg-muted/50 text-muted-foreground flex flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center"
+          >
+            <span className="flex items-center gap-2">
+              <Info aria-hidden="true" className="size-4 shrink-0" />
+              {link.message}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={dismissLink}
             >
-              <option value="all">All campaigns</option>
-              {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                  {campaign.status === "archived" ? " (archived)" : ""}
-                </option>
-              ))}
-            </select>
+              OK
+            </Button>
           </div>
+        )}
 
-          {selectedCampaignArchived && (
-            <Card className="border-destructive/40 bg-destructive/5">
-              <CardContent className="flex items-start gap-3 p-4">
-                <AlertCircle className="text-destructive mt-0.5 size-5" />
-                <div>
-                  <p className="font-medium">This campaign is archived</p>
-                  <p className="text-muted-foreground text-sm">
-                    Restore the campaign before you add, edit, archive, or
-                    schedule its posts.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+        {error && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="flex items-center justify-between gap-4 p-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="text-destructive size-5" />
+                <p className="text-sm">{error}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void loadCalendar()}
+              >
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard label="Planned" value={String(summary.planned)} />
-            <SummaryCard label="Scheduled" value={String(summary.scheduled)} />
-            <SummaryCard label="Posted" value={String(summary.published)} />
-            <SummaryCard label="Archived" value={String(summary.archived)} />
-          </div>
-
-          {eligibleApprovals.length === 0 && (
-            <Card className="bg-card/70 border-dashed">
-              <CardContent className="text-muted-foreground p-4 text-sm">
-                No approved posts are waiting to be planned. Approve a draft in
-                Approvals first.
-              </CardContent>
-            </Card>
-          )}
-
-          {slots.length === 0 ? (
-            <EmptyNoSlots />
-          ) : (
-            <div className="space-y-4">
-              {slots.map((slot) => (
-                <ContentCalendarSlotCard
-                  key={slot.id}
-                  slot={slot}
-                  highlighted={slot.id === highlightedSlotId}
-                  saving={saving}
-                  onUpdate={updateSlot}
-                  onArchive={archiveSlot}
-                  onSchedule={scheduleSlot}
-                />
-              ))}
+        {loading ? (
+          <Card className="bg-card/70">
+            <CardContent className="text-muted-foreground p-8 text-center text-sm">
+              Loading your calendar…
+            </CardContent>
+          </Card>
+        ) : campaigns.length === 0 ? (
+          <EmptyNoCampaigns />
+        ) : (
+          <>
+            <div className="bg-card/60 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
+              <div>
+                <p
+                  id="calendar-campaign-filter-label"
+                  className="text-sm font-medium"
+                >
+                  Show posts from
+                </p>
+                <p
+                  id="calendar-campaign-filter-hint"
+                  className="text-muted-foreground text-xs"
+                >
+                  See every campaign, or focus on one.
+                </p>
+              </div>
+              <select
+                aria-labelledby="calendar-campaign-filter-label"
+                aria-describedby="calendar-campaign-filter-hint"
+                value={selectedCampaignId ?? "all"}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  selectCampaign(
+                    nextValue === "all" ? null : Number(nextValue),
+                  );
+                  // Keep the address in step so Back returns to this campaign.
+                  if (linkParams?.campaignId !== undefined)
+                    navigateTo(
+                      contentCalendarRoute,
+                      nextValue === "all"
+                        ? {}
+                        : { campaignId: Number(nextValue) },
+                      { replace: true },
+                    );
+                }}
+                className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 min-w-60 rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
+                <option value="all">All campaigns</option>
+                {campaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.name}
+                    {campaign.status === "archived" ? " (archived)" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-        </>
-      )}
+
+            {selectedCampaignArchived && (
+              <Card className="border-destructive/40 bg-destructive/5">
+                <CardContent className="flex items-start gap-3 p-4">
+                  <AlertCircle className="text-destructive mt-0.5 size-5" />
+                  <div>
+                    <p className="font-medium">This campaign is archived</p>
+                    <p className="text-muted-foreground text-sm">
+                      Restore the campaign before you add, edit, archive, or
+                      schedule its posts.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <SummaryCard label="Planned" value={String(summary.planned)} />
+              <SummaryCard
+                label="Scheduled"
+                value={String(summary.scheduled)}
+              />
+              <SummaryCard label="Posted" value={String(summary.published)} />
+              <SummaryCard label="Archived" value={String(summary.archived)} />
+            </div>
+
+            {eligibleApprovals.length === 0 && (
+              <Card className="bg-card/70 border-dashed">
+                <CardContent className="text-muted-foreground p-4 text-sm">
+                  No approved posts are waiting to be planned. Approve a draft
+                  in Approvals first.
+                </CardContent>
+              </Card>
+            )}
+
+            {slots.length === 0 ? (
+              <EmptyNoSlots />
+            ) : (
+              <div className="space-y-4">
+                {slots.map((slot) => (
+                  <ContentCalendarSlotCard
+                    key={slot.id}
+                    slot={slot}
+                    highlighted={slot.id === highlightedSlotId}
+                    saving={saving}
+                    onUpdate={updateSlot}
+                    onArchive={archiveSlot}
+                    onSchedule={withPanelRefresh(scheduleSlot)}
+                    onReschedule={withPanelRefresh(rescheduleSlot)}
+                    onCancelSchedule={withPanelRefresh(cancelSlotSchedule)}
+                    rescheduleOpen={rescheduleSlotId === slot.id}
+                    onRescheduleOpenChange={(open) =>
+                      setRescheduleSlotId(open ? slot.id : null)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <div className="xl:sticky xl:top-4">
+        <AutoPostingPanel
+          campaignId={selectedCampaignId}
+          refreshToken={panelRefreshToken}
+          onReschedule={handlePanelReschedule}
+          onScheduleChanged={() => void reloadSlots()}
+        />
+      </div>
     </div>
   );
 }

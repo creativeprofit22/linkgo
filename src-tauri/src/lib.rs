@@ -102,7 +102,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
-            window_commands::linkgo_window_open_settings,
             agent_continuations::linkgo_agent_settle_approved_continuation,
             approval_review::linkgo_approval_create,
             approval_review::linkgo_approval_set_status,

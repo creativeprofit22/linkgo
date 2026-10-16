@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -120,7 +121,7 @@ test("native override command rejects invalid playbook overrides", async ({
 });
 
 async function openPlaybooks(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Brand voice/ }).click();
+  await openSection(page, "Settings", "Brand voice");
   await expect(
     page.getByRole("heading", { name: "Brand voice", exact: true }),
   ).toBeVisible();

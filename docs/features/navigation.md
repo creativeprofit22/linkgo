@@ -12,12 +12,20 @@ Why it is hand-rolled rather than a router library:
 ```
 
 - Keys are sorted and empty values are left out, so one target has one link.
-- Only the hash changes. `location.pathname` still picks the window in
-  `src/main.tsx` (`/` main window, `/settings` Settings window), so the
-  Settings window, title bar and browser-preview banner are unaffected.
+- Only the hash changes. There is one window. An old `/settings` path (the
+  removed Settings window) is rewritten to `/#/settings` in `src/main.tsx`.
 - Screen ids match the old tab ids: `today`, `campaigns`, `autopilot`, `backlog`,
-  `queue` (Ideas), `drafts`, `approvals`, `calendar`, `scheduler`, `comments`,
-  `metrics`, `workflows`, `agents`, `playbooks`, `integrations`, `safety`.
+  `queue` (Ideas), `drafts`, `approvals`, `calendar`, `comments`,
+  `metrics`, `workflows`, `agents`, `playbooks`, `integrations`, `safety`,
+  plus `settings` (Settings › General, startup switch).
+- The Main menu shows 5 areas (Today, Create, Calendar, Results, Settings);
+  each screen id opens inside its area. The map, area links and phone rules
+  are in [navigation areas](navigation-areas.md).
+- Area links: `#/create` opens `#/campaigns` and `#/results` opens `#/metrics`,
+  replacing the history entry like the retired id below.
+- Retired id: `scheduler` (the old Auto-posting tab) is now a side panel on
+  the Calendar. `#/scheduler` opens `#/calendar`, replacing the history entry
+  so Back skips the retired link (`homeRouteAliases` in `src/pages/home-areas.ts`).
   `setup` (Get started) is linkable but not in the Main menu; the sidebar
   setup launcher opens it ([setup](setup.md)).
 
@@ -29,7 +37,8 @@ Why it is hand-rolled rather than a router library:
 | `navigateTo`, hooks, last-screen storage | `src/lib/navigation/use-hash-navigation.ts`                 |
 | Each screen's route entry                | That feature's public `schemas.ts` (`<feature>Route`)       |
 | Each screen's param type                 | That feature's public `types/index.ts`                      |
-| Menu order and fallback screen           | `src/pages/home.tsx`                                        |
+| Areas, menu order, aliases               | `src/pages/home-areas.ts`                                   |
+| Fallback screen and view switch          | `src/pages/home.tsx`                                        |
 
 `src/lib/navigation` never imports features, workflows or agent code. Features
 declare routes with `defineRoute(id, schema)` in `schemas.ts` rather than
@@ -183,7 +192,8 @@ Unknown provider or playbook keys and any value other than `1` are
    Exception: when `types/index.ts` already imports `schemas.ts` (Ideas), keep
    the param type in `schemas.ts` to avoid an import cycle.
 2. New screens: add the route to `homeRoutes` and a menu entry in
-   `src/pages/home.tsx`.
+   `src/pages/home-areas.ts`, and the view in `src/pages/home.tsx` (see
+   [navigation areas](navigation-areas.md#adding-a-screen)).
 3. Read params with `useRouteParams`; treat them as untrusted — check the item
    exists and show a plain fallback message when it doesn't.
 4. Add parse cases and a browser test to `tests/navigation.spec.ts`.

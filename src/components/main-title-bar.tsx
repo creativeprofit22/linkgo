@@ -2,15 +2,10 @@ import { Settings } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { TitleBar } from "@/components/title-bar";
 import { Button } from "@/components/ui/button";
-import { IS_TAURI } from "@/lib/env";
+import { settingsRoute } from "@/features/settings/schemas";
+import { navigateTo } from "@/lib/navigation/use-hash-navigation";
 
 export function MainTitleBar(): React.ReactNode {
-  const handleOpenSettings = async (): Promise<void> => {
-    if (!IS_TAURI) return;
-    const { openSettingsWindow } = await import("@/lib/window");
-    await openSettingsWindow();
-  };
-
   return (
     <TitleBar
       title="Linkgo"
@@ -20,7 +15,8 @@ export function MainTitleBar(): React.ReactNode {
             type="button"
             variant="ghost"
             size="icon-sm"
-            onClick={handleOpenSettings}
+            className="pointer-coarse:size-11"
+            onClick={() => navigateTo(settingsRoute)}
             aria-label="Open settings"
           >
             <Settings className="size-4" />

@@ -6,6 +6,7 @@ import {
   type TestInfo,
 } from "@playwright/test";
 
+import { openSection } from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
 test.use({ timezoneId: "America/New_York" });
@@ -611,7 +612,7 @@ test("supports keyboard focus return, narrow reflow, zoom, reduced motion, and f
     page.getByLabel("Campaign", { exact: true }),
     page.getByLabel("Owner", { exact: true }),
     page.getByLabel("View"),
-    page.getByRole("button", { name: "Start" }),
+    page.getByRole("button", { name: "Start", exact: true }),
   ]) {
     await expect(control).toBeVisible();
     await expect(control).toHaveCSS("border-top-style", "solid");
@@ -758,10 +759,7 @@ async function openBacklogWithCampaign(
 }
 
 async function openBacklog(page: Page): Promise<void> {
-  await page
-    .getByRole("navigation", { name: "Main menu" })
-    .getByRole("button", { name: /^Tasks/ })
-    .click();
+  await openSection(page, "Settings", "Tasks");
   await expect(
     page.getByRole("heading", { name: "Tasks", exact: true }),
   ).toBeVisible();

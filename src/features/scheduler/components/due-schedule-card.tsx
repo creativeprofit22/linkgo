@@ -2,9 +2,12 @@ import { AlertTriangle, CalendarClock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { approvalsRoute } from "@/features/approvals/schemas";
 import type { ScheduleJobStatus } from "@/features/approvals/types";
-import { canScheduleAgain } from "@/features/scheduler/schedule-again";
+import { contentCalendarRoute } from "@/features/content-calendar/schemas";
+import {
+  canScheduleAgain,
+  type RescheduleTarget,
+} from "@/features/scheduler/schedule-again";
 import type { DueScheduleCardItem } from "@/features/scheduler/types";
 import { formatRouteHash } from "@/lib/navigation/route-contract";
 import { toPlainMessage } from "@/lib/plain-message";
@@ -35,9 +38,16 @@ function formatDate(value: string | null | undefined): string {
 
 export function DueScheduleCard({
   job,
+  onReschedule,
 }: {
   job: DueScheduleCardItem;
+  /** Opens the Calendar's time picker in place; without it, links to Calendar. */
+  onReschedule?: (target: RescheduleTarget) => void;
 }): React.ReactNode {
+  const target: RescheduleTarget = {
+    campaignId: job.campaign_id,
+    approvalId: job.approval_id,
+  };
   const hasError = (job.last_error ?? "").trim().length > 0;
   return (
     <Card
@@ -63,7 +73,7 @@ export function DueScheduleCard({
           </Badge>
         </div>
 
-        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 text-sm">
           <Detail label="Scheduled" value={formatDate(job.scheduled_for)} />
           <Detail
             label="Tries"
@@ -92,18 +102,24 @@ export function DueScheduleCard({
         }) && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-muted-foreground text-sm">
-              This post didn't go out. Pick a new time on its approval.
+              This post didn't go out. Pick a new time for it.
             </p>
-            <Button asChild size="sm" variant="outline">
-              <a
-                href={formatRouteHash(approvalsRoute, {
-                  campaignId: job.campaign_id,
-                  approvalId: job.approval_id,
-                })}
+            {onReschedule ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onReschedule(target)}
               >
-                Schedule again
-              </a>
-            </Button>
+                Reschedule
+              </Button>
+            ) : (
+              <Button asChild size="sm" variant="outline">
+                <a href={formatRouteHash(contentCalendarRoute, target)}>
+                  Schedule again
+                </a>
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

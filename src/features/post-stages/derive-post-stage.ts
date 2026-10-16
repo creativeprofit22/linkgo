@@ -69,7 +69,7 @@ export function deriveApprovalStage(
 
   const job = approval.scheduleJob;
   if (job?.status === "failed" || latestAttempt(approval)?.status === "failed")
-    return stage("scheduled", "problem", "Posting failed — check Auto-posting");
+    return stage("scheduled", "problem", "Posting failed — check Calendar");
   if (job?.status === "scheduled")
     return stage("scheduled", "current", "Scheduled");
   if (job?.status === "completed")

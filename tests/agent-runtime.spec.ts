@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { openSection } from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 import { expectSupportDetail } from "./helpers/support-details";
 
@@ -227,7 +228,7 @@ test("starts a provider-backed run through the native command boundary", async (
     };
   });
 
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const customCard = page
     .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -245,7 +246,7 @@ test("starts a provider-backed run through the native command boundary", async (
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
-  await page.getByRole("button", { name: /^Brand voice/ }).click();
+  await openSection(page, "Settings", "Brand voice");
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
   const customInstructions =
     "Prefer punchy operator lessons with one concrete metric.";
@@ -255,7 +256,7 @@ test("starts a provider-backed run through the native command boundary", async (
     customInstructions,
   );
 
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "drafter", "linkedin_writer");
@@ -379,7 +380,7 @@ test("feeds a validated tool result into a second provider turn before completio
       },
     };
   });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const customCard = page
     .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -395,7 +396,7 @@ test("feeds a validated tool result into a second provider turn before completio
   await expect(page.getByText("Connected").first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "researcher");
@@ -515,7 +516,7 @@ test("provider-backed score_relevance calls persist model-supplied scores", asyn
       },
     };
   });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const customCard = page
     .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -531,7 +532,7 @@ test("provider-backed score_relevance calls persist model-supplied scores", asyn
   await expect(page.getByText("Connected").first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await insertCandidateForScoring(page);
   await openAgentRuntime(page);
@@ -624,7 +625,7 @@ test("provider duplicate research_posts calls are rejected before local writes",
       },
     };
   });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const customCard = page
     .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -640,7 +641,7 @@ test("provider duplicate research_posts calls are rejected before local writes",
   await expect(page.getByText("Connected").first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "custom", "researcher");
@@ -705,7 +706,7 @@ test("rejects research_posts writes for a different campaign", async ({
     };
   });
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await createCampaign(page, "Second campaign");
   await openAgentRuntime(page);
@@ -737,7 +738,7 @@ for (const approvalPosition of ["first", "second"] as const) {
     await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
     await installMixedApprovalTurnProvider(page, approvalPosition);
     await connectCustomProvider(page);
-    await page.getByRole("button", { name: /Campaigns/ }).click();
+    await openSection(page, "Create", "Campaigns");
     await createCampaign(page);
     await seedApproval(page);
     await openAgentRuntime(page);
@@ -790,7 +791,7 @@ test("starts an Anthropic provider-backed run through the native command boundar
     };
   });
 
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const anthropicCard = page
     .getByText("Anthropic", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -804,7 +805,7 @@ test("starts an Anthropic provider-backed run through the native command boundar
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "anthropic");
@@ -842,7 +843,7 @@ test("starts an OpenAI run after the account sign-in access token expired", asyn
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installSuccessfulContinuationProvider(page, "OpenAI renewed run.");
   await signInOpenAiAccount(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await setOpenAiSignInState(page, "expired");
 
@@ -863,7 +864,7 @@ test("keeps a revoked OpenAI account sign-in blocked as not connected", async ({
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installSuccessfulContinuationProvider(page, "Must not run.");
   await signInOpenAiAccount(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openAgentRuntime(page);
   await createProviderRun(page, "openai");
@@ -890,7 +891,7 @@ test("keeps a revoked OpenAI account sign-in blocked as not connected", async ({
   );
   expect((await getAgentRuns(page))[0]?.status).not.toBe("completed");
 
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await openAgentRuntime(page);
   await page
     .getByRole("button", { name: "New assistant task" })
@@ -965,7 +966,7 @@ test("hides disabled runtime playbooks from new agent runs", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Brand voice/ }).click();
+  await openSection(page, "Settings", "Brand voice");
   const writerCard = getPlaybookCard(page, "LinkedIn Writer");
   await writerCard
     .getByRole("switch", { name: "Use with the AI assistant" })
@@ -973,7 +974,7 @@ test("hides disabled runtime playbooks from new agent runs", async ({
   await writerCard.getByRole("button", { name: "Save brand voice" }).click();
   await expect(writerCard.getByText("Off", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openAgentRuntime(page);
   await page
@@ -1104,7 +1105,7 @@ test("rejects custom continuation without a Base URL before checkpoint mutation"
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installScheduleApprovalProvider(page, 1, "provider-schedule-custom");
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1152,7 +1153,7 @@ test("reports a second approval interrupt without claiming continuation completi
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installScheduleApprovalProvider(page, 1, "provider-schedule-first");
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1198,7 +1199,7 @@ test("reports recoverable provider failure with the saved continuation", async (
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await installScheduleApprovalProvider(page, 1, "provider-schedule-first");
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1298,7 +1299,7 @@ test("reload recovery skips an approved tool after a continuation provider failu
   await enableReloadPersistence(page);
   await installScheduleApprovalProvider(page, 1, "provider-schedule-recovery");
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await seedApproval(page);
   await openAgentRuntime(page);
@@ -1351,7 +1352,7 @@ test("reload recovery skips an approved tool after a continuation provider failu
     "Recovered provider continuation completed.",
   );
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await openAgentRuntime(page);
   const recoverButton = page.getByRole("button", {
     name: "Pick up where it stopped for assistant task 1",
@@ -1782,7 +1783,7 @@ async function enableReloadPersistence(page: Page): Promise<void> {
 }
 
 async function openApprovals(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
@@ -1842,7 +1843,7 @@ async function seedApprovalReadiness(
 }
 
 async function openAgentRuntime(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^AI assistant/ }).click();
+  await openSection(page, "Settings", "AI assistant");
   await expect(
     page.getByRole("heading", { name: "AI assistant", exact: true }),
   ).toBeVisible();
@@ -1871,7 +1872,7 @@ async function createCampaign(
 }
 
 async function connectCustomProvider(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const customCard = page
     .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -1890,7 +1891,7 @@ async function connectCustomProvider(page: Page): Promise<void> {
 }
 
 async function signInOpenAiAccount(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const openAiCard = page
     .getByText("OpenAI", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -2149,7 +2150,7 @@ function getPlaybookCard(page: Page, label: string): Locator {
 }
 
 async function archiveSelectedCampaign(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();

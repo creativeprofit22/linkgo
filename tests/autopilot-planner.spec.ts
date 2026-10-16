@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openSection } from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 import { expectSupportDetail } from "./helpers/support-details";
 
@@ -109,13 +110,13 @@ test("materializes one linked plan, backlog item, and score-first workflow exact
   );
   expect(state.runs[0]?.current_step_key).toBe("score");
 
-  await page.getByRole("button", { name: /^Tasks/u }).click();
+  await openSection(page, "Settings", "Tasks");
   await expect(page.getByText("Created by Autopilot.")).toBeVisible();
   await expectSupportDetail(page, "Plan id", 1);
   await expectSupportDetail(page, "Import id", 1);
   await expectSupportDetail(page, "Automation id", 1);
 
-  await page.getByRole("button", { name: /^Automations/u }).click();
+  await openSection(page, "Settings", "Automations");
   await expect(
     page.getByText("Started by Autopilot from your imported ideas.", {
       exact: false,
@@ -486,7 +487,7 @@ async function capturePlannerScreenshot(
 }
 
 async function openAutopilot(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Autopilot/u }).click();
+  await openSection(page, "Settings", "Autopilot");
   await expect(
     page.getByRole("heading", { name: "Autopilot", exact: true }),
   ).toBeVisible();
@@ -497,7 +498,7 @@ async function createCampaign(
   name: string,
   autopilot: boolean,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Campaigns", exact: false }).click();
+  await openSection(page, "Create", "Campaigns");
   await page.getByRole("button", { name: "New campaign" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New campaign" });
   await dialog.getByLabel("Name").fill(name);

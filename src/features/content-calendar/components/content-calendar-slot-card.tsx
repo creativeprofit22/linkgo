@@ -1,4 +1,4 @@
-import { Archive, CalendarClock, ExternalLink } from "lucide-react";
+import { Archive, CalendarClock, CalendarX, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -11,11 +11,18 @@ import {
   publishStatusLabels,
   scheduleStatusLabels,
 } from "@/features/content-calendar/components/content-calendar-status-badge";
+import { ScheduleSlotDialog } from "@/features/content-calendar/components/schedule-slot-dialog";
+import {
+  describeTimeZone,
+  formatWallClockForDisplay,
+} from "@/lib/date-time/wall-clock";
 import { toPlainMessage } from "@/lib/plain-message";
 import { cn } from "@/lib/utils";
 import type {
   ArchiveContentCalendarSlotInput,
+  CancelContentCalendarSlotScheduleInput,
   ContentCalendarSlotWithDetails,
+  RescheduleContentCalendarSlotInput,
   ScheduleContentCalendarSlotInput,
   UpdateContentCalendarSlotInput,
 } from "@/features/content-calendar/types";
@@ -28,6 +35,13 @@ interface ContentCalendarSlotCardProps {
   onUpdate: (input: UpdateContentCalendarSlotInput) => Promise<void>;
   onArchive: (input: ArchiveContentCalendarSlotInput) => Promise<void>;
   onSchedule: (input: ScheduleContentCalendarSlotInput) => Promise<void>;
+  onReschedule: (input: RescheduleContentCalendarSlotInput) => Promise<void>;
+  onCancelSchedule: (
+    input: CancelContentCalendarSlotScheduleInput,
+  ) => Promise<void>;
+  /** The reschedule dialog is controlled so the side panel can open it. */
+  rescheduleOpen: boolean;
+  onRescheduleOpenChange: (open: boolean) => void;
 }
 
 export function ContentCalendarSlotCard({
@@ -37,6 +51,10 @@ export function ContentCalendarSlotCard({
   onUpdate,
   onArchive,
   onSchedule,
+  onReschedule,
+  onCancelSchedule,
+  rescheduleOpen,
+  onRescheduleOpenChange,
 }: ContentCalendarSlotCardProps): React.ReactNode {
   const lifecycle = getContentCalendarLifecycle(slot);
   const campaignArchived = slot.approval.campaign_status === "archived";
@@ -50,6 +68,32 @@ export function ContentCalendarSlotCard({
     slot.approval.status === "approved" &&
     !scheduleBlocksReschedule;
   const canMutate = !saving && slot.status === "planned" && !campaignArchived;
+  const jobStatus = slot.scheduleJob?.status;
+  // Native re-checks both: cancel resets the post to approved; a failed job
+  // already left it approved, so rescheduling it needs no cancel.
+  const rescheduleAllowed =
+    slot.status === "planned" &&
+    !campaignArchived &&
+    slot.approval.status !== "published" &&
+    (jobStatus === "scheduled" || jobStatus === "failed");
+  // `saving` gates only the trigger: the open dialog must survive its own
+  // submit (and a failed one) so the picked time isn't lost.
+  const canReschedule = !saving && rescheduleAllowed;
+  const canCancelSchedule = canMutate && jobStatus === "scheduled";
+  const showScheduleButton = canSchedule && jobStatus !== "failed";
+
+  function cancelSchedule(): void {
+    if (slot.scheduleJob === null) return;
+    if (
+      window.confirm(
+        "Cancel this schedule? The post stays approved and won't go out until you pick a time again.",
+      )
+    ) {
+      void onCancelSchedule({
+        scheduleJobId: slot.scheduleJob.id,
+      }).catch(() => {});
+    }
+  }
 
   function archiveSlot(): void {
     if (
@@ -76,7 +120,8 @@ export function ContentCalendarSlotCard({
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="truncate">
-                {slot.slot_for} · {slot.timezone}
+                {formatWallClockForDisplay(slot.slot_for, slot.timezone)} ·{" "}
+                {describeTimeZone(slot.timezone)}
               </CardTitle>
               <ContentCalendarPurposeBadge purpose={slot.purpose} />
               <ContentCalendarLifecycleBadge lifecycle={lifecycle} />
@@ -108,16 +153,33 @@ export function ContentCalendarSlotCard({
               disabled={!canMutate}
               onUpdate={onUpdate}
             />
-            {canSchedule && (
+            {showScheduleButton && (
               <Button
                 type="button"
                 size="sm"
                 onClick={() => void onSchedule({ id: slot.id })}
               >
-                <CalendarClock className="size-4" />{" "}
-                {slot.scheduleJob?.status === "failed"
-                  ? "Schedule again"
-                  : "Schedule post"}
+                <CalendarClock className="size-4" /> Schedule post
+              </Button>
+            )}
+            {canReschedule && (
+              <Button
+                type="button"
+                size="sm"
+                variant={jobStatus === "failed" ? "default" : "outline"}
+                onClick={() => onRescheduleOpenChange(true)}
+              >
+                <CalendarClock className="size-4" /> Reschedule
+              </Button>
+            )}
+            {canCancelSchedule && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={cancelSchedule}
+              >
+                <CalendarX className="size-4" /> Cancel schedule
               </Button>
             )}
             <Button
@@ -152,7 +214,11 @@ export function ContentCalendarSlotCard({
           <div className="bg-muted/30 rounded-xl border p-4">
             <p className="font-medium">Schedule</p>
             <p className="text-muted-foreground mt-2 text-sm">
-              {slot.scheduleJob.scheduled_for} · {slot.scheduleJob.timezone} ·{" "}
+              {formatWallClockForDisplay(
+                slot.scheduleJob.scheduled_for,
+                slot.scheduleJob.timezone,
+              )}{" "}
+              · {describeTimeZone(slot.scheduleJob.timezone)} ·{" "}
               {scheduleStatusLabels[slot.scheduleJob.status]}
             </p>
             {slot.scheduleJob.last_error && (
@@ -180,6 +246,14 @@ export function ContentCalendarSlotCard({
           </div>
         )}
       </CardContent>
+      {(rescheduleAllowed || rescheduleOpen) && (
+        <ScheduleSlotDialog
+          slot={slot}
+          open={rescheduleOpen}
+          onOpenChange={onRescheduleOpenChange}
+          onReschedule={onReschedule}
+        />
+      )}
     </Card>
   );
 }

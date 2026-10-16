@@ -42,8 +42,6 @@ export function ApprovalsView(): React.ReactNode {
     selectCampaign,
     createReview,
     setReviewStatus,
-    scheduleReview,
-    cancelScheduleJob,
     recordPublishResult,
     refreshApprovals,
     stageIndex,
@@ -291,8 +289,6 @@ export function ApprovalsView(): React.ReactNode {
                         approval.id,
                       )}
                       onSetStatus={setReviewStatus}
-                      onSchedule={scheduleReview}
-                      onCancelSchedule={cancelScheduleJob}
                       onRecordPublishAttempt={recordPublishResult}
                       onPublished={refreshApprovals}
                     />

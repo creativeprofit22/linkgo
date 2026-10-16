@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   SchedulerEvent,
   SchedulerEventType,
@@ -32,28 +31,32 @@ function severityVariant(
   return "secondary";
 }
 
+/** Collapsed by default so the Calendar side panel stays short. */
 export function SchedulerEventList({
   events,
 }: {
   events: SchedulerEvent[];
 }): React.ReactNode {
   return (
-    <Card className="bg-card/70">
-      <CardHeader>
-        <CardTitle className="text-base">Recent activity</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <details className="group rounded-xl border">
+      <summary className="hover:bg-muted/50 focus-visible:ring-ring flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-xl px-3 text-sm font-medium outline-none focus-visible:ring-2">
+        <span>Recent activity</span>
+        <span className="text-muted-foreground text-xs font-normal">
+          {events.length === 0 ? "None yet" : `${events.length} updates`}
+        </span>
+      </summary>
+      <div className="px-3 pb-3">
         {events.length === 0 ? (
-          <p className="text-muted-foreground py-6 text-center text-sm">
+          <p className="text-muted-foreground py-4 text-center text-sm">
             Nothing has happened yet. Activity shows here once auto-posting is
             on.
           </p>
         ) : (
-          <div className="space-y-3">
+          <ul aria-label="Recent activity" className="space-y-2">
             {events.map((event) => (
-              <div key={event.id} className="rounded-lg border p-3">
+              <li key={event.id} className="rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium">
                       {toPlainMessage(event.summary)}
                     </p>
@@ -62,15 +65,18 @@ export function SchedulerEventList({
                       {formatDate(event.created_at)}
                     </p>
                   </div>
-                  <Badge variant={severityVariant(event.severity)}>
+                  <Badge
+                    className="shrink-0"
+                    variant={severityVariant(event.severity)}
+                  >
                     {eventTypeLabels[event.event_type]}
                   </Badge>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </details>
   );
 }

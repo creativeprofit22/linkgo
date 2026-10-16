@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -32,7 +33,7 @@ test("connects API-key provider without rendering secrets", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   await expect(
     page.getByRole("heading", { name: "Connected accounts" }),
@@ -72,7 +73,7 @@ test("requires Base URL before saving Other AI service key", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   const customCard = page
     .getByText("Other AI service", { exact: true })
@@ -146,7 +147,7 @@ test("starts LinkedIn OAuth manual code flow and disconnects", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   const linkedinCard = page
     .getByText("LinkedIn", { exact: true })
@@ -182,7 +183,7 @@ test("shows a failed-copy message when OAuth URL copy is unavailable", async ({
   });
 
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   const linkedinCard = page
     .getByText("LinkedIn", { exact: true })
@@ -203,7 +204,7 @@ test("rejects plain-HTTP public Base URL even with local consent", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   const customCard = page
     .getByText("Other AI service", { exact: true })
@@ -239,7 +240,7 @@ test("requires explicit consent before saving a localhost Base URL", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   const customCard = page
     .getByText("Other AI service", { exact: true })
@@ -277,7 +278,7 @@ test("shows reauth status and a reconnect path for a disallowed saved Base URL",
   const reauthMessage =
     "Base URL points to this computer or a private network. Reconnect the provider and allow the local endpoint to use it";
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   const customCard = page
     .getByText("Other AI service", { exact: true })
@@ -320,7 +321,7 @@ test("offers local consent when the native policy flags a Base URL the renderer 
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
 
   const customCard = page
     .getByText("Other AI service", { exact: true })
@@ -365,7 +366,7 @@ async function openAccountSignIn(
   label: "OpenAI" | "Anthropic",
 ): Promise<import("@playwright/test").Locator> {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   await aiCard(page, label).getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: `${label} connection` });
   await dialog.getByRole("button", { name: "Account sign-in" }).click();
@@ -608,7 +609,7 @@ test("confirms before sign-in replaces a saved API key and vice versa", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   await aiCard(page, "OpenAI").getByRole("button", { name: "Connect" }).click();
   const dialog = page.getByRole("dialog", { name: "OpenAI connection" });
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { defineRoute, emptyRouteSearch } from "@/lib/navigation/route-contract";
 
 export const setLaunchOnLoginSchema = z.object({
   enabled: z.boolean(),
@@ -20,3 +21,6 @@ export const launchOnLoginSettingsSchema = z.object({
   lastSyncedAt: z.string().nullable(),
   lastError: z.string(),
 });
+
+/** In-app Settings › General screen (`#/settings`). No params. */
+export const settingsRoute = defineRoute("settings", emptyRouteSearch());

@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -289,35 +290,35 @@ function escapeRegExp(value: string): string {
 }
 
 async function openCampaigns(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openDrafts(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
 }
 
 async function openApprovals(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
 }
 
 async function openMetrics(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Analytics/ }).click();
+  await openSection(page, "Results");
   await expect(
     page.getByRole("heading", { name: "Analytics", exact: true }),
   ).toBeVisible();

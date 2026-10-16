@@ -1,5 +1,6 @@
 import { CalendarPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { DateTimePicker } from "@/components/date-time-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +24,7 @@ import type {
   ContentCalendarPurpose,
   CreateContentCalendarSlotInput,
 } from "@/features/content-calendar/types";
+import { toDateTimeLocalValue } from "@/lib/date-time/wall-clock";
 
 const purposeOptions: ContentCalendarPurpose[] = [
   "reach",
@@ -80,58 +82,7 @@ const initialFormState: CalendarSlotFormState = {
   notes: "",
 };
 
-/**
- * Stored schedule formats accepted natively (`is_supported_timestamp`):
- * `YYYY-MM-DD[T ]HH:MM[:SS[.fff]]` with an optional `Z` or `±HH:MM` suffix.
- */
-const scheduleTimestampPattern =
-  /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/;
-
-/** Wall-clock `YYYY-MM-DDTHH:mm` of an instant in a zone; "" if unknown. */
-function toZonedWallClock(instant: Date, timezone: string): string {
-  const zone = timezone.trim();
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone:
-        zone === "" || zone.toLowerCase() === "local" ? undefined : zone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(instant);
-    const part = (type: Intl.DateTimeFormatPartTypes): string =>
-      parts.find((entry) => entry.type === type)?.value ?? "";
-    const value = `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
-    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? value : "";
-  } catch {
-    // RangeError: the stored time zone isn't one Intl knows.
-    return "";
-  }
-}
-
-/**
- * `datetime-local` value (`YYYY-MM-DDTHH:mm`) from a stored schedule time.
- * `T` or space separators are accepted; seconds are dropped. A `Z` or
- * `±HH:MM` suffix is converted to the wall clock in `timezone` ("local"
- * means the device zone), or "" when the zone is unknown, so the shown
- * time never silently shifts to a different moment.
- */
-export function toDateTimeLocalValue(
-  value: string,
-  timezone = "local",
-): string {
-  const match = scheduleTimestampPattern.exec(value.trim());
-  if (!match) return "";
-  const [, date, time, seconds, offset] = match;
-  if (date === undefined || time === undefined) return "";
-  const wallClock = `${date}T${time}`;
-  if (offset === undefined) return wallClock;
-  const instant = new Date(`${wallClock}:${seconds ?? "00"}${offset}`);
-  if (Number.isNaN(instant.getTime())) return "";
-  return toZonedWallClock(instant, timezone);
-}
+export { toDateTimeLocalValue };
 
 function getPresetFormState(
   approval: ContentCalendarEligibleApproval,
@@ -302,21 +253,15 @@ export function CreateContentCalendarSlotDialog({
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Date and time" htmlFor="calendar-slot-for">
-              <Input
-                id="calendar-slot-for"
-                type="datetime-local"
-                value={form.slotFor}
-                required
-                maxLength={80}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    slotFor: event.target.value,
-                  }))
-                }
-              />
-            </Field>
+            <DateTimePicker
+              id="calendar-slot-for"
+              className="sm:col-span-2"
+              value={form.slotFor}
+              timezone={form.timezone}
+              onChange={(slotFor) =>
+                setForm((current) => ({ ...current, slotFor }))
+              }
+            />
             <Field label="Time zone" htmlFor="calendar-timezone">
               <Input
                 id="calendar-timezone"

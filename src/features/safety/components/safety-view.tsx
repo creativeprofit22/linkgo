@@ -109,6 +109,7 @@ export function SafetyView(): React.ReactNode {
               </p>
             </div>
             <select
+              aria-label="Show campaign"
               value={selectedCampaignId ?? "all"}
               onChange={(event) => {
                 const nextValue = event.target.value;

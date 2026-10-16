@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  cancelSchedule,
   createApproval,
   listApprovalEligibleDraftPage,
   listApprovalPage,
   recordPublishAttempt,
-  scheduleApproval,
   setApprovalStatus,
 } from "@/features/approvals/data";
 import { toPlainMessage } from "@/lib/plain-message";
 import type {
   ApprovalEligibleDraft,
   ApprovalWithDetails,
-  CancelScheduleInput,
   CreateApprovalInput,
   RecordPublishAttemptInput,
-  ScheduleApprovalInput,
   SetApprovalStatusInput,
 } from "@/features/approvals/types";
 import { listCampaigns } from "@/features/campaigns/data";
@@ -62,8 +58,6 @@ interface UseApprovalsState {
   /** Resolves with the new approval's id. */
   createReview: (input: CreateApprovalInput) => Promise<number>;
   setReviewStatus: (input: SetApprovalStatusInput) => Promise<void>;
-  scheduleReview: (input: ScheduleApprovalInput) => Promise<void>;
-  cancelScheduleJob: (input: CancelScheduleInput) => Promise<void>;
   recordPublishResult: (input: RecordPublishAttemptInput) => Promise<void>;
   /** Reloads the selected campaign and safety state without a loading state. */
   refreshApprovals: () => Promise<void>;
@@ -354,43 +348,6 @@ export function useApprovals(
     [reloadAfterMutation],
   );
 
-  const scheduleReview = useCallback(
-    async (input: ScheduleApprovalInput) => {
-      try {
-        await scheduleApproval(input);
-      } catch (caught) {
-        const message = getErrorMessage(caught);
-        void getSafetySettings()
-          .then(setSafetySettings)
-          .catch(() => undefined);
-        toast.error(
-          getMutationFailureTitle(caught, "We couldn't schedule this post"),
-          { description: message },
-        );
-        throw caught;
-      }
-      await reloadAfterMutation();
-    },
-    [reloadAfterMutation],
-  );
-
-  const cancelScheduleJob = useCallback(
-    async (input: CancelScheduleInput) => {
-      try {
-        await cancelSchedule(input);
-      } catch (caught) {
-        const message = getErrorMessage(caught);
-        toast.error(
-          getMutationFailureTitle(caught, "We couldn't cancel the schedule"),
-          { description: message },
-        );
-        throw caught;
-      }
-      await reloadAfterMutation();
-    },
-    [reloadAfterMutation],
-  );
-
   const recordPublishResult = useCallback(
     async (input: RecordPublishAttemptInput) => {
       try {
@@ -458,8 +415,6 @@ export function useApprovals(
       selectCampaign,
       createReview,
       setReviewStatus,
-      scheduleReview,
-      cancelScheduleJob,
       recordPublishResult,
       refreshApprovals,
     }),
@@ -480,8 +435,6 @@ export function useApprovals(
       selectCampaign,
       createReview,
       setReviewStatus,
-      scheduleReview,
-      cancelScheduleJob,
       recordPublishResult,
       refreshApprovals,
     ],

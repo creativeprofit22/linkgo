@@ -219,6 +219,7 @@ export function DraftsView(): React.ReactNode {
               </p>
             </div>
             <select
+              aria-label="Selected campaign"
               value={selectedCampaignId ?? ""}
               onChange={(event) => {
                 const nextId = Number(event.target.value);

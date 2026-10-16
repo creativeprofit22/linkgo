@@ -1,5 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  rescheduleInDialog,
+  scheduleFromApprovalCard,
+} from "./helpers/calendar-scheduling";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -7,14 +12,15 @@ test.beforeEach(async ({ page }) => {
 
 test.setTimeout(90_000);
 
-test("starts the scheduler from the Scheduler tab", async ({ page }) => {
+test("starts auto-posting from the Calendar side panel", async ({ page }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
-  await openScheduler(page);
+  const panel = await openScheduler(page);
 
-  await expect(page.getByText("Off", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Turn on auto-posting" }).click();
-  await expect(page.getByText("On", { exact: true })).toBeVisible();
-  await expect(page.getByText("Off after restart")).toHaveCount(0);
+  const status = panel.getByTestId("auto-posting-status");
+  await expect(status).toHaveText("Off");
+  await panel.getByRole("button", { name: "Turn on auto-posting" }).click();
+  await expect(status).toHaveText("On");
+  await expect(panel.getByText("Off after restart")).toHaveCount(0);
 });
 
 test("flags a scheduler that was on before Linkgo restarted", async ({
@@ -26,25 +32,23 @@ test("flags a scheduler that was on before Linkgo restarted", async ({
       window as unknown as Record<string, unknown>
     ).__LINKGO_SCHEDULER_SIMULATE_RESTART__ = true;
   });
-  await openScheduler(page);
+  const panel = await openScheduler(page);
 
-  await expect(
-    page.getByText("Off after restart", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Off", { exact: true })).toHaveCount(0);
-  const notice = page
+  const status = panel.getByTestId("auto-posting-status");
+  await expect(status).toHaveText("Off after restart");
+  const notice = panel
     .getByRole("status")
     .filter({ hasText: "Auto-posting turned off when Linkgo restarted" });
   await expect(notice).toContainText(
     "Go to Safety and look for any post marked “Couldn’t confirm”",
   );
-  const startButton = page.getByRole("button", {
+  const startButton = panel.getByRole("button", {
     name: "Turn on auto-posting",
   });
   await expect(startButton).toBeEnabled();
 
   await startButton.click();
-  await expect(page.getByText("On", { exact: true })).toBeVisible();
+  await expect(status).toHaveText("On");
   await expect(notice).toHaveCount(0);
 });
 
@@ -54,14 +58,12 @@ test("runs a due scheduled post and records a successful publish", async ({
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await createApprovedScheduledPost(page, "2020-01-01T09:00");
 
-  await openScheduler(page);
+  const panel = await openScheduler(page);
   await expect(
-    page.getByText("Due now", { exact: true }).first(),
+    panel.getByText("Due now", { exact: true }).first(),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Post what's due now" }).click();
-  await expect(
-    page.getByText("Scheduled LinkedIn post was published."),
-  ).toBeVisible();
+  await panel.getByRole("button", { name: "Post what's due now" }).click();
+  await expectActivity(panel, "Scheduled LinkedIn post was published.");
 
   const [schedule] = await getScheduleJobs(page);
   const [attempt] = await getPublishAttempts(page);
@@ -69,13 +71,8 @@ test("runs a due scheduled post and records a successful publish", async ({
   expect(attempt.status).toBe("succeeded");
   expect(attempt.schedule_job_id).toBe(schedule.id);
 
-  const attemptRow = page
-    .getByRole("list", { name: "Recent posting attempts" })
-    .getByRole("listitem")
-    .first();
-  await expect(attemptRow).toContainText(cleanVariant().hook);
-  await expect(attemptRow).toContainText("Founder-led scheduler growth");
-  await expect(attemptRow).toContainText("Posted");
+  // Nothing failed, so the side panel has no posts to recover.
+  await expect(panel.getByText("Every recent post went out.")).toBeVisible();
 
   await openApprovals(page);
   await expect(getBadge(page, "Posted")).toBeVisible();
@@ -92,11 +89,12 @@ test("keeps a failed due publish scheduled for retry", async ({ page }) => {
       "LinkedIn API rejected the scheduled post.";
   });
 
-  await openScheduler(page);
-  await page.getByRole("button", { name: "Post what's due now" }).click();
-  await expect(
-    page.getByText("Scheduled LinkedIn publish failed and will retry."),
-  ).toBeVisible();
+  const panel = await openScheduler(page);
+  await panel.getByRole("button", { name: "Post what's due now" }).click();
+  await expectActivity(
+    panel,
+    "Scheduled LinkedIn publish failed and will retry.",
+  );
 
   const [schedule] = await getScheduleJobs(page);
   const [attempt] = await getPublishAttempts(page);
@@ -119,28 +117,20 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
     target.__LINKGO_SCHEDULER_FORCE_TERMINAL_FAILURE__ = true;
   });
 
-  await openScheduler(page);
-  await page.getByRole("button", { name: "Post what's due now" }).click();
-  await expect(
-    page.getByText("Scheduled LinkedIn publish failed permanently."),
-  ).toBeVisible();
+  const panel = await openScheduler(page);
+  await panel.getByRole("button", { name: "Post what's due now" }).click();
+  await expectActivity(panel, "Scheduled LinkedIn publish failed permanently.");
 
   const [schedule] = await getScheduleJobs(page);
   const counts = await getStateCounts(page);
   expect(schedule.status).toBe("failed");
   expect(counts.errorQueueItems).toBe(1);
-  // The failed attempt links to its approval to pick a new time.
-  const scheduleAgain = page
-    .getByRole("list", { name: "Recent posting attempts" })
-    .getByRole("link", { name: "Schedule again", exact: true });
-  await expect(scheduleAgain).toHaveAttribute("href", /^#\/approvals\?/u);
-  const scheduleAgainParams = new URLSearchParams(
-    ((await scheduleAgain.getAttribute("href")) ?? "").split("?")[1],
-  );
-  expect(scheduleAgainParams.get("approvalId")).toBe(
-    String(schedule.approval_id),
-  );
-  expect(scheduleAgainParams.get("campaignId")).toMatch(/^\d+$/u);
+  // The failed post offers Reschedule right in the side panel.
+  await expect(
+    panel
+      .getByRole("list", { name: "Posts that didn't go out" })
+      .getByRole("button", { name: "Reschedule", exact: true }),
+  ).toBeVisible();
 
   await openApprovals(page);
   await expect(getBadge(page, "Approved")).toBeVisible();
@@ -150,13 +140,15 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
   await expect(
     page.getByText("LinkedIn terminal scheduler failure.").first(),
   ).toBeVisible();
+  // Approvals has no time controls of its own; it links to the Calendar.
+  await expect(page.getByLabel("Date", { exact: true })).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Schedule again", exact: true })
+    .getByRole("button", { name: "Schedule again in Calendar", exact: true })
     .click();
-  await expect(page.getByLabel("Date and time")).toBeVisible();
+  await expect(page.locator('[data-highlighted="true"]')).toBeVisible();
 });
 
-test("hides Schedule again on a failed attempt once its post is rescheduled", async ({
+test("reschedules a failed post from the side panel and hides Reschedule", async ({
   page,
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
@@ -168,33 +160,21 @@ test("hides Schedule again on a failed attempt once its post is rescheduled", as
     target.__LINKGO_SCHEDULER_FORCE_TERMINAL_FAILURE__ = true;
   });
 
-  await openScheduler(page);
-  await page.getByRole("button", { name: "Post what's due now" }).click();
-  await expect(
-    page.getByText("Scheduled LinkedIn publish failed permanently."),
-  ).toBeVisible();
-  const attempts = page.getByRole("list", { name: "Recent posting attempts" });
-  await expect(
-    attempts.getByRole("link", { name: "Schedule again", exact: true }),
-  ).toBeVisible();
-
-  await openApprovals(page);
-  await page
-    .getByRole("button", { name: "Schedule again", exact: true })
-    .click();
-  await page.getByLabel("Date and time").fill("2099-01-01T09:00");
-  await page.getByLabel("Time zone").fill("local");
-  const dialog = page.getByRole("dialog", { name: "Schedule post" });
-  await dialog.getByRole("button", { name: "Schedule post" }).click();
-  await expect(dialog).toBeHidden();
+  const panel = await openScheduler(page);
+  await panel.getByRole("button", { name: "Post what's due now" }).click();
+  await expectActivity(panel, "Scheduled LinkedIn publish failed permanently.");
+  const failed = panel.getByRole("list", { name: "Posts that didn't go out" });
+  await failed.getByRole("button", { name: "Reschedule", exact: true }).click();
+  await rescheduleInDialog(page, {
+    scheduledFor: "2099-01-01T09:00",
+    timezone: "local",
+  });
   const [schedule] = await getScheduleJobs(page);
   expect(schedule.status).toBe("scheduled");
 
-  await openScheduler(page);
-  await expect(attempts.getByText("Didn't post")).toBeVisible();
-  await expect(attempts.getByText("Scheduled again.")).toBeVisible();
+  await expect(failed.getByText("Scheduled again.")).toBeVisible();
   await expect(
-    attempts.getByRole("link", { name: "Schedule again", exact: true }),
+    failed.getByRole("button", { name: "Reschedule", exact: true }),
   ).toHaveCount(0);
 });
 
@@ -216,14 +196,12 @@ test("global kill switch blocks due jobs without publishing", async ({
     page.getByText("On — everything is paused", { exact: true }),
   ).toBeVisible();
 
-  await openScheduler(page);
+  const panel = await openScheduler(page);
   await expect(
-    page.getByRole("button", { name: "Turn on auto-posting" }),
+    panel.getByRole("button", { name: "Turn on auto-posting" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Post what's due now" }).click();
-  await expect(
-    page.getByText("didn't go out because everything is paused").first(),
-  ).toBeVisible();
+  await panel.getByRole("button", { name: "Post what's due now" }).click();
+  await expectActivity(panel, "didn't go out because everything is paused");
 
   const [schedule] = await getScheduleJobs(page);
   const publishInvokes = await getLinkedInPublishInvokeCount(page);
@@ -264,22 +242,34 @@ function getBadge(page: Page, label: string): Locator {
   });
 }
 
-async function openScheduler(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Auto-posting/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Auto-posting", exact: true }),
-  ).toBeVisible();
+// Recent activity is collapsed in the side panel; open it to read events.
+async function expectActivity(panel: Locator, text: string): Promise<void> {
+  const activity = panel.locator("details").filter({
+    has: panel.page().getByText("Recent activity", { exact: true }),
+  });
+  if ((await activity.getAttribute("open")) === null) {
+    await activity.locator("summary").click();
+  }
+  await expect(activity.getByText(text).first()).toBeVisible();
+}
+
+// Auto-posting lives in the Calendar's side panel; there is no tab for it.
+async function openScheduler(page: Page): Promise<Locator> {
+  await openSection(page, "Calendar");
+  const panel = page.getByRole("complementary", { name: "Auto-posting" });
+  await expect(panel).toBeVisible();
+  return panel;
 }
 
 async function openApprovals(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
 }
 
 async function openSafety(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Safety/ }).click();
+  await openSection(page, "Settings", "Safety");
   await expect(
     page.getByRole("heading", { name: "Safety", exact: true }),
   ).toBeVisible();
@@ -294,13 +284,7 @@ async function createApprovedScheduledPost(
   await createReview(page);
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(getBadge(page, "Approved")).toBeVisible();
-  await page.getByRole("button", { name: "Pick a time", exact: true }).click();
-  await page.getByLabel("Date and time").fill(scheduledFor);
-  await page.getByLabel("Time zone").fill("local");
-  const dialog = page.getByRole("dialog", { name: "Schedule post" });
-  await dialog.getByRole("button", { name: "Schedule post" }).click();
-  await expect(dialog).toBeHidden();
-  await expect(getBadge(page, "Scheduled").first()).toBeVisible();
+  await scheduleFromApprovalCard(page, { scheduledFor, timezone: "local" });
 }
 
 async function createReadyDraft(
@@ -341,14 +325,14 @@ async function createReadyDraft(
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openDrafts(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();

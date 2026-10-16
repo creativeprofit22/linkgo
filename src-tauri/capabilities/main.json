@@ -1,10 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Main Linkgo window: app commands it uses, its own window controls, event listening for OAuth callbacks and window resize, and the show-window global shortcut.",
+  "description": "Main Linkgo window (the only window): app commands it uses, launch-on-login control for in-app Settings, its own window controls, event listening for OAuth callbacks and window resize, and the show-window global shortcut.",
   "windows": ["main"],
   "permissions": [
     "main-commands",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-close",

@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 import { getSubmitBlockedReason } from "../src/features/drafts/components/generate-draft-blocked-reason";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -199,7 +200,7 @@ test("persists and saves distinct connected-provider authored variants", async (
   ];
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -231,7 +232,7 @@ test("rejects count-mismatched and malformed provider arrays atomically", async 
 }) => {
   await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
   await connectCustomProvider(page);
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await createCampaign(page);
   await openQueue(page);
   await addCandidate(page);
@@ -1171,7 +1172,7 @@ async function getSavedDraftVariants(
 }
 
 async function connectCustomProvider(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Connected accounts/ }).click();
+  await openSection(page, "Settings", "Connected accounts");
   const customCard = page
     .getByText("Other AI service", { exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'bg-card')][1]");
@@ -1296,19 +1297,19 @@ async function installInvalidDraftProvider(page: Page): Promise<void> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   await expect(
     page.getByRole("heading", { name: "Ideas", exact: true }),
   ).toBeVisible();
 }
 
 async function openCampaigns(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await expect(page.getByRole("heading", { name: "Campaigns" })).toBeVisible();
 }
 
 async function openDrafts(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Drafts/ }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();

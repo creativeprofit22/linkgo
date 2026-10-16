@@ -92,7 +92,7 @@ test.describe("deriveApprovalStage", () => {
       expected: {
         key: "scheduled",
         state: "problem",
-        detail: "Posting failed — check Auto-posting",
+        detail: "Posting failed — check Calendar",
       },
     },
     {
@@ -105,7 +105,7 @@ test.describe("deriveApprovalStage", () => {
       expected: {
         key: "scheduled",
         state: "problem",
-        detail: "Posting failed — check Auto-posting",
+        detail: "Posting failed — check Calendar",
       },
     },
     {

@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function openSettings(page: Page): Promise<void> {
-  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/settings", { waitUntil: "domcontentloaded" });
   await expect(
     page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();

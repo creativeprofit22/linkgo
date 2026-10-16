@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { openSection } from "./helpers/navigation";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 
 test.beforeEach(async ({ page }) => {
@@ -52,7 +53,7 @@ async function openPanel(page: Page): Promise<Locator> {
   await dialog.getByLabel("Tone").fill("Practical");
   await dialog.getByRole("button", { name: "Create campaign" }).click();
   await expect(dialog).toBeHidden();
-  await page.getByRole("button", { name: /^Ideas/ }).click();
+  await openSection(page, "Create", "Ideas");
   const panel = page.getByTestId("brightdata-panel");
   await expect(
     panel.getByRole("switch", { name: "Fetch posts with Bright Data" }),

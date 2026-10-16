@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 import { expectSupportDetail } from "./helpers/support-details";
+import { openSection } from "./helpers/navigation";
 
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
@@ -230,7 +231,7 @@ test("scores an exact planner scope through a connected provider and reconciles 
   expect(JSON.stringify(result.providerCalls)).toContain(
     "Trusted campaign and scoring metadata (JSON):",
   );
-  await page.getByRole("button", { name: /Autopilot/u }).click();
+  await openSection(page, "Settings", "Autopilot");
   await expect(page.getByText("Scoring in Automations: Done")).toBeVisible();
   await expectSupportDetail(page, "AI service", "OpenAI");
 });
@@ -359,7 +360,7 @@ test("linked draft advances to audit only after operator save", async ({
     page.getByRole("button", { name: "Start automation", exact: true }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: /^Drafts Write/u }).click();
+  await openSection(page, "Create", "Drafts");
   await expect(
     page.getByRole("heading", { name: "Drafts", exact: true }),
   ).toBeVisible();
@@ -908,7 +909,7 @@ test("blocks archived generated draft saves without mutating linked work", async
   page,
 }) => {
   await preparePlannerDraftWorkflow(page);
-  await page.getByRole("button", { name: /^Drafts Write/u }).click();
+  await openSection(page, "Create", "Drafts");
   await page.getByRole("button", { name: "Write with AI" }).click();
   const generationDialog = page.getByRole("dialog", {
     name: "Write versions with AI",
@@ -921,7 +922,7 @@ test("blocks archived generated draft saves without mutating linked work", async
   await expectSupportDetail(page, "Automation id", 1);
 
   await archiveSelectedCampaign(page);
-  await page.getByRole("button", { name: /^Drafts Write/u }).click();
+  await openSection(page, "Create", "Drafts");
   await page.getByRole("combobox").selectOption("1");
   const saveButton = page.getByRole("button", { name: "Save as draft" });
   const dismissButton = page.getByRole("button", {
@@ -1026,7 +1027,7 @@ for (const withAgentRun of [false, true]) {
     }, withAgentRun);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /^Drafts Write/u }).click();
+    await openSection(page, "Create", "Drafts");
     await expect(
       page.getByRole("heading", { name: "Drafts", exact: true }),
     ).toBeVisible();
@@ -1457,7 +1458,7 @@ test("planner-linked backlog is workflow-controlled while ordinary work remains 
       },
     });
   });
-  await page.getByRole("button", { name: /^Tasks/u }).click();
+  await openSection(page, "Settings", "Tasks");
   await expect(
     page.getByText("Open Automations to manage scoring."),
   ).toBeVisible();
@@ -2187,7 +2188,7 @@ async function resumeWorkflowRun(page: Page, id: number): Promise<void> {
 }
 
 async function openApprovals(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Approvals/ }).click();
+  await openSection(page, "Create", "Approvals");
   await expect(
     page.getByRole("heading", { name: "Approvals", exact: true }),
   ).toBeVisible();
@@ -2387,7 +2388,7 @@ async function preparePlannerScoringWorkflow(
       });
     });
   }
-  await page.getByRole("button", { name: /Autopilot/u }).click();
+  await openSection(page, "Settings", "Autopilot");
   await page.getByRole("button", { name: "Check now" }).click();
   await expect(page.getByText("Plan for Founder-led growth")).toBeVisible();
   await openWorkflows(page);
@@ -2539,7 +2540,7 @@ async function preparePlannerSavedDraftAudit(
   variants = 3,
 ): Promise<void> {
   await preparePlannerDraftWorkflow(page);
-  await page.getByRole("button", { name: /^Drafts Write/u }).click();
+  await openSection(page, "Create", "Drafts");
   await page.getByRole("button", { name: "Write with AI" }).click();
   const dialog = page.getByRole("dialog", { name: "Write versions with AI" });
   await dialog.getByLabel("AI service").selectOption("dry_run");
@@ -2685,14 +2686,14 @@ async function configureScoringProvider(
 }
 
 async function openWorkflows(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Automations/ }).click();
+  await openSection(page, "Settings", "Automations");
   await expect(
     page.getByRole("heading", { name: "Automations", exact: true }),
   ).toBeVisible();
 }
 
 async function openCampaigns(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Campaigns/ }).click();
+  await openSection(page, "Create", "Campaigns");
   await expect(
     page.getByRole("heading", { name: "Campaigns", exact: true }),
   ).toBeVisible();

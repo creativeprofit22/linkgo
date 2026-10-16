@@ -46,9 +46,9 @@ The OS autostart state is read and changed through the autostart plugin first, n
 
 ## Window and permissions
 
-The Settings window is created natively by `linkgo_window_open_settings` (`src-tauri/src/window_commands.rs`) with a fixed label (`settings`), route (`/settings`), size and parent; it focuses an existing Settings window instead of opening a second one. The renderer cannot create webviews or choose their URLs.
+Settings is a screen inside the main window (`#/settings`, area **Settings › General**; see [navigation areas](navigation-areas.md)). The title-bar gear opens it with `navigateTo(settingsRoute)`, which also works in browser preview. The old separate Settings window, its `linkgo_window_open_settings` command and `settings.json` capability were removed on 2026-10-15. An old `/settings` address is redirected to `/#/settings` by `src/main.tsx`.
 
-The `settings` window has its own capability (`src-tauri/capabilities/settings.json`): the two launch-on-login commands above, `autostart:allow-enable/disable/is-enabled`, event listening and its own window controls. It cannot call publishing, credential, draft, agent or other main-window commands. Startup draft reconciliation runs only in the main window. See `docs/security/capability-matrix.md`.
+The main capability (`src-tauri/capabilities/main.json`) now holds exactly `autostart:allow-enable/disable/is-enabled` and the two launch-on-login commands above, pinned by `main_window_grants_startup_controls` in `src-tauri/src/command_registry_tests.rs`. Startup draft reconciliation runs in the main window. See `docs/security/capability-matrix.md`.
 
 ## Exclusions
 

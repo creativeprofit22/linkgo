@@ -4,21 +4,21 @@ One post moves Ideas → Drafts → Approvals → Calendar. Each finished step o
 
 ## Before and after
 
-Both runs were measured on 2026-10-02 with Playwright and the stateful Tauri mocks (`tests/helpers/tauri-mocks.ts`), synthetic data, Practice mode and no AI account. Each count starts with the idea already on the Ideas screen and ends with the post scheduled and on the calendar plan. Typing into fields isn't counted.
+Both runs were measured on 2026-10-02 (the "after" run re-measured on 2026-10-11, once scheduling moved into the Calendar) with Playwright and the stateful Tauri mocks (`tests/helpers/tauri-mocks.ts`), synthetic data, Practice mode and no AI account. Each count starts with the idea already on the Ideas screen and ends with the post scheduled and on the calendar plan. Typing into fields isn't counted.
 
-| Measure                       | Before | After | Change                                                                                   |
-| ----------------------------- | -----: | ----: | ---------------------------------------------------------------------------------------- |
-| Clicks                        |     17 |    15 | Tab clicks replaced by next-step buttons                                                 |
-| Dialogs                       |      4 |     4 | Write with AI, Send for approval, Schedule post, Plan a post (all still human-submitted) |
-| Tab switches                  |      3 |     0 | Write post, Send for approval and See on calendar change screens for you                 |
-| Item re-picks from a dropdown |      3 |     0 | Idea and draft are locked in; Add to plan preselects the approval                        |
-| Fields retyped on Plan a post |      2 |     0 | Date/time and time zone prefilled from the schedule                                      |
+| Measure                       | Before | After | Change                                                                          |
+| ----------------------------- | -----: | ----: | ------------------------------------------------------------------------------- |
+| Clicks                        |     17 |    16 | Tab clicks replaced by next-step buttons; the date is picked on a calendar grid |
+| Dialogs                       |      4 |     3 | Write with AI, Send for approval, Plan a post (all still human-submitted)       |
+| Tab switches                  |      3 |     0 | Write post, Send for approval and Schedule in Calendar change screens for you   |
+| Item re-picks from a dropdown |      3 |     0 | Idea and draft are locked in; Add to plan preselects the approval               |
+| Fields retyped on Plan a post |      2 |     0 | The time is entered once, in the Calendar, and Schedule post reuses it          |
 
 **Before:** Drafts tab → Write with AI → Write versions → Save as draft → Choose this version → Review with AI → Improve with AI → Yes, improve it → Approvals tab → Send for approval → Send for approval (submit) → Approve → Schedule → Schedule post (submit) → Calendar tab → Plan a post → Plan post (submit).
 
-**After:** Write post (idea card) → Write versions → Save as draft → Choose this version → Review with AI → Improve with AI → Yes, improve it → Send for approval (draft card) → Send for approval (submit) → Approve → Pick a time → Schedule post (submit) → See on calendar → Add to plan → Plan post (submit).
+**After:** Write post (idea card) → Write versions → Save as draft → Choose this version → Review with AI → Improve with AI → Yes, improve it → Send for approval (draft card) → Send for approval (submit) → Approve → Schedule in Calendar → Add to plan → pick a date → Plan post (submit) → Schedule post.
 
-`tests/post-flow.spec.ts` asserts the "after" counts (15 clicks, 4 dialogs), so a regression fails the suite. The Choose / Review / Improve clicks are the draft quality gate and stay deliberate.
+`tests/post-flow.spec.ts` asserts the "after" counts (16 clicks, 3 dialogs; the date-picker pick counts as one click), so a regression fails the suite. The Choose / Review / Improve clicks are the draft quality gate and stay deliberate.
 
 ## Next step per stage
 
@@ -30,8 +30,8 @@ Both runs were measured on 2026-10-02 with Playwright and the stateful Tauri moc
 | Idea card     | Scheduled                                         | See on calendar                          | `#/calendar?campaignId&approvalId`        |
 | Draft card    | No live approval                                  | Send for approval (or disabled + reason) | `#/approvals?campaignId&draftId&send=1`   |
 | Draft card    | Live approval                                     | Open approval                            | `#/approvals?campaignId&approvalId`       |
-| Approval card | `approved`                                        | Pick a time                              | Schedule post dialog                      |
-| Approval card | Schedule job `scheduled`                          | See on calendar                          | `#/calendar?campaignId&approvalId`        |
+| Approval card | `approved`                                        | Schedule in Calendar                     | `#/calendar?campaignId&approvalId`        |
+| Approval card | Schedule job `scheduled`                          | Change time in Calendar                  | `#/calendar?campaignId&approvalId`        |
 
 Other buttons on those cards are secondary (outline), so there is one obvious next step.
 
@@ -59,7 +59,7 @@ The prior art here is the status models in Mixpost (`PostStatus`: draft, schedul
 ## Human approval gate
 
 - No link or param can approve, schedule or post. `send=1` only opens Send for approval, and the human still submits it.
-- **Pick a time** exists only while the approval status is `approved`, which a human sets with Approve. The chain test asserts it is absent while the card shows "Waiting for your OK".
+- **Schedule in Calendar** exists only while the approval status is `approved`, which a human sets with Approve. The chain test asserts it is absent while the card shows "Waiting for your OK".
 - **Add to plan** only opens Plan a post; nothing is saved until the operator submits.
 - Native checks are unchanged and stay authoritative: approval reads, the scheduler, and the calendar only listing `approved | scheduled | published` approvals.
 
