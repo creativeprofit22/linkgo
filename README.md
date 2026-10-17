@@ -60,6 +60,16 @@ restriction, not a bug; errors in the desktop app keep their own native
 messages. Playwright specs inject Tauri mocks, which are only honoured in
 Playwright builds.
 
+### Configuration
+
+LinkedIn sign-in, publishing and commenting need `LINKGO_LINKEDIN_CLIENT_ID` and
+`LINKGO_LINKEDIN_CLIENT_SECRET` from your LinkedIn developer app;
+`LINKGO_LINKEDIN_REDIRECT_URI` and `LINKGO_LINKEDIN_VERSION` are optional. See
+[`.env.example`](.env.example) for defaults. Linkgo does not load `.env` files, so
+set these in your shell before `bun run tauri:dev`. Without them the rest of the
+app works and LinkedIn connect reports that OAuth is not configured. AI provider
+credentials are entered in the app and kept in the OS keyring.
+
 ### Release-candidate test build (test-only)
 
 `bun run tauri:build:rctest` builds installers under a separate identity
@@ -78,9 +88,11 @@ desktop harness tells builds apart by binary name.
 ```bash
 bun run check:renderer-transactions
 bun run check:architecture
+bun run check:glossary
 bun run format:check
 bun run format:rust:check
 bun run lint
+bun run typecheck:tests
 bun run lint:rust
 bun run build
 bun run test
@@ -88,11 +100,11 @@ bun run test:rust
 ```
 
 Use `bun run check` for the full quality gate, in the order shown above. Formatting
-bun run check:glossary
 checks all supported nonignored repository files with `prettier --check .` and all
 Rust workspace members with `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check`.
+ESLint and `typecheck:tests` (`tsconfig.tests.json`) cover the app plus the
+Playwright specs, helpers and configs, which Playwright itself never type-checks.
 Strict Clippy checks all targets and features with
-bun run typecheck:tests
 `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`.
 The Rust toolchain includes the required rustfmt and Clippy components.
 
@@ -102,8 +114,6 @@ scope, including tests and root configuration files. Both Prettier commands resp
 
 The gate stops on the first failure; later checks are not counted as passes.
 Existing formatting failures must remain visible until separately remediated, and
-ESLint and `typecheck:tests` (`tsconfig.tests.json`) cover the app plus the
-Playwright specs, helpers and configs, which Playwright itself never type-checks.
 an interrupted run remains incomplete rather than a release pass.
 GitHub Actions runs this same gate on Windows for pull requests, `main`, version
 tags, and published releases. Only after the quality job succeeds do version tags

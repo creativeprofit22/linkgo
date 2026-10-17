@@ -8,6 +8,7 @@
 - LinkedIn publishing and commenting must stay human approval-gated.
 - Rate-limit and safety defaults must be conservative until metrics prove quality.
 - Avoid pre-creating future tables. Add each table in the feature migration that uses it.
+- Read `docs/glossary.md` before naming anything, and `docs/decisions/` before changing a recorded decision.
 
 ## Polish
 
@@ -197,3 +198,44 @@ If a polish pass needs a probe that doesn't exist, surface the tradeoff
 inline (same protocol as `## Eyes` escalation). Don't guess at visual
 fidelity — log a `wish` with `ggcoder eyes log wish "<gap>"` and either
 build the probe or fall back with the user's approval.
+
+<!-- gg:init:start -->
+
+## Linkgo project context
+
+Local-first Tauri v2 desktop app (React/Vite frontend, Rust backend) that imports source material, drafts/audits LinkedIn posts and comments with LLMs, schedules them, and publishes via LinkedIn REST only after human approval.
+
+### Shape
+
+- `src/features/<domain>/` — one slice per domain; public surface is only `index.ts`, `data.ts`, `schemas.ts`, `types/index.ts` (anything else imported cross-feature fails the `private-feature` architecture rule).
+- `src/lib/tauri.ts` `invokeCommand` — the only frontend→backend path. Each domain has a mirroring Rust module in `src-tauri/src/`.
+- `src-tauri/src/auth/` — OAuth (LinkedIn, Anthropic, OpenAI, Claude Code) via loopback redirect; secrets in OS keychain, never SQLite.
+- `src-tauri/src/publishing/` — publish service, fenced reservation store, LinkedIn transport, crash recovery (startup sweep never calls LinkedIn).
+- `src-tauri/src/brightdata/` — off-by-default, manual-only, read-only scraper feeding Source Imports.
+- `src-tauri/src/net/` — outbound HTTP transport that blocks private addresses; all model/provider calls run in Rust.
+
+### Gotchas / invariants
+
+- **No SQL in the renderer.** `check:renderer-transactions` bans `@tauri-apps/plugin-sql`, `@/lib/db`, `plugin:sql|`, BEGIN/COMMIT/SAVEPOINT in `src/` (zero tolerance) — writes go through feature-specific native commands so transactions stay atomic in Rust.
+- **New native command = register in Rust + allow in `src-tauri/permissions/main-commands.toml`.** `command_registry_tests.rs` fails if any frontend `invoke` is unregistered or a forbidden secret command is exposed.
+- **CSP `connect-src` stays `'self' ipc: http://ipc.localhost`** (enforced by `scripts/check-csp.test.mjs` inside `check:architecture`). Never add `fetch` to external hosts from the frontend; route through Rust `net/`.
+- **Ports are coupled:** Vite 17420 (`strictPort`), HMR 17421, both hard-coded in `devCsp` and `devUrl`; Playwright preview uses 17422. Change all together or the CSP test/dev app breaks.
+- **Migrations:** append new modules to the end of `src-tauri/src/migrations/mod.rs` list; never edit a shipped migration (sqlx checksums in `_sqlx_migrations` → existing user DBs fail to boot). Migrations run with FKs off and `legacy_alter_table = ON` (otherwise SQLite table rebuilds silently rewrite child FKs), then must pass `PRAGMA foreign_key_check`. Keep `repair_provider_parity_references` (repairs pre-migration-21 DBs).
+- **DB pool is `max_connections(1)` on purpose** (`autopilot_planner.rs` `managed_pool`) — raising it reintroduces write races.
+- **Keyring service name derives from the bundle identifier:** only `com.linkgo.app` maps to `linkgo`. Renaming the production identifier silently orphans users' stored credentials.
+- **Publishing safety:** attempts move `reserved → in_flight` only when `owner_token` and `fence` match; manual and scheduled publish mutually block. Approval creation rejects stale revisions, blocking audits, low quality, or missing AI audit. Conservative caps live in SQL defaults (`migrations/campaigns.rs`, mirrored in `campaigns/schemas.ts`): 1 post/day (max 10), 5 comments/day (max 50).
+- **Architecture exceptions** in `scripts/architecture-baseline.json` match exact from/to/kind/form/per-name counts with `owner`, `rationale`, `removeWhen`; changing an import's count breaks the match.
+
+### Workflows
+
+- CI (`.github/workflows/ci.yml`, Windows only): `bun run check` is the full gate (also cargo fmt, clippy `-D warnings`, glossary, Rust tests); parallel supply-chain job runs `check:deps` (needs `cargo-audit` installed) + gitleaks over full history. Installers built only on `v*` tags/releases.
+- `bun run test` builds then serves a preview with `VITE_PLAYWRIGHT=true` (enables test hooks via `src/lib/env.ts` `IS_TEST`).
+- **Desktop tests (`test:desktop`) attach over CDP to an already-running RC build; they do not launch the app:**
+  1. `bun run tauri:build:rctest` and install it (identifier `com.linkgo.app.rctest`, `linkgo-rctest.exe` — isolated data and credentials).
+  2. Quit production `linkgo.exe` (harness fails closed if it is running).
+  3. Start `linkgo-rctest.exe` with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` (or `LINKGO_CDP_PORT`).
+  4. `LINKGO_DESKTOP_SCENARIO=fresh|upgraded|recovery bun run test:desktop` (config throws without it). Serial, no retries.
+- Main window is created in Rust (`create: false`, `visible: false`, frameless/transparent 1180×780); frontend shows it on mount without focusing — tests call `bringToFront()`.
+- Paid live Bright Data smoke: `LINKGO_BRIGHTDATA_LIVE=1 cargo test --lib brightdata::commands::live_smoke -- --ignored --nocapture` (in `src-tauri`). Ask before running — costs money.
+- LinkedIn OAuth config via env: `LINKGO_LINKEDIN_CLIENT_ID`, `_CLIENT_SECRET`, `_REDIRECT_URI`, `_VERSION`.
+<!-- gg:init:end -->
