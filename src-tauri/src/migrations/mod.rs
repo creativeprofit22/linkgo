@@ -15,6 +15,7 @@ pub mod comments;
 pub mod content_calendar;
 pub mod draft_ai_audits;
 pub mod draft_generation;
+pub mod draft_lessons;
 pub mod draft_quality;
 pub mod draft_quality_tool;
 pub mod drafts;
@@ -78,6 +79,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(latest_draft_quality::migrations());
     migrations.extend(publish_executions::migrations());
     migrations.extend(brightdata_connector::migrations());
+    migrations.extend(draft_lessons::migrations());
     migrations
 }
 

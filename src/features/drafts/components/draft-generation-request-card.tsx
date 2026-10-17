@@ -3,7 +3,10 @@ import { SupportDetails } from "@/components/support-details";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PROVIDER_LABELS } from "@/agent/provider-catalog";
-import { DRAFT_PROMPT_ROUTES } from "@/features/drafts/prompt-routing";
+import {
+  DRAFT_PROMPT_ROUTES,
+  toDraftLessonInputs,
+} from "@/features/drafts/prompt-routing";
 import type { DraftGenerationRequest } from "@/features/drafts/types";
 import { toPlainMessage } from "@/lib/plain-message";
 
@@ -39,6 +42,20 @@ export function DraftGenerationRequestCard({
             <p className="text-muted-foreground mt-1 text-xs">
               {request.playbook_key ? "Brand voice on" : "No brand voice"} ·{" "}
               {DRAFT_PROMPT_ROUTES[request.content_intent].label} post
+            </p>
+            <p
+              className="text-muted-foreground mt-1 text-xs"
+              data-testid="draft-generation-lessons"
+            >
+              {request.applied_lessons.length > 0
+                ? `Used: ${toDraftLessonInputs(request.applied_lessons)
+                    .map((lesson) =>
+                      lesson.kind === "avoid"
+                        ? `Avoid: ${lesson.summary}`
+                        : lesson.summary,
+                    )
+                    .join(" · ")}`
+                : "No lessons used"}
             </p>
           </div>
           <StatusPill status={request.status} />

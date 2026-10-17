@@ -84,17 +84,33 @@ async function installFixture(
         }));
       if (cmd === "linkgo_metrics_eligible_approvals")
         return answer(current.eligible, passthrough);
-      if (cmd === "linkgo_metrics_posts_missing_results")
-        return answer(current.eligible, passthrough, (rows) => ({
-          items: (rows as Record<string, unknown>[]).map((row) => ({
-            approval_id: row.approval_id,
-            campaign_id: row.campaign_id,
-            campaign_name: row.campaign_name,
-            variant_hook: row.variant_hook,
-            publish_created_at: row.publish_created_at,
-          })),
-          totalCount: current.missingTotal ?? rows.length,
-        }));
+      if (cmd === "linkgo_metrics_posts_missing_results") {
+        // Mirrors the native `publishedBefore` cutoff (posts too new to ask
+        // about are left out).
+        const cutoff = Date.parse(
+          String(
+            (args as { input?: { publishedBefore?: string } } | undefined)
+              ?.input?.publishedBefore ?? "",
+          ),
+        );
+        return answer(current.eligible, passthrough, (rows) => {
+          const old = (rows as Record<string, unknown>[]).filter(
+            (row) =>
+              Number.isNaN(cutoff) ||
+              Date.parse(String(row.publish_created_at)) <= cutoff,
+          );
+          return {
+            items: old.map((row) => ({
+              approval_id: row.approval_id,
+              campaign_id: row.campaign_id,
+              campaign_name: row.campaign_name,
+              variant_hook: row.variant_hook,
+              publish_created_at: row.publish_created_at,
+            })),
+            totalCount: current.missingTotal ?? old.length,
+          };
+        });
+      }
       if (cmd === "linkgo_publish_execution_list_open")
         return answer(current.executions, passthrough);
       if (cmd === "linkgo_auth_status") {
@@ -387,7 +403,7 @@ test("a post waiting for OK opens Approvals with that post highlighted", async (
   );
 });
 
-test("a posted post without results opens Add results with it picked", async ({
+test("a posted post without results asks How did it do? with it picked", async ({
   page,
 }) => {
   await installFixture(page, {
@@ -402,15 +418,53 @@ test("a posted post without results opens Add results with it picked", async ({
   const item = row(page, "results-missing").filter({
     hasText: "What churn taught us",
   });
-  await expect(item).toContainText("Add results for “What churn taught us”");
+  await expect(item).toContainText("How did it do?");
+  await expect(item).toContainText("“What churn taught us” went out");
   await expect(item.getByRole("link")).toHaveCount(1);
   await item.getByRole("link", { name: "Add results" }).click();
 
   await expect(page).toHaveURL(/#\/metrics\?approvalId=5&campaignId=1$/);
-  const dialog = page.getByRole("dialog", { name: "Add results" });
+  const dialog = page.getByRole("dialog", { name: "How did it do?" });
   await expect(dialog).toBeVisible();
-  // Picked for the person; nothing is saved until they submit.
-  await expect(dialog.locator("#metric-approval")).toHaveValue("5");
+  // Picked for the person and shown read-only; nothing is saved until submit.
+  await expect(dialog.getByTestId("metric-linked-post")).toContainText(
+    "What churn taught us",
+  );
+  await expect(dialog.locator("#metric-approval")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Pick a different post" }).click();
+  // Picking switches back to the plain "Add results" form, still on post 5.
+  const picker = page.getByRole("dialog", { name: "Add results" });
+  await expect(picker.locator("#metric-approval")).toHaveValue("5");
+});
+
+test("results are only asked for once a post is two days old", async ({
+  page,
+}) => {
+  const hoursAgo = (hours: number): string =>
+    new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  await installFixture(page, {
+    ...EMPTY,
+    eligible: [
+      {
+        ...eligibleRow(4, "Went out an hour ago"),
+        publish_created_at: hoursAgo(1),
+      },
+      {
+        ...eligibleRow(5, "Went out yesterday"),
+        publish_created_at: hoursAgo(47),
+      },
+      {
+        ...eligibleRow(6, "Went out three days ago"),
+        publish_created_at: hoursAgo(72),
+      },
+    ],
+  });
+  await openToday(page);
+
+  await expect(row(page, "results-missing")).toHaveCount(1);
+  await expect(row(page, "results-missing")).toContainText(
+    "Went out three days ago",
+  );
 });
 
 test("See all counts every post missing results, not only the loaded ones", async ({
@@ -426,7 +480,7 @@ test("See all counts every post missing results, not only the loaded ones", asyn
   await expect(row(page, "results-missing")).toHaveCount(5);
   await expect(
     page.getByTestId("today-overflow-results-missing"),
-  ).toContainText("115 more posts need results.");
+  ).toContainText("115 more posts are ready for results.");
 });
 
 test("unclear outcomes cap at five with See all to Safety", async ({
@@ -471,6 +525,29 @@ test("the next scheduled post shows under Coming up and links to it", async ({
     "data-highlighted",
     "true",
   );
+});
+
+test.describe("in a browser ahead of UTC", () => {
+  test.use({ timezoneId: "Pacific/Auckland", locale: "en-US" });
+
+  test("a post's day reads its stored UTC time in local time", async ({
+    page,
+  }) => {
+    // 23:30 UTC on Oct 1 is already Oct 2 in Auckland (UTC+13).
+    await installFixture(page, {
+      ...EMPTY,
+      eligible: [
+        {
+          ...eligibleRow(7, "Late-night post"),
+          publish_created_at: "2026-10-01 23:30:00",
+        },
+      ],
+    });
+    await openToday(page);
+
+    const item = row(page, "results-missing");
+    await expect(item).toContainText("went out Oct 2");
+  });
 });
 
 test.describe("in a browser outside the post's time zone", () => {

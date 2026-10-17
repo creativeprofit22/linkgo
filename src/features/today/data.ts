@@ -179,14 +179,18 @@ function settledValue<T>(result: PromiseSettledResult<T>): T | null {
  */
 export async function loadToday({
   signal,
-}: { signal?: AbortSignal } = {}): Promise<TodaySnapshot> {
+  now,
+}: { signal?: AbortSignal; now?: Date } = {}): Promise<TodaySnapshot> {
   const approvalsRead = listApprovalPage();
   const [setup, page, connections, missingResults, unclearOutcomes] =
     await Promise.allSettled([
       loadSetupChecklist(signal),
       approvalsRead,
       getConnectionHealth(signal ? { signal } : {}),
-      listPostsMissingResults(signal ? { signal } : {}),
+      listPostsMissingResults({
+        ...(signal ? { signal } : {}),
+        ...(now ? { now } : {}),
+      }),
       listUnclearPublishOutcomes(signal ? { signal } : {}),
     ]);
   signal?.throwIfAborted();

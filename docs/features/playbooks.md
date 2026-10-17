@@ -50,6 +50,18 @@ Runtime playbooks can be enabled or disabled and can store bounded custom runtim
 
 `#/playbooks?focus=<playbook key>` scrolls to that guide and puts the cursor in "Your own instructions" when the guide has that field. Guidance-only guides (such as `linkedin_commenter`) have no such field, so the link scrolls to the guide and focuses its heading, which screen readers announce. The first-run checklist ([setup](setup.md)) uses `focus=linkedin_writer` for "Describe how you write", and counts the step done once the Writer guide has non-empty instructions.
 
+### Lessons from your results
+
+Below the guides, **Lessons from your results** lists every saved lesson
+(`campaign_memory`), grouped by campaign, with a **Use in drafts** switch. On
+means `active`; off archives the lesson (`archived`) so it is kept but not used.
+Switching uses the existing `setCampaignMemoryStatus` command and its learning
+event; no new storage. Archived campaigns show their lessons with the switch
+disabled. Lessons that are on shape new drafts for their campaign, up to 5,
+newest first ([drafts](drafts.md#lessons-in-drafts)). Loading, error (with
+**Try again**) and empty states are shown; a link opens Analytics.
+`useLessons` reads through the public `campaigns` and `metrics` `data.ts`.
+
 The LinkedIn Commenter card is visible as guidance-only and intentionally exposes no autonomous posting or commenting action.
 
 ## Test coverage
@@ -59,6 +71,8 @@ Playwright covers:
 - Rendering the Brand voice tab and five built-ins.
 - Editing custom instructions and persisting an override row.
 - Disabling a runtime playbook and marking it disabled.
+- Listing lessons in Brand voice, switching them off and on, and new drafts
+  showing "Used: …" or "No lessons used" accordingly; the empty lessons state.
 - Keeping the commenter playbook guidance-only with no autonomous posting action.
 - Runtime playbook selection, provider prompt injection, and disabled-playbook filtering from the AI assistant **New assistant task** dialog.
 

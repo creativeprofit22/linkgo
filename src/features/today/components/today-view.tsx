@@ -43,7 +43,7 @@ const OVERFLOW_LABEL: Partial<Record<TodayItemKind, (n: number) => string>> = {
   waiting: (n) =>
     `${n} more ${n === 1 ? "post is" : "posts are"} waiting for your OK.`,
   "results-missing": (n) =>
-    `${n} more ${n === 1 ? "post needs" : "posts need"} results.`,
+    `${n} more ${n === 1 ? "post is" : "posts are"} ready for results.`,
 };
 
 interface RowCopy {
@@ -186,8 +186,8 @@ function rowCopy(item: TodayItem): RowCopy {
       };
     case "results-missing":
       return {
-        title: `Add results for ${quoted(item.postTitle)}`,
-        description: `Posted ${formatDay(item.publishedAt)} in ${item.campaignName}. Add its likes and comments so Linkgo learns what works.`,
+        title: "How did it do?",
+        description: `${quoted(item.postTitle)} went out ${formatDay(item.publishedAt)} in ${item.campaignName}. Add its numbers so Linkgo learns what works.`,
         action: "Add results",
         icon: (
           <BarChart3

@@ -1,4 +1,5 @@
 import { AlertCircle, BarChart3, Info, RefreshCw, Target } from "lucide-react";
+import { useMemo } from "react";
 import { CreateFirstCampaignButton } from "@/features/campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,6 +7,11 @@ import { CampaignMemoryCard } from "@/features/metrics/components/campaign-memor
 import { LearningEventList } from "@/features/metrics/components/learning-event-list";
 import { MetricCard } from "@/features/metrics/components/metric-card";
 import { RecordPostMetricDialog } from "@/features/metrics/components/record-post-metric-dialog";
+import { ResultPatternsPanel } from "@/features/metrics/components/result-patterns-panel";
+import {
+  computeResultPatterns,
+  latestResultPerPost,
+} from "@/features/metrics/patterns";
 import { useMetrics } from "@/features/metrics/hooks/use-metrics";
 import { metricsRoute } from "@/features/metrics/schemas";
 import type {
@@ -98,6 +104,24 @@ export function MetricsView(): React.ReactNode {
     );
   };
   const summary = getMetricsSummary(metrics, memory);
+  const patterns = useMemo(
+    () =>
+      computeResultPatterns(metrics, {
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    [metrics],
+  );
+  const latestAutoMetrics = useMemo(
+    () =>
+      new Map(
+        latestResultPerPost(
+          metrics.filter(
+            (metric) => metric.collection_source === "linkedin_social_metadata",
+          ),
+        ).map((metric) => [metric.approval_id, metric] as const),
+      ),
+    [metrics],
+  );
   const refreshStatusLabel = getMetricRefreshStatusLabel(refreshStatus);
   const refreshControlStops =
     refreshStatus?.running === true || refreshStatus?.enabled === true;
@@ -162,6 +186,7 @@ export function MetricsView(): React.ReactNode {
             selectedCampaignArchived={selectedCampaignArchived}
             disabled={campaigns.length === 0 || eligibleApprovals.length === 0}
             onRecord={recordMetric}
+            latestAutoMetrics={latestAutoMetrics}
             {...(link.kind === "record"
               ? {
                   open: true,
@@ -211,8 +236,11 @@ export function MetricsView(): React.ReactNode {
       )}
 
       {loading ? (
-        <Card className="bg-card/70">
-          <CardContent className="text-muted-foreground p-8 text-center text-sm">
+        <Card className="bg-card/70" aria-busy="true">
+          <CardContent
+            role="status"
+            className="text-muted-foreground p-8 text-center text-sm"
+          >
             Loading analytics…
           </CardContent>
         </Card>
@@ -326,6 +354,14 @@ export function MetricsView(): React.ReactNode {
               ))}
             </div>
           )}
+
+          <ResultPatternsPanel
+            report={patterns}
+            campaignId={loadedCampaignId}
+            campaignArchived={selectedCampaignArchived}
+            memory={memory}
+            onSaveLesson={saveMemory}
+          />
 
           <section className="space-y-4">
             <div>

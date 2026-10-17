@@ -58,12 +58,17 @@ Public data functions include:
 - `getMetricRefreshStatus()`
 - `startMetricRefresh()`
 - `stopMetricRefresh()`
-- `listPostsMissingResults({ signal? })` — read-only: published posts with no
-  recorded results, newest first, with a plain post title, as
+- `listPostsMissingResults({ signal?, now? })` — read-only: published posts
+  with no recorded results, newest first, with a plain post title, as
   `{ items, totalCount }`. `items` holds at most 50 posts; `totalCount` is the
   uncapped total. Backed by `linkgo_metrics_posts_missing_results`, so a post
-  with any metric row is never reported missing, however many refreshes other
-  posts have. Used by [Today](today.md).
+  with any metric row (added by you or from LinkedIn) is never reported
+  missing, however many refreshes other posts have. Posts are listed only once
+  they went out at least `RESULTS_PROMPT_DELAY_HOURS` (48) before `now`
+  (default: the current time); the renderer sends that instant as
+  `publishedBefore`. Used by [Today](today.md).
+- `computeResultPatterns(metrics, { timeZone })` in `patterns.ts` — pure
+  pattern analysis (see [Result patterns](#result-patterns)).
 - `runMetricRefreshTick()`
 
 Native commands:
@@ -81,7 +86,7 @@ Validation uses Zod schemas in `src/features/metrics/schemas.ts`; the native com
 Reads are native too (`src-tauri/src/metrics_reads.rs`); the renderer has no direct SQL access to metrics tables. Each read takes an optional positive `campaignId` and rejects unknown fields.
 
 - `linkgo_metrics_eligible_approvals`, `linkgo_metrics_post_metrics_list`, `linkgo_metrics_campaign_memory_list` and `linkgo_metrics_learning_events_list` return up to 500 rows each.
-- `linkgo_metrics_posts_missing_results` returns `{ items, totalCount }`: eligible published approvals (latest successful attempt, campaign not archived) with no `post_metrics` row at all (`NOT EXISTS`), newest publish first, up to 50 items, plus the uncapped count, both read in one transaction.
+- `linkgo_metrics_posts_missing_results` takes `{ campaignId?, publishedBefore? }` and returns `{ items, totalCount }`: eligible published approvals (latest successful attempt, campaign not archived) with no `post_metrics` row at all (`NOT EXISTS`) whose latest successful attempt is at or before `publishedBefore` (when given), newest publish first, up to 50 items, plus the uncapped count, both read in one transaction. A `publishedBefore` SQLite cannot read as a date and time (or longer than 64 characters) is rejected.
 - `linkgo_metrics_refresh_dashboard` returns the refresh settings, up to 500 jobs, the 20 newest events and the summary counts, all read in one transaction.
 
 Response shapes are checked by strict schemas in `src/features/metrics/record-schemas.ts`. Tests: `src-tauri/src/metrics_reads_tests.rs`.
@@ -115,7 +120,18 @@ The Analytics tab includes:
 - Start/stop controls (`Turn on auto-update` / `Turn off auto-update`) for opt-in metric refresh.
 - Manual `Update from LinkedIn now` tick control.
 - Add results dialog for published posts. `#/metrics?campaignId=C&approvalId=A`
-  opens it with that post picked ([navigation](navigation.md#metrics-links)).
+  opens it with that post picked ([navigation](navigation.md#metrics-links)),
+  titled "How did it do?" and showing the post read-only (hook and day it went
+  out) with **Pick a different post** to switch back to the post list. When
+  the selected post already has a LinkedIn snapshot, reactions and comments
+  are filled in from the newest one with a note, whether the dialog was opened
+  from the **Add results** button or a link, and again whenever the person
+  picks a different post. Prefill never overwrites reactions or comments the
+  person has typed, and the note only shows while the prefilled post stays
+  selected; the person checks them and adds the rest. Nothing saves until
+  **Save results**.
+- `What's working` section ([Result patterns](#result-patterns)) with
+  **Save as lesson** on each clear pattern.
 - Metric cards with source badge: `Added by you` or `From LinkedIn`.
 - Clear API limitation copy for API snapshots.
 - Updates from LinkedIn section with refresh jobs (`Posts being tracked`) and recent refresh events (`Recent activity`).
@@ -125,6 +141,37 @@ The Analytics tab includes:
 
 Archived campaigns keep history visible but hide mutation controls.
 
+## Result patterns
+
+`src/features/metrics/patterns.ts` is pure (no I/O, UI or agent imports) and
+compares the selected campaign's measured posts. Rules:
+
+- Metric: average reactions + comments + reposts per post, using each post's
+  latest result. Not reach-normalised (LinkedIn snapshots carry no
+  impressions); the UI says so.
+- Dimensions, fixed vocabulary:
+  - Opening line (hook, else first body line), checked in order: question
+    (`?`) → number (a digit) → how-to (starts with "how") → personal (starts
+    with "I", "my" or "we") → plain statement.
+  - Format (body): list (3+ bullet or numbered lines) → short (≤ 120 words) →
+    longer.
+  - Day posted and time posted (morning 5–11, midday 11–14, afternoon 14–17,
+    evening 17–22, night), from the latest successful publish attempt (stored
+    UTC) shown in the computer's time zone. Posts without one are left out of
+    these two only.
+- Thin data: fewer than 5 measured posts → "Not enough results yet: n of 5
+  posts needed." A group counts only with 2+ posts; fewer than two such groups
+  → "too alike to compare". A pattern is claimed only when the best group's
+  average is at least 1.2× the runner-up's; otherwise "No clear winner".
+  Sample size is always shown. Ties sort by group key, so output is
+  deterministic.
+- **Save as lesson** is a human click that creates a `winner` campaign memory
+  with a fixed summary (e.g. "Open with a question", "Post on Tuesdays") and
+  evidence quoting the averages and counts. It is disabled once a lesson with
+  that summary exists and for archived campaigns. Lessons are used by new
+  drafts ([drafts](drafts.md#lessons-in-drafts)) and switched on or off in
+  [Brand voice](playbooks.md#lessons-from-your-results).
+
 ## Explicit exclusions
 
 This feature intentionally excludes:
@@ -132,7 +179,7 @@ This feature intentionally excludes:
 - Scraping LinkedIn pages.
 - LinkedIn member-post impressions/click analytics.
 - Organization-page analytics collection.
-- AI winner/loser analysis.
+- AI winner/loser analysis (result patterns are fixed, deterministic rules).
 - Automatic campaign-memory generation.
 - Comment/reply automation.
 - Running refresh jobs after Linkgo quits.

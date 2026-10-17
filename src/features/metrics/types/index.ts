@@ -136,6 +136,7 @@ export interface PostMissingResults {
   campaignName: string;
   /** The post's hook, or "Untitled post". */
   postTitle: string;
+  /** ISO 8601 UTC time of the latest successful publish attempt. */
   publishedAt: string;
 }
 
@@ -145,8 +146,67 @@ export interface PostsMissingResultsPage {
   totalCount: number;
 }
 
+/**
+ * Hours after a post goes out before Linkgo asks "How did it do?". Earlier
+ * numbers are mostly noise, so the post is not listed as missing results yet.
+ */
+export const RESULTS_PROMPT_DELAY_HOURS = 48;
+
 export interface PostsMissingResultsInput {
   signal?: AbortSignal;
+  /** Clock for the prompt delay; defaults to the current time. */
+  now?: Date;
+}
+
+/** What a result pattern compares posts by. */
+export type ResultPatternDimension =
+  | "opening"
+  | "format"
+  | "weekday"
+  | "timeOfDay";
+
+/** One bucket of posts, e.g. "Opens with a question". */
+export interface ResultPatternGroup {
+  key: string;
+  label: string;
+  postCount: number;
+  /** Average reactions + comments + reposts per post. */
+  averageEngagement: number;
+}
+
+/**
+ * - `thin`: not enough data to say anything (`few-posts`: under the minimum
+ *   measured posts; `one-kind`: fewer than two groups have enough posts).
+ * - `no-difference`: groups exist but none clearly did better.
+ * - `found`: `best` beat `runnerUp` by at least the minimum lift.
+ */
+export type ResultPattern =
+  | {
+      kind: "thin";
+      dimension: ResultPatternDimension;
+      sampleSize: number;
+      neededPosts: number;
+      reason: "few-posts" | "one-kind";
+    }
+  | {
+      kind: "no-difference";
+      dimension: ResultPatternDimension;
+      sampleSize: number;
+      groups: ResultPatternGroup[];
+    }
+  | {
+      kind: "found";
+      dimension: ResultPatternDimension;
+      sampleSize: number;
+      best: ResultPatternGroup;
+      runnerUp: ResultPatternGroup;
+      groups: ResultPatternGroup[];
+    };
+
+export interface ResultPatternsReport {
+  /** Measured posts considered (latest result per post). */
+  sampleSize: number;
+  patterns: ResultPattern[];
 }
 
 export interface CampaignMemory {

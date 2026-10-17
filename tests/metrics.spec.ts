@@ -195,6 +195,165 @@ test("archives and restores campaign memory", async ({ page }) => {
   await expect(page.getByText("Campaign memory restored")).toBeVisible();
 });
 
+test("a linked post asks How did it do? and fills in LinkedIn numbers first", async ({
+  page,
+}) => {
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await openMetrics(page);
+  await page.getByRole("button", { name: "Update from LinkedIn now" }).click();
+  await expectSummaryValue(page, "Updates from LinkedIn", "1");
+
+  await page.evaluate(() => {
+    window.location.hash = "#/metrics?approvalId=1&campaignId=1";
+  });
+  const dialog = page.getByRole("dialog", { name: "How did it do?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("metric-linked-post")).toBeVisible();
+  await expect(dialog.locator("#metric-approval")).toHaveCount(0);
+  // The mock LinkedIn snapshot has 42 reactions and 7 comments.
+  await expect(dialog.getByLabel("Reactions")).toHaveValue("42");
+  await expect(dialog.getByLabel("Comments")).toHaveValue("7");
+  await expect(dialog.getByRole("status")).toContainText(
+    "filled in from LinkedIn",
+  );
+  await expect(dialog.getByLabel("Impressions")).toHaveValue("0");
+});
+
+test("Add results fills in LinkedIn numbers for the picked post", async ({
+  page,
+}) => {
+  await addSecondEligiblePost(page);
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await openMetrics(page);
+  await page.getByRole("button", { name: "Update from LinkedIn now" }).click();
+  await expectSummaryValue(page, "Updates from LinkedIn", "1");
+
+  await page.getByRole("button", { name: "Add results" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add results" });
+  await expect(dialog).toBeVisible();
+  // Post 2 has no LinkedIn snapshot; post 1 does (42 reactions, 7 comments).
+  await dialog.locator("#metric-approval").selectOption("2");
+  await expect(dialog.getByLabel("Reactions")).toHaveValue("0");
+  await expect(dialog.getByRole("status")).toHaveCount(0);
+
+  await dialog.locator("#metric-approval").selectOption("1");
+  await expect(dialog.getByLabel("Reactions")).toHaveValue("42");
+  await expect(dialog.getByLabel("Comments")).toHaveValue("7");
+  await expect(dialog.getByRole("status")).toContainText(
+    "filled in from LinkedIn",
+  );
+
+  await dialog.locator("#metric-approval").selectOption("2");
+  await expect(dialog.getByLabel("Reactions")).toHaveValue("0");
+  await expect(dialog.getByRole("status")).toHaveCount(0);
+});
+
+test("Add results keeps typed reactions when the picked post changes", async ({
+  page,
+}) => {
+  await addSecondEligiblePost(page);
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(
+    page,
+    "https://www.linkedin.com/feed/update/urn%3Ali%3AugcPost%3A123/",
+  );
+  await openMetrics(page);
+  await page.getByRole("button", { name: "Update from LinkedIn now" }).click();
+  await expectSummaryValue(page, "Updates from LinkedIn", "1");
+
+  await page.getByRole("button", { name: "Add results" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add results" });
+  await expect(dialog).toBeVisible();
+  await dialog.locator("#metric-approval").selectOption("2");
+  await dialog.getByLabel("Reactions").fill("5");
+
+  await dialog.locator("#metric-approval").selectOption("1");
+  await expect(dialog.getByLabel("Reactions")).toHaveValue("5");
+  await expect(dialog.getByLabel("Comments")).toHaveValue("0");
+  await expect(dialog.getByRole("status")).toHaveCount(0);
+});
+
+test("on a phone-sized window the results form fits and scrolls instead of clipping", async ({
+  page,
+}) => {
+  // Phone size from the start: the New campaign dialog used in setup must
+  // also fit and scroll (it used to clip its Create button off-screen).
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(page);
+  await openMetrics(page);
+  await page.evaluate(() => {
+    window.location.hash = "#/metrics?approvalId=1&campaignId=1";
+  });
+  const dialog = page.getByRole("dialog", { name: "How did it do?" });
+  await expect(dialog).toBeVisible();
+  const box = await dialog.boundingBox();
+  expect(box?.y ?? -1).toBeGreaterThanOrEqual(0);
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
+  await expect(
+    dialog.getByRole("heading", { name: "How did it do?" }),
+  ).toBeInViewport();
+  const save = dialog.getByRole("button", { name: "Save results" });
+  await save.scrollIntoViewIfNeeded();
+  await expect(save).toBeInViewport();
+});
+
+test("What's working stays quiet with too few results", async ({ page }) => {
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createPublishedApproval(page);
+  await openMetrics(page);
+  await recordMetrics(page);
+
+  const panel = page.getByRole("region", { name: "What’s working" });
+  await expect(panel).toContainText("from 1 measured post");
+  await expect(panel.getByTestId("pattern-opening")).toContainText(
+    "Not enough results yet: 1 of 5 posts needed.",
+  );
+  await expect(
+    panel.getByRole("button", { name: "Save as lesson" }),
+  ).toHaveCount(0);
+});
+
+test("What's working shows a clear pattern and saves it as a lesson", async ({
+  page,
+}) => {
+  await installSyntheticMetrics(page, [
+    { approval: 11, hook: "Why do launches stall?", reactions: 30 },
+    { approval: 12, hook: "What would you cut?", reactions: 20 },
+    { approval: 13, hook: "Pricing is a product call", reactions: 10 },
+    { approval: 14, hook: "Shipping beats polish", reactions: 10 },
+    { approval: 15, hook: "Churn starts at signup", reactions: 10 },
+  ]);
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openMetrics(page);
+
+  const panel = page.getByRole("region", { name: "What’s working" });
+  await expect(panel).toContainText("from 5 measured posts");
+  const opening = panel.getByTestId("pattern-opening");
+  await expect(opening).toContainText(
+    "Opens with a question did better: 25 vs 10",
+  );
+  await expect(opening).toContainText("2 of 5 posts");
+  await opening.getByRole("button", { name: "Save as lesson" }).click();
+
+  await expect(
+    opening.getByRole("button", { name: "Saved as lesson" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("Open with a question", { exact: true }),
+  ).toBeVisible();
+  await expectSummaryValue(page, "Active notes", "1");
+});
+
 test("shows empty published-post state before anything is published", async ({
   page,
 }) => {
@@ -517,6 +676,102 @@ async function setGlobalKillSwitch(
       values: [nextEnabled ? 1 : 0, "Test kill switch"],
     });
   }, enabled);
+}
+
+/**
+ * Appends a second published post (approval 2, no metrics) to the
+ * eligible-approvals read so the dialog's post list can switch posts.
+ */
+async function addSecondEligiblePost(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const internals = (
+      window as unknown as {
+        __TAURI_INTERNALS__: {
+          invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    const original = internals.invoke.bind(internals);
+    internals.invoke = async (
+      cmd: string,
+      args?: unknown,
+    ): Promise<unknown> => {
+      const result = await original(cmd, args);
+      if (cmd !== "linkgo_metrics_eligible_approvals") return result;
+      if (!Array.isArray(result) || result.length === 0) return result;
+      const first = result[0] as Record<string, unknown>;
+      return [
+        ...result,
+        { ...first, approval_id: 2, variant_number: 2, publish_attempt_id: 2 },
+      ];
+    };
+  });
+}
+
+/**
+ * Replaces the post-metrics read for campaign 1 with synthetic measured
+ * posts; every other command still goes to the shared mocks.
+ */
+async function installSyntheticMetrics(
+  page: Page,
+  posts: Array<{ approval: number; hook: string; reactions: number }>,
+): Promise<void> {
+  await page.addInitScript((rows) => {
+    const internals = (
+      window as unknown as {
+        __TAURI_INTERNALS__: {
+          invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    const original = internals.invoke.bind(internals);
+    internals.invoke = (cmd: string, args?: unknown): Promise<unknown> => {
+      if (cmd !== "linkgo_metrics_post_metrics_list")
+        return original(cmd, args);
+      return Promise.resolve(
+        rows.map((row) => ({
+          id: row.approval,
+          campaign_id: 1,
+          approval_id: row.approval,
+          publish_attempt_id: row.approval,
+          platform: "linkedin",
+          measured_at: "2026-09-20T09:00",
+          impressions: 0,
+          reactions: row.reactions,
+          comments: 0,
+          reposts: 0,
+          profile_visits: 0,
+          link_clicks: 0,
+          ctr: null,
+          notes: "",
+          collection_source: "manual",
+          raw_payload_json: "{}",
+          created_at: "2026-09-20 09:00:00",
+          updated_at: "2026-09-20 09:00:00",
+          campaign_name: "Founder-led growth",
+          campaign_status: "active",
+          approval_status: "published",
+          draft_id: row.approval,
+          draft_angle: "",
+          draft_notes: "",
+          variant_id: row.approval,
+          variant_number: 1,
+          variant_hook: row.hook,
+          variant_body: "Short body.",
+          variant_cta: "",
+          variant_hashtags: "",
+          variant_status: "selected",
+          target_author_name: "Jane Operator",
+          target_author_profile_url: "",
+          target_content: "",
+          target_url: "",
+          publish_external_post_url: null,
+          publish_platform_post_id: null,
+          publish_created_at: "2026-09-15 09:00:00",
+        })),
+      );
+    };
+  }, posts);
 }
 
 async function saveDefaultMemory(page: Page): Promise<void> {

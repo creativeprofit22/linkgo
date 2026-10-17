@@ -11,6 +11,7 @@ import { draftPostInputSchema } from "../src/agent/schemas";
 import {
   DRAFT_PROMPT_ROUTES,
   buildDraftPromptSummary,
+  toDraftLessonInputs,
 } from "../src/features/drafts/prompt-routing";
 import { DRAFT_CONTENT_INTENTS } from "../src/features/drafts/types";
 
@@ -162,6 +163,50 @@ test("bounds drafter reference data separately from trusted metadata", () => {
     campaign: { name: "Launch" },
     candidate: { targetContent: injectedSource },
   });
+});
+
+test("saved lessons map to do/avoid guidance for the drafter", () => {
+  expect(
+    toDraftLessonInputs([
+      { signal: "winner", summary: "Open with a question" },
+      { signal: "insight", summary: "Post on Tuesdays" },
+      { signal: "underperformer", summary: "Long intros" },
+      { signal: "avoid", summary: "Hashtag walls" },
+    ]),
+  ).toEqual([
+    { kind: "do", summary: "Open with a question" },
+    { kind: "do", summary: "Post on Tuesdays" },
+    { kind: "avoid", summary: "Long intros" },
+    { kind: "avoid", summary: "Hashtag walls" },
+  ]);
+  expect(toDraftLessonInputs([])).toEqual([]);
+});
+
+test("drafter gets lessons only as trusted request metadata", () => {
+  const build = (appliedLessons?: unknown) =>
+    buildAgentMessages("drafter", {
+      inputSummary: "Write drafts.",
+      inputContext: {
+        draftRequest: {
+          campaignId: 7,
+          candidatePostId: 11,
+          variantCount: 3,
+          contentIntent: "idea",
+          ...(appliedLessons === undefined ? {} : { appliedLessons }),
+        },
+        referenceData: { campaign: { name: "Launch" } },
+      },
+    });
+  const withLessons = build([{ kind: "do", summary: "Open with a question" }]);
+  const system = withLessons[0]?.content ?? "";
+  const user = withLessons[1]?.content ?? "";
+  expect(system).toContain("appliedLessons");
+  expect(system).toContain("never invent facts, results, or experiences");
+  const trustedPart = user.split(UNTRUSTED_REFERENCE_DATA_START)[0] ?? "";
+  expect(trustedPart).toContain(
+    '"appliedLessons":[{"kind":"do","summary":"Open with a question"}]',
+  );
+  expect(build()[1]?.content ?? "").not.toContain("appliedLessons");
 });
 
 test("auditor prompt forbids invented support and requires exact bounded findings", () => {

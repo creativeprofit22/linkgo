@@ -334,6 +334,8 @@ async fn generation_requests_and_workflow_options_are_filtered() {
         .collect();
     assert_eq!(statuses, vec!["generated", "saved"]);
     assert_eq!(rows[0]["campaign_name"], "Live");
+    // Requests made before lessons existed read back as "no lessons used".
+    assert_eq!(rows[0]["applied_lessons_json"], "[]");
     assert!(
         list_workflow_options(&f.pool, DraftWorkflowOptionsInput { campaign_id: 1 })
             .await

@@ -1,6 +1,7 @@
 import { AlertCircle, NotebookTabs } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LessonsPanel } from "@/features/playbooks/components/lessons-panel";
 import { PlaybookCard } from "@/features/playbooks/components/playbook-card";
 import { usePlaybooks } from "@/features/playbooks/hooks/use-playbooks";
 import { playbooksRoute } from "@/features/playbooks/schemas";
@@ -85,6 +86,7 @@ export function PlaybooksView(): React.ReactNode {
               />
             ))}
           </div>
+          <LessonsPanel />
         </>
       )}
     </div>

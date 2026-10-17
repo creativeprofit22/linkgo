@@ -44,6 +44,13 @@ fn campaign(id: i64) -> MetricsListInput {
     }
 }
 
+fn missing(campaign_id: Option<i64>, published_before: Option<&str>) -> PostsMissingResultsInput {
+    PostsMissingResultsInput {
+        campaign_id,
+        published_before: published_before.map(str::to_string),
+    }
+}
+
 fn ids(rows: &[Value], key: &str) -> Vec<i64> {
     rows.iter().map(|row| row[key].as_i64().unwrap()).collect()
 }
@@ -61,7 +68,7 @@ async fn invalid_campaign_is_rejected_by_every_read() {
     let f = migrated().await;
     assert!(list_eligible_approvals(&f.pool, campaign(0)).await.is_err());
     assert!(list_post_metrics(&f.pool, campaign(-1)).await.is_err());
-    assert!(list_posts_missing_results(&f.pool, campaign(0))
+    assert!(list_posts_missing_results(&f.pool, missing(Some(0), None))
         .await
         .is_err());
     assert!(list_campaign_memory(&f.pool, campaign(0)).await.is_err());
@@ -154,13 +161,15 @@ async fn missing_results_skips_measured_and_archived() {
          INSERT INTO publish_attempts (approval_id,status,created_at) SELECT id,'succeeded','2026-04-01 00:00:00' FROM approvals WHERE id >= 4;",
     )
     .await;
-    let page = list_posts_missing_results(&f.pool, all()).await.unwrap();
+    let page = list_posts_missing_results(&f.pool, missing(None, None))
+        .await
+        .unwrap();
     assert_eq!(ids(&page.items, "approval_id"), vec![4]);
     assert_eq!(page.total_count, 1);
     assert_eq!(page.items[0]["campaign_name"], "Live");
     assert_eq!(page.items[0]["variant_hook"], "  ");
     assert_eq!(page.items[0]["publish_created_at"], "2026-04-01 00:00:00");
-    let other = list_posts_missing_results(&f.pool, campaign(3))
+    let other = list_posts_missing_results(&f.pool, missing(Some(3), None))
         .await
         .unwrap();
     assert!(other.items.is_empty());
@@ -182,7 +191,9 @@ async fn missing_results_ignores_metric_list_cap() {
     let metrics = list_post_metrics(&f.pool, all()).await.unwrap();
     assert_eq!(metrics.len() as i64, METRICS_LIST_LIMIT);
     assert!(!ids(&metrics, "approval_id").contains(&1));
-    let page = list_posts_missing_results(&f.pool, all()).await.unwrap();
+    let page = list_posts_missing_results(&f.pool, missing(None, None))
+        .await
+        .unwrap();
     assert!(page.items.is_empty());
     assert_eq!(page.total_count, 0);
 }
@@ -201,11 +212,63 @@ async fn missing_results_caps_items_but_counts_all() {
          INSERT INTO publish_attempts (approval_id,status,created_at) SELECT id,'succeeded','2026-05-01 00:00:00' FROM approvals WHERE id >= 101;",
     )
     .await;
-    let page = list_posts_missing_results(&f.pool, all()).await.unwrap();
+    let page = list_posts_missing_results(&f.pool, missing(None, None))
+        .await
+        .unwrap();
     assert_eq!(page.items.len() as i64, MISSING_RESULTS_LIMIT);
     assert_eq!(page.total_count, 60);
     // Same publish time: newest approval id first.
     assert_eq!(page.items[0]["approval_id"], 160);
+}
+
+#[tokio::test]
+async fn missing_results_honours_published_before_cutoff() {
+    let f = fixture().await;
+    seed(
+        &f.pool,
+        "WITH RECURSIVE n(i) AS (SELECT 4 UNION ALL SELECT i + 1 FROM n WHERE i < 5)
+         INSERT INTO target_posts (id,url,normalized_url,content,content_hash) SELECT i,'https://e.com/'||i,'https://e.com/'||i,'x','h'||i FROM n;
+         INSERT INTO candidate_posts (id,campaign_id,target_post_id) SELECT id,1,id FROM target_posts WHERE id >= 4;
+         INSERT INTO drafts (id,campaign_id,candidate_post_id,status) SELECT id,1,id,'ready_for_review' FROM candidate_posts WHERE id >= 4;
+         INSERT INTO draft_variants (id,draft_id,variant_number,hook,body,status) SELECT id,id,1,'h','b','selected' FROM drafts WHERE id >= 4;
+         INSERT INTO approvals (id,campaign_id,draft_id,draft_variant_id,status) SELECT id,1,id,id,'published' FROM drafts WHERE id >= 4;
+         INSERT INTO publish_attempts (approval_id,status,created_at) VALUES
+           (4,'succeeded','2026-04-01 00:00:00'),(5,'succeeded','2026-04-03 12:00:00');",
+    )
+    .await;
+    // Approval 5 went out after the cutoff; approval 4 before it.
+    let page = list_posts_missing_results(&f.pool, missing(None, Some("2026-04-02T00:00:00.000Z")))
+        .await
+        .unwrap();
+    assert_eq!(ids(&page.items, "approval_id"), vec![4]);
+    assert_eq!(page.total_count, 1);
+    // Exactly at the cutoff counts as old enough.
+    let edge = list_posts_missing_results(&f.pool, missing(None, Some("2026-04-03 12:00:00")))
+        .await
+        .unwrap();
+    assert_eq!(ids(&edge.items, "approval_id"), vec![5, 4]);
+    assert_eq!(edge.total_count, 2);
+    let none = list_posts_missing_results(&f.pool, missing(None, None))
+        .await
+        .unwrap();
+    assert_eq!(none.total_count, 2);
+}
+
+#[tokio::test]
+async fn missing_results_rejects_invalid_published_before() {
+    let f = fixture().await;
+    for bad in ["", "yesterday", "2026-13-45", &"9".repeat(100)] {
+        assert!(
+            list_posts_missing_results(&f.pool, missing(None, Some(bad)))
+                .await
+                .is_err(),
+            "{bad} should be rejected"
+        );
+    }
+    assert!(serde_json::from_value::<PostsMissingResultsInput>(
+        serde_json::json!({ "publishedBefore": "2026-01-01", "extra": 1 })
+    )
+    .is_err());
 }
 
 #[tokio::test]

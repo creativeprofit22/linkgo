@@ -357,6 +357,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       workflow_step_id: number | null;
       angle: string;
       voice_notes: string;
+      applied_lessons_json: string;
       status: "pending" | "generated" | "saved" | "failed" | "dismissed";
       summary: string;
       generated_variants_json: string;
@@ -5957,6 +5958,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           workflow_step_id: workflowStepId,
           angle: String(values[9] ?? ""),
           voice_notes: String(values[10] ?? ""),
+          applied_lessons_json: String(values[11] ?? "[]"),
           status: "pending",
           summary: "",
           generated_variants_json: "[]",
@@ -9193,6 +9195,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         status: "generated",
         summary: "Three generated variants await a decision",
         generated_variants_json: "[]",
+        applied_lessons_json: "[]",
         error_message: "",
         created_draft_id: null,
         created_at: now,
@@ -9301,6 +9304,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         status: "pending",
         summary: "",
         generated_variants_json: "[]",
+        applied_lessons_json: "[]",
         error_message: "",
         created_draft_id: null,
         created_at: now,
@@ -9411,6 +9415,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         status: "failed",
         summary: `${label} generation request`,
         generated_variants_json: "[]",
+        applied_lessons_json: "[]",
         error_message: `${label} deferred request fixture`,
         created_draft_id: null,
         created_at: now,
@@ -16630,6 +16635,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       workflow_step_id: number | null;
       angle: string;
       voice_notes: string;
+      applied_lessons_json: string;
       status: DraftGenerationRequestStatus;
       summary: string;
       generated_variants_json: string;
@@ -17722,12 +17728,43 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         campaignId: candidate.campaign_id,
         candidateId: input.candidateId,
       });
+      // Mirrors native `active_lessons`: up to 5 switched-on lessons for the
+      // campaign, newest first, summaries cleaned and capped at 160.
+      const appliedLessons = campaignMemory
+        .filter(
+          (memory) =>
+            memory.campaign_id === candidate.campaign_id &&
+            memory.status === "active",
+        )
+        .sort((left, right) => {
+          const delta =
+            Date.parse(right.updated_at) - Date.parse(left.updated_at);
+          return delta !== 0 && !Number.isNaN(delta)
+            ? delta
+            : right.id - left.id;
+        })
+        .slice(0, 5)
+        .map((memory) => {
+          const clean = Array.from(memory.summary, (character) =>
+            /\p{Cc}/u.test(character) ? " " : character,
+          )
+            .join("")
+            .replace(/\s+/g, " ")
+            .trim();
+          return {
+            id: memory.id,
+            signal: memory.signal,
+            summary:
+              clean.length <= 160 ? clean : `${clean.slice(0, 159).trimEnd()}…`,
+          };
+        })
+        .filter((lesson) => lesson.summary !== "");
       const requestResult = mockSqlExecute(
         `INSERT INTO draft_generation_requests (
       campaign_id, candidate_post_id, provider_key, model_name, playbook_key,
       variant_count, content_intent, workflow_run_id, workflow_step_id,
-      angle, voice_notes, status, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', datetime('now'))`,
+      angle, voice_notes, applied_lessons_json, status, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', datetime('now'))`,
         [
           candidate.campaign_id,
           input.candidateId,
@@ -17740,6 +17777,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           claimed?.workflowStepId ?? null,
           input.angle.trim(),
           input.voiceNotes.trim(),
+          JSON.stringify(appliedLessons),
         ],
       );
       const requestId = requestResult.lastInsertId;
@@ -17753,6 +17791,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         campaignId: candidate.campaign_id,
         workflowRunId: claimed?.workflowRunId ?? null,
         candidateContext: context.referenceData,
+        appliedLessons,
       };
     }
 
@@ -20425,9 +20464,29 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         if (cmd === "linkgo_metrics_posts_missing_results") {
           // Mirrors `MISSING_RESULTS_SQL`: eligible approvals with no metric
           // row at all (not a capped list), 50 rows plus the uncapped total.
-          const input = nativeInput<{ campaignId?: number }>(args);
+          // `publishedBefore` hides posts too new to ask about.
+          const input = nativeInput<{
+            campaignId?: number;
+            publishedBefore?: string;
+          }>(args);
           const values =
             input.campaignId === undefined ? [] : [input.campaignId];
+          const cutoff =
+            input.publishedBefore === undefined
+              ? null
+              : Date.parse(input.publishedBefore);
+          if (cutoff !== null && Number.isNaN(cutoff)) {
+            return Promise.reject(
+              new Error("Published-before must be a valid date and time"),
+            );
+          }
+          // SQLite `datetime('now')` text is UTC without a zone marker.
+          const asUtc = (value: unknown): number => {
+            const text = String(value).trim().replace(" ", "T");
+            return Date.parse(
+              /(Z|[+-]\d{2}:?\d{2})$/i.test(text) ? text : `${text}Z`,
+            );
+          };
           const measured = new Set(
             postMetrics.map((metric) => metric.approval_id),
           );
@@ -20435,7 +20494,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             selectMetricEligibleApprovals(values) as Array<
               Record<string, unknown>
             >
-          ).filter((row) => !measured.has(Number(row.approval_id)));
+          ).filter(
+            (row) =>
+              !measured.has(Number(row.approval_id)) &&
+              (cutoff === null || asUtc(row.publish_created_at) <= cutoff),
+          );
           return Promise.resolve({
             items: missing.slice(0, 50).map((row) => ({
               approval_id: row.approval_id,

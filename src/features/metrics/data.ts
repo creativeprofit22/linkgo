@@ -39,6 +39,8 @@ import type {
   RecordPostMetricInput,
   SetCampaignMemoryStatusInput,
 } from "@/features/metrics/types";
+import { RESULTS_PROMPT_DELAY_HOURS } from "@/features/metrics/types";
+import { parseStoredUtc } from "@/features/metrics/patterns";
 import type { ApprovalStatus } from "@/features/approvals/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 import type { DraftVariantStatus } from "@/features/drafts/types";
@@ -298,18 +300,30 @@ export async function listPostMetrics(
   return rows.map(mapPostMetricWithDetails);
 }
 
+/** Posts published at or before this instant are old enough to ask about. */
+export function resultsPromptCutoff(now: Date): string {
+  return new Date(
+    now.getTime() - RESULTS_PROMPT_DELAY_HOURS * 60 * 60 * 1000,
+  ).toISOString();
+}
+
 /**
  * Read-only: posted LinkedIn posts (campaign not archived) with no recorded
- * metric, newest publish first. The native read decides "has any metric?"
- * itself, so capped metric lists never resurface measured posts. `items` is
- * capped; `totalCount` is the uncapped total.
+ * metric, newest publish first, that went out at least
+ * `RESULTS_PROMPT_DELAY_HOURS` before `now`. The native read decides "has any
+ * metric?" itself (manual or LinkedIn snapshot), so capped metric lists never
+ * resurface measured posts. `items` is capped; `totalCount` is the uncapped
+ * total.
  */
 export async function listPostsMissingResults(
   input: PostsMissingResultsInput = {},
 ): Promise<PostsMissingResultsPage> {
   const record = postsMissingResultsRecordSchema.parse(
     await invokeCommand("linkgo_metrics_posts_missing_results", {
-      input: campaignInput(undefined),
+      input: {
+        ...campaignInput(undefined),
+        publishedBefore: resultsPromptCutoff(input.now ?? new Date()),
+      },
     }),
   );
   input.signal?.throwIfAborted();
@@ -321,7 +335,11 @@ export async function listPostsMissingResults(
         campaignId: row.campaign_id,
         campaignName: row.campaign_name,
         postTitle: hook.length > 0 ? hook : "Untitled post",
-        publishedAt: row.publish_created_at,
+        // Stored as zone-less SQLite UTC text; hand out ISO UTC so callers
+        // show the right local day.
+        publishedAt:
+          parseStoredUtc(row.publish_created_at)?.toISOString() ??
+          row.publish_created_at,
       };
     }),
     totalCount: record.totalCount,

@@ -12,7 +12,7 @@ opens the screen where the user fixes it, with that item already picked.
 | `connection`      | "<Service> needs reconnecting"            | Reconnect           | `#/integrations?connect=<provider>`     |
 | `unclear-outcome` | "Did '<post>' go out?"                    | Check what happened | `#/safety?executionId=E`                |
 | `waiting`         | "'<post>' is waiting for your OK"         | Review post         | `#/approvals?campaignId=C&approvalId=A` |
-| `results-missing` | "Add results for '<post>'"                | Add results         | `#/metrics?campaignId=C&approvalId=A`   |
+| `results-missing` | "How did it do?"                          | Add results         | `#/metrics?campaignId=C&approvalId=A`   |
 | `next-scheduled`  | "Next post: '<post>'" (under "Coming up") | See schedule        | `#/approvals?campaignId=C&approvalId=A` |
 
 - Rows follow the order above (`TODAY_ITEM_KINDS`). `setup` shows only while
@@ -29,6 +29,11 @@ opens the screen where the user fixes it, with that item already picked.
   rows (`TODAY_ROWS_PER_KIND`); extra rows become a "See all" link to that
   kind's full screen (unclear outcomes open `#/safety`). Connections are not
   capped: they are bounded by the provider list.
+- `results-missing` rows describe the post ("'<post>' went out <day> in
+  <campaign>") and appear only once the post went out at least 48 hours ago
+  (`RESULTS_PROMPT_DELAY_HOURS`); `loadToday({ now? })` passes its clock to
+  `listPostsMissingResults`. Posts already updated from LinkedIn never ask.
+  The overflow reads "N more posts are ready for results."
 - Unclear outcomes for comments read "Did your comment go out?". A post
   missing from the loaded approvals still shows, as "Did your post go out?".
 - No button approves, schedules, posts or reconciles. Every link only opens a

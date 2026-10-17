@@ -151,6 +151,7 @@ async fn claim_inserts_request_starts_linked_step_and_returns_bounded_context() 
         "Linkgo app"
     );
     assert_eq!(claimed.candidate_context["candidate"]["relevanceScore"], 70);
+    assert!(claimed.applied_lessons.is_empty());
     assert_eq!(
         text(&f.pool, &format!("SELECT status||'|'||angle||'|'||workflow_run_id||'|'||workflow_step_id FROM draft_generation_requests WHERE id={}", claimed.request_id)).await,
         "pending|Angle|5|6"
@@ -167,6 +168,57 @@ async fn claim_inserts_request_starts_linked_step_and_returns_bounded_context() 
         .await,
         "step_started"
     );
+}
+
+#[tokio::test]
+async fn claim_uses_only_active_lessons_of_its_campaign_newest_first_capped() {
+    let f = fixture().await;
+    seed(
+        &f.pool,
+        "INSERT INTO campaign_memory (id,campaign_id,signal,summary,status,updated_at) VALUES
+           (1,1,'winner','Open with a question','active','2026-01-01 00:00:00'),
+           (2,1,'avoid','Long intros','active','2026-01-02 00:00:00'),
+           (3,1,'insight','Tuesdays','active','2026-01-03 00:00:00'),
+           (4,1,'winner','Lists','active','2026-01-04 00:00:00'),
+           (5,1,'underperformer','  Line\u{1}one\nnext  ','active','2026-01-05 00:00:00'),
+           (6,1,'winner','Same time, higher id wins','active','2026-01-05 00:00:00'),
+           (7,1,'winner','Switched off','archived','2026-02-01 00:00:00'),
+           (8,2,'winner','Other campaign','active','2026-02-01 00:00:00');",
+    )
+    .await;
+    let claimed = claim_generation(&f.pool, claim(2, None)).await.unwrap();
+    let ids: Vec<i64> = claimed.applied_lessons.iter().map(|l| l.id).collect();
+    // Archived (7) and other-campaign (8) never apply; oldest (1) is past the cap.
+    assert_eq!(ids, vec![6, 5, 4, 3, 2]);
+    assert_eq!(claimed.applied_lessons.len() as i64, APPLIED_LESSONS_LIMIT);
+    assert_eq!(claimed.applied_lessons[1].signal, "underperformer");
+    assert!(!claimed.applied_lessons[1]
+        .summary
+        .chars()
+        .any(char::is_control));
+    let stored: Vec<AppliedLesson> = serde_json::from_str(
+        &text(
+            &f.pool,
+            &format!(
+                "SELECT applied_lessons_json FROM draft_generation_requests WHERE id={}",
+                claimed.request_id
+            ),
+        )
+        .await,
+    )
+    .unwrap();
+    assert_eq!(stored, claimed.applied_lessons);
+
+    // Turning a lesson off changes the next draft's inputs.
+    seed(
+        &f.pool,
+        "UPDATE campaign_memory SET status='archived' WHERE id IN (2,3,4,5,6);",
+    )
+    .await;
+    let next = claim_generation(&f.pool, claim(1, None)).await.unwrap();
+    let ids: Vec<i64> = next.applied_lessons.iter().map(|l| l.id).collect();
+    assert_eq!(ids, vec![1]);
+    assert_eq!(next.applied_lessons[0].summary, "Open with a question");
 }
 
 #[tokio::test]

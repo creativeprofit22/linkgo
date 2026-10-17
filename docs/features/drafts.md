@@ -46,7 +46,7 @@ Late results from an earlier loop are rejected without writes:
 
 ## Schema
 
-Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, Migration 30 in `planner_draft_generation.rs`, Migration 31 in `draft_ai_audits.rs`, Migration 32 in `planner_draft_audits.rs`, and Migration 33 in `draft_quality.rs`.
+Migrations: `src-tauri/src/migrations/drafts.rs`, `src-tauri/src/migrations/draft_generation.rs`, Migration 30 in `planner_draft_generation.rs`, Migration 31 in `draft_ai_audits.rs`, Migration 32 in `planner_draft_audits.rs`, Migration 33 in `draft_quality.rs`, and Migration 39 in `draft_lessons.rs`.
 
 Tables:
 
@@ -74,6 +74,23 @@ Key constraints:
 - Variant text changes increment `content_revision`; each active AI audit is unique by variant and revision.
 - Each AI audit has at most one linked agent run, and normalized findings are unique by audit run and category.
 - Migration 32 gives a planner-owned AI audit at most one `workflow_step_execution` link; existing and manual audit rows remain valid with no execution link.
+- Migration 39 adds `draft_generation_requests.applied_lessons_json` (JSON array, at most 4000 characters, default `[]`), recording which lessons a generation used.
+
+### Lessons in drafts
+
+`linkgo_draft_generation_claim` reads, in the same transaction as the request
+insert, up to 5 `active` `campaign_memory` rows for the request's campaign
+(newest `updated_at`, then highest id). Summaries have control characters
+replaced, whitespace collapsed and are capped at 160 characters. They are
+stored as `[{id, signal, summary}]` in `applied_lessons_json` and returned as
+`appliedLessons`. The renderer passes them to the drafter as trusted
+`inputContext.draftRequest.appliedLessons` via `toDraftLessonInputs`
+(`winner`/`insight` → `do`, `underperformer`/`avoid` → `avoid`); the drafter
+system prompt says to follow "do", steer clear of "avoid", and never invent
+facts to satisfy a lesson. Each AI draft card shows "Used: <summary> · Avoid: <summary> · …" (avoid
+lessons are labelled so they never read as used) or "No lessons used". Unreadable stored JSON reads as no lessons. Turning a lesson
+off in Brand voice (archive) removes it from later claims only; past requests
+keep their record.
 
 See `docs/DATA_MODEL.md` for column-level details.
 

@@ -13,8 +13,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { parseStoredUtc } from "@/features/metrics/patterns";
 import type {
   MetricEligibleApproval,
+  PostMetric,
   RecordPostMetricInput,
 } from "@/features/metrics/types";
 
@@ -39,8 +41,33 @@ interface RecordPostMetricDialogProps {
   /** Controlled open state, e.g. when a link opens the dialog. */
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
-  /** Post picked when the dialog opens; must be in `eligibleApprovals`. */
+  /**
+   * Post picked when the dialog opens; must be in `eligibleApprovals`. The
+   * post is then shown read-only ("How did it do?") unless the person chooses
+   * to pick a different one.
+   */
   initialApprovalId?: number | undefined;
+  /**
+   * Newest LinkedIn snapshot per post (keyed by approval id). When the
+   * selected post has one, reactions and comments are prefilled so the person
+   * only checks and adds the rest.
+   */
+  latestAutoMetrics?: ReadonlyMap<number, LatestAutoMetric> | undefined;
+}
+
+export type LatestAutoMetric = Pick<
+  PostMetric,
+  "approval_id" | "reactions" | "comments" | "measured_at"
+>;
+
+function formatPostDay(stored: string): string {
+  const date = parseStoredUtc(stored);
+  if (date === null) return "on an unknown day";
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(date);
 }
 
 function getLocalDateTimeValue(): string {
@@ -107,6 +134,7 @@ export function RecordPostMetricDialog({
   open: openProp,
   onOpenChange,
   initialApprovalId,
+  latestAutoMetrics,
 }: RecordPostMetricDialogProps): React.ReactNode {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
@@ -115,6 +143,13 @@ export function RecordPostMetricDialog({
     onOpenChange?.(next);
   };
   const [submitting, setSubmitting] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [prefilled, setPrefilled] = useState<{
+    approvalId: string;
+    measuredAt: string;
+  } | null>(null);
+  // Once the person types reactions or comments, prefill never overwrites them.
+  const [countsTouched, setCountsTouched] = useState(false);
   const [form, setForm] = useState<RecordMetricFormState>(() =>
     getInitialFormState(eligibleApprovals),
   );
@@ -129,11 +164,61 @@ export function RecordPostMetricDialog({
   // Opening from a link picks that post; nothing is saved until submit.
   useEffect(() => {
     if (!open || initialApprovalId === undefined) return;
+    setPicking(false);
     setForm((current) => ({
       ...current,
       approvalId: String(initialApprovalId),
     }));
   }, [open, initialApprovalId]);
+
+  // Whichever post is selected, fill in reactions and comments from its
+  // newest LinkedIn snapshot while the person hasn't typed them yet.
+  const selectedAuto = latestAutoMetrics?.get(Number(form.approvalId));
+  const autoReactions = selectedAuto?.reactions;
+  const autoComments = selectedAuto?.comments;
+  const autoMeasuredAt = selectedAuto?.measured_at;
+  const selectedApprovalId = form.approvalId;
+  useEffect(() => {
+    if (!open || countsTouched) return;
+    const prefill =
+      autoReactions !== undefined &&
+      autoComments !== undefined &&
+      autoMeasuredAt !== undefined;
+    setPrefilled(
+      prefill
+        ? { approvalId: selectedApprovalId, measuredAt: autoMeasuredAt }
+        : null,
+    );
+    // Untouched counts are either the defaults or an earlier prefill, so a
+    // post without a snapshot goes back to the defaults.
+    setForm((current) => ({
+      ...current,
+      reactions: prefill ? String(autoReactions) : "0",
+      comments: prefill ? String(autoComments) : "0",
+    }));
+  }, [
+    open,
+    countsTouched,
+    selectedApprovalId,
+    autoReactions,
+    autoComments,
+    autoMeasuredAt,
+  ]);
+
+  const linkedApproval =
+    initialApprovalId === undefined
+      ? null
+      : (eligibleApprovals.find(
+          (approval) => approval.approval.id === initialApprovalId,
+        ) ?? null);
+  const showLinkedPost =
+    !picking &&
+    linkedApproval !== null &&
+    linkedApproval.approval.id === Number(form.approvalId);
+  const prefilledAt =
+    prefilled !== null && prefilled.approvalId === form.approvalId
+      ? prefilled.measuredAt
+      : null;
 
   useEffect(() => {
     const approvalStillEligible = eligibleApprovals.some(
@@ -189,6 +274,9 @@ export function RecordPostMetricDialog({
       };
       await onRecord(input);
       setForm(getInitialFormState(eligibleApprovals));
+      setPrefilled(null);
+      setCountsTouched(false);
+      setPicking(false);
       setOpen(false);
     } finally {
       setSubmitting(false);
@@ -206,29 +294,77 @@ export function RecordPostMetricDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Add results</DialogTitle>
+            <DialogTitle>
+              {showLinkedPost ? "How did it do?" : "Add results"}
+            </DialogTitle>
             <DialogDescription>
               Copy the numbers from LinkedIn for this post. Linkgo saves them on
               this computer.
             </DialogDescription>
           </DialogHeader>
 
-          <Field label="Post" htmlFor="metric-approval" required>
-            <select
-              id="metric-approval"
-              value={form.approvalId}
-              required
-              onChange={(event) => updateForm("approvalId", event.target.value)}
-              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+          {showLinkedPost ? (
+            <div
+              className="bg-muted/40 flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+              data-testid="metric-linked-post"
             >
-              {eligibleApprovals.map((approval) => (
-                <option key={approval.approval.id} value={approval.approval.id}>
-                  {approval.source.author_name || "Unknown author"} · Version{" "}
-                  {approval.variant.variant_number}
-                </option>
-              ))}
-            </select>
-          </Field>
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-muted-foreground text-xs font-medium">
+                  Post
+                </p>
+                <p className="truncate text-sm font-medium">
+                  {linkedApproval.variant.hook.trim() || "Untitled post"}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Went out{" "}
+                  {formatPostDay(
+                    linkedApproval.latestPublishAttempt.created_at,
+                  )}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-8"
+                onClick={() => setPicking(true)}
+              >
+                Pick a different post
+              </Button>
+            </div>
+          ) : (
+            <Field label="Post" htmlFor="metric-approval" required>
+              <select
+                id="metric-approval"
+                value={form.approvalId}
+                required
+                onChange={(event) =>
+                  updateForm("approvalId", event.target.value)
+                }
+                className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
+                {eligibleApprovals.map((approval) => (
+                  <option
+                    key={approval.approval.id}
+                    value={approval.approval.id}
+                  >
+                    {approval.source.author_name || "Unknown author"} · Version{" "}
+                    {approval.variant.variant_number}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          {prefilledAt !== null ? (
+            <p
+              role="status"
+              className="text-muted-foreground bg-linkgo-blue/5 rounded-md border px-3 py-2 text-xs"
+            >
+              Reactions and comments are filled in from LinkedIn on{" "}
+              {formatPostDay(prefilledAt)}. Check them, then add the rest.
+            </p>
+          ) : null}
 
           <Field label="Checked on" htmlFor="metric-measured-at" required>
             <Input
@@ -251,13 +387,19 @@ export function RecordPostMetricDialog({
               label="Reactions"
               id="metric-reactions"
               value={form.reactions}
-              onChange={(value) => updateForm("reactions", value)}
+              onChange={(value) => {
+                setCountsTouched(true);
+                updateForm("reactions", value);
+              }}
             />
             <NumberField
               label="Comments"
               id="metric-comments"
               value={form.comments}
-              onChange={(value) => updateForm("comments", value)}
+              onChange={(value) => {
+                setCountsTouched(true);
+                updateForm("comments", value);
+              }}
             />
             <NumberField
               label="Reposts"

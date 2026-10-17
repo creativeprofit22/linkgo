@@ -405,6 +405,7 @@ Stores each explicit provider-assisted generation attempt before provider execut
 | `angle` / `voice_notes`   | TEXT    | Explicit operator instructions                                        |
 | `status`                  | TEXT    | `pending`, `generated`, `saved`, `failed`, or `dismissed`             |
 | `generated_variants_json` | TEXT    | Bounded generated output awaiting save                                |
+| `applied_lessons_json`    | TEXT    | Migration 39: lessons used, `[{id,signal,summary}]`; default `[]`     |
 | `created_draft_id`        | INTEGER | Nullable saved draft provenance                                       |
 
 Migration 30 adds intent/workflow provenance, insert/update count guards, and a partial unique index allowing only one `pending` or `generated` request per linked draft step. Failure or dismissal releases that active-step claim. Saving a linked request atomically creates the draft, variants, deterministic audits, one `draft` artifact, workflow events, and the transition to `audit`.

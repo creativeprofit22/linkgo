@@ -11,6 +11,7 @@ import {
   createDraftSchema,
   draftAiAuditReconcileResultSchema,
   draftAiAuditStartResultSchema,
+  appliedLessonListSchema,
   draftGenerationClaimResultSchema,
   draftGenerationSettleResultSchema,
   draftMutationResultSchema,
@@ -34,13 +35,17 @@ import {
   updateDraftSchema,
   updateDraftVariantSchema,
 } from "@/features/drafts/schemas";
-import { buildDraftPromptSummary } from "@/features/drafts/prompt-routing";
+import {
+  buildDraftPromptSummary,
+  toDraftLessonInputs,
+} from "@/features/drafts/prompt-routing";
 import type {
   CandidateStatus,
   CandidateWithTarget,
 } from "@/features/candidate-queue/types";
 import { DRAFT_AI_AUDIT_RULE_KEYS } from "@/features/drafts/types";
 import type {
+  AppliedLesson,
   CompleteDraftAiAuditRunInput,
   CreateDraftInput,
   Draft,
@@ -170,6 +175,7 @@ interface DraftGenerationRequestRow {
   workflow_step_id: number | null;
   angle: string;
   voice_notes: string;
+  applied_lessons_json: string;
   status: DraftGenerationRequestStatus;
   summary: string;
   generated_variants_json: string;
@@ -278,6 +284,15 @@ function mapGeneratedVariants(value: string): GeneratedDraftVariant[] {
   }
 }
 
+/** Stored lessons are display-only history; anything unreadable shows none. */
+function mapAppliedLessons(value: string): AppliedLesson[] {
+  try {
+    return appliedLessonListSchema.parse(JSON.parse(value));
+  } catch {
+    return [];
+  }
+}
+
 function mapGenerationCandidate(
   row: DraftGenerationRequestRow,
 ): CandidateWithTarget {
@@ -331,6 +346,7 @@ function mapDraftGenerationRequest(
     status: row.status,
     summary: row.summary,
     generated_variants: generatedVariants,
+    applied_lessons: mapAppliedLessons(row.applied_lessons_json),
     error_message: row.error_message,
     created_draft_id: row.created_draft_id,
     created_at: row.created_at,
@@ -625,6 +641,7 @@ export async function generateDraftVariants(
       candidatePostId: parsed.candidateId,
       variantCount: parsed.variantCount,
       contentIntent: parsed.contentIntent,
+      appliedLessons: toDraftLessonInputs(claimed.appliedLessons),
     },
     referenceData: claimed.candidateContext,
   };

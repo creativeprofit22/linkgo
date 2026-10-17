@@ -211,6 +211,7 @@ export const draftGenerationRequestListSchema = z
       workflow_step_id: nullableIdSchema,
       angle: z.string(),
       voice_notes: z.string(),
+      applied_lessons_json: z.string(),
       status: z.enum(["pending", "generated", "saved", "failed", "dismissed"]),
       summary: z.string(),
       generated_variants_json: z.string(),

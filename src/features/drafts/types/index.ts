@@ -445,6 +445,28 @@ export interface GeneratedDraftVariant {
   hashtags: string[];
 }
 
+/** Saved-lesson signals (mirrors `campaign_memory.signal`). */
+export const APPLIED_LESSON_SIGNALS = [
+  "winner",
+  "underperformer",
+  "insight",
+  "avoid",
+] as const;
+export type AppliedLessonSignal = (typeof APPLIED_LESSON_SIGNALS)[number];
+
+/** A saved lesson a draft generation used ("Used: ..."). */
+export interface AppliedLesson {
+  id: number;
+  signal: AppliedLessonSignal;
+  summary: string;
+}
+
+/** How the drafter is told to treat a lesson. */
+export interface DraftLessonInput {
+  kind: "do" | "avoid";
+  summary: string;
+}
+
 export interface DraftGenerationRequest {
   id: number;
   campaign_id: number;
@@ -462,6 +484,8 @@ export interface DraftGenerationRequest {
   status: DraftGenerationRequestStatus;
   summary: string;
   generated_variants: GeneratedDraftVariant[];
+  /** Lessons used for this generation; empty when none were on. */
+  applied_lessons: AppliedLesson[];
   error_message: string;
   created_draft_id: number | null;
   created_at: string;

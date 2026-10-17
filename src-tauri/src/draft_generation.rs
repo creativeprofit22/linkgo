@@ -416,6 +416,19 @@ pub struct ClaimDraftGenerationInput {
     pub voice_notes: String,
 }
 
+/// Most saved lessons one generation may use, and the per-lesson summary cap.
+pub(crate) const APPLIED_LESSONS_LIMIT: i64 = 5;
+const APPLIED_LESSON_SUMMARY_MAX: usize = 160;
+
+/// A saved lesson (`campaign_memory` row that is switched on) given to the
+/// drafter and recorded on the request so the UI can show "Used: ...".
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct AppliedLesson {
+    pub id: i64,
+    pub signal: String,
+    pub summary: String,
+}
+
 /// What the renderer needs to build the drafter run's prompt context.
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -424,6 +437,41 @@ pub struct ClaimDraftGenerationResult {
     pub campaign_id: i64,
     pub workflow_run_id: Option<i64>,
     pub candidate_context: Value,
+    pub applied_lessons: Vec<AppliedLesson>,
+}
+
+/// Active lessons for one campaign, newest first, with summaries made safe
+/// for a bounded JSON column (no control characters, capped length).
+async fn active_lessons(
+    connection: &mut SqliteConnection,
+    campaign_id: i64,
+) -> Result<Vec<AppliedLesson>, String> {
+    let rows: Vec<(i64, String, String)> = sqlx::query_as(
+        "SELECT id, signal, summary FROM campaign_memory
+         WHERE campaign_id = ?1 AND status = 'active'
+         ORDER BY datetime(updated_at) DESC, id DESC
+         LIMIT ?2",
+    )
+    .bind(campaign_id)
+    .bind(APPLIED_LESSONS_LIMIT)
+    .fetch_all(&mut *connection)
+    .await
+    .map_err(storage_error)?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(id, signal, summary)| {
+            let clean: String = summary
+                .chars()
+                .map(|c| if c.is_control() { ' ' } else { c })
+                .collect();
+            let summary = truncate_reference(&clean, APPLIED_LESSON_SUMMARY_MAX);
+            (!summary.is_empty()).then_some(AppliedLesson {
+                id,
+                signal,
+                summary,
+            })
+        })
+        .collect())
 }
 
 /// Claims a generation: validates the candidate (and linked draft step),
@@ -459,12 +507,15 @@ pub(crate) async fn claim_generation(
             let claimed =
                 claim_linked_step(connection, input.workflow_run_id, campaign_id, input.candidate_id)
                     .await?;
+            let applied_lessons = active_lessons(connection, campaign_id).await?;
+            let applied_lessons_json =
+                serde_json::to_string(&applied_lessons).map_err(|_| STORAGE_ERROR.to_string())?;
             let request_id = sqlx::query(
                 "INSERT INTO draft_generation_requests (
                     campaign_id, candidate_post_id, provider_key, model_name, playbook_key,
                     variant_count, content_intent, workflow_run_id, workflow_step_id, angle,
-                    voice_notes, status, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'pending', datetime('now'))",
+                    voice_notes, applied_lessons_json, status, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'pending', datetime('now'))",
             )
             .bind(campaign_id)
             .bind(input.candidate_id)
@@ -477,6 +528,7 @@ pub(crate) async fn claim_generation(
             .bind(claimed.map(|step| step.workflow_step_id))
             .bind(&angle)
             .bind(&voice_notes)
+            .bind(&applied_lessons_json)
             .execute(&mut *connection)
             .await
             .map_err(|error| {
@@ -530,6 +582,7 @@ pub(crate) async fn claim_generation(
                 campaign_id,
                 workflow_run_id: claimed.map(|step| step.workflow_run_id),
                 candidate_context,
+                applied_lessons,
             }))
         })
     })

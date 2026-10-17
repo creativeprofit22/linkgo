@@ -22,6 +22,18 @@ pub struct MetricsListInput {
     pub campaign_id: Option<i64>,
 }
 
+/// Input for the posts-missing-results read. `published_before` hides posts
+/// whose latest successful publish attempt is newer than the cutoff, so results
+/// are only asked for once the post has had time to collect engagement.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PostsMissingResultsInput {
+    #[serde(default)]
+    pub campaign_id: Option<i64>,
+    #[serde(default)]
+    pub published_before: Option<String>,
+}
+
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshSummary {
@@ -156,6 +168,7 @@ macro_rules! missing_results_from {
   )
   WHERE a.status = 'published' AND c.status <> 'archived'
     AND (?1 IS NULL OR a.campaign_id = ?1)
+    AND (?3 IS NULL OR datetime(pa.created_at) <= datetime(?3))
     AND NOT EXISTS (SELECT 1 FROM post_metrics pm WHERE pm.approval_id = a.id)"
     };
 }
@@ -225,21 +238,43 @@ pub(crate) async fn list_post_metrics(
     read_list(pool, input, POST_METRICS_SQL).await
 }
 
+const MAX_PUBLISHED_BEFORE_LENGTH: usize = 64;
+
 pub(crate) async fn list_posts_missing_results(
     pool: &SqlitePool,
-    input: MetricsListInput,
+    input: PostsMissingResultsInput,
 ) -> Result<PostsMissingResults, String> {
-    let campaign_id = validate(&input)?;
+    let campaign_id = validate(&MetricsListInput {
+        campaign_id: input.campaign_id,
+    })?;
+    let published_before = input.published_before;
     let mut transaction = pool.begin().await.map_err(read_error)?;
-    let items = list(
-        &mut transaction,
-        MISSING_RESULTS_SQL,
-        campaign_id,
-        MISSING_RESULTS_LIMIT,
-    )
-    .await?;
+    if let Some(cutoff) = published_before.as_deref() {
+        let (valid,): (bool,) = if cutoff.len() > MAX_PUBLISHED_BEFORE_LENGTH {
+            (false,)
+        } else {
+            sqlx::query_as("SELECT datetime(?1) IS NOT NULL")
+                .bind(cutoff)
+                .fetch_one(&mut *transaction)
+                .await
+                .map_err(read_error)?
+        };
+        if !valid {
+            return Err("Published-before must be a valid date and time".to_string());
+        }
+    }
+    let rows = sqlx::query(MISSING_RESULTS_SQL)
+        .bind(campaign_id)
+        .bind(MISSING_RESULTS_LIMIT)
+        .bind(published_before.as_deref())
+        .fetch_all(&mut *transaction)
+        .await
+        .map_err(read_error)?;
+    let items = rows_to_json(&rows);
     let (total_count,): (i64,) = sqlx::query_as(MISSING_RESULTS_COUNT_SQL)
         .bind(campaign_id)
+        .bind(MISSING_RESULTS_LIMIT)
+        .bind(published_before.as_deref())
         .fetch_one(&mut *transaction)
         .await
         .map_err(read_error)?;
@@ -325,7 +360,7 @@ pub async fn linkgo_metrics_post_metrics_list(
 #[tauri::command]
 pub async fn linkgo_metrics_posts_missing_results(
     pool: State<'_, SqlitePool>,
-    input: MetricsListInput,
+    input: PostsMissingResultsInput,
 ) -> Result<PostsMissingResults, String> {
     list_posts_missing_results(pool.inner(), input).await
 }

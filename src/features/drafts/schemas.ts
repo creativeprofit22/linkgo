@@ -1,6 +1,7 @@
 import { agentProviderKeySchema } from "@/agent/schemas";
 import { AGENT_PLAYBOOK_KEYS } from "@/agent/playbooks";
 import {
+  APPLIED_LESSON_SIGNALS,
   DRAFT_AI_AUDIT_RULE_KEYS,
   DRAFT_CONTENT_INTENTS,
   DRAFT_QUALITY_ATTEMPT_STATUSES,
@@ -433,12 +434,24 @@ export const draftMutationResultSchema = z
   .strict();
 
 /** Native result of `linkgo_draft_generation_claim`. */
+/** Lesson summaries are capped natively at 160 UTF-16 units. */
+export const appliedLessonSchema = z
+  .object({
+    id: z.number().int().positive(),
+    signal: z.enum(APPLIED_LESSON_SIGNALS),
+    summary: z.string().min(1).max(160),
+  })
+  .strict();
+
+export const appliedLessonListSchema = z.array(appliedLessonSchema).max(5);
+
 export const draftGenerationClaimResultSchema = z
   .object({
     requestId: z.number().int().positive(),
     campaignId: z.number().int().positive(),
     workflowRunId: z.number().int().positive().nullable(),
     candidateContext: z.record(z.string(), z.unknown()),
+    appliedLessons: appliedLessonListSchema,
   })
   .strict();
 

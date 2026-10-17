@@ -1,4 +1,8 @@
-import type { DraftContentIntent } from "@/features/drafts/types";
+import type {
+  AppliedLesson,
+  DraftContentIntent,
+  DraftLessonInput,
+} from "@/features/drafts/types";
 
 export interface DraftPromptRoute {
   label: string;
@@ -63,4 +67,20 @@ export function buildDraftPromptSummary(input: {
     `Operator voice notes: ${operatorVoice}`,
     "Return the result only through draft_post with the durable draft generation request ID, campaign ID, candidate ID, variant count, content intent, and exactly that many fully authored hook/body/cta/hashtags variants.",
   ].join("\n");
+}
+
+/**
+ * Saved lessons become plain drafter guidance: winners and insights are
+ * things to do, underperformers and avoid-notes are things to avoid.
+ */
+export function toDraftLessonInputs(
+  lessons: readonly Pick<AppliedLesson, "signal" | "summary">[],
+): DraftLessonInput[] {
+  return lessons.map((lesson) => ({
+    kind:
+      lesson.signal === "winner" || lesson.signal === "insight"
+        ? "do"
+        : "avoid",
+    summary: lesson.summary,
+  }));
 }

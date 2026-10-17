@@ -315,7 +315,8 @@ pub(crate) async fn list_generation_requests(
         "SELECT dgr.id, dgr.campaign_id, dgr.candidate_post_id, dgr.agent_run_id,
                 dgr.provider_key, dgr.model_name, dgr.playbook_key, dgr.variant_count,
                 dgr.content_intent, dgr.workflow_run_id, dgr.workflow_step_id, dgr.angle,
-                dgr.voice_notes, dgr.status, dgr.summary, dgr.generated_variants_json,
+                dgr.voice_notes, dgr.applied_lessons_json, dgr.status, dgr.summary,
+                dgr.generated_variants_json,
                 dgr.error_message, dgr.created_draft_id, dgr.created_at, dgr.updated_at,
                 {CANDIDATE_TARGET_COLUMNS}
          FROM draft_generation_requests dgr
