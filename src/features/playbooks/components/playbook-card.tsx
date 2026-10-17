@@ -143,6 +143,7 @@ export function PlaybookCard({
               </div>
               <Switch
                 id={`${playbook.key}-enabled`}
+                aria-label={`Use with the AI assistant: ${playbook.label}`}
                 checked={enabled}
                 disabled={saving}
                 onCheckedChange={setEnabled}

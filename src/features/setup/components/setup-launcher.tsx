@@ -8,7 +8,7 @@ import { navigateTo } from "@/lib/navigation/use-hash-navigation";
 import { cn } from "@/lib/utils";
 
 const launcherClassName =
-  "flex w-auto shrink-0 items-center gap-2 rounded-xl border p-2 text-left text-sm font-medium transition-colors sm:w-full sm:gap-3 sm:p-3";
+  "flex w-auto shrink-0 items-center gap-2 rounded-xl border p-2 text-left pointer-coarse:min-h-11 text-sm font-medium transition-colors sm:w-full sm:gap-3 sm:p-3";
 
 /**
  * Sidebar entry for first-run setup: shows progress while setup is open,

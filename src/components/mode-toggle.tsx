@@ -10,6 +10,7 @@ export function ModeToggle(): React.ReactNode {
       type="button"
       variant="ghost"
       size="icon-sm"
+      className="pointer-coarse:size-11"
       aria-label="Switch between light and dark mode"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
     >

@@ -112,6 +112,24 @@
   textarea {
     font: inherit;
   }
+
+  /* Touch screens: 44px minimum for text fields and selects (WCAG 2.5.5).
+     Utilities set height, not min-height, so this still applies. */
+  @media (pointer: coarse) {
+    select,
+    input:not(
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="hidden"]
+    ) {
+      min-height: 2.75rem;
+    }
+
+    :is(a, button, input, select, textarea, summary, label, [role="button"]) {
+      touch-action: manipulation;
+    }
+  }
 }
 
 @media (forced-colors: active) {
@@ -148,6 +166,6 @@
 
   .title-bar-control,
   .title-bar-btn {
-    @apply text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex h-8 w-8 items-center justify-center transition-colors;
+    @apply text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex h-8 w-8 items-center justify-center transition-colors pointer-coarse:h-11 pointer-coarse:w-11;
   }
 }

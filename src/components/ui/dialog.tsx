@@ -55,14 +55,14 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "bg-background fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border p-6 shadow-xl outline-none sm:max-w-2xl",
+          "bg-background fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border p-6 shadow-xl outline-none sm:max-w-2xl",
           className,
         )}
         {...props}
       >
         {children}
         {showCloseButton && (
-          <DialogPrimitive.Close className="ring-offset-background focus-visible:ring-ring absolute end-3 top-3 flex size-8 items-center justify-center rounded-sm opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 motion-reduce:transition-none forced-colors:border forced-colors:opacity-100">
+          <DialogPrimitive.Close className="ring-offset-background focus-visible:ring-ring absolute end-3 top-3 flex size-8 items-center justify-center rounded-sm opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 motion-reduce:transition-none forced-colors:border forced-colors:opacity-100 pointer-coarse:size-11">
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>

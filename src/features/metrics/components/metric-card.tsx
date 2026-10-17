@@ -51,7 +51,7 @@ export function MetricCard({
               href={metric.source.url}
               target="_blank"
               rel="noreferrer"
-              className="text-linkgo-blue inline-flex max-w-full items-center gap-1 truncate text-sm hover:underline"
+              className="text-linkgo-blue inline-flex min-h-8 max-w-full items-center gap-1 truncate text-sm hover:underline pointer-coarse:min-h-11"
             >
               <span className="truncate">{metric.source.url}</span>
               <ExternalLink className="size-3" />
@@ -83,7 +83,7 @@ export function MetricCard({
                   href={metric.latestPublishAttempt.external_post_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-linkgo-blue inline-flex max-w-full items-center gap-1 truncate hover:underline"
+                  className="text-linkgo-blue inline-flex min-h-8 max-w-full items-center gap-1 truncate hover:underline pointer-coarse:min-h-11"
                 >
                   <span className="truncate">
                     {metric.latestPublishAttempt.external_post_url}
