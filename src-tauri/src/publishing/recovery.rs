@@ -9,7 +9,8 @@ use sqlx::{Row, SqliteConnection, SqlitePool};
 use tauri::State;
 
 use super::store::{
-    self, settle_on_connection, take_over, SettleOptions, SettleResult, STORAGE_ERROR,
+    self, settle_on_connection, take_over, SettleOptions, SettleResult, OPEN_STATUSES_SQL,
+    RECONCILABLE_STATUSES_SQL, RECOVERABLE_STATUSES_SQL, STORAGE_ERROR,
 };
 use super::types::{
     ExecutionKind, OpenPublishExecution, ReconcileExecutionInput, ReconcileExecutionResult,
@@ -66,14 +67,14 @@ fn evidence_outcome(row: &StaleRow) -> Option<TransportOutcome> {
 }
 
 async fn stale_rows(pool: &SqlitePool, cutoff_epoch: i64) -> Result<Vec<StaleRow>, String> {
-    let rows = sqlx::query(
+    let rows = sqlx::query(&format!(
         "SELECT id, fence, status, schedule_job_id, remote_outcome, remote_status_code,
                 remote_platform_id, remote_urn, remote_url, error_message
          FROM publish_executions
-         WHERE status IN ('reserved', 'in_flight')
+         WHERE status IN {RECOVERABLE_STATUSES_SQL}
            AND updated_at <= datetime(?1, 'unixepoch')
-         ORDER BY id",
-    )
+         ORDER BY id"
+    ))
     .bind(cutoff_epoch)
     .fetch_all(pool)
     .await
@@ -152,7 +153,7 @@ async fn recover_row(
     settle_transaction(pool, STORAGE_ERROR, move |connection| {
         Box::pin(async move {
             let Some(lease) =
-                take_over(connection, row.id, row.fence, "('reserved', 'in_flight')").await?
+                take_over(connection, row.id, row.fence, RECOVERABLE_STATUSES_SQL).await?
             else {
                 return Ok(Settlement::Accepted(SweepAction::Skipped));
             };
@@ -254,15 +255,15 @@ pub(crate) async fn sweep_and_list_open(
 }
 
 pub(crate) async fn list_open(pool: &SqlitePool) -> Result<Vec<OpenPublishExecution>, String> {
-    let rows = sqlx::query(
+    let rows = sqlx::query(&format!(
         "SELECT pe.id, pe.kind, pe.subject_id, pe.campaign_id, c.name AS campaign_name,
                 pe.schedule_job_id, pe.caller, pe.status, pe.fence, pe.remote_outcome,
                 pe.remote_status_code, pe.error_message, pe.reserved_at, pe.sent_at, pe.updated_at
          FROM publish_executions pe
          INNER JOIN campaigns c ON c.id = pe.campaign_id
-         WHERE pe.status IN ('reserved', 'in_flight', 'outcome_unknown')
-         ORDER BY pe.id",
-    )
+         WHERE pe.status IN {OPEN_STATUSES_SQL}
+         ORDER BY pe.id"
+    ))
     .fetch_all(pool)
     .await
     .map_err(storage)?;
@@ -400,8 +401,13 @@ pub(crate) async fn reconcile(
                     message: "Operator confirmed on LinkedIn that this was not posted".to_string(),
                 },
             };
-            let Some(lease) =
-                take_over(connection, input.execution_id, fence, "('outcome_unknown')").await?
+            let Some(lease) = take_over(
+                connection,
+                input.execution_id,
+                fence,
+                RECONCILABLE_STATUSES_SQL,
+            )
+            .await?
             else {
                 return Ok(Settlement::Rejected(
                     "This execution changed since it was loaded; refresh and try again".to_string(),

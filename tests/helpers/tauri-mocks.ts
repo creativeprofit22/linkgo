@@ -1,9 +1,91 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 
 import { MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH } from "../../src/features/source-imports/schemas";
 
+/**
+ * Approval review rules shared with `src-tauri/src/approval_review.rs`.
+ * Rust tests check the native rules against this file; the fake below reads
+ * its rules from it, so the two cannot silently drift apart.
+ */
+export type ApprovalReviewContract = {
+  transitions: Record<string, string[]>;
+  readinessGates: Record<string, "requested_revision" | "reviewed_revision">;
+};
+
+/** Publishing rules shared with `src-tauri/src/publishing` and `auth/publish.rs`. */
+export type PublishingContract = {
+  openExecutionStatuses: string[];
+  reconcilableExecutionStatuses: string[];
+  openExecutionError: string;
+  reconcileConfirmation: string;
+  reconciledStatusByResolution: Record<string, string>;
+};
+
+/** Scheduling rules shared with `src-tauri/src/approval_scheduling.rs`. */
+export type SchedulingContract = {
+  countedJobStatuses: string[];
+  reusableJobStatuses: string[];
+};
+
+type DailyCap = {
+  column: string;
+  label: string;
+  default: number;
+  min: number;
+  max: number;
+};
+
+/** Daily caps shared with `src-tauri/src/campaigns.rs` and its migration. */
+export type CampaignLimitsContract = {
+  dailyPostLimit: DailyCap;
+  dailyCommentLimit: DailyCap;
+};
+
+/** Comment review rules shared with `src-tauri/src/comment_threads.rs`. */
+export type CommentReviewContract = {
+  terminalStatuses: string[];
+};
+
+function loadFixture(name: string): unknown {
+  return JSON.parse(
+    readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8"),
+  );
+}
+
+export function loadApprovalReviewContract(): ApprovalReviewContract {
+  return loadFixture("approval-review-contract.json") as ApprovalReviewContract;
+}
+
 export async function setupTauriMocks(page: Page): Promise<void> {
-  await page.addInitScript((maxSourceImportInputJsonLength) => {
+  // Every rule shared with Rust is read from tests/fixtures, which the native
+  // tests also check, so the fake cannot silently drift from the real app.
+  const mockArgs = {
+    maxSourceImportInputJsonLength: MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH,
+    approvalReviewContract: loadApprovalReviewContract(),
+    publishingContract: loadFixture(
+      "publishing-contract.json",
+    ) as PublishingContract,
+    schedulingContract: loadFixture(
+      "scheduling-contract.json",
+    ) as SchedulingContract,
+    campaignLimitsContract: loadFixture(
+      "campaign-limits-contract.json",
+    ) as CampaignLimitsContract,
+    commentReviewContract: loadFixture(
+      "comment-review-contract.json",
+    ) as CommentReviewContract,
+  };
+  await page.addInitScript((mockArgs) => {
+    const {
+      maxSourceImportInputJsonLength,
+      approvalReviewContract,
+      publishingContract,
+      schedulingContract,
+      campaignLimitsContract,
+      commentReviewContract,
+    } = mockArgs;
     type Campaign = {
       id: number;
       name: string;
@@ -270,6 +352,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       created_at: string;
     };
 
+    function mustFind<T>(row: T | undefined, label: string): T {
+      if (row === undefined) throw new Error(`Mock ${label} was not found`);
+      return row;
+    }
+
+    function optionalContentRevision(
+      revision: number | undefined,
+    ): Pick<DraftAudit, "content_revision"> {
+      return revision === undefined ? {} : { content_revision: revision };
+    }
+
     type DraftAiAuditRunStatus =
       | "pending"
       | "running"
@@ -325,6 +418,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       attempt_number: number;
       content_revision: number;
       agent_run_id: number;
+      // Native column is nullable; seeds that never link an audit omit it.
+      ai_audit_run_id?: number | null;
       status: "scoring" | "passed" | "rewritten" | "failed";
     };
 
@@ -1257,7 +1352,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       pending: number;
     } | null = null;
     const reloadSnapshotKey = "linkgo:test:sql-snapshot";
-    let persistedReloadSnapshot: string | null = null;
+    let persistedReloadSnapshot: string | null;
     try {
       persistedReloadSnapshot =
         window.sessionStorage.getItem(reloadSnapshotKey);
@@ -3271,7 +3366,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         approval?.status === "scheduled" &&
         campaign?.status !== "archived" &&
         dateMs(job.scheduled_for) <= nowMs &&
-        (job.next_attempt_at === null || dateMs(job.next_attempt_at) <= nowMs)
+        (job.next_attempt_at === null ||
+          dateMs(job.next_attempt_at) <= nowMs) &&
+        // Native due-job query skips approvals with an open execution, so a
+        // manual publish and the scheduler never both contact LinkedIn.
+        !hasOpenPublishExecution("post", job.approval_id)
       );
     }
 
@@ -3295,11 +3394,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           );
         })
         .map((job) => {
-          const approval = scheduleApproval(job)!;
-          const campaign = scheduleCampaign(job)!;
-          const variant = draftVariants.find(
-            (row) => row.id === approval.draft_variant_id,
-          )!;
+          const approval = mustFind(scheduleApproval(job), "approval");
+          const campaign = mustFind(scheduleCampaign(job), "campaign");
+          const variant = mustFind(
+            draftVariants.find((row) => row.id === approval.draft_variant_id),
+            "draft variant",
+          );
           return {
             ...job,
             campaign_id: approval.campaign_id,
@@ -3392,14 +3492,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     }
 
     function parseUpdateColumns(query: string, tableName: string): string[] {
-      return query
-        .slice(
-          query.indexOf(`UPDATE ${tableName}`) + `UPDATE ${tableName}`.length,
-        )
-        .split(", updated_at")[0]
+      const assignments =
+        query
+          .slice(
+            query.indexOf(`UPDATE ${tableName}`) + `UPDATE ${tableName}`.length,
+          )
+          .split(", updated_at")[0] ?? "";
+      return assignments
         .replace("SET", "")
         .split(",")
-        .map((assignment) => assignment.trim().split(" = ")[0])
+        .map((assignment) => assignment.trim().split(" = ")[0] ?? "")
         .filter(Boolean);
     }
 
@@ -4055,9 +4157,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           const scheduledDay = String(values[1] ?? "")
             .trim()
             .slice(0, 10);
-          const statusMatches = query.match(/sj\.status IN \(([^)]*)\)/);
-          const statuses = statusMatches
-            ? statusMatches[1]
+          const statusList = query.match(/sj\.status IN \(([^)]*)\)/)?.[1];
+          const statuses = statusList
+            ? statusList
                 .split(",")
                 .map((status) => status.trim().replace(/'/g, ""))
             : ["scheduled", "completed"];
@@ -5089,6 +5191,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       });
     }
 
+    // Typed view of the mocked invoke payload; callers name the input shape.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
     function readCampaignBacklogCommandInput<T>(args?: unknown): T {
       return ((args as { input?: T } | undefined)?.input ?? {}) as T;
     }
@@ -5144,7 +5248,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         minute: "2-digit",
         hourCycle: "h23",
       });
-      const partsAt = (instant: number): number[] => {
+      const partsAt = (
+        instant: number,
+      ): [number, number, number, number, number] => {
         const values = new Map(
           formatter
             .formatToParts(new Date(instant))
@@ -5651,8 +5757,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           tone: String(values[4] ?? ""),
           auto_pilot: Number(values[5] ?? 0),
           status: "draft",
-          daily_post_limit: Number(values[6] ?? 1),
-          daily_comment_limit: Number(values[7] ?? 5),
+          daily_post_limit: Number(
+            values[6] ?? campaignLimitsContract.dailyPostLimit.default,
+          ),
+          daily_comment_limit: Number(
+            values[7] ?? campaignLimitsContract.dailyCommentLimit.default,
+          ),
           created_at: now,
           updated_at: now,
         };
@@ -6081,9 +6191,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const audit: DraftAudit = {
           id: nextDraftAuditId,
           draft_variant_id: Number(values[0] ?? 0),
-          content_revision: draftVariants.find(
-            (row) => row.id === Number(values[0]),
-          )?.content_revision,
+          ...optionalContentRevision(
+            draftVariants.find((row) => row.id === Number(values[0]))
+              ?.content_revision,
+          ),
           rule_key: String(values[1] ?? ""),
           severity: values[2] as DraftAuditSeverity,
           message: String(values[3] ?? ""),
@@ -7416,7 +7527,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           index >= 0;
           index -= 1
         ) {
-          if (deletedIds.has(draftAiAuditFindings[index].audit_run_id)) {
+          const finding = draftAiAuditFindings[index];
+          if (finding && deletedIds.has(finding.audit_run_id)) {
             draftAiAuditFindings.splice(index, 1);
           }
         }
@@ -8821,7 +8933,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const seeded = (
         w.__LINKGO_SQL_SEED_DRAFT_AI_AUDIT_VARIANT__ as () => DraftVariant
       )();
-      const variant = draftVariants.find((row) => row.id === seeded.id)!;
+      const variant = mustFind(
+        draftVariants.find((row) => row.id === seeded.id),
+        "seeded draft variant",
+      );
       const now = getNow();
       const auditId = nextDraftAiAuditRunId++;
       draftAiAuditRuns.push({
@@ -8864,13 +8979,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           modelName: "dry-run-local",
         },
       })) as { qualityRunId: number; attemptId: number };
-      const run = draftQualityRuns.find(
-        (row) => row.id === claim.qualityRunId,
-      )!;
+      const run = mustFind(
+        draftQualityRuns.find((row) => row.id === claim.qualityRunId),
+        "claimed quality run",
+      );
       run.status = status;
-      const attempt = draftQualityAttempts.find(
-        (row) => row.id === claim.attemptId,
-      )!;
+      const attempt = mustFind(
+        draftQualityAttempts.find((row) => row.id === claim.attemptId),
+        "claimed quality attempt",
+      );
       attempt.status = "failed";
       attempt.attempt_number = lastAttempt;
       if (stale) variant.content_revision += 1;
@@ -10048,6 +10165,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         created_at: getNow(),
         updated_at: getNow(),
       });
+      // Mirrors removing the provider's keychain entry.
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete providerSecrets[providerKey];
     }
     // Seeds a connected AI account directly, via account sign-in ("oauth")
@@ -10084,6 +10203,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
     };
 
+    // Typed view of the mocked invoke payload; callers name the input shape.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
     function nativeScoringInput<T>(args?: unknown): T {
       return ((args as { input?: T } | undefined)?.input ?? {}) as T;
     }
@@ -11391,8 +11512,485 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       label: "main",
     };
 
-    const OPEN_EXECUTION_MESSAGE =
-      "Another publish for this item is in progress or awaiting reconciliation";
+    // ------------------------------------------------------------------
+    // Shared-contract gates. Each mirrors one native function, in the same
+    // order with the same messages, and reads its lists and caps from
+    // tests/fixtures. tests/*-contract.spec.ts checks them against the same
+    // tables the Rust tests use.
+    // ------------------------------------------------------------------
+    type GateResult = { ok: true } | { error: string };
+
+    /** Mirrors SQLite `date()`: a `Z` or `±HH:MM` suffix converts to UTC. */
+    function sqliteWindowKey(value: string): string {
+      const trimmed = value.trim();
+      if (/(Z|[+-]\d{2}:\d{2})$/u.test(trimmed)) {
+        const parsed = Date.parse(trimmed.replace(" ", "T"));
+        if (Number.isFinite(parsed))
+          return new Date(parsed).toISOString().slice(0, 10);
+      }
+      return trimmed.slice(0, 10);
+    }
+
+    /** Mirrors `check_kill_switch` in auth/publish.rs (publish preflight). */
+    function publishKillSwitchError(): string | null {
+      if (safetySettings.global_kill_switch !== 1) return null;
+      const reason = safetySettings.kill_switch_reason;
+      return reason.trim() === ""
+        ? "Global kill switch is enabled"
+        : `Global kill switch is enabled: ${reason}`;
+    }
+
+    type PostPublishFacts = {
+      campaignStatus: string;
+      approvalStatus: string;
+      successfulAttemptCount: number;
+      readyAtReviewedRevision: boolean;
+      requestedScheduleJob: number | null;
+      currentScheduledJob: number | null;
+      idempotencyMatches: boolean;
+      commentaryMatches: boolean;
+    };
+
+    /** Mirrors `evaluate_post_publish` in auth/publish.rs. */
+    function evaluatePostPublish(facts: PostPublishFacts): GateResult {
+      if (facts.campaignStatus === "archived")
+        return { error: "Campaign is archived" };
+      if (!["approved", "scheduled"].includes(facts.approvalStatus))
+        return {
+          error:
+            "Only approved or scheduled approvals can publish via LinkedIn",
+        };
+      if (facts.successfulAttemptCount > 0)
+        return { error: "Approval already has a successful publish attempt" };
+      if (!facts.readyAtReviewedRevision)
+        return { error: STALE_APPROVAL_ERROR };
+      const { approvalStatus, requestedScheduleJob, currentScheduledJob } =
+        facts;
+      if (approvalStatus === "scheduled" && requestedScheduleJob === null)
+        return {
+          error: "Scheduled approvals require the current schedule job",
+        };
+      if (
+        requestedScheduleJob !== null &&
+        currentScheduledJob !== requestedScheduleJob
+      )
+        return { error: "Schedule job is not the current scheduled job" };
+      if (
+        approvalStatus === "approved" &&
+        requestedScheduleJob === null &&
+        currentScheduledJob !== null
+      )
+        return { error: "Schedule job is not the current scheduled job" };
+      if (!facts.idempotencyMatches)
+        return {
+          error: "Publish idempotency key does not match approval state",
+        };
+      if (!facts.commentaryMatches)
+        return {
+          error: "Publish commentary does not match the approved draft variant",
+        };
+      return { ok: true };
+    }
+
+    type CommentPublishFacts = {
+      campaignStatus: string;
+      threadStatus: string;
+      successfulAttemptCount: number;
+      selectedCount: number;
+      selectedBlocked: boolean;
+      commentaryMatches: boolean;
+      targetResolved: boolean;
+      targetMatches: boolean;
+      idempotencyMatches: boolean;
+      dailyCount: number;
+      dailyCommentLimit: number;
+    };
+
+    /** Mirrors `evaluate_comment_publish` in auth/publish.rs. */
+    function evaluateCommentPublish(facts: CommentPublishFacts): GateResult {
+      if (facts.campaignStatus === "archived")
+        return { error: "Campaign is archived" };
+      if (facts.threadStatus !== "approved")
+        return { error: "Only approved comments can publish via LinkedIn" };
+      if (facts.successfulAttemptCount > 0)
+        return {
+          error: "Comment thread already has a successful posting attempt",
+        };
+      if (facts.selectedCount !== 1)
+        return { error: "Choose exactly one selected comment variant" };
+      if (facts.selectedBlocked)
+        return { error: "Blocked comment variants cannot be reviewed" };
+      if (!facts.commentaryMatches)
+        return {
+          error: "Commentary does not match the approved comment variant",
+        };
+      if (!facts.targetResolved)
+        return {
+          error:
+            "LinkedIn target URN could not be resolved from the candidate URL",
+        };
+      if (!facts.targetMatches)
+        return {
+          error: "LinkedIn target URN does not match the comment target",
+        };
+      if (!facts.idempotencyMatches)
+        return { error: "Comment idempotency key does not match thread state" };
+      if (facts.dailyCount >= facts.dailyCommentLimit)
+        return {
+          error: `Daily comment limit reached for today: ${facts.dailyCount}/${facts.dailyCommentLimit} used`,
+        };
+      return { ok: true };
+    }
+
+    type ScheduleEligibilityFacts = {
+      campaignStatus: string;
+      approvalStatus: string;
+      readyAtReviewedRevision: boolean;
+      existingJobStatus: string | null;
+    };
+
+    /** Mirrors `evaluate_schedule_eligibility` in approval_scheduling.rs. */
+    function evaluateScheduleEligibility(
+      facts: ScheduleEligibilityFacts,
+    ): GateResult {
+      if (facts.campaignStatus === "archived")
+        return { error: "Campaign is archived" };
+      if (facts.approvalStatus !== "approved")
+        return { error: "Only approved posts can be scheduled" };
+      if (!facts.readyAtReviewedRevision)
+        return { error: STALE_APPROVAL_ERROR };
+      if (
+        facts.existingJobStatus !== null &&
+        !schedulingContract.reusableJobStatuses.includes(
+          facts.existingJobStatus,
+        )
+      )
+        return { error: "Approval already has an active schedule job" };
+      return { ok: true };
+    }
+
+    type ScheduleLimitFacts = {
+      killSwitchReason: string | null;
+      windowKey: string;
+      currentCount: number;
+      dailyPostLimit: number;
+    };
+
+    /** Mirrors `evaluate_schedule_limit` in approval_scheduling.rs. */
+    function evaluateScheduleLimit(facts: ScheduleLimitFacts): {
+      decision: "kill_switch" | "limit_reached" | "allowed";
+      message: string;
+    } {
+      const { killSwitchReason, windowKey, currentCount, dailyPostLimit } =
+        facts;
+      if (killSwitchReason !== null)
+        return {
+          decision: "kill_switch",
+          message:
+            killSwitchReason === ""
+              ? "Global kill switch is enabled"
+              : `Global kill switch is enabled: ${killSwitchReason}`,
+        };
+      return currentCount < dailyPostLimit
+        ? {
+            decision: "allowed",
+            message: `Schedule allowed for ${windowKey}: ${currentCount}/${dailyPostLimit} used`,
+          }
+        : {
+            decision: "limit_reached",
+            message: `Daily post scheduling limit reached for ${windowKey}: ${currentCount}/${dailyPostLimit} used`,
+          };
+    }
+
+    /** Mirrors `evaluate_selected_variant` in comment_threads.rs. */
+    function evaluateSelectedVariant(
+      selectedCount: number,
+      selectedBlocked: boolean,
+    ): GateResult {
+      if (selectedCount > 1)
+        return { error: "Choose exactly one selected comment variant" };
+      if (selectedCount === 0)
+        return { error: "Choose one comment variant before review" };
+      if (selectedBlocked)
+        return { error: "Blocked comment variants cannot be reviewed" };
+      return { ok: true };
+    }
+
+    type ThreadStatusFacts = {
+      current: string;
+      next: string;
+      selectedCount: number;
+      selectedBlocked: boolean;
+    };
+
+    /** Mirrors `evaluate_thread_status` in comment_threads.rs. */
+    function evaluateThreadStatus(facts: ThreadStatusFacts): GateResult {
+      const { current, next } = facts;
+      if (next === "needs_review" || next === "approved") {
+        const selected = evaluateSelectedVariant(
+          facts.selectedCount,
+          facts.selectedBlocked,
+        );
+        if ("error" in selected) return selected;
+      }
+      if (next === "posted")
+        return { error: "Use record posted to move comments to posted" };
+      if (next === "approved" && current !== "needs_review")
+        return { error: "Only comments needing review can be approved" };
+      if (next === "changes_requested" && current !== "needs_review")
+        return { error: "Only comments needing review can request changes" };
+      if (commentReviewContract.terminalStatuses.includes(current))
+        return { error: "Terminal comment threads cannot change status" };
+      return { ok: true };
+    }
+
+    type VariantStatusFacts = {
+      threadStatus: string;
+      next: string;
+      variantBlocked: boolean;
+    };
+
+    /** Mirrors `evaluate_variant_status` in comment_threads.rs. */
+    function evaluateVariantStatus(facts: VariantStatusFacts): GateResult {
+      if (commentReviewContract.terminalStatuses.includes(facts.threadStatus))
+        return {
+          error:
+            "Posted, rejected, and cancelled comments cannot change variants",
+        };
+      if (facts.next === "selected" && facts.variantBlocked)
+        return { error: "Blocked comment variants cannot be selected" };
+      return { ok: true };
+    }
+
+    /** Mirrors `comment_limit_summary` in comments.rs. */
+    function commentLimitSummary(
+      windowKey: string,
+      count: number,
+      limit: number,
+    ): { allowed: boolean; summary: string } {
+      const allowed = count < limit;
+      return {
+        allowed,
+        summary: allowed
+          ? `Comment allowed for ${windowKey}: ${count}/${limit} used`
+          : `Daily comment limit reached for ${windowKey}: ${count}/${limit} used`,
+      };
+    }
+
+    type CommentAssertFacts = {
+      threadStatus: string;
+      selectedCount: number;
+      selectedBlocked: boolean;
+      commentaryMatches: boolean;
+      targetResolved: boolean;
+      targetMatches: boolean;
+      idempotencyMatches: boolean;
+      successfulAttemptCount: number;
+      killSwitchReason: string | null;
+      windowKey: string;
+      dailyCount: number;
+      dailyCommentLimit: number;
+    };
+
+    type CommentAssertDecision =
+      | { decision: "allowed" }
+      | { decision: "rejected"; message: string }
+      | { decision: "kill_switch"; message: string; summary: string }
+      | { decision: "limit_reached"; message: string };
+
+    /** Mirrors `evaluate_comment_assert` in comment_threads.rs. */
+    function evaluateCommentAssert(
+      facts: CommentAssertFacts,
+    ): CommentAssertDecision {
+      const reject = (message: string): CommentAssertDecision => ({
+        decision: "rejected",
+        message,
+      });
+      if (facts.threadStatus !== "approved")
+        return reject("Only approved comments can publish via LinkedIn");
+      const selected = evaluateSelectedVariant(
+        facts.selectedCount,
+        facts.selectedBlocked,
+      );
+      if ("error" in selected) return reject(selected.error);
+      if (!facts.commentaryMatches)
+        return reject("Commentary does not match the approved comment variant");
+      if (!facts.targetResolved)
+        return reject(
+          "LinkedIn target URN could not be resolved from the candidate URL",
+        );
+      if (!facts.targetMatches)
+        return reject("LinkedIn target URN does not match the comment target");
+      if (!facts.idempotencyMatches)
+        return reject("Comment idempotency key does not match thread state");
+      if (facts.successfulAttemptCount > 0)
+        return reject(
+          "Comment thread already has a successful posting attempt",
+        );
+      if (facts.killSwitchReason !== null)
+        return facts.killSwitchReason === ""
+          ? {
+              decision: "kill_switch",
+              message: "Global kill switch is enabled",
+              summary: "Comment posting blocked by global kill switch",
+            }
+          : {
+              decision: "kill_switch",
+              message: `Global kill switch is enabled: ${facts.killSwitchReason}`,
+              summary: `Comment posting blocked by global kill switch: ${facts.killSwitchReason}`,
+            };
+      const limit = commentLimitSummary(
+        facts.windowKey,
+        facts.dailyCount,
+        facts.dailyCommentLimit,
+      );
+      return limit.allowed
+        ? { decision: "allowed" }
+        : { decision: "limit_reached", message: limit.summary };
+    }
+
+    /** Mirrors `range_field` in campaigns.rs for the daily caps. */
+    function validateDailyCap(
+      field: "dailyPostLimit" | "dailyCommentLimit",
+      value: number,
+    ): GateResult {
+      const cap = campaignLimitsContract[field];
+      if (!Number.isInteger(value) || value < cap.min || value > cap.max)
+        return {
+          error: `${cap.label} must be between ${cap.min} and ${cap.max}`,
+        };
+      return { ok: true };
+    }
+
+    function assertDailyCaps(input: {
+      dailyPostLimit?: number;
+      dailyCommentLimit?: number;
+    }): void {
+      for (const field of ["dailyPostLimit", "dailyCommentLimit"] as const) {
+        const value = input[field];
+        if (value === undefined) continue;
+        const result = validateDailyCap(field, value);
+        if ("error" in result) throw new Error(result.error);
+      }
+    }
+
+    /** Mirrors `check_post_preflight`: kill switch, then the post gate. */
+    function mockPostPublishPreflight(input: {
+      approvalId: number;
+      scheduleJobId?: number;
+      commentary?: string;
+      idempotencyKey?: string;
+    }): string | null {
+      const killSwitch = publishKillSwitchError();
+      if (killSwitch !== null) return killSwitch;
+      const approval = approvals.find((row) => row.id === input.approvalId);
+      if (!approval) return "Approval was not found";
+      const campaign = campaigns.find((row) => row.id === approval.campaign_id);
+      const variant = draftVariants.find(
+        (row) => row.id === approval.draft_variant_id,
+      );
+      const latest = [...scheduleJobs]
+        .filter((job) => job.approval_id === approval.id)
+        .sort(
+          (left, right) =>
+            right.updated_at.localeCompare(left.updated_at) ||
+            right.id - left.id,
+        )[0];
+      const requested = input.scheduleJobId ?? null;
+      const commentary = mockEscapeLinkedInLittleText(
+        [
+          variant?.hook ?? "",
+          variant?.body ?? "",
+          variant?.cta ?? "",
+          variant?.hashtags ?? "",
+        ]
+          .map((block) => block.trim())
+          .filter(Boolean)
+          .join("\n\n"),
+      );
+      const gate = evaluatePostPublish({
+        campaignStatus: campaign?.status ?? "active",
+        approvalStatus: approval.status,
+        successfulAttemptCount: publishAttempts.filter(
+          (attempt) =>
+            attempt.approval_id === approval.id &&
+            attempt.status === "succeeded",
+        ).length,
+        readyAtReviewedRevision: isApprovalReadyAtRevision(
+          approval,
+          approval.reviewed_content_revision,
+        ),
+        requestedScheduleJob: requested,
+        currentScheduledJob: latest?.status === "scheduled" ? latest.id : null,
+        idempotencyMatches:
+          input.idempotencyKey ===
+          `approval:${approval.id}:linkedin:${requested ?? "manual"}`,
+        commentaryMatches: input.commentary === commentary,
+      });
+      return "error" in gate ? gate.error : null;
+    }
+
+    /** Mirrors `check_comment_preflight`: kill switch, then the comment gate. */
+    function mockCommentPublishPreflight(input: {
+      commentThreadId: number;
+      commentary?: string;
+      targetUrn?: string;
+      idempotencyKey?: string;
+    }): string | null {
+      const killSwitch = publishKillSwitchError();
+      if (killSwitch !== null) return killSwitch;
+      const thread = commentThreads.find(
+        (row) => row.id === input.commentThreadId,
+      );
+      if (!thread) return "Comment thread was not found";
+      const campaign = campaigns.find((row) => row.id === thread.campaign_id);
+      const selected = mockSelectedVariantFacts(thread.id);
+      const candidate = candidatePosts.find(
+        (row) => row.id === thread.candidate_post_id,
+      );
+      const target = targetPosts.find(
+        (row) => row.id === candidate?.target_post_id,
+      );
+      const targetUrn = mockResolveLinkedInTargetUrn(
+        target?.platform_resource_urn || target?.url || "",
+      );
+      const today = getNow().slice(0, 10);
+      const succeededToday = commentAttempts.filter((attempt) => {
+        const owner = commentThreads.find(
+          (row) => row.id === attempt.comment_thread_id,
+        );
+        return (
+          owner?.campaign_id === thread.campaign_id &&
+          attempt.status === "succeeded" &&
+          attempt.created_at.slice(0, 10) === today
+        );
+      }).length;
+      const gate = evaluateCommentPublish({
+        campaignStatus: campaign?.status ?? "active",
+        threadStatus: thread.status,
+        successfulAttemptCount: commentAttempts.filter(
+          (row) =>
+            row.comment_thread_id === thread.id && row.status === "succeeded",
+        ).length,
+        selectedCount: selected.count,
+        selectedBlocked: selected.blocked,
+        commentaryMatches:
+          mockEscapeLinkedInLittleText(selected.variant?.body ?? "") ===
+          input.commentary,
+        targetResolved: targetUrn !== "",
+        targetMatches: targetUrn !== "" && targetUrn === input.targetUrn,
+        idempotencyMatches:
+          input.idempotencyKey ===
+          `comment-thread:${thread.id}:linkedin:manual`,
+        // Unclear outcomes still count until reconciled.
+        dailyCount:
+          succeededToday + openCommentExecutionCount(thread.campaign_id),
+        dailyCommentLimit: campaign?.daily_comment_limit ?? 0,
+      });
+      return "error" in gate ? gate.error : null;
+    }
+
+    const OPEN_EXECUTION_MESSAGE = publishingContract.openExecutionError;
     type MockOpenPublishExecution = {
       id: number;
       kind: "post" | "comment";
@@ -11401,7 +11999,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       campaignName: string;
       scheduleJobId: number | null;
       caller: "manual" | "scheduler";
-      status: "reserved" | "in_flight" | "outcome_unknown";
+      // Specs may seed settled rows too; only open statuses lock a subject.
+      status: string;
       fence: number;
       remoteOutcome: "" | "created" | "rejected" | "ambiguous";
       remoteStatusCode: number | null;
@@ -11419,14 +12018,32 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       return w.__LINKGO_PUBLISH_EXECUTIONS__ as MockOpenPublishExecution[];
     };
     let nextPublishExecutionId = 1000;
+    /** Mirrors `ensure_no_open_execution`: any caller, same kind and subject. */
+    const isOpenPublishExecution = (execution: { status: string }) =>
+      publishingContract.openExecutionStatuses.includes(execution.status);
+    const blocksPublish = (
+      execution: { kind: string; subjectId: unknown; status: string },
+      kind: string,
+      subjectId: unknown,
+    ): boolean =>
+      execution.kind === kind &&
+      execution.subjectId === subjectId &&
+      publishingContract.openExecutionStatuses.includes(execution.status);
     const hasOpenPublishExecution = (
       kind: "post" | "comment",
       subjectId: unknown,
     ): boolean =>
-      publishExecutionStore().some(
-        (execution) =>
-          execution.kind === kind && execution.subjectId === subjectId,
+      publishExecutionStore().some((execution) =>
+        blocksPublish(execution, kind, subjectId),
       );
+    /** Open comment executions count toward the campaign's comment cap. */
+    const openCommentExecutionCount = (campaignId: number): number =>
+      publishExecutionStore().filter(
+        (execution) =>
+          execution.kind === "comment" &&
+          execution.campaignId === campaignId &&
+          isOpenPublishExecution(execution),
+      ).length;
 
     const recordCommentAttemptCommand = (args: unknown) => {
       const invokes = Number(w.__LINKGO_COMMENT_RECORD_ATTEMPT_INVOKES__ ?? 0);
@@ -11804,14 +12421,44 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     // Mirrors src-tauri/src/approval_review.rs: one atomic settlement per
     // command, same rules, messages and rejection side effects.
-    const APPROVAL_REVIEW_TRANSITIONS: Partial<
-      Record<ApprovalStatus, ApprovalStatus[]>
-    > = {
-      needs_review: ["approved", "changes_requested", "rejected", "cancelled"],
-      changes_requested: ["needs_review", "approved", "rejected", "cancelled"],
-      approved: ["needs_review", "changes_requested", "cancelled"],
-      cancelled: ["needs_review"],
+    // Read from tests/fixtures/approval-review-contract.json (shared with Rust).
+    const APPROVAL_REVIEW_TRANSITIONS: Partial<Record<string, string[]>> =
+      approvalReviewContract.transitions;
+    const APPROVAL_READINESS_GATES: Partial<
+      Record<string, "requested_revision" | "reviewed_revision">
+    > = approvalReviewContract.readinessGates;
+
+    type ApprovalCreateFacts = {
+      campaignStatus: string;
+      draftStatus: string;
+      selectedVariantIds: number[];
+      currentRevisionReady: boolean;
+      blockAuditCount: number;
+      existingApprovalCount: number;
     };
+
+    /** Mirrors `evaluate_create` in approval_review.rs, in the same order. */
+    function evaluateApprovalCreate(
+      facts: ApprovalCreateFacts,
+    ): { ok: number } | { error: string } {
+      if (facts.campaignStatus === "archived")
+        return { error: "Campaign is archived" };
+      if (facts.draftStatus !== "ready_for_review")
+        return { error: "Draft is not ready for review" };
+      const variantId = facts.selectedVariantIds[0];
+      if (facts.selectedVariantIds.length !== 1 || variantId === undefined)
+        return { error: "Select a draft variant before review" };
+      if (!facts.currentRevisionReady)
+        return {
+          error:
+            "Selected variant requires both a completed current-revision AI audit with six canonical non-blocking findings and a passed quality score of at least 70",
+        };
+      if (facts.blockAuditCount > 0)
+        return { error: "Blocked variants cannot be sent for approval" };
+      if (facts.existingApprovalCount > 0)
+        return { error: "Draft already has an approval record" };
+      return { ok: variantId };
+    }
     const STALE_APPROVAL_ERROR =
       "Approval is stale or not ready. Reload and run current AI audit and quality checks.";
 
@@ -11999,30 +12646,29 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const draft = drafts.find((row) => row.id === draftId);
         if (!draft) throw new Error("Draft was not found");
         const campaign = campaigns.find((row) => row.id === draft.campaign_id);
-        if (campaign?.status === "archived")
-          throw new Error("Campaign is archived");
-        if (draft.status !== "ready_for_review")
-          throw new Error("Draft is not ready for review");
-        const selected = draftVariants.filter(
-          (row) => row.draft_id === draftId && row.status === "selected",
-        );
-        const variant = selected[0];
-        if (selected.length !== 1 || !variant)
-          throw new Error("Select a draft variant before review");
-        if (!isApprovalReady(variant))
-          throw new Error(
-            "Selected variant requires both a completed current-revision AI audit with six canonical non-blocking findings and a passed quality score of at least 70",
-          );
-        if (
-          draftAudits.some(
-            (audit) =>
-              audit.draft_variant_id === variant.id &&
-              audit.severity === "block",
+        const selected = draftVariants
+          .filter(
+            (row) => row.draft_id === draftId && row.status === "selected",
           )
-        )
-          throw new Error("Blocked variants cannot be sent for approval");
-        if (approvals.some((row) => row.draft_id === draftId))
-          throw new Error("Draft already has an approval record");
+          .sort((a, b) => a.id - b.id);
+        const first = selected[0];
+        const decision = evaluateApprovalCreate({
+          campaignStatus: campaign?.status ?? "active",
+          draftStatus: draft.status,
+          selectedVariantIds: selected.map((row) => row.id),
+          currentRevisionReady: first !== undefined && isApprovalReady(first),
+          blockAuditCount: draftAudits.filter(
+            (audit) =>
+              audit.draft_variant_id === first?.id &&
+              audit.severity === "block",
+          ).length,
+          existingApprovalCount: approvals.filter(
+            (row) => row.draft_id === draftId,
+          ).length,
+        });
+        if ("error" in decision) throw new Error(decision.error);
+        const variant = selected.find((row) => row.id === decision.ok);
+        if (!variant) throw new Error("Select a draft variant before review");
         const now = getNow();
         const approval: Approval = {
           id: nextApprovalId++,
@@ -12066,9 +12712,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           !(APPROVAL_REVIEW_TRANSITIONS[approval.status] ?? []).includes(next)
         )
           throw new Error("Unsupported approval transition");
+        const gate = APPROVAL_READINESS_GATES[next];
         if (
-          next === "approved" &&
-          !isApprovalReadyAtRevision(approval, input?.contentRevision)
+          gate !== undefined &&
+          !isApprovalReadyAtRevision(
+            approval,
+            gate === "requested_revision"
+              ? input?.contentRevision
+              : approval.reviewed_content_revision,
+          )
         )
           throw new Error(STALE_APPROVAL_ERROR);
         const now = getNow();
@@ -12537,32 +13189,41 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       const approval = approvals.find((row) => row.id === input.approvalId);
       if (!approval) throw new Error("Approval was not found");
       const campaign = campaigns.find((row) => row.id === approval.campaign_id);
-      if (campaign?.status === "archived")
-        throw new Error("Campaign is archived");
-      if (approval.status !== "approved")
-        throw new Error("Only approved posts can be scheduled");
-      if (
-        !isApprovalReadyAtRevision(approval, approval.reviewed_content_revision)
-      )
-        throw new Error(STALE_APPROVAL_ERROR);
       const existing = scheduleJobs.find(
         (row) => row.approval_id === approval.id,
       );
-      if (existing && !["cancelled", "failed"].includes(existing.status)) {
-        throw new Error("Approval already has an active schedule job");
-      }
-      const windowKey = scheduledFor.slice(0, 10);
+      const eligibility = evaluateScheduleEligibility({
+        campaignStatus: campaign?.status ?? "active",
+        approvalStatus: approval.status,
+        readyAtReviewedRevision: isApprovalReadyAtRevision(
+          approval,
+          approval.reviewed_content_revision,
+        ),
+        existingJobStatus: existing?.status ?? null,
+      });
+      if ("error" in eligibility) throw new Error(eligibility.error);
+      // SQLite `date()` buckets by UTC day when an offset is given.
+      const windowKey = sqliteWindowKey(scheduledFor);
       const currentCount = scheduleJobs.filter((job) => {
         const owner = approvals.find((row) => row.id === job.approval_id);
         return (
           owner?.campaign_id === approval.campaign_id &&
-          job.scheduled_for.slice(0, 10) === windowKey &&
-          ["scheduled", "completed"].includes(job.status)
+          sqliteWindowKey(job.scheduled_for) === windowKey &&
+          schedulingContract.countedJobStatuses.includes(job.status)
         );
       }).length;
       const limit = campaign?.daily_post_limit ?? 0;
+      const limitDecision = evaluateScheduleLimit({
+        killSwitchReason:
+          safetySettings.global_kill_switch === 1
+            ? safetySettings.kill_switch_reason
+            : null,
+        windowKey,
+        currentCount,
+        dailyPostLimit: limit,
+      });
       const now = getNow();
-      if (safetySettings.global_kill_switch === 1) {
+      if (limitDecision.decision === "kill_switch") {
         const summary = `Post scheduling blocked by global kill switch for ${windowKey}: ${currentCount}/${limit} used`;
         safetyAuditEvents.push({
           id: nextSafetyAuditEventId++,
@@ -12588,17 +13249,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           summary,
           created_at: now,
         });
-        throw new Error(
-          safetySettings.kill_switch_reason
-            ? `Global kill switch is enabled: ${safetySettings.kill_switch_reason}`
-            : "Global kill switch is enabled",
-        );
+        throw new Error(limitDecision.message);
       }
-      const summary =
-        currentCount < limit
-          ? `Schedule allowed for ${windowKey}: ${currentCount}/${limit} used`
-          : `Daily post scheduling limit reached for ${windowKey}: ${currentCount}/${limit} used`;
-      if (currentCount >= limit) {
+      const summary = limitDecision.message;
+      if (limitDecision.decision === "limit_reached") {
         rateLimitEvents.push({
           id: nextRateLimitEventId++,
           campaign_id: approval.campaign_id,
@@ -12892,7 +13546,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           "Add a number or first-person signal so the draft feels specific.",
         ]);
       for (let index = draftAudits.length - 1; index >= 0; index -= 1) {
-        if (draftAudits[index].draft_variant_id === variant.id)
+        if (draftAudits[index]?.draft_variant_id === variant.id)
           draftAudits.splice(index, 1);
       }
       for (const [rule_key, severity, message] of findings) {
@@ -13136,7 +13790,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         status: "scoring",
       };
       draftQualityAttempts.push(attempt);
-      const draft = drafts.find((row) => row.id === variant.draft_id)!;
+      const draft = mustFind(
+        drafts.find((row) => row.id === variant.draft_id),
+        "draft",
+      );
       const agentRunId = createQualityAgent(run, attempt, variant);
       return Promise.resolve({
         qualityRunId: run.id,
@@ -13231,7 +13888,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         [
           run.active_ai_audit_run_id,
           ...runAttempts.map((attempt) => attempt.ai_audit_run_id),
-        ].filter((id): id is number => id !== null),
+        ].filter((id): id is number => typeof id === "number"),
       );
       const agentIds = new Set<number>(
         [
@@ -13378,6 +14035,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
     }
 
+    // Typed view of the mocked invoke payload; callers name the input shape.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
     function nativeInput<T>(args: unknown): T {
       return (args as { input: T }).input;
     }
@@ -13674,25 +14333,29 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       };
     }
 
-    function mockSelectedVariantReady(threadId: number): CommentVariant {
+    /** Mirrors `selected_variant_facts` in comment_threads.rs. */
+    function mockSelectedVariantFacts(threadId: number): {
+      count: number;
+      blocked: boolean;
+      variant: CommentVariant | undefined;
+    } {
       const selected = commentVariants
         .filter(
           (row) =>
             row.comment_thread_id === threadId && row.status === "selected",
         )
         .sort((left, right) => left.id - right.id);
-      if (selected.length > 1)
-        throw new Error("Choose exactly one selected comment variant");
       const variant = selected[0];
-      if (!variant) throw new Error("Choose one comment variant before review");
-      if (
-        commentAudits.some(
-          (row) =>
-            row.comment_variant_id === variant.id && row.severity === "block",
-        )
-      )
-        throw new Error("Blocked comment variants cannot be reviewed");
-      return variant;
+      return {
+        count: selected.length,
+        blocked:
+          variant !== undefined &&
+          commentAudits.some(
+            (row) =>
+              row.comment_variant_id === variant.id && row.severity === "block",
+          ),
+        variant,
+      };
     }
 
     function requestMockCommentChanges(thread: CommentThread): void {
@@ -13701,7 +14364,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       thread.updated_at = getNow();
     }
 
-    const MOCK_TERMINAL_COMMENT_STATUSES = ["posted", "rejected", "cancelled"];
+    const MOCK_TERMINAL_COMMENT_STATUSES =
+      commentReviewContract.terminalStatuses;
 
     function createCommentThreadCommand(args: unknown): Promise<unknown> {
       return runNativeMutation(() => {
@@ -13810,20 +14474,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           status: CommentVariantStatus;
         }>(args);
         const { thread, variant } = mockThreadForVariant(input.id);
-        if (MOCK_TERMINAL_COMMENT_STATUSES.includes(thread.status))
-          throw new Error(
-            "Posted, rejected, and cancelled comments cannot change variants",
-          );
+        const gate = evaluateVariantStatus({
+          threadStatus: thread.status,
+          next: input.status,
+          variantBlocked: commentAudits.some(
+            (row) =>
+              row.comment_variant_id === variant.id && row.severity === "block",
+          ),
+        });
+        if ("error" in gate) throw new Error(gate.error);
         const now = getNow();
         if (input.status === "selected") {
-          if (
-            commentAudits.some(
-              (row) =>
-                row.comment_variant_id === variant.id &&
-                row.severity === "block",
-            )
-          )
-            throw new Error("Blocked comment variants cannot be selected");
           for (const row of commentVariants) {
             if (row.comment_thread_id === thread.id && row.id !== variant.id) {
               row.status = "draft";
@@ -13846,19 +14507,14 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           reviewerNotes?: string;
         }>(args);
         const thread = mutableMockCommentThread(input.id);
-        if (input.status === "needs_review" || input.status === "approved")
-          mockSelectedVariantReady(thread.id);
-        if (input.status === "posted")
-          throw new Error("Use record posted to move comments to posted");
-        if (input.status === "approved" && thread.status !== "needs_review")
-          throw new Error("Only comments needing review can be approved");
-        if (
-          input.status === "changes_requested" &&
-          thread.status !== "needs_review"
-        )
-          throw new Error("Only comments needing review can request changes");
-        if (MOCK_TERMINAL_COMMENT_STATUSES.includes(thread.status))
-          throw new Error("Terminal comment threads cannot change status");
+        const selected = mockSelectedVariantFacts(thread.id);
+        const gate = evaluateThreadStatus({
+          current: thread.status,
+          next: input.status,
+          selectedCount: selected.count,
+          selectedBlocked: selected.blocked,
+        });
+        if ("error" in gate) throw new Error(gate.error);
         const now = getNow();
         thread.status = input.status;
         if (input.reviewerNotes !== undefined)
@@ -13923,13 +14579,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       let rejection = "";
       const settled = runNativeMutation(() => {
         const thread = mutableMockCommentThread(input.commentThreadId);
-        if (thread.status !== "approved")
-          throw new Error("Only approved comments can publish via LinkedIn");
-        const selected = mockSelectedVariantReady(thread.id);
-        if (mockEscapeLinkedInLittleText(selected.body) !== input.commentary)
-          throw new Error(
-            "Commentary does not match the approved comment variant",
-          );
+        const selected = mockSelectedVariantFacts(thread.id);
         const candidate = candidatePosts.find(
           (row) => row.id === thread.candidate_post_id,
         );
@@ -13939,29 +14589,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const expectedUrn = mockResolveLinkedInTargetUrn(
           target?.platform_resource_urn || target?.url || "",
         );
-        if (!expectedUrn)
-          throw new Error(
-            "LinkedIn target URN could not be resolved from the candidate URL",
-          );
-        if (expectedUrn !== input.targetUrn)
-          throw new Error(
-            "LinkedIn target URN does not match the comment target",
-          );
-        if (
-          input.idempotencyKey !== `comment-thread:${thread.id}:linkedin:manual`
-        )
-          throw new Error(
-            "Comment idempotency key does not match thread state",
-          );
-        if (
-          commentAttempts.some(
-            (row) =>
-              row.comment_thread_id === thread.id && row.status === "succeeded",
-          )
-        )
-          throw new Error(
-            "Comment thread already has a successful posting attempt",
-          );
         const campaign = campaigns.find((row) => row.id === thread.campaign_id);
         const today = getNow().slice(0, 10);
         const limit = campaign?.daily_comment_limit ?? 0;
@@ -13989,22 +14616,37 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           });
           rejection = error;
         };
-        if (safetySettings.global_kill_switch === 1) {
-          const reason = safetySettings.kill_switch_reason;
-          block(
-            reason
-              ? `Comment posting blocked by global kill switch: ${reason}`
-              : "Comment posting blocked by global kill switch",
-            reason
-              ? `Global kill switch is enabled: ${reason}`
-              : "Global kill switch is enabled",
-          );
-          return undefined;
-        }
-        if (currentCount >= limit) {
-          const summary = `Daily comment limit reached for ${today}: ${currentCount}/${limit} used`;
-          block(summary, summary);
-        }
+        const decision = evaluateCommentAssert({
+          threadStatus: thread.status,
+          selectedCount: selected.count,
+          selectedBlocked: selected.blocked,
+          commentaryMatches:
+            mockEscapeLinkedInLittleText(selected.variant?.body ?? "") ===
+            input.commentary,
+          targetResolved: expectedUrn !== "",
+          targetMatches: expectedUrn !== "" && expectedUrn === input.targetUrn,
+          idempotencyMatches:
+            input.idempotencyKey ===
+            `comment-thread:${thread.id}:linkedin:manual`,
+          successfulAttemptCount: commentAttempts.filter(
+            (row) =>
+              row.comment_thread_id === thread.id && row.status === "succeeded",
+          ).length,
+          killSwitchReason:
+            safetySettings.global_kill_switch === 1
+              ? safetySettings.kill_switch_reason
+              : null,
+          windowKey: today,
+          dailyCount: currentCount,
+          dailyCommentLimit: limit,
+        });
+        // Plain rejections roll back; kill-switch and cap blocks commit their
+        // rate-limit row first, like the native Settlement::Rejected path.
+        if (decision.decision === "rejected") throw new Error(decision.message);
+        if (decision.decision === "kill_switch")
+          block(decision.summary, decision.message);
+        if (decision.decision === "limit_reached")
+          block(decision.message, decision.message);
         return undefined;
       });
       return settled.then(() =>
@@ -14109,7 +14751,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         (row) => row.campaign_id === input.campaignId,
       );
       const maxAge = policy?.max_post_age_days ?? 30;
-      let allowed = false;
+      let allowed: boolean;
       try {
         const url = new URL(input.url);
         const host = url.hostname.toLocaleLowerCase();
@@ -15057,18 +15699,17 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function mockWf_createWorkflowRun(input: CreateWorkflowRunInput): number {
       const parsed = input;
-      try {
-        const campaignRows = mockSqlSelect<CampaignStatusRow>(
-          `SELECT id, status FROM campaigns WHERE id = $1 LIMIT 1`,
-          [parsed.campaignId],
-        );
-        const campaign = campaignRows[0];
-        if (campaign === undefined) throw new Error("Campaign was not found");
-        if (campaign.status === "archived")
-          throw new Error("Campaign is archived");
+      const campaignRows = mockSqlSelect<CampaignStatusRow>(
+        `SELECT id, status FROM campaigns WHERE id = $1 LIMIT 1`,
+        [parsed.campaignId],
+      );
+      const campaign = campaignRows[0];
+      if (campaign === undefined) throw new Error("Campaign was not found");
+      if (campaign.status === "archived")
+        throw new Error("Campaign is archived");
 
-        const result = mockSqlExecute(
-          `INSERT INTO workflow_runs (
+      const result = mockSqlExecute(
+        `INSERT INTO workflow_runs (
         campaign_id,
         workflow_type,
         title,
@@ -15077,12 +15718,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         context_summary,
         updated_at
       ) VALUES ($1, 'content_pipeline', $2, 'queued', 'research', $3, datetime('now'))`,
-          [parsed.campaignId, parsed.title, parsed.contextSummary],
-        );
+        [parsed.campaignId, parsed.title, parsed.contextSummary],
+      );
 
-        for (const step of CONTENT_PIPELINE_STEPS) {
-          mockSqlExecute(
-            `INSERT INTO workflow_steps (
+      for (const step of CONTENT_PIPELINE_STEPS) {
+        mockSqlExecute(
+          `INSERT INTO workflow_steps (
           workflow_run_id,
           step_key,
           title,
@@ -15093,123 +15734,115 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           error_message,
           updated_at
         ) VALUES ($1, $2, $3, $4, $5, 'pending', '', '', datetime('now'))`,
-            [
-              result.lastInsertId,
-              step.step_key,
-              step.title,
-              step.description,
-              step.sort_order,
-            ],
-          );
-        }
-
-        mockWf_insertWorkflowEvent(
-          result.lastInsertId,
-          null,
-          "run_created",
-          `Run created: ${parsed.title}`,
+          [
+            result.lastInsertId,
+            step.step_key,
+            step.title,
+            step.description,
+            step.sort_order,
+          ],
         );
-        return result.lastInsertId;
-      } catch (error) {
-        throw error;
       }
+
+      mockWf_insertWorkflowEvent(
+        result.lastInsertId,
+        null,
+        "run_created",
+        `Run created: ${parsed.title}`,
+      );
+      return result.lastInsertId;
     }
 
     function mockWf_startWorkflowRun(input: StartWorkflowRunInput): void {
       const parsed = input;
-      try {
-        const run = mockWf_getWorkflowRunValidation(parsed.id);
-        if (run.campaign_status === "archived")
-          throw new Error("Campaign is archived");
-        if (TERMINAL_RUN_STATUSES.includes(run.status)) {
-          throw new Error("Terminal workflow runs cannot be started");
-        }
+      const run = mockWf_getWorkflowRunValidation(parsed.id);
+      if (run.campaign_status === "archived")
+        throw new Error("Campaign is archived");
+      if (TERMINAL_RUN_STATUSES.includes(run.status)) {
+        throw new Error("Terminal workflow runs cannot be started");
+      }
 
-        mockSqlExecute(
-          `UPDATE workflow_runs
+      mockSqlExecute(
+        `UPDATE workflow_runs
       SET status = 'running',
         started_at = COALESCE(started_at, datetime('now')),
         updated_at = datetime('now')
       WHERE id = $1`,
-          [parsed.id],
-        );
+        [parsed.id],
+      );
 
-        mockWf_insertWorkflowEvent(
-          parsed.id,
-          null,
-          "run_started",
-          run.started_at === null
-            ? "Workflow run started"
-            : "Workflow run resumed",
-        );
+      mockWf_insertWorkflowEvent(
+        parsed.id,
+        null,
+        "run_started",
+        run.started_at === null
+          ? "Workflow run started"
+          : "Workflow run resumed",
+      );
 
-        const steps = mockWf_loadWorkflowSteps(parsed.id);
-        const resumableStep =
-          steps.find(
-            (step) =>
-              step.step_key === run.current_step_key &&
-              ["blocked", "failed"].includes(step.status),
-          ) ??
-          steps.find((step) => ["blocked", "failed"].includes(step.status));
+      const steps = mockWf_loadWorkflowSteps(parsed.id);
+      const resumableStep =
+        steps.find(
+          (step) =>
+            step.step_key === run.current_step_key &&
+            ["blocked", "failed"].includes(step.status),
+        ) ?? steps.find((step) => ["blocked", "failed"].includes(step.status));
 
-        if (resumableStep !== undefined) {
-          mockSqlExecute(
-            `UPDATE workflow_steps
+      if (resumableStep !== undefined) {
+        mockSqlExecute(
+          `UPDATE workflow_steps
         SET status = 'running',
           started_at = COALESCE(started_at, datetime('now')),
           completed_at = NULL,
           updated_at = datetime('now')
         WHERE id = $1`,
-            [resumableStep.id],
-          );
-          mockWf_insertWorkflowEvent(
-            parsed.id,
-            resumableStep.id,
-            "step_resumed",
-            `${resumableStep.title} resumed`,
-          );
-        } else {
-          const hasActiveStep = steps.some((step) =>
-            ["running", "waiting_approval"].includes(step.status),
-          );
-          if (!hasActiveStep) {
-            const firstRunnableStep =
-              steps.find(
-                (step) =>
-                  step.step_key === run.current_step_key &&
-                  step.status === "pending",
-              ) ?? steps.find((step) => step.status === "pending");
-            if (firstRunnableStep !== undefined) {
-              mockSqlExecute(
-                `UPDATE workflow_steps
+          [resumableStep.id],
+        );
+        mockWf_insertWorkflowEvent(
+          parsed.id,
+          resumableStep.id,
+          "step_resumed",
+          `${resumableStep.title} resumed`,
+        );
+      } else {
+        const hasActiveStep = steps.some((step) =>
+          ["running", "waiting_approval"].includes(step.status),
+        );
+        if (!hasActiveStep) {
+          const firstRunnableStep =
+            steps.find(
+              (step) =>
+                step.step_key === run.current_step_key &&
+                step.status === "pending",
+            ) ?? steps.find((step) => step.status === "pending");
+          if (firstRunnableStep !== undefined) {
+            mockSqlExecute(
+              `UPDATE workflow_steps
             SET status = 'running',
               started_at = COALESCE(started_at, datetime('now')),
               completed_at = NULL,
               updated_at = datetime('now')
             WHERE id = $1`,
-                [firstRunnableStep.id],
-              );
-              mockWf_insertWorkflowEvent(
-                parsed.id,
-                firstRunnableStep.id,
-                "step_started",
-                `${firstRunnableStep.title} started`,
-              );
-            }
+              [firstRunnableStep.id],
+            );
+            mockWf_insertWorkflowEvent(
+              parsed.id,
+              firstRunnableStep.id,
+              "step_started",
+              `${firstRunnableStep.title} started`,
+            );
           }
         }
+      }
 
-        const scoreStatusRows = mockSqlSelect<{ status: WorkflowStepStatus }>(
-          `SELECT status FROM workflow_steps
+      const scoreStatusRows = mockSqlSelect<{ status: WorkflowStepStatus }>(
+        `SELECT status FROM workflow_steps
         WHERE workflow_run_id = $1 AND step_key = 'score' LIMIT 1`,
-          [parsed.id],
-        );
-        const scoreStatus = scoreStatusRows[0]?.status;
-        if (scoreStatus !== undefined) {
-          mockWf_syncPlannerScoringBacklogInTransaction(parsed.id, scoreStatus);
-        }
-      } catch (error) {
-        throw error;
+        [parsed.id],
+      );
+      const scoreStatus = scoreStatusRows[0]?.status;
+      if (scoreStatus !== undefined) {
+        mockWf_syncPlannerScoringBacklogInTransaction(parsed.id, scoreStatus);
       }
     }
 
@@ -15305,19 +15938,18 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       input: CreateWorkflowArtifactInput,
     ): number {
       const parsed = input;
-      try {
-        const run = mockWf_getWorkflowRunValidation(parsed.workflowRunId);
-        mockWf_getWorkflowArtifactOwnership(
-          parsed.artifactType,
-          parsed.artifactId,
-          parsed.workflowStepId,
-          parsed.workflowRunId,
-          run.campaign_id,
-          run.campaign_status,
-        );
+      const run = mockWf_getWorkflowRunValidation(parsed.workflowRunId);
+      mockWf_getWorkflowArtifactOwnership(
+        parsed.artifactType,
+        parsed.artifactId,
+        parsed.workflowStepId,
+        parsed.workflowRunId,
+        run.campaign_id,
+        run.campaign_status,
+      );
 
-        mockSqlExecute(
-          `INSERT INTO workflow_artifacts (
+      mockSqlExecute(
+        `INSERT INTO workflow_artifacts (
         workflow_run_id,
         workflow_step_id,
         artifact_type,
@@ -15329,37 +15961,34 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         workflow_step_id = excluded.workflow_step_id,
         summary = excluded.summary,
         updated_at = datetime('now')`,
-          [
-            parsed.workflowRunId,
-            parsed.workflowStepId ?? null,
-            parsed.artifactType,
-            parsed.artifactId,
-            parsed.summary,
-          ],
-        );
-        const artifactRows = mockSqlSelect<{ id: number }>(
-          `SELECT id
+        [
+          parsed.workflowRunId,
+          parsed.workflowStepId ?? null,
+          parsed.artifactType,
+          parsed.artifactId,
+          parsed.summary,
+        ],
+      );
+      const artifactRows = mockSqlSelect<{ id: number }>(
+        `SELECT id
       FROM workflow_artifacts
       WHERE workflow_run_id = $1
         AND artifact_type = $2
         AND artifact_id = $3
       LIMIT 1`,
-          [parsed.workflowRunId, parsed.artifactType, parsed.artifactId],
-        );
-        const artifact = artifactRows[0];
-        if (artifact === undefined) {
-          throw new Error("Workflow artifact was not found after upsert");
-        }
-        mockSqlExecute(
-          `UPDATE workflow_runs
+        [parsed.workflowRunId, parsed.artifactType, parsed.artifactId],
+      );
+      const artifact = artifactRows[0];
+      if (artifact === undefined) {
+        throw new Error("Workflow artifact was not found after upsert");
+      }
+      mockSqlExecute(
+        `UPDATE workflow_runs
       SET updated_at = datetime('now')
       WHERE id = $1`,
-          [parsed.workflowRunId],
-        );
-        return artifact.id;
-      } catch (error) {
-        throw error;
-      }
+        [parsed.workflowRunId],
+      );
+      return artifact.id;
     }
 
     function mockWf_resumeWorkflowRun(input: StartWorkflowRunInput): {
@@ -15367,49 +15996,42 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     } {
       const parsed = input;
       let linkedAgentIsActive = false;
-      try {
-        const run = mockWf_getWorkflowRunValidation(parsed.id);
-        if (
-          run.autopilot_plan_id !== null &&
-          run.current_step_key === "draft"
-        ) {
-          throw new Error(mockWf_PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
-        }
-        const steps = mockWf_loadWorkflowSteps(parsed.id);
-        const waitingStep =
-          steps.find(
-            (step) =>
-              step.step_key === run.current_step_key &&
-              step.status === "waiting_approval",
-          ) ?? steps.find((step) => step.status === "waiting_approval");
+      const run = mockWf_getWorkflowRunValidation(parsed.id);
+      if (run.autopilot_plan_id !== null && run.current_step_key === "draft") {
+        throw new Error(mockWf_PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
+      }
+      const steps = mockWf_loadWorkflowSteps(parsed.id);
+      const waitingStep =
+        steps.find(
+          (step) =>
+            step.step_key === run.current_step_key &&
+            step.status === "waiting_approval",
+        ) ?? steps.find((step) => step.status === "waiting_approval");
 
-        if (waitingStep !== undefined) {
-          const agentRows = mockSqlSelect<WorkflowLinkedAgentRow>(
-            `SELECT id, status, output_summary, error_message
+      if (waitingStep !== undefined) {
+        const agentRows = mockSqlSelect<WorkflowLinkedAgentRow>(
+          `SELECT id, status, output_summary, error_message
         FROM agent_runs
         WHERE workflow_run_id = $1
           AND workflow_step_id = $2
         ORDER BY id DESC
         LIMIT 1`,
-            [parsed.id, waitingStep.id],
-          );
-          const agentRun = agentRows[0];
-          if (agentRun !== undefined) {
-            mockWf_reconcileWorkflowAgentRunInTransaction({
-              agentRunId: agentRun.id,
-              status: agentRun.status,
-              outputSummary: agentRun.output_summary,
-              errorMessage: agentRun.error_message,
-            });
-            linkedAgentIsActive = [
-              "queued",
-              "running",
-              "waiting_approval",
-            ].includes(agentRun.status);
-          }
+          [parsed.id, waitingStep.id],
+        );
+        const agentRun = agentRows[0];
+        if (agentRun !== undefined) {
+          mockWf_reconcileWorkflowAgentRunInTransaction({
+            agentRunId: agentRun.id,
+            status: agentRun.status,
+            outputSummary: agentRun.output_summary,
+            errorMessage: agentRun.error_message,
+          });
+          linkedAgentIsActive = [
+            "queued",
+            "running",
+            "waiting_approval",
+          ].includes(agentRun.status);
         }
-      } catch (error) {
-        throw error;
       }
 
       return { linkedAgentIsActive };
@@ -15419,9 +16041,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       input: SetWorkflowStepStatusInput,
     ): void {
       const parsed = input;
-      try {
-        const rows = mockSqlSelect<WorkflowStepValidationRow>(
-          `SELECT
+      const rows = mockSqlSelect<WorkflowStepValidationRow>(
+        `SELECT
         ws.*,
         wr.status AS run_status,
         wr.campaign_id,
@@ -15433,30 +16054,30 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       LEFT JOIN autopilot_plans ap ON ap.workflow_run_id = wr.id
       WHERE ws.id = $1
       LIMIT 1`,
-          [parsed.stepId],
-        );
-        const step = rows[0];
-        if (step === undefined) throw new Error("Workflow step was not found");
-        if (step.campaign_status === "archived")
-          throw new Error("Campaign is archived");
-        if (step.run_status === "cancelled") {
-          throw new Error("Cancelled workflow runs cannot change steps");
-        }
-        if (step.run_status === "completed" && parsed.status !== "running") {
-          throw new Error("Completed workflow runs can only reopen steps");
-        }
-        if (
-          step.autopilot_plan_id !== null &&
-          step.step_key === "draft" &&
-          mockWf_FINISHED_STEP_STATUSES.includes(parsed.status)
-        ) {
-          throw new Error(mockWf_PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
-        }
+        [parsed.stepId],
+      );
+      const step = rows[0];
+      if (step === undefined) throw new Error("Workflow step was not found");
+      if (step.campaign_status === "archived")
+        throw new Error("Campaign is archived");
+      if (step.run_status === "cancelled") {
+        throw new Error("Cancelled workflow runs cannot change steps");
+      }
+      if (step.run_status === "completed" && parsed.status !== "running") {
+        throw new Error("Completed workflow runs can only reopen steps");
+      }
+      if (
+        step.autopilot_plan_id !== null &&
+        step.step_key === "draft" &&
+        mockWf_FINISHED_STEP_STATUSES.includes(parsed.status)
+      ) {
+        throw new Error(mockWf_PLANNER_DRAFT_SAVE_ONLY_MESSAGE);
+      }
 
-        mockWf_assertStepTransition(step.status, parsed.status);
+      mockWf_assertStepTransition(step.status, parsed.status);
 
-        mockSqlExecute(
-          `UPDATE workflow_steps
+      mockSqlExecute(
+        `UPDATE workflow_steps
       SET status = $1,
         output_summary = $2,
         error_message = $3,
@@ -15468,108 +16089,97 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         END,
         updated_at = datetime('now')
       WHERE id = $4`,
-          [
-            parsed.status,
-            parsed.outputSummary,
-            parsed.errorMessage,
-            parsed.stepId,
-          ],
-        );
+        [
+          parsed.status,
+          parsed.outputSummary,
+          parsed.errorMessage,
+          parsed.stepId,
+        ],
+      );
 
-        mockWf_insertWorkflowEvent(
+      mockWf_insertWorkflowEvent(
+        step.workflow_run_id,
+        step.id,
+        mockWf_getStepEventType(step.status, parsed.status),
+        mockWf_getStepEventSummary(step, parsed.status),
+      );
+
+      if (parsed.status === "completed") {
+        mockWf_startNextPendingWorkflowStep(step);
+      }
+
+      mockWf_updateRunFromSteps(step.workflow_run_id, step.run_status);
+      if (step.step_key === "score") {
+        mockWf_syncPlannerScoringBacklogInTransaction(
           step.workflow_run_id,
-          step.id,
-          mockWf_getStepEventType(step.status, parsed.status),
-          mockWf_getStepEventSummary(step, parsed.status),
+          parsed.status,
         );
-
-        if (parsed.status === "completed") {
-          mockWf_startNextPendingWorkflowStep(step);
-        }
-
-        mockWf_updateRunFromSteps(step.workflow_run_id, step.run_status);
-        if (step.step_key === "score") {
-          mockWf_syncPlannerScoringBacklogInTransaction(
-            step.workflow_run_id,
-            parsed.status,
-          );
-        }
-      } catch (error) {
-        throw error;
       }
     }
 
     function mockWf_cancelWorkflowRun(input: CancelWorkflowRunInput): void {
       const parsed = input;
-      try {
-        const run = mockWf_getWorkflowRunValidation(parsed.id);
-        if (run.campaign_status === "archived")
-          throw new Error("Campaign is archived");
+      const run = mockWf_getWorkflowRunValidation(parsed.id);
+      if (run.campaign_status === "archived")
+        throw new Error("Campaign is archived");
 
-        mockSqlExecute(
-          `UPDATE workflow_runs
+      mockSqlExecute(
+        `UPDATE workflow_runs
       SET status = 'cancelled',
         completed_at = datetime('now'),
         updated_at = datetime('now')
       WHERE id = $1`,
-          [parsed.id],
-        );
-        mockWf_insertWorkflowEvent(
-          parsed.id,
-          null,
-          "run_cancelled",
-          "Workflow run cancelled",
-        );
-        const scoreRows = mockSqlSelect<{
-          id: number;
-          status: WorkflowStepStatus;
-        }>(
-          `SELECT id, status FROM workflow_steps
+        [parsed.id],
+      );
+      mockWf_insertWorkflowEvent(
+        parsed.id,
+        null,
+        "run_cancelled",
+        "Workflow run cancelled",
+      );
+      const scoreRows = mockSqlSelect<{
+        id: number;
+        status: WorkflowStepStatus;
+      }>(
+        `SELECT id, status FROM workflow_steps
         WHERE workflow_run_id = $1 AND step_key = 'score' LIMIT 1`,
-          [parsed.id],
-        );
-        const scoreStep = scoreRows[0];
-        if (
-          scoreStep !== undefined &&
-          !["completed", "skipped"].includes(scoreStep.status)
-        ) {
-          mockSqlExecute(
-            `UPDATE workflow_steps
+        [parsed.id],
+      );
+      const scoreStep = scoreRows[0];
+      if (
+        scoreStep !== undefined &&
+        !["completed", "skipped"].includes(scoreStep.status)
+      ) {
+        mockSqlExecute(
+          `UPDATE workflow_steps
           SET status = 'skipped',
             completed_at = COALESCE(completed_at, datetime('now')),
             updated_at = datetime('now')
           WHERE id = $1`,
-            [scoreStep.id],
-          );
-          mockWf_syncPlannerScoringBacklogInTransaction(parsed.id, "skipped");
-        }
-      } catch (error) {
-        throw error;
+          [scoreStep.id],
+        );
+        mockWf_syncPlannerScoringBacklogInTransaction(parsed.id, "skipped");
       }
     }
 
     function mockWf_addWorkflowNote(input: AddWorkflowNoteInput): void {
       const parsed = input;
-      try {
-        const run = mockWf_getWorkflowRunValidation(parsed.workflowRunId);
-        if (run.campaign_status === "archived")
-          throw new Error("Campaign is archived");
+      const run = mockWf_getWorkflowRunValidation(parsed.workflowRunId);
+      if (run.campaign_status === "archived")
+        throw new Error("Campaign is archived");
 
-        mockWf_insertWorkflowEvent(
-          parsed.workflowRunId,
-          null,
-          "note_added",
-          parsed.note,
-        );
-        mockSqlExecute(
-          `UPDATE workflow_runs
+      mockWf_insertWorkflowEvent(
+        parsed.workflowRunId,
+        null,
+        "note_added",
+        parsed.note,
+      );
+      mockSqlExecute(
+        `UPDATE workflow_runs
       SET updated_at = datetime('now')
       WHERE id = $1`,
-          [parsed.workflowRunId],
-        );
-      } catch (error) {
-        throw error;
-      }
+        [parsed.workflowRunId],
+      );
     }
 
     function runWorkflowCommand(
@@ -16089,16 +16699,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         parsed.agentRole,
         parsed.playbookKey,
       );
-      try {
-        mockAr_assertCampaignCanMutate(parsed.campaignId);
-        const workflow = mockAr_validateWorkflowOwnership(
-          parsed.campaignId,
-          parsed.workflowRunId,
-          parsed.workflowStepId,
-        );
+      mockAr_assertCampaignCanMutate(parsed.campaignId);
+      const workflow = mockAr_validateWorkflowOwnership(
+        parsed.campaignId,
+        parsed.workflowRunId,
+        parsed.workflowStepId,
+      );
 
-        const result = mockSqlExecute(
-          `INSERT INTO agent_runs (
+      const result = mockSqlExecute(
+        `INSERT INTO agent_runs (
         campaign_id,
         workflow_run_id,
         workflow_step_id,
@@ -16111,28 +16720,25 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         input_context_json,
         updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, $9, datetime('now'))`,
-          [
-            parsed.campaignId,
-            workflow.workflowRunId,
-            workflow.workflowStepId,
-            parsed.agentRole,
-            parsed.providerKey,
-            parsed.modelName,
-            playbookKey,
-            parsed.inputSummary,
-            JSON.stringify(parsed.inputContext),
-          ],
-        );
+        [
+          parsed.campaignId,
+          workflow.workflowRunId,
+          workflow.workflowStepId,
+          parsed.agentRole,
+          parsed.providerKey,
+          parsed.modelName,
+          playbookKey,
+          parsed.inputSummary,
+          JSON.stringify(parsed.inputContext),
+        ],
+      );
 
-        mockAr_insertAgentRunEvent({
-          agentRunId: result.lastInsertId,
-          eventType: "run_created",
-          summary: `Agent run created for ${parsed.agentRole}.`,
-        });
-        return result.lastInsertId;
-      } catch (error) {
-        throw error;
-      }
+      mockAr_insertAgentRunEvent({
+        agentRunId: result.lastInsertId,
+        eventType: "run_created",
+        summary: `Agent run created for ${parsed.agentRole}.`,
+      });
+      return result.lastInsertId;
     }
 
     function mockAr_getApprovalLink(approvalId: number): ApprovalLinkRow {
@@ -16328,42 +16934,38 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function mockAr_cancelAgentRun(input: CancelAgentRunInput): void {
       const parsed = input;
-      try {
-        const run = mockAr_getAgentRunValidation(parsed.id);
-        if (run.campaign_status === "archived")
-          throw new Error("Campaign is archived");
-        if (run.status === "completed") {
-          throw new Error("Completed agent runs cannot be cancelled");
-        }
+      const run = mockAr_getAgentRunValidation(parsed.id);
+      if (run.campaign_status === "archived")
+        throw new Error("Campaign is archived");
+      if (run.status === "completed") {
+        throw new Error("Completed agent runs cannot be cancelled");
+      }
 
-        const errorMessage = run.error_message || "Agent run cancelled";
-        mockSqlExecute(
-          `UPDATE agent_runs
+      const errorMessage = run.error_message || "Agent run cancelled";
+      mockSqlExecute(
+        `UPDATE agent_runs
       SET status = 'cancelled',
         error_message = $1,
         completed_at = datetime('now'),
         updated_at = datetime('now')
       WHERE id = $2`,
-          [errorMessage, parsed.id],
-        );
-        mockWf_reconcileWorkflowAgentRunInTransaction({
-          agentRunId: run.id,
-          status: "cancelled",
-          outputSummary: run.output_summary,
-          errorMessage,
-        });
-        mockSqlExecute(
-          `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
-          [parsed.id],
-        );
-        mockAr_insertAgentRunEvent({
-          agentRunId: parsed.id,
-          eventType: "run_cancelled",
-          summary: "Agent run cancelled",
-        });
-      } catch (error) {
-        throw error;
-      }
+        [errorMessage, parsed.id],
+      );
+      mockWf_reconcileWorkflowAgentRunInTransaction({
+        agentRunId: run.id,
+        status: "cancelled",
+        outputSummary: run.output_summary,
+        errorMessage,
+      });
+      mockSqlExecute(
+        `DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1`,
+        [parsed.id],
+      );
+      mockAr_insertAgentRunEvent({
+        agentRunId: parsed.id,
+        eventType: "run_cancelled",
+        summary: "Agent run cancelled",
+      });
     }
     function runAgentRunCommand(
       args: unknown,
@@ -16944,20 +17546,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function mockDr_createDraft(input: CreateDraftInput): number {
       const parsed = input;
-      try {
-        const candidate = mockDr_getEligibleDraftCandidate(parsed.candidateId);
-        const draftId = mockDr_insertDraftInTransaction({
-          campaignId: candidate.campaign_id,
-          candidateId: parsed.candidateId,
-          angle: parsed.angle,
-          notes: parsed.notes,
-          contentIntent: parsed.contentIntent,
-          variants: parsed.variants,
-        });
-        return draftId;
-      } catch (error) {
-        throw error;
-      }
+      const candidate = mockDr_getEligibleDraftCandidate(parsed.candidateId);
+      const draftId = mockDr_insertDraftInTransaction({
+        campaignId: candidate.campaign_id,
+        candidateId: parsed.candidateId,
+        angle: parsed.angle,
+        notes: parsed.notes,
+        contentIntent: parsed.contentIntent,
+        variants: parsed.variants,
+      });
+      return draftId;
     }
 
     function mockDr_updateDraftVariant(input: UpdateDraftVariantInput): void {
@@ -16975,137 +17573,124 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         values.push(value);
         updates.push(`${column} = $${values.length}`);
       }
-      try {
-        const currentVariants = mockSqlSelect<DraftVariantRow>(
-          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
-          [parsed.id],
-        );
-        const currentVariant = currentVariants[0];
-        if (currentVariant === undefined) {
-          throw new Error("Draft variant was not found");
-        }
+      const currentVariants = mockSqlSelect<DraftVariantRow>(
+        `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+        [parsed.id],
+      );
+      const currentVariant = currentVariants[0];
+      if (currentVariant === undefined) {
+        throw new Error("Draft variant was not found");
+      }
 
-        if (parsed.hook !== undefined && parsed.hook !== currentVariant.hook) {
-          addUpdate("hook", parsed.hook);
-        }
-        if (parsed.body !== undefined && parsed.body !== currentVariant.body) {
-          addUpdate("body", parsed.body);
-        }
-        if (parsed.cta !== undefined && parsed.cta !== currentVariant.cta) {
-          addUpdate("cta", parsed.cta);
-        }
-        if (
-          parsed.hashtags !== undefined &&
-          parsed.hashtags !== currentVariant.hashtags
-        ) {
-          addUpdate("hashtags", parsed.hashtags);
-        }
+      if (parsed.hook !== undefined && parsed.hook !== currentVariant.hook) {
+        addUpdate("hook", parsed.hook);
+      }
+      if (parsed.body !== undefined && parsed.body !== currentVariant.body) {
+        addUpdate("body", parsed.body);
+      }
+      if (parsed.cta !== undefined && parsed.cta !== currentVariant.cta) {
+        addUpdate("cta", parsed.cta);
+      }
+      if (
+        parsed.hashtags !== undefined &&
+        parsed.hashtags !== currentVariant.hashtags
+      ) {
+        addUpdate("hashtags", parsed.hashtags);
+      }
 
-        if (updates.length === 0) {
-          return;
-        }
+      if (updates.length === 0) {
+        return;
+      }
 
-        values.push(parsed.id);
-        mockSqlExecute(
-          `UPDATE draft_variants
+      values.push(parsed.id);
+      mockSqlExecute(
+        `UPDATE draft_variants
       SET ${updates.join(", ")},
           updated_at = datetime('now')
       WHERE id = $${values.length}`,
-          values,
-        );
+        values,
+      );
 
-        const variants = mockSqlSelect<DraftVariantRow>(
-          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
-          [parsed.id],
-        );
-        const variant = variants[0];
-        if (variant === undefined)
-          throw new Error("Draft variant was not found");
+      const variants = mockSqlSelect<DraftVariantRow>(
+        `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+        [parsed.id],
+      );
+      const variant = variants[0];
+      if (variant === undefined) throw new Error("Draft variant was not found");
 
-        mockSqlExecute(`DELETE FROM draft_audits WHERE draft_variant_id = $1`, [
-          parsed.id,
-        ]);
-        mockDr_insertAuditFindings(
-          parsed.id,
-          mockDr_auditDraftVariant(variant),
-        );
-        mockSqlExecute(
-          `UPDATE drafts
+      mockSqlExecute(`DELETE FROM draft_audits WHERE draft_variant_id = $1`, [
+        parsed.id,
+      ]);
+      mockDr_insertAuditFindings(parsed.id, mockDr_auditDraftVariant(variant));
+      mockSqlExecute(
+        `UPDATE drafts
       SET updated_at = datetime('now')
       WHERE id = $1`,
-          [variant.draft_id],
-        );
-      } catch (error) {
-        throw error;
-      }
+        [variant.draft_id],
+      );
     }
 
     function mockDr_setDraftVariantStatus(
       input: SetDraftVariantStatusInput,
     ): void {
       const parsed = input;
-      try {
-        const variants = mockSqlSelect<DraftVariantRow>(
-          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+      const variants = mockSqlSelect<DraftVariantRow>(
+        `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+        [parsed.id],
+      );
+      const variant = variants[0];
+      if (variant === undefined) throw new Error("Draft variant was not found");
+
+      if (parsed.status === "selected") {
+        const audits = mockSqlSelect<DraftAuditRow>(
+          `SELECT * FROM draft_audits WHERE draft_variant_id = $1`,
           [parsed.id],
         );
-        const variant = variants[0];
-        if (variant === undefined)
-          throw new Error("Draft variant was not found");
-
-        if (parsed.status === "selected") {
-          const audits = mockSqlSelect<DraftAuditRow>(
-            `SELECT * FROM draft_audits WHERE draft_variant_id = $1`,
-            [parsed.id],
-          );
-          if (audits.some((audit) => audit.severity === "block")) {
-            throw new Error("Blocked variants cannot be selected");
-          }
-          mockSqlExecute(
-            `UPDATE draft_variants
+        if (audits.some((audit) => audit.severity === "block")) {
+          throw new Error("Blocked variants cannot be selected");
+        }
+        mockSqlExecute(
+          `UPDATE draft_variants
         SET status = 'draft', updated_at = datetime('now')
         WHERE draft_id = $1 AND id <> $2`,
-            [variant.draft_id, parsed.id],
-          );
-          mockSqlExecute(
-            `UPDATE draft_variants
+          [variant.draft_id, parsed.id],
+        );
+        mockSqlExecute(
+          `UPDATE draft_variants
         SET status = 'selected', updated_at = datetime('now')
         WHERE id = $1`,
-            [parsed.id],
-          );
-          mockSqlExecute(
-            `UPDATE drafts
+          [parsed.id],
+        );
+        mockSqlExecute(
+          `UPDATE drafts
         SET status = 'ready_for_review', updated_at = datetime('now')
         WHERE id = $1`,
-            [variant.draft_id],
-          );
-        } else {
-          mockSqlExecute(
-            `UPDATE draft_variants
+          [variant.draft_id],
+        );
+      } else {
+        mockSqlExecute(
+          `UPDATE draft_variants
         SET status = $1, updated_at = datetime('now')
         WHERE id = $2`,
-            [parsed.status, parsed.id],
-          );
+          [parsed.status, parsed.id],
+        );
 
-          if (parsed.status === "draft") {
-            const selectedCounts = mockSqlSelect<SelectedCountRow>(
-              `SELECT COUNT(*) AS selected_count
+        if (parsed.status === "draft") {
+          const selectedCounts = mockSqlSelect<SelectedCountRow>(
+            `SELECT COUNT(*) AS selected_count
           FROM draft_variants
           WHERE draft_id = $1 AND status = 'selected'`,
-              [variant.draft_id],
-            );
-            if ((selectedCounts[0]?.selected_count ?? 0) === 0) {
-              mockSqlExecute(
-                `UPDATE drafts
+            [variant.draft_id],
+          );
+          if ((selectedCounts[0]?.selected_count ?? 0) === 0) {
+            mockSqlExecute(
+              `UPDATE drafts
             SET status = 'needs_revision', updated_at = datetime('now')
             WHERE id = $1`,
-                [variant.draft_id],
-              );
-            }
+              [variant.draft_id],
+            );
           }
         }
-      } catch (error) {
-        throw error;
       }
     }
 
@@ -17234,116 +17819,108 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function mockDr_saveGeneratedDraft(input: SaveGeneratedDraftInput): number {
       const parsed = input;
-      try {
-        const request = mockDr_loadDraftGenerationRequestRow(parsed.id);
-        if (request.status !== "generated") {
-          throw new Error("Only generated draft requests can be saved");
-        }
-        mockDr_getEligibleDraftCandidate(
-          request.candidate_post_id,
-          request.campaign_id,
+      const request = mockDr_loadDraftGenerationRequestRow(parsed.id);
+      if (request.status !== "generated") {
+        throw new Error("Only generated draft requests can be saved");
+      }
+      mockDr_getEligibleDraftCandidate(
+        request.candidate_post_id,
+        request.campaign_id,
+      );
+      const generatedVariants = mockDr_mapGeneratedVariants(
+        request.generated_variants_json,
+      );
+      if (generatedVariants.length !== request.variant_count) {
+        throw new Error(
+          "Generated request does not have its exact requested variants",
         );
-        const generatedVariants = mockDr_mapGeneratedVariants(
-          request.generated_variants_json,
-        );
-        if (generatedVariants.length !== request.variant_count) {
-          throw new Error(
-            "Generated request does not have its exact requested variants",
-          );
-        }
-        const linkedScope = mockDr_validateLinkedDraftSaveInTransaction({
-          workflowRunId: request.workflow_run_id,
-          workflowStepId: request.workflow_step_id,
-          campaignId: request.campaign_id,
-          candidateId: request.candidate_post_id,
-        });
-        const draftId = mockDr_insertDraftInTransaction({
-          campaignId: request.campaign_id,
-          candidateId: request.candidate_post_id,
-          angle: request.angle,
-          notes: `Generated by ${request.provider_key}/${request.model_name || "default"} from request #${request.id}.`,
-          contentIntent: request.content_intent,
-          variants: generatedVariants.map((variant) => ({
-            hook: variant.hook,
-            body: variant.body,
-            cta: variant.cta,
-            hashtags: mockDr_generatedHashtagsToDraftString(variant.hashtags),
-          })),
-        });
-        const savedResult = mockSqlExecute(
-          `UPDATE draft_generation_requests
+      }
+      const linkedScope = mockDr_validateLinkedDraftSaveInTransaction({
+        workflowRunId: request.workflow_run_id,
+        workflowStepId: request.workflow_step_id,
+        campaignId: request.campaign_id,
+        candidateId: request.candidate_post_id,
+      });
+      const draftId = mockDr_insertDraftInTransaction({
+        campaignId: request.campaign_id,
+        candidateId: request.candidate_post_id,
+        angle: request.angle,
+        notes: `Generated by ${request.provider_key}/${request.model_name || "default"} from request #${request.id}.`,
+        contentIntent: request.content_intent,
+        variants: generatedVariants.map((variant) => ({
+          hook: variant.hook,
+          body: variant.body,
+          cta: variant.cta,
+          hashtags: mockDr_generatedHashtagsToDraftString(variant.hashtags),
+        })),
+      });
+      const savedResult = mockSqlExecute(
+        `UPDATE draft_generation_requests
       SET status = 'saved', created_draft_id = $1, updated_at = datetime('now')
       WHERE id = $2 AND status = 'generated'`,
-          [draftId, request.id],
-        );
-        if (savedResult.rowsAffected !== 1) {
-          throw new Error("Draft generation request is no longer saveable");
-        }
-        if (linkedScope !== null) {
-          mockDr_completeLinkedDraftSaveInTransaction({
-            ...linkedScope,
-            draftId,
-            contentIntent: request.content_intent,
-          });
-        }
-        return draftId;
-      } catch (error) {
-        throw error;
+        [draftId, request.id],
+      );
+      if (savedResult.rowsAffected !== 1) {
+        throw new Error("Draft generation request is no longer saveable");
       }
+      if (linkedScope !== null) {
+        mockDr_completeLinkedDraftSaveInTransaction({
+          ...linkedScope,
+          draftId,
+          contentIntent: request.content_intent,
+        });
+      }
+      return draftId;
     }
 
     function mockDr_dismissDraftGenerationRequest(id: number): void {
       const parsed = { id };
-      try {
-        const request = mockDr_loadDraftGenerationRequestRow(parsed.id);
-        const interruptedReason =
-          request.status === "pending"
-            ? `Draft generation request #${request.id} was dismissed after an interrupted provider call. Generate variants again to retry.`
-            : "Draft generation dismissed by operator";
+      const request = mockDr_loadDraftGenerationRequestRow(parsed.id);
+      const interruptedReason =
+        request.status === "pending"
+          ? `Draft generation request #${request.id} was dismissed after an interrupted provider call. Generate variants again to retry.`
+          : "Draft generation dismissed by operator";
 
-        if (request.status === "pending" && request.agent_run_id !== null) {
-          const cancelledRun = mockSqlExecute(
-            `UPDATE agent_runs
+      if (request.status === "pending" && request.agent_run_id !== null) {
+        const cancelledRun = mockSqlExecute(
+          `UPDATE agent_runs
         SET status = 'cancelled',
           error_message = $1,
           completed_at = COALESCE(completed_at, datetime('now')),
           updated_at = datetime('now')
         WHERE id = $2 AND status IN ('queued', 'running')`,
-            [interruptedReason, request.agent_run_id],
-          );
-          if (cancelledRun.rowsAffected === 1) {
-            mockSqlExecute(
-              `DELETE FROM agent_run_approval_checkpoints
+          [interruptedReason, request.agent_run_id],
+        );
+        if (cancelledRun.rowsAffected === 1) {
+          mockSqlExecute(
+            `DELETE FROM agent_run_approval_checkpoints
           WHERE agent_run_id = $1`,
-              [request.agent_run_id],
-            );
-            mockSqlExecute(
-              `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+            [request.agent_run_id],
+          );
+          mockSqlExecute(
+            `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
           VALUES ($1, $2, $3)`,
-              [request.agent_run_id, "run_cancelled", interruptedReason],
-            );
-          }
+            [request.agent_run_id, "run_cancelled", interruptedReason],
+          );
         }
+      }
 
-        const dismissedResult = mockSqlExecute(
-          `UPDATE draft_generation_requests
+      const dismissedResult = mockSqlExecute(
+        `UPDATE draft_generation_requests
       SET status = 'dismissed',
         error_message = CASE WHEN status = 'pending' THEN $1 ELSE error_message END,
         updated_at = datetime('now')
       WHERE id = $2 AND status IN ('generated', 'failed', 'pending')`,
-          [interruptedReason, parsed.id],
-        );
-        if (dismissedResult.rowsAffected === 1 && request.status !== "failed") {
-          mockDr_blockLinkedDraftGenerationInTransaction({
-            workflowRunId: request.workflow_run_id,
-            workflowStepId: request.workflow_step_id,
-            campaignId: request.campaign_id,
-            candidateId: request.candidate_post_id,
-            reason: interruptedReason,
-          });
-        }
-      } catch (error) {
-        throw error;
+        [interruptedReason, parsed.id],
+      );
+      if (dismissedResult.rowsAffected === 1 && request.status !== "failed") {
+        mockDr_blockLinkedDraftGenerationInTransaction({
+          workflowRunId: request.workflow_run_id,
+          workflowStepId: request.workflow_step_id,
+          campaignId: request.campaign_id,
+          candidateId: request.candidate_post_id,
+          reason: interruptedReason,
+        });
       }
     }
 
@@ -17782,7 +18359,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
       const requestId = requestResult.lastInsertId;
       const context = mockDr_buildDraftGenerationContext(
-        input as never,
+        input,
         candidate,
         requestId,
       );
@@ -18000,7 +18577,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       errorMessage: string;
       agentRunId?: number | null;
     };
-    type DraftAiAuditRunProjection = DraftAiAuditRunRow;
     const DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES = 5;
     const DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES = 30;
     interface DraftAiAuditSnapshot {
@@ -18043,13 +18619,6 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     interface StaleDraftAuditAgentRow {
       id: number;
-    }
-
-    function mockAu_boundDraftAiAuditError(caught: unknown): string {
-      const detail =
-        caught instanceof Error ? caught.message : "Draft AI audit failed";
-      if (detail.length <= 1000) return detail || "Draft AI audit failed";
-      return `${detail.slice(0, 999)}…`;
     }
 
     function mockAu_loadDraftAiAuditSnapshot(
@@ -18163,29 +18732,23 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       contentRevision: number;
       agentRunId: number;
     }): void {
-      try {
-        const result = mockSqlExecute(
-          `UPDATE draft_ai_audit_runs
+      const result = mockSqlExecute(
+        `UPDATE draft_ai_audit_runs
       SET agent_run_id = $1, updated_at = datetime('now')
       WHERE id = $2
         AND draft_variant_id = $3
         AND content_revision = $4
         AND agent_run_id IS NULL
         AND status IN ('pending', 'running')`,
-          [
-            input.agentRunId,
-            input.auditRunId,
-            input.draftVariantId,
-            input.contentRevision,
-          ],
-        );
-        if (result.rowsAffected !== 1) {
-          throw new Error(
-            "Draft AI audit could not be linked to its agent run",
-          );
-        }
-      } catch (error) {
-        throw error;
+        [
+          input.agentRunId,
+          input.auditRunId,
+          input.draftVariantId,
+          input.contentRevision,
+        ],
+      );
+      if (result.rowsAffected !== 1) {
+        throw new Error("Draft AI audit could not be linked to its agent run");
       }
     }
 
@@ -18196,11 +18759,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       agentRunId: number | null;
       errorMessage: string;
     }): void {
-      try {
-        const run = mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
-        mockAu_assertAuditRunIdentity(run, input);
-        const failedAudit = mockSqlExecute(
-          `UPDATE draft_ai_audit_runs
+      const run = mockAu_getDraftAiAuditRunInTransaction(input.auditRunId);
+      mockAu_assertAuditRunIdentity(run, input);
+      const failedAudit = mockSqlExecute(
+        `UPDATE draft_ai_audit_runs
       SET status = 'failed',
         error_message = $1,
         completed_at = datetime('now'),
@@ -18209,43 +18771,40 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         AND draft_variant_id = $3
         AND content_revision = $4
         AND status IN ('pending', 'running')`,
-          [
-            input.errorMessage,
-            input.auditRunId,
-            input.draftVariantId,
-            input.contentRevision,
-          ],
-        );
-        if (failedAudit.rowsAffected !== 1) {
-          throw new Error("Draft AI audit run is not active");
-        }
+        [
+          input.errorMessage,
+          input.auditRunId,
+          input.draftVariantId,
+          input.contentRevision,
+        ],
+      );
+      if (failedAudit.rowsAffected !== 1) {
+        throw new Error("Draft AI audit run is not active");
+      }
 
-        const agentRunId = run.agent_run_id ?? input.agentRunId;
-        if (agentRunId !== null) {
-          const failedAgent = mockSqlExecute(
-            `UPDATE agent_runs
+      const agentRunId = run.agent_run_id ?? input.agentRunId;
+      if (agentRunId !== null) {
+        const failedAgent = mockSqlExecute(
+          `UPDATE agent_runs
         SET status = 'failed',
           error_message = $1,
           completed_at = datetime('now'),
           updated_at = datetime('now')
         WHERE id = $2
           AND status IN ('queued', 'running', 'waiting_approval')`,
-            [input.errorMessage, agentRunId],
+          [input.errorMessage, agentRunId],
+        );
+        if (failedAgent.rowsAffected === 1) {
+          mockSqlExecute(
+            "DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1",
+            [agentRunId],
           );
-          if (failedAgent.rowsAffected === 1) {
-            mockSqlExecute(
-              "DELETE FROM agent_run_approval_checkpoints WHERE agent_run_id = $1",
-              [agentRunId],
-            );
-            mockSqlExecute(
-              `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
+          mockSqlExecute(
+            `INSERT INTO agent_run_events (agent_run_id, event_type, summary)
           VALUES ($1, $2, $3)`,
-              [agentRunId, "run_failed", input.errorMessage],
-            );
-          }
+            [agentRunId, "run_failed", input.errorMessage],
+          );
         }
-      } catch (error) {
-        throw error;
       }
     }
 
@@ -18282,7 +18841,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function mockAu_assertDraftRevisionCurrentInTransaction(
       draftVariantId: number,
-      contentRevision: number,
+      contentRevision: number | undefined,
       message: string,
     ): void {
       const rows = mockSqlSelect<
@@ -18308,7 +18867,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     function mockAu_mapDraftAiAuditRun(
       row: DraftAiAuditRunRow,
     ): DraftAiAuditRun {
-      return row as DraftAiAuditRunRow;
+      return row;
     }
 
     function mockAu_startDraftAiAuditRun(
@@ -18379,50 +18938,49 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     ): void {
       const parsed = input;
 
-      try {
-        const run = mockAu_getDraftAiAuditRunInTransaction(parsed.auditRunId);
-        mockAu_assertAuditRunIdentity(run, parsed);
-        mockAu_assertDraftRevisionCurrentInTransaction(
-          parsed.draftVariantId,
-          parsed.contentRevision,
-          "Draft content changed before the AI audit completed",
-        );
+      const run = mockAu_getDraftAiAuditRunInTransaction(parsed.auditRunId);
+      mockAu_assertAuditRunIdentity(run, parsed);
+      mockAu_assertDraftRevisionCurrentInTransaction(
+        parsed.draftVariantId,
+        parsed.contentRevision,
+        "Draft content changed before the AI audit completed",
+      );
 
-        // Refresh deterministic evidence in the same revision-checked transaction.
-        // This also gives historical drafts and native rewrites a verifiable audit.
-        const variants = mockSqlSelect<DraftVariantRow>(
-          `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
-          [parsed.draftVariantId],
-        );
-        const variant = variants[0];
-        if (!variant) throw new Error("Draft variant was not found");
-        mockSqlExecute(`DELETE FROM draft_audits WHERE draft_variant_id = $1`, [
-          parsed.draftVariantId,
-        ]);
-        mockDr_insertAuditFindings(
-          parsed.draftVariantId,
-          mockDr_auditDraftVariant(variant),
-        );
+      // Refresh deterministic evidence in the same revision-checked transaction.
+      // This also gives historical drafts and native rewrites a verifiable audit.
+      const variants = mockSqlSelect<DraftVariantRow>(
+        `SELECT * FROM draft_variants WHERE id = $1 LIMIT 1`,
+        [parsed.draftVariantId],
+      );
+      const variant = variants[0];
+      if (!variant) throw new Error("Draft variant was not found");
+      mockSqlExecute(`DELETE FROM draft_audits WHERE draft_variant_id = $1`, [
+        parsed.draftVariantId,
+      ]);
+      mockDr_insertAuditFindings(
+        parsed.draftVariantId,
+        mockDr_auditDraftVariant(variant),
+      );
 
-        for (const finding of parsed.findings) {
-          mockSqlExecute(
-            `INSERT INTO draft_ai_audit_findings (
+      for (const finding of parsed.findings) {
+        mockSqlExecute(
+          `INSERT INTO draft_ai_audit_findings (
           audit_run_id,
           rule_key,
           severity,
           message
         ) VALUES ($1, $2, $3, $4)`,
-            [
-              parsed.auditRunId,
-              finding.ruleKey,
-              finding.severity,
-              finding.message,
-            ],
-          );
-        }
+          [
+            parsed.auditRunId,
+            finding.ruleKey,
+            finding.severity,
+            finding.message,
+          ],
+        );
+      }
 
-        const update = mockSqlExecute(
-          `UPDATE draft_ai_audit_runs
+      const update = mockSqlExecute(
+        `UPDATE draft_ai_audit_runs
       SET status = 'completed',
           summary = $1,
           error_message = '',
@@ -18432,29 +18990,25 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         AND draft_variant_id = $3
         AND content_revision = $4
         AND status IN ('pending', 'running')`,
-          [
-            parsed.summary,
-            parsed.auditRunId,
-            parsed.draftVariantId,
-            parsed.contentRevision,
-          ],
-        );
-        if (update.rowsAffected !== 1) {
-          throw new Error("Draft AI audit run is not active");
-        }
-      } catch (error) {
-        throw error;
+        [
+          parsed.summary,
+          parsed.auditRunId,
+          parsed.draftVariantId,
+          parsed.contentRevision,
+        ],
+      );
+      if (update.rowsAffected !== 1) {
+        throw new Error("Draft AI audit run is not active");
       }
     }
 
     function mockAu_failDraftAiAuditRun(input: FailDraftAiAuditRunInput): void {
       const parsed = input;
 
-      try {
-        const run = mockAu_getDraftAiAuditRunInTransaction(parsed.auditRunId);
-        mockAu_assertAuditRunIdentity(run, parsed);
-        const update = mockSqlExecute(
-          `UPDATE draft_ai_audit_runs
+      const run = mockAu_getDraftAiAuditRunInTransaction(parsed.auditRunId);
+      mockAu_assertAuditRunIdentity(run, parsed);
+      const update = mockSqlExecute(
+        `UPDATE draft_ai_audit_runs
       SET status = 'failed',
           error_message = $1,
           completed_at = datetime('now'),
@@ -18463,18 +19017,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         AND draft_variant_id = $3
         AND content_revision = $4
         AND status IN ('pending', 'running')`,
-          [
-            parsed.errorMessage,
-            parsed.auditRunId,
-            parsed.draftVariantId,
-            parsed.contentRevision,
-          ],
-        );
-        if (update.rowsAffected !== 1) {
-          throw new Error("Draft AI audit run is not active");
-        }
-      } catch (error) {
-        throw error;
+        [
+          parsed.errorMessage,
+          parsed.auditRunId,
+          parsed.draftVariantId,
+          parsed.contentRevision,
+        ],
+      );
+      if (update.rowsAffected !== 1) {
+        throw new Error("Draft AI audit run is not active");
       }
     }
 
@@ -18527,9 +19078,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       let clearedApprovalCheckpointCount = 0;
       const reservationCutoff = `-${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes`;
       const executionCutoff = `-${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes`;
-      try {
-        const staleAudits = mockSqlSelect<StaleDraftAiAuditRow>(
-          `SELECT
+      const staleAudits = mockSqlSelect<StaleDraftAiAuditRow>(
+        `SELECT
         dar.id,
         dar.draft_variant_id,
         dar.content_revision,
@@ -18557,16 +19107,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         )
       ORDER BY datetime(dar.updated_at) ASC, dar.id ASC
       LIMIT $3`,
-          [reservationCutoff, executionCutoff, parsed.maxAuditRuns],
-        );
+        [reservationCutoff, executionCutoff, parsed.maxAuditRuns],
+      );
 
-        for (const audit of staleAudits) {
-          const errorMessage =
-            audit.agent_run_id === null
-              ? `Draft AI audit was interrupted before agent linking and remained reserved for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`
-              : `Draft AI audit did not reach terminal settlement within ${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes of its last lifecycle activity.`;
-          const failedAudit = mockSqlExecute(
-            `UPDATE draft_ai_audit_runs
+      for (const audit of staleAudits) {
+        const errorMessage =
+          audit.agent_run_id === null
+            ? `Draft AI audit was interrupted before agent linking and remained reserved for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`
+            : `Draft AI audit did not reach terminal settlement within ${DRAFT_AI_AUDIT_EXECUTION_STALE_MINUTES} minutes of its last lifecycle activity.`;
+        const failedAudit = mockSqlExecute(
+          `UPDATE draft_ai_audit_runs
         SET status = 'failed',
           error_message = $1,
           completed_at = datetime('now'),
@@ -18575,29 +19125,29 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           AND draft_variant_id = $3
           AND content_revision = $4
           AND status IN ('pending', 'running')`,
-            [
-              errorMessage,
-              audit.id,
-              audit.draft_variant_id,
-              audit.content_revision,
-            ],
+          [
+            errorMessage,
+            audit.id,
+            audit.draft_variant_id,
+            audit.content_revision,
+          ],
+        );
+        if (failedAudit.rowsAffected !== 1) continue;
+        failedAuditRunIds.push(audit.id);
+
+        if (audit.agent_run_id !== null) {
+          const agentResult = mockAu_failStaleDraftAuditAgent(
+            audit.agent_run_id,
+            errorMessage,
           );
-          if (failedAudit.rowsAffected !== 1) continue;
-          failedAuditRunIds.push(audit.id);
-
-          if (audit.agent_run_id !== null) {
-            const agentResult = mockAu_failStaleDraftAuditAgent(
-              audit.agent_run_id,
-              errorMessage,
-            );
-            if (agentResult.failed) failedAgentRunIds.push(audit.agent_run_id);
-            clearedApprovalCheckpointCount +=
-              agentResult.clearedApprovalCheckpoints;
-          }
+          if (agentResult.failed) failedAgentRunIds.push(audit.agent_run_id);
+          clearedApprovalCheckpointCount +=
+            agentResult.clearedApprovalCheckpoints;
         }
+      }
 
-        const orphanedAgents = mockSqlSelect<StaleDraftAuditAgentRow>(
-          `SELECT ar.id
+      const orphanedAgents = mockSqlSelect<StaleDraftAuditAgentRow>(
+        `SELECT ar.id
       FROM agent_runs ar
       WHERE ar.agent_role = 'auditor'
         AND ar.workflow_run_id IS NULL
@@ -18616,21 +19166,18 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         )
       ORDER BY datetime(ar.updated_at) ASC, ar.id ASC
       LIMIT $2`,
-          [reservationCutoff, parsed.maxOrphanAgentRuns],
-        );
+        [reservationCutoff, parsed.maxOrphanAgentRuns],
+      );
 
-        for (const agent of orphanedAgents) {
-          const errorMessage = `Draft AI audit agent was interrupted before linking and remained orphaned for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`;
-          const agentResult = mockAu_failStaleDraftAuditAgent(
-            agent.id,
-            errorMessage,
-          );
-          if (agentResult.failed) failedAgentRunIds.push(agent.id);
-          clearedApprovalCheckpointCount +=
-            agentResult.clearedApprovalCheckpoints;
-        }
-      } catch (error) {
-        throw error;
+      for (const agent of orphanedAgents) {
+        const errorMessage = `Draft AI audit agent was interrupted before linking and remained orphaned for more than ${DRAFT_AI_AUDIT_RESERVATION_STALE_MINUTES} minutes.`;
+        const agentResult = mockAu_failStaleDraftAuditAgent(
+          agent.id,
+          errorMessage,
+        );
+        if (agentResult.failed) failedAgentRunIds.push(agent.id);
+        clearedApprovalCheckpointCount +=
+          agentResult.clearedApprovalCheckpoints;
       }
 
       return {
@@ -18813,7 +19360,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         completed_at: now,
         created_at: now,
         updated_at: now,
-      } as AgentRun);
+      });
       agentToolCalls.push({
         id: nextAgentToolCallId,
         agent_run_id: agentRunId,
@@ -18830,7 +19377,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         started_at: now,
         completed_at: now,
         created_at: now,
-      } as AgentToolCall);
+      });
       nextAgentToolCallId += 1;
       // Linking requires the reserved revision; a stale run is left unlinked so
       // completion reports the stale revision, as native does.
@@ -19623,10 +20170,13 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             voice: string;
             tone: string;
             autoPilot: boolean;
-            dailyPostLimit: number;
-            dailyCommentLimit: number;
+            // Native fills omitted caps with the conservative defaults.
+            dailyPostLimit?: number;
+            dailyCommentLimit?: number;
             keywords: string[];
           }>(args);
+          // Native validation runs before the duplicate-name lookup.
+          assertDailyCaps(input);
           const name = input.name.trim();
           if (campaigns.some((row) => row.name === name))
             throw new Error("A campaign with this name already exists");
@@ -19640,8 +20190,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             tone: input.tone.trim(),
             auto_pilot: input.autoPilot ? 1 : 0,
             status: "draft",
-            daily_post_limit: input.dailyPostLimit,
-            daily_comment_limit: input.dailyCommentLimit,
+            daily_post_limit:
+              input.dailyPostLimit ??
+              campaignLimitsContract.dailyPostLimit.default,
+            daily_comment_limit:
+              input.dailyCommentLimit ??
+              campaignLimitsContract.dailyCommentLimit.default,
             created_at: now,
             updated_at: now,
           };
@@ -19668,6 +20222,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               keywords: string[];
             }> & { id: number }
           >(args);
+          assertDailyCaps(input);
           const campaign = campaigns.find((row) => row.id === input.id);
           if (!campaign) return null;
           if (input.name !== undefined) {
@@ -19901,9 +20456,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           const input = nativeInput<{ campaignId?: number }>(args);
           const values =
             input.campaignId === undefined ? [] : [input.campaignId];
-          return Promise.resolve(
-            (selectSql({ query, values }) as unknown[]).slice(0, limit),
-          );
+          return Promise.resolve(selectSql({ query, values }).slice(0, limit));
         };
         // Mirrors `drafts_reads.rs`, reusing the SQL-mock row builders.
         if (cmd === "linkgo_draft_list") {
@@ -20061,12 +20614,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           const input = nativeInput<{ campaignId: number }>(args);
           return withCampaignGate(
             input.campaignId,
-            (
-              selectSql({
-                query: "cp.id AS candidate_id FROM workflow_runs wr NOT EXISTS",
-                values: [input.campaignId],
-              }) as unknown[]
-            ).slice(0, 200),
+            selectSql({
+              query: "cp.id AS candidate_id FROM workflow_runs wr NOT EXISTS",
+              values: [input.campaignId],
+            }).slice(0, 200),
           );
         }
         if (cmd === "linkgo_draft_update") {
@@ -20245,10 +20796,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                     "campaign_status",
                   ]),
                 )
-                .map((row) => ({
-                  ...row,
-                  quality_start_blocked: qualityStartBlocked(Number(row.id)),
-                }));
+                .map(
+                  (row): Record<string, unknown> => ({
+                    ...row,
+                    quality_start_blocked: qualityStartBlocked(Number(row.id)),
+                  }),
+                );
               const runIds = runs.map((run) => Number(run.id));
               const eventCounts = new Map<number, number>();
               return withCampaignGate(input.campaignId, {
@@ -20288,12 +20841,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               }) as Array<{ campaign_id: number }>;
               return Promise.resolve({
                 header: header ?? null,
-                artifacts: (
-                  selectSql({
-                    query: "wa.id AS artifact_order tp.content",
-                    values: [id],
-                  }) as unknown[]
-                ).slice(0, 500),
+                artifacts: selectSql({
+                  query: "wa.id AS artifact_order tp.content",
+                  values: [id],
+                }).slice(0, 500),
                 keywords:
                   header === undefined
                     ? []
@@ -20310,13 +20861,11 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           if (cmd === "linkgo_workflow_planner_draft_audit_scope") {
             try {
               return Promise.resolve(
-                (
-                  selectSql({
-                    query:
-                      "FROM workflow_runs wr dgr.created_draft_id artifact_type = 'draft'",
-                    values: [nativeInput<{ id: number }>(args).id],
-                  }) as unknown[]
-                ).slice(0, 2),
+                selectSql({
+                  query:
+                    "FROM workflow_runs wr dgr.created_draft_id artifact_type = 'draft'",
+                  values: [nativeInput<{ id: number }>(args).id],
+                }).slice(0, 2),
               );
             } catch (error) {
               return failWith(error);
@@ -20524,12 +21073,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           }) as Array<Record<string, number>>;
           return Promise.resolve({
             settings: { ...metricRefreshSettings },
-            jobs: (
-              selectSql({
-                query: "FROM metric_refresh_jobs mrj",
-                values,
-              }) as unknown[]
-            ).slice(0, 500),
+            jobs: selectSql({
+              query: "FROM metric_refresh_jobs mrj",
+              values,
+            }).slice(0, 500),
             events: selectSql({
               query: "FROM metric_refresh_events mre",
               values,
@@ -21116,7 +21663,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         const testApi = (
           w as unknown as {
             __LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__?: {
-              execute: (args: unknown) => Promise<unknown> | unknown;
+              execute: (args: unknown) => unknown;
             };
           }
         ).__LINKGO_AGENT_PROVIDER_COMMAND_TEST_API__;
@@ -21265,6 +21812,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
               | {
                   input?: {
                     commentThreadId?: number;
+                    commentary?: string;
                     targetUrn?: string;
                     idempotencyKey?: string;
                   };
@@ -21280,6 +21828,16 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           return Promise.resolve({
             status: "blocked",
             message: OPEN_EXECUTION_MESSAGE,
+          });
+        }
+        const commentRefusal = mockCommentPublishPreflight({
+          ...input,
+          commentThreadId,
+        });
+        if (commentRefusal !== null) {
+          return Promise.resolve({
+            status: "blocked",
+            message: commentRefusal,
           });
         }
         const executionId = nextPublishExecutionId;
@@ -21337,6 +21895,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
                   input?: {
                     approvalId?: number;
                     scheduleJobId?: number;
+                    commentary?: string;
+                    idempotencyKey?: string;
                   };
                 }
               | undefined
@@ -21347,6 +21907,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             status: "blocked",
             message: OPEN_EXECUTION_MESSAGE,
           });
+        }
+        const postRefusal = mockPostPublishPreflight({ ...input, approvalId });
+        if (postRefusal !== null) {
+          return Promise.resolve({ status: "blocked", message: postRefusal });
         }
         const executionId = nextPublishExecutionId;
         nextPublishExecutionId += 1;
@@ -21447,8 +22011,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             | undefined) ?? []),
           input,
         ];
-        if (input.confirmation !== "RECONCILE") {
-          throw new Error("Type RECONCILE to confirm");
+        if (input.confirmation !== publishingContract.reconcileConfirmation) {
+          throw new Error(
+            `Type ${publishingContract.reconcileConfirmation} to confirm`,
+          );
         }
         const index = publishExecutionStore().findIndex(
           (row) => row.id === input.executionId,
@@ -21457,7 +22023,12 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         if (row === undefined) {
           throw new Error("Publishing execution was not found");
         }
-        if (row.status !== "outcome_unknown" || row.fence !== input.fence) {
+        if (
+          !publishingContract.reconcilableExecutionStatuses.includes(
+            row.status,
+          ) ||
+          row.fence !== input.fence
+        ) {
           throw new Error(
             "This execution changed since it was loaded; refresh and try again",
           );
@@ -21485,9 +22056,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         return Promise.resolve({
           executionId: row.id,
           status:
-            input.resolution === "posted"
-              ? "reconciled_posted"
-              : "reconciled_not_posted",
+            publishingContract.reconciledStatusByResolution[
+              input.resolution ?? ""
+            ] ?? "reconciled_not_posted",
         });
       }
       return Promise.resolve(null);
@@ -21561,8 +22132,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       args: unknown,
     ): Promise<unknown> => {
       brightData.calls.push(cmd);
-      const input = ((args as { input?: Record<string, unknown> } | undefined)
-        ?.input ?? {}) as Record<string, unknown>;
+      const input =
+        (args as { input?: Record<string, unknown> } | undefined)?.input ?? {};
       const campaignId = Number(input.campaignId);
       const runsFor = (id: number): BrightDataMockRun[] =>
         brightData.runs
@@ -21794,5 +22365,39 @@ export async function setupTauriMocks(page: Page): Promise<void> {
     Object.defineProperty(window, "__TAURI_MOCK_WINDOW__", {
       value: mockWindow,
     });
-  }, MAX_SOURCE_IMPORT_INPUT_JSON_LENGTH);
+    Object.defineProperty(window, "__LINKGO_APPROVAL_CONTRACT__", {
+      value: { evaluateApprovalCreate },
+    });
+    // The fake's pure gates, for tests/*-contract.spec.ts to check against
+    // the same fixtures the Rust tests use.
+    Object.defineProperty(window, "__LINKGO_CONTRACT_GATES__", {
+      value: {
+        evaluatePostPublish,
+        evaluateCommentPublish,
+        evaluateScheduleEligibility,
+        evaluateScheduleLimit,
+        evaluateThreadStatus,
+        evaluateVariantStatus,
+        evaluateCommentAssert,
+        commentLimitSummary,
+        validateDailyCap,
+        sqliteWindowKey,
+        isOpenExecutionBlocking: (
+          open: { kind: string; subject: number; status: string },
+          attempt: { kind: string; subject: number },
+        ): boolean =>
+          blocksPublish(
+            { kind: open.kind, subjectId: open.subject, status: open.status },
+            attempt.kind,
+            attempt.subject,
+          ),
+        countsTowardCommentCap: (executionStatus: string): boolean =>
+          isOpenPublishExecution({ status: executionStatus }),
+        isCountedJobStatus: (status: string): boolean =>
+          schedulingContract.countedJobStatuses.includes(status),
+        isTerminalCommentStatus: (status: string): boolean =>
+          MOCK_TERMINAL_COMMENT_STATUSES.includes(status),
+      },
+    });
+  }, mockArgs);
 }

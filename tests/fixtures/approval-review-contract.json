@@ -1,0 +1,68 @@
+{
+  "description": "Approval review rules shared by src-tauri/src/approval_review.rs (checked in approval_review_tests.rs) and the browser fake in tests/helpers/tauri-mocks.ts (which reads its rules from here and is checked in tests/approval-review-contract.spec.ts). Change both sides together.",
+  "transitions": {
+    "needs_review": ["approved", "changes_requested", "rejected", "cancelled"],
+    "changes_requested": ["needs_review", "approved", "rejected", "cancelled"],
+    "approved": ["needs_review", "changes_requested", "cancelled"],
+    "rejected": [],
+    "scheduled": [],
+    "published": [],
+    "cancelled": ["needs_review"]
+  },
+  "readinessGates": {
+    "approved": "requested_revision",
+    "needs_review": "reviewed_revision"
+  },
+  "createBase": {
+    "campaignStatus": "active",
+    "draftStatus": "ready_for_review",
+    "selectedVariantIds": [7],
+    "currentRevisionReady": true,
+    "blockAuditCount": 0,
+    "existingApprovalCount": 0
+  },
+  "createCases": [
+    { "name": "ready", "facts": {}, "expected": { "ok": 7 } },
+    {
+      "name": "archived campaign wins over every other failure",
+      "facts": {
+        "campaignStatus": "archived",
+        "draftStatus": "drafting",
+        "selectedVariantIds": []
+      },
+      "expected": { "error": "Campaign is archived" }
+    },
+    {
+      "name": "draft not ready",
+      "facts": { "draftStatus": "drafting" },
+      "expected": { "error": "Draft is not ready for review" }
+    },
+    {
+      "name": "no selected variant",
+      "facts": { "selectedVariantIds": [] },
+      "expected": { "error": "Select a draft variant before review" }
+    },
+    {
+      "name": "two selected variants",
+      "facts": { "selectedVariantIds": [7, 8] },
+      "expected": { "error": "Select a draft variant before review" }
+    },
+    {
+      "name": "missing current-revision AI audit or quality",
+      "facts": { "currentRevisionReady": false, "blockAuditCount": 1 },
+      "expected": {
+        "error": "Selected variant requires both a completed current-revision AI audit with six canonical non-blocking findings and a passed quality score of at least 70"
+      }
+    },
+    {
+      "name": "block finding from any revision",
+      "facts": { "blockAuditCount": 1, "existingApprovalCount": 1 },
+      "expected": { "error": "Blocked variants cannot be sent for approval" }
+    },
+    {
+      "name": "duplicate approval",
+      "facts": { "existingApprovalCount": 1 },
+      "expected": { "error": "Draft already has an approval record" }
+    }
+  ]
+}

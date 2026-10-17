@@ -28,7 +28,31 @@ use crate::db_transaction::{settle as settle_transaction, Settlement};
 pub(crate) const STORAGE_ERROR: &str = "Could not record publishing execution";
 pub(crate) const OPEN_EXECUTION_ERROR: &str =
     "Another publish for this item is in progress or awaiting reconciliation";
+/// Statuses that keep a subject locked: a new execution for the same kind
+/// and subject is refused while one of these exists, whoever the caller is.
+#[cfg(test)]
+pub(crate) const OPEN_EXECUTION_STATUSES: [&str; 3] = ["reserved", "in_flight", "outcome_unknown"];
+/// Statuses the startup/pre-publish sweep may take over.
+#[cfg(test)]
+pub(crate) const RECOVERABLE_EXECUTION_STATUSES: [&str; 2] = ["reserved", "in_flight"];
+/// Statuses an operator may reconcile.
+#[cfg(test)]
+pub(crate) const RECONCILABLE_EXECUTION_STATUSES: [&str; 1] = ["outcome_unknown"];
+// SQL forms of the lists above, used by every query; the publishing contract
+// test keeps them equal to the lists and to tests/fixtures/publishing-contract.json.
 pub(crate) const OPEN_STATUSES_SQL: &str = "('reserved', 'in_flight', 'outcome_unknown')";
+pub(crate) const RECOVERABLE_STATUSES_SQL: &str = "('reserved', 'in_flight')";
+pub(crate) const RECONCILABLE_STATUSES_SQL: &str = "('outcome_unknown')";
+
+/// `('a', 'b')` form of a status list, for checking the SQL constants.
+#[cfg(test)]
+pub(crate) fn sql_status_list(statuses: &[&str]) -> String {
+    let quoted: Vec<String> = statuses
+        .iter()
+        .map(|status| format!("'{status}'"))
+        .collect();
+    format!("({})", quoted.join(", "))
+}
 
 static TOKEN_COUNTER: AtomicU64 = AtomicU64::new(0);
 

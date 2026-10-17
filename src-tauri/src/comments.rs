@@ -59,6 +59,24 @@ pub(crate) enum CommentRecordMode {
     RemoteConfirmed,
 }
 
+/// Daily comment cap decision for `current_count` succeeded attempts today.
+/// Shared with the browser fake through tests/fixtures/comment-review-contract.json.
+pub(crate) fn comment_limit_summary(
+    window_key: &str,
+    current_count: i64,
+    daily_comment_limit: i64,
+) -> (bool, String) {
+    let allowed = current_count < daily_comment_limit;
+    let summary = if allowed {
+        format!("Comment allowed for {window_key}: {current_count}/{daily_comment_limit} used")
+    } else {
+        format!(
+            "Daily comment limit reached for {window_key}: {current_count}/{daily_comment_limit} used"
+        )
+    };
+    (allowed, summary)
+}
+
 pub(crate) async fn comment_limit_decision(
     connection: &mut SqliteConnection,
     thread: &ThreadState,
@@ -79,18 +97,8 @@ pub(crate) async fn comment_limit_decision(
     .fetch_one(&mut *connection)
     .await
     .map_err(comment_storage_error)?;
-    let allowed = current_count < thread.daily_comment_limit;
-    let summary = if allowed {
-        format!(
-            "Comment allowed for {window_key}: {current_count}/{} used",
-            thread.daily_comment_limit
-        )
-    } else {
-        format!(
-            "Daily comment limit reached for {window_key}: {current_count}/{} used",
-            thread.daily_comment_limit
-        )
-    };
+    let (allowed, summary) =
+        comment_limit_summary(&window_key, current_count, thread.daily_comment_limit);
     Ok(LimitDecision {
         window_key,
         current_count,

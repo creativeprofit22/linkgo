@@ -72,6 +72,116 @@ fn preflight() -> CommentPublishPreflightInput {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Shared contract with the browser fake (tests/fixtures/comment-review-contract.json)
+// ---------------------------------------------------------------------------
+
+fn comment_contract() -> serde_json::Value {
+    serde_json::from_str(include_str!(
+        "../../tests/fixtures/comment-review-contract.json"
+    ))
+    .unwrap()
+}
+
+#[test]
+fn terminal_statuses_match_contract() {
+    let contract = comment_contract();
+    let listed: Vec<&str> = contract["terminalStatuses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|status| status.as_str().unwrap())
+        .collect();
+    assert_eq!(listed, TERMINAL);
+}
+
+#[test]
+fn thread_status_gate_matches_contract() {
+    use crate::test_support::{contract_case, contract_expected};
+    let contract = comment_contract();
+    for case in contract["threadStatusCases"].as_array().unwrap() {
+        let facts = contract_case(&contract["threadStatusBase"], &case["facts"]);
+        let actual = evaluate_thread_status(
+            facts["current"].as_str().unwrap(),
+            facts["next"].as_str().unwrap(),
+            facts["selectedCount"].as_u64().unwrap() as usize,
+            facts["selectedBlocked"].as_bool().unwrap(),
+        )
+        .map_err(str::to_string);
+        assert_eq!(actual, contract_expected(case), "{}", case["name"]);
+    }
+}
+
+#[test]
+fn variant_status_gate_matches_contract() {
+    use crate::test_support::contract_expected;
+    let contract = comment_contract();
+    for case in contract["variantStatusCases"].as_array().unwrap() {
+        let actual = evaluate_variant_status(
+            case["threadStatus"].as_str().unwrap(),
+            case["next"].as_str().unwrap(),
+            case["variantBlocked"].as_bool().unwrap(),
+        )
+        .map_err(str::to_string);
+        assert_eq!(actual, contract_expected(case), "{}", case["name"]);
+    }
+}
+
+#[test]
+fn pre_publish_check_matches_contract() {
+    use crate::test_support::contract_case;
+    let contract = comment_contract();
+    for case in contract["assertCases"].as_array().unwrap() {
+        let facts = contract_case(&contract["assertBase"], &case["facts"]);
+        let actual = evaluate_comment_assert(&CommentAssertFacts {
+            thread_status: facts["threadStatus"].as_str().unwrap(),
+            selected_count: facts["selectedCount"].as_u64().unwrap() as usize,
+            selected_blocked: facts["selectedBlocked"].as_bool().unwrap(),
+            commentary_matches: facts["commentaryMatches"].as_bool().unwrap(),
+            target_resolved: facts["targetResolved"].as_bool().unwrap(),
+            target_matches: facts["targetMatches"].as_bool().unwrap(),
+            idempotency_matches: facts["idempotencyMatches"].as_bool().unwrap(),
+            successful_attempt_count: facts["successfulAttemptCount"].as_i64().unwrap(),
+            kill_switch_reason: facts["killSwitchReason"].as_str(),
+            window_key: facts["windowKey"].as_str().unwrap(),
+            daily_count: facts["dailyCount"].as_i64().unwrap(),
+            daily_comment_limit: facts["dailyCommentLimit"].as_i64().unwrap(),
+        });
+        let expected = &case["expected"];
+        let name = &case["name"];
+        match actual {
+            CommentAssertDecision::Allowed => assert_eq!(expected["decision"], "allowed", "{name}"),
+            CommentAssertDecision::Rejected(message) => {
+                assert_eq!(expected["decision"], "rejected", "{name}");
+                assert_eq!(expected["message"], message.as_str(), "{name}");
+            }
+            CommentAssertDecision::KillSwitch { summary, error } => {
+                assert_eq!(expected["decision"], "kill_switch", "{name}");
+                assert_eq!(expected["message"], error.as_str(), "{name}");
+                assert_eq!(expected["summary"], summary.as_str(), "{name}");
+            }
+            CommentAssertDecision::LimitReached { summary } => {
+                assert_eq!(expected["decision"], "limit_reached", "{name}");
+                assert_eq!(expected["message"], summary.as_str(), "{name}");
+            }
+        }
+    }
+}
+
+#[test]
+fn limit_summary_matches_contract() {
+    let contract = comment_contract();
+    for case in contract["limitSummaryCases"].as_array().unwrap() {
+        let (allowed, summary) = comment_limit_summary(
+            case["windowKey"].as_str().unwrap(),
+            case["count"].as_i64().unwrap(),
+            case["limit"].as_i64().unwrap(),
+        );
+        assert_eq!(allowed, case["allowed"].as_bool().unwrap());
+        assert_eq!(summary, case["summary"].as_str().unwrap());
+    }
+}
+
 #[test]
 fn inputs_reject_unknown_fields() {
     assert!(serde_json::from_value::<SetCommentThreadStatusInput>(

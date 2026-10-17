@@ -85,6 +85,25 @@ pub(crate) fn assert_transition(
     }
 }
 
+/// Which content revision a review move must still be ready at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReadinessGate {
+    /// The revision the reviewer is approving (from the request).
+    RequestedRevision,
+    /// The revision stored when the approval was last reviewed.
+    ReviewedRevision,
+}
+
+/// Statuses the database only accepts for ready content; `None` means the
+/// move needs no readiness check.
+pub(crate) fn readiness_gate(next: ApprovalStatus) -> Option<ReadinessGate> {
+    match next {
+        ApprovalStatus::Approved => Some(ReadinessGate::RequestedRevision),
+        ApprovalStatus::NeedsReview => Some(ReadinessGate::ReviewedRevision),
+        _ => None,
+    }
+}
+
 /// Facts loaded for a draft before creating its approval.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CreateFacts {
@@ -480,11 +499,10 @@ async fn execute_set_status(
 
     // Statuses the database only accepts for ready content are checked here
     // first so the operator sees a domain error instead of a storage failure.
-    let readiness_revision = match input.status {
-        ApprovalStatus::Approved => Some(input.content_revision),
-        ApprovalStatus::NeedsReview => Some(approval.reviewed_content_revision),
-        _ => None,
-    };
+    let readiness_revision = readiness_gate(input.status).map(|gate| match gate {
+        ReadinessGate::RequestedRevision => input.content_revision,
+        ReadinessGate::ReviewedRevision => approval.reviewed_content_revision,
+    });
     if let Some(revision) = readiness_revision {
         if !is_ready_at_revision(connection, approval.id, revision, STORAGE_ERROR).await? {
             return Ok(Settlement::Rejected(STALE_APPROVAL_ERROR.to_string()));

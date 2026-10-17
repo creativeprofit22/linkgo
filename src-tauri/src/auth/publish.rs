@@ -7,6 +7,7 @@ use super::{
     linkedin_api::{get_linkedin_userinfo, linked_in_account_label, resolve_linkedin_target_urn},
     OAuthCredentials, StoredCredential,
 };
+use crate::publishing::store::OPEN_STATUSES_SQL;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -219,24 +220,26 @@ pub(crate) async fn check_post_preflight(
         .try_get("successful_publish_attempt_count")
         .unwrap_or(0);
 
-    if campaign_status == "archived" {
-        return Err("Campaign is archived".to_string());
-    }
-    if !matches!(approval_status.as_str(), "approved" | "scheduled") {
-        return Err("Only approved or scheduled approvals can publish via LinkedIn".to_string());
-    }
-    if successful_publish_attempt_count > 0 {
-        return Err("Approval already has a successful publish attempt".to_string());
-    }
+    // Cheap state gates first, before the readiness and schedule reads.
+    evaluate_post_state(
+        &campaign_status,
+        &approval_status,
+        successful_publish_attempt_count,
+    )?;
 
     // The variant must still be ready at the revision the reviewer approved;
     // an edit after approval bumps content_revision and fails here.
-    crate::approval_review::assert_publish_ready(
+    let ready_at_reviewed_revision = match crate::approval_review::assert_publish_ready(
         transaction,
         input.approval_id,
         "Could not read approval",
     )
-    .await?;
+    .await
+    {
+        Ok(()) => true,
+        Err(error) if error == crate::approval_review::STALE_APPROVAL_ERROR => false,
+        Err(error) => return Err(error),
+    };
 
     // Same rule as `linkgo_approval_publish_preflight`: a requested schedule
     // job must be the approval's latest job and still `scheduled`.
@@ -255,10 +258,89 @@ pub(crate) async fn check_post_preflight(
             .flatten()
     });
 
+    let expected_idempotency_key = format!(
+        "approval:{}:linkedin:{}",
+        input.approval_id,
+        input
+            .schedule_job_id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "manual".to_string())
+    );
+    let raw_commentary = compose_linkedin_commentary(
+        &approval.try_get::<String, _>("hook").unwrap_or_default(),
+        &approval.try_get::<String, _>("body").unwrap_or_default(),
+        &approval.try_get::<String, _>("cta").unwrap_or_default(),
+        &approval
+            .try_get::<String, _>("hashtags")
+            .unwrap_or_default(),
+    );
+    let commentary = escape_linkedin_little_text(&raw_commentary);
+    evaluate_post_publish(&PostPublishFacts {
+        campaign_status: &campaign_status,
+        approval_status: &approval_status,
+        successful_attempt_count: successful_publish_attempt_count,
+        ready_at_reviewed_revision,
+        requested_schedule_job: input.schedule_job_id,
+        current_scheduled_job: current_scheduled_id,
+        idempotency_matches: input.idempotency_key == expected_idempotency_key,
+        commentary_matches: commentary == input.commentary,
+    })?;
+
+    Ok(PublishApprovalPreflight {
+        commentary,
+        campaign_id: approval.try_get("campaign_id").unwrap_or_default(),
+    })
+}
+
+/// Facts the post publish gate decides on, loaded by `check_post_preflight`.
+/// Shared with the browser fake through tests/fixtures/publishing-contract.json.
+#[derive(Debug, Clone)]
+pub(crate) struct PostPublishFacts<'a> {
+    pub campaign_status: &'a str,
+    pub approval_status: &'a str,
+    pub successful_attempt_count: i64,
+    pub ready_at_reviewed_revision: bool,
+    pub requested_schedule_job: Option<i64>,
+    /// The approval's latest schedule job, when it is still `scheduled`.
+    pub current_scheduled_job: Option<i64>,
+    pub idempotency_matches: bool,
+    pub commentary_matches: bool,
+}
+
+/// The first three post gates, which need only the approval row.
+fn evaluate_post_state(
+    campaign_status: &str,
+    approval_status: &str,
+    successful_attempt_count: i64,
+) -> Result<(), String> {
+    if campaign_status == "archived" {
+        return Err("Campaign is archived".to_string());
+    }
+    if !matches!(approval_status, "approved" | "scheduled") {
+        return Err("Only approved or scheduled approvals can publish via LinkedIn".to_string());
+    }
+    if successful_attempt_count > 0 {
+        return Err("Approval already has a successful publish attempt".to_string());
+    }
+    Ok(())
+}
+
+/// Post publish gate, in order. Manual and scheduled publishes block each
+/// other here: a scheduled approval needs its current job, and a manual
+/// publish may not bypass a pending scheduled job.
+pub(crate) fn evaluate_post_publish(facts: &PostPublishFacts<'_>) -> Result<(), String> {
+    evaluate_post_state(
+        facts.campaign_status,
+        facts.approval_status,
+        facts.successful_attempt_count,
+    )?;
+    if !facts.ready_at_reviewed_revision {
+        return Err(crate::approval_review::STALE_APPROVAL_ERROR.to_string());
+    }
     match (
-        approval_status.as_str(),
-        input.schedule_job_id,
-        current_scheduled_id,
+        facts.approval_status,
+        facts.requested_schedule_job,
+        facts.current_scheduled_job,
     ) {
         ("scheduled", None, _) => {
             return Err("Scheduled approvals require the current schedule job".to_string());
@@ -273,36 +355,69 @@ pub(crate) async fn check_post_preflight(
         }
         _ => {}
     }
-
-    let expected_idempotency_key = format!(
-        "approval:{}:linkedin:{}",
-        input.approval_id,
-        input
-            .schedule_job_id
-            .map(|id| id.to_string())
-            .unwrap_or_else(|| "manual".to_string())
-    );
-    if input.idempotency_key != expected_idempotency_key {
+    if !facts.idempotency_matches {
         return Err("Publish idempotency key does not match approval state".to_string());
     }
-
-    let raw_commentary = compose_linkedin_commentary(
-        &approval.try_get::<String, _>("hook").unwrap_or_default(),
-        &approval.try_get::<String, _>("body").unwrap_or_default(),
-        &approval.try_get::<String, _>("cta").unwrap_or_default(),
-        &approval
-            .try_get::<String, _>("hashtags")
-            .unwrap_or_default(),
-    );
-    let commentary = escape_linkedin_little_text(&raw_commentary);
-    if commentary != input.commentary {
+    if !facts.commentary_matches {
         return Err("Publish commentary does not match the approved draft variant".to_string());
     }
+    Ok(())
+}
 
-    Ok(PublishApprovalPreflight {
-        commentary,
-        campaign_id: approval.try_get("campaign_id").unwrap_or_default(),
-    })
+/// Facts the comment publish gate decides on, loaded by
+/// `check_comment_preflight`. Shared with the browser fake.
+#[derive(Debug, Clone)]
+pub(crate) struct CommentPublishFacts<'a> {
+    pub campaign_status: &'a str,
+    pub thread_status: &'a str,
+    pub successful_attempt_count: i64,
+    pub selected_count: usize,
+    pub selected_blocked: bool,
+    pub commentary_matches: bool,
+    pub target_resolved: bool,
+    pub target_matches: bool,
+    pub idempotency_matches: bool,
+    /// Succeeded attempts today plus open comment executions.
+    pub daily_count: i64,
+    pub daily_comment_limit: i64,
+}
+
+/// Comment publish gate, in order.
+pub(crate) fn evaluate_comment_publish(facts: &CommentPublishFacts<'_>) -> Result<(), String> {
+    if facts.campaign_status == "archived" {
+        return Err("Campaign is archived".to_string());
+    }
+    if facts.thread_status != "approved" {
+        return Err("Only approved comments can publish via LinkedIn".to_string());
+    }
+    if facts.successful_attempt_count > 0 {
+        return Err("Comment thread already has a successful posting attempt".to_string());
+    }
+    if facts.selected_count != 1 {
+        return Err("Choose exactly one selected comment variant".to_string());
+    }
+    if facts.selected_blocked {
+        return Err("Blocked comment variants cannot be reviewed".to_string());
+    }
+    if !facts.commentary_matches {
+        return Err("Commentary does not match the approved comment variant".to_string());
+    }
+    if !facts.target_resolved {
+        return Err("LinkedIn target URN could not be resolved from the candidate URL".to_string());
+    }
+    if !facts.target_matches {
+        return Err("LinkedIn target URN does not match the comment target".to_string());
+    }
+    if !facts.idempotency_matches {
+        return Err("Comment idempotency key does not match thread state".to_string());
+    }
+    if facts.daily_count >= facts.daily_comment_limit {
+        return Err(format!(
+            "Daily comment limit reached for today: {}/{} used",
+            facts.daily_count, facts.daily_comment_limit
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) async fn check_kill_switch(connection: &mut SqliteConnection) -> Result<(), String> {
@@ -336,7 +451,7 @@ pub(crate) async fn check_comment_preflight(
     ensure_comment_input(input)?;
     check_kill_switch(connection).await?;
 
-    let thread = sqlx::query(
+    let thread = sqlx::query(&format!(
         "SELECT
             comment_threads.status AS thread_status,
             campaigns.status AS campaign_status,
@@ -360,14 +475,14 @@ pub(crate) async fn check_comment_preflight(
                 SELECT COUNT(*) FROM publish_executions
                 WHERE publish_executions.kind = 'comment'
                     AND publish_executions.campaign_id = comment_threads.campaign_id
-                    AND publish_executions.status IN ('reserved', 'in_flight', 'outcome_unknown')
+                    AND publish_executions.status IN {OPEN_STATUSES_SQL}
             ) AS daily_success_count
         FROM comment_threads
         INNER JOIN campaigns ON campaigns.id = comment_threads.campaign_id
         INNER JOIN candidate_posts ON candidate_posts.id = comment_threads.candidate_post_id
         INNER JOIN target_posts ON target_posts.id = candidate_posts.target_post_id
-        WHERE comment_threads.id = ?",
-    )
+        WHERE comment_threads.id = ?"
+    ))
     .bind(input.comment_thread_id)
     .fetch_optional(&mut *connection)
     .await
@@ -376,16 +491,22 @@ pub(crate) async fn check_comment_preflight(
 
     let campaign_status: String = thread.try_get("campaign_status").unwrap_or_default();
     let thread_status: String = thread.try_get("thread_status").unwrap_or_default();
-    if campaign_status == "archived" {
-        return Err("Campaign is archived".to_string());
-    }
-    if thread_status != "approved" {
-        return Err("Only approved comments can publish via LinkedIn".to_string());
-    }
     let successful_attempt_count: i64 = thread.try_get("successful_attempt_count").unwrap_or(0);
-    if successful_attempt_count > 0 {
-        return Err("Comment thread already has a successful posting attempt".to_string());
-    }
+    let early = CommentPublishFacts {
+        campaign_status: &campaign_status,
+        thread_status: &thread_status,
+        successful_attempt_count,
+        selected_count: 1,
+        selected_blocked: false,
+        commentary_matches: true,
+        target_resolved: true,
+        target_matches: true,
+        idempotency_matches: true,
+        daily_count: 0,
+        daily_comment_limit: 1,
+    };
+    // State gates first, before reading the selected variant.
+    evaluate_comment_publish(&early)?;
 
     let variants = sqlx::query(
         "SELECT
@@ -403,19 +524,14 @@ pub(crate) async fn check_comment_preflight(
     .fetch_all(&mut *connection)
     .await
     .map_err(|_| "Could not read selected comment variant".to_string())?;
-    if variants.len() != 1 {
-        return Err("Choose exactly one selected comment variant".to_string());
-    }
-    let variant = &variants[0];
-    let blocked_count: i64 = variant.try_get("blocked_count").unwrap_or(0);
-    if blocked_count > 0 {
-        return Err("Blocked comment variants cannot be reviewed".to_string());
-    }
-    let raw_body: String = variant.try_get("body").unwrap_or_default();
-    let commentary = escape_linkedin_little_text(&raw_body);
-    if commentary != input.commentary {
-        return Err("Commentary does not match the approved comment variant".to_string());
-    }
+    let selected = variants.first().filter(|_| variants.len() == 1);
+    let selected_blocked =
+        selected.is_some_and(|variant| variant.try_get::<i64, _>("blocked_count").unwrap_or(0) > 0);
+    let commentary = escape_linkedin_little_text(
+        &selected
+            .map(|variant| variant.try_get::<String, _>("body").unwrap_or_default())
+            .unwrap_or_default(),
+    );
 
     let target_resource: String = thread
         .try_get("target_platform_resource_urn")
@@ -425,27 +541,24 @@ pub(crate) async fn check_comment_preflight(
         &target_url
     } else {
         &target_resource
-    })
-    .ok_or_else(|| {
-        "LinkedIn target URN could not be resolved from the candidate URL".to_string()
-    })?;
-    if target_urn != input.target_urn {
-        return Err("LinkedIn target URN does not match the comment target".to_string());
-    }
-
+    });
     let expected_idempotency_key =
         format!("comment-thread:{}:linkedin:manual", input.comment_thread_id);
-    if input.idempotency_key != expected_idempotency_key {
-        return Err("Comment idempotency key does not match thread state".to_string());
-    }
 
-    let daily_comment_limit: i64 = thread.try_get("daily_comment_limit").unwrap_or(0);
-    let daily_success_count: i64 = thread.try_get("daily_success_count").unwrap_or(0);
-    if daily_success_count >= daily_comment_limit {
-        return Err(format!(
-            "Daily comment limit reached for today: {daily_success_count}/{daily_comment_limit} used"
-        ));
-    }
+    evaluate_comment_publish(&CommentPublishFacts {
+        selected_count: variants.len(),
+        selected_blocked,
+        commentary_matches: commentary == input.commentary,
+        target_resolved: target_urn.is_some(),
+        target_matches: target_urn.as_deref() == Some(input.target_urn.as_str()),
+        idempotency_matches: input.idempotency_key == expected_idempotency_key,
+        daily_count: thread.try_get("daily_success_count").unwrap_or(0),
+        daily_comment_limit: thread.try_get("daily_comment_limit").unwrap_or(0),
+        ..early
+    })?;
+    let target_urn = target_urn.ok_or_else(|| {
+        "LinkedIn target URN could not be resolved from the candidate URL".to_string()
+    })?;
 
     Ok(PublishCommentPreflight {
         commentary,

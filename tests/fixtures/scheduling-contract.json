@@ -1,0 +1,130 @@
+{
+  "description": "Post scheduling rules shared by src-tauri/src/approval_scheduling.rs (checked in approval_scheduling_tests.rs) and the browser fake in tests/helpers/tauri-mocks.ts (checked in tests/safety-gates-contract.spec.ts). Change both sides together.",
+  "countedJobStatuses": ["scheduled", "completed"],
+  "reusableJobStatuses": ["cancelled", "failed"],
+  "eligibilityBase": {
+    "campaignStatus": "active",
+    "approvalStatus": "approved",
+    "readyAtReviewedRevision": true,
+    "existingJobStatus": null
+  },
+  "eligibilityCases": [
+    { "name": "approved and ready", "facts": {}, "expected": { "ok": true } },
+    {
+      "name": "archived campaign wins over everything",
+      "facts": {
+        "campaignStatus": "archived",
+        "approvalStatus": "rejected",
+        "existingJobStatus": "scheduled"
+      },
+      "expected": { "error": "Campaign is archived" }
+    },
+    {
+      "name": "not approved",
+      "facts": {
+        "approvalStatus": "needs_review",
+        "readyAtReviewedRevision": false
+      },
+      "expected": { "error": "Only approved posts can be scheduled" }
+    },
+    {
+      "name": "already scheduled approval",
+      "facts": { "approvalStatus": "scheduled" },
+      "expected": { "error": "Only approved posts can be scheduled" }
+    },
+    {
+      "name": "edited after approval",
+      "facts": {
+        "readyAtReviewedRevision": false,
+        "existingJobStatus": "scheduled"
+      },
+      "expected": {
+        "error": "Approval is stale or not ready. Reload and run current AI audit and quality checks."
+      }
+    },
+    {
+      "name": "an active job exists",
+      "facts": { "existingJobStatus": "scheduled" },
+      "expected": { "error": "Approval already has an active schedule job" }
+    },
+    {
+      "name": "a completed job exists",
+      "facts": { "existingJobStatus": "completed" },
+      "expected": { "error": "Approval already has an active schedule job" }
+    },
+    {
+      "name": "a cancelled job can be reused",
+      "facts": { "existingJobStatus": "cancelled" },
+      "expected": { "ok": true }
+    },
+    {
+      "name": "a failed job can be reused",
+      "facts": { "existingJobStatus": "failed" },
+      "expected": { "ok": true }
+    }
+  ],
+  "limitBase": {
+    "killSwitchReason": null,
+    "windowKey": "2026-11-02",
+    "currentCount": 0,
+    "dailyPostLimit": 1
+  },
+  "limitCases": [
+    {
+      "name": "first post of the day under the default cap",
+      "facts": {},
+      "expected": {
+        "decision": "allowed",
+        "message": "Schedule allowed for 2026-11-02: 0/1 used"
+      }
+    },
+    {
+      "name": "default cap of one is reached",
+      "facts": { "currentCount": 1 },
+      "expected": {
+        "decision": "limit_reached",
+        "message": "Daily post scheduling limit reached for 2026-11-02: 1/1 used"
+      }
+    },
+    {
+      "name": "a zero cap blocks every post",
+      "facts": { "dailyPostLimit": 0 },
+      "expected": {
+        "decision": "limit_reached",
+        "message": "Daily post scheduling limit reached for 2026-11-02: 0/0 used"
+      }
+    },
+    {
+      "name": "the maximum cap allows the tenth post",
+      "facts": { "currentCount": 9, "dailyPostLimit": 10 },
+      "expected": {
+        "decision": "allowed",
+        "message": "Schedule allowed for 2026-11-02: 9/10 used"
+      }
+    },
+    {
+      "name": "kill switch with a reason wins over the cap",
+      "facts": { "killSwitchReason": "Incident review", "currentCount": 5 },
+      "expected": {
+        "decision": "kill_switch",
+        "message": "Global kill switch is enabled: Incident review"
+      }
+    },
+    {
+      "name": "kill switch without a reason",
+      "facts": { "killSwitchReason": "" },
+      "expected": {
+        "decision": "kill_switch",
+        "message": "Global kill switch is enabled"
+      }
+    }
+  ],
+  "windowKeyCases": [
+    { "scheduledFor": "2026-11-02T09:30", "windowKey": "2026-11-02" },
+    { "scheduledFor": "2026-11-02 09:30:15.250", "windowKey": "2026-11-02" },
+    { "scheduledFor": "2026-11-02T09:30Z", "windowKey": "2026-11-02" },
+    { "scheduledFor": "2026-11-02T23:30-05:00", "windowKey": "2026-11-03" },
+    { "scheduledFor": "2026-11-02T00:30+02:00", "windowKey": "2026-11-01" },
+    { "scheduledFor": "2026-12-31T22:00-03:00", "windowKey": "2027-01-01" }
+  ]
+}

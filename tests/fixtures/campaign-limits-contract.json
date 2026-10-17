@@ -1,0 +1,42 @@
+{
+  "description": "Conservative daily caps shared by src-tauri (migrations/campaigns.rs SQL defaults and CHECKs, campaigns.rs validation; checked in campaigns_tests.rs), src/features/campaigns/schemas.ts and the browser fake (both checked in tests/safety-gates-contract.spec.ts). Raising a default or maximum is a safety decision: change every side together.",
+  "dailyPostLimit": {
+    "column": "daily_post_limit",
+    "label": "Daily post limit",
+    "default": 1,
+    "min": 0,
+    "max": 10
+  },
+  "dailyCommentLimit": {
+    "column": "daily_comment_limit",
+    "label": "Daily comment limit",
+    "default": 5,
+    "min": 0,
+    "max": 50
+  },
+  "validationCases": [
+    { "field": "dailyPostLimit", "value": 0, "expected": { "ok": true } },
+    { "field": "dailyPostLimit", "value": 10, "expected": { "ok": true } },
+    {
+      "field": "dailyPostLimit",
+      "value": 11,
+      "expected": { "error": "Daily post limit must be between 0 and 10" }
+    },
+    {
+      "field": "dailyPostLimit",
+      "value": -1,
+      "expected": { "error": "Daily post limit must be between 0 and 10" }
+    },
+    { "field": "dailyCommentLimit", "value": 50, "expected": { "ok": true } },
+    {
+      "field": "dailyCommentLimit",
+      "value": 51,
+      "expected": { "error": "Daily comment limit must be between 0 and 50" }
+    },
+    {
+      "field": "dailyCommentLimit",
+      "value": -1,
+      "expected": { "error": "Daily comment limit must be between 0 and 50" }
+    }
+  ]
+}

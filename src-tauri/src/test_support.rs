@@ -38,6 +38,26 @@ pub(crate) async fn migrated() -> Fixture {
     }
 }
 
+/// One case from a shared contract fixture: `base` with `overrides` applied.
+pub(crate) fn contract_case(
+    base: &serde_json::Value,
+    overrides: &serde_json::Value,
+) -> serde_json::Value {
+    let mut merged = base.as_object().cloned().unwrap_or_default();
+    for (key, value) in overrides.as_object().cloned().unwrap_or_default() {
+        merged.insert(key, value);
+    }
+    serde_json::Value::Object(merged)
+}
+
+/// Expected `Result` of a contract case: `{ "ok": ... }` or `{ "error": "..." }`.
+pub(crate) fn contract_expected(case: &serde_json::Value) -> Result<(), String> {
+    match case["expected"]["error"].as_str() {
+        Some(error) => Err(error.to_string()),
+        None => Ok(()),
+    }
+}
+
 /// Runs a multi-statement seed script.
 pub(crate) async fn seed(pool: &SqlitePool, sql: &str) {
     pool.execute(sql).await.unwrap();

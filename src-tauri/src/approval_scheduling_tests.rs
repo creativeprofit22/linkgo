@@ -337,6 +337,129 @@ async fn datetime_local_value_schedules_and_counts_toward_daily_limit() {
     assert_eq!(count(&pool, "schedule_jobs").await, 1);
 }
 
+// ---------------------------------------------------------------------------
+// Shared contract with the browser fake (tests/fixtures/scheduling-contract.json)
+// ---------------------------------------------------------------------------
+
+fn scheduling_contract() -> serde_json::Value {
+    serde_json::from_str(include_str!(
+        "../../tests/fixtures/scheduling-contract.json"
+    ))
+    .unwrap()
+}
+
+fn contract_strings(value: &serde_json::Value) -> Vec<&str> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect()
+}
+
+#[test]
+fn job_status_lists_match_contract_and_their_sql() {
+    let contract = scheduling_contract();
+    assert_eq!(
+        contract_strings(&contract["countedJobStatuses"]),
+        COUNTED_JOB_STATUSES
+    );
+    assert_eq!(
+        COUNTED_JOB_STATUSES_SQL,
+        crate::publishing::store::sql_status_list(&COUNTED_JOB_STATUSES)
+    );
+    assert_eq!(
+        contract_strings(&contract["reusableJobStatuses"]),
+        REUSABLE_JOB_STATUSES
+    );
+}
+
+#[test]
+fn schedule_eligibility_matches_contract() {
+    use crate::test_support::{contract_case, contract_expected};
+    let contract = scheduling_contract();
+    for case in contract["eligibilityCases"].as_array().unwrap() {
+        let facts = contract_case(&contract["eligibilityBase"], &case["facts"]);
+        let actual = evaluate_schedule_eligibility(
+            facts["campaignStatus"].as_str().unwrap(),
+            facts["approvalStatus"].as_str().unwrap(),
+            facts["readyAtReviewedRevision"].as_bool().unwrap(),
+            facts["existingJobStatus"].as_str(),
+        )
+        .map_err(str::to_string);
+        assert_eq!(actual, contract_expected(case), "{}", case["name"]);
+    }
+}
+
+#[test]
+fn schedule_limit_matches_contract() {
+    use crate::test_support::contract_case;
+    let contract = scheduling_contract();
+    for case in contract["limitCases"].as_array().unwrap() {
+        let facts = contract_case(&contract["limitBase"], &case["facts"]);
+        let actual = evaluate_schedule_limit(
+            facts["killSwitchReason"].as_str(),
+            facts["windowKey"].as_str().unwrap(),
+            facts["currentCount"].as_i64().unwrap(),
+            facts["dailyPostLimit"].as_i64().unwrap(),
+        );
+        let (decision, message) = match actual {
+            ScheduleLimitDecision::Allowed { summary } => ("allowed", summary),
+            ScheduleLimitDecision::LimitReached { summary } => ("limit_reached", summary),
+            ScheduleLimitDecision::KillSwitch { error } => ("kill_switch", error),
+        };
+        assert_eq!(decision, case["expected"]["decision"], "{}", case["name"]);
+        assert_eq!(message, case["expected"]["message"], "{}", case["name"]);
+    }
+}
+
+#[tokio::test]
+async fn window_keys_match_contract() {
+    let pool = test_pool().await;
+    let contract = scheduling_contract();
+    for case in contract["windowKeyCases"].as_array().unwrap() {
+        let scheduled_for = case["scheduledFor"].as_str().unwrap();
+        assert!(
+            validate_schedule(ScheduleApprovalInput {
+                approval_id: 1,
+                scheduled_for: scheduled_for.to_string(),
+                timezone: String::new(),
+            })
+            .is_ok(),
+            "{scheduled_for} must be accepted"
+        );
+        let window_key: String = sqlx::query_scalar("SELECT date(?1)")
+            .bind(scheduled_for)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(window_key, case["windowKey"], "{scheduled_for}");
+    }
+}
+
+#[tokio::test]
+async fn counted_job_statuses_fill_the_daily_cap_like_contract() {
+    let contract = scheduling_contract();
+    let counted = contract_strings(&contract["countedJobStatuses"]);
+    for status in ["scheduled", "completed", "cancelled", "failed"] {
+        let pool = test_pool().await;
+        pool.execute(
+            format!(
+                "UPDATE campaigns SET daily_post_limit = 1;
+                 INSERT INTO approvals VALUES (2, 1, 2, 2, 1, 'scheduled', NULL);
+                 INSERT INTO schedule_jobs (approval_id, platform, scheduled_for, timezone, status, idempotency_key)
+                   VALUES (2, 'linkedin', '2026-08-20T08:00:00Z', 'UTC', '{status}', 'other');"
+            )
+            .as_str(),
+        )
+        .await
+        .unwrap();
+        let result = schedule_approval(&pool, input()).await;
+        let blocked = matches!(&result, Err(message) if message.starts_with("Daily post scheduling limit reached"));
+        assert_eq!(blocked, counted.contains(&status), "{status}: {result:?}");
+    }
+}
+
 #[tokio::test]
 async fn cancel_late_audit_failure_rolls_back_state() {
     let pool = test_pool().await;

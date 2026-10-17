@@ -82,6 +82,88 @@ fn create_defaults_match_renderer_schema() {
     assert!(valid.keywords.is_empty());
 }
 
+// ---------------------------------------------------------------------------
+// Shared contract (tests/fixtures/campaign-limits-contract.json), also read by
+// src/features/campaigns/schemas.ts checks and the browser fake.
+// ---------------------------------------------------------------------------
+
+fn limits_contract() -> serde_json::Value {
+    serde_json::from_str(include_str!(
+        "../../tests/fixtures/campaign-limits-contract.json"
+    ))
+    .unwrap()
+}
+
+#[test]
+fn daily_cap_defaults_and_maxima_match_contract() {
+    let contract = limits_contract();
+    let post = &contract["dailyPostLimit"];
+    let comment = &contract["dailyCommentLimit"];
+    assert_eq!(post["default"], default_daily_post_limit());
+    assert_eq!(post["max"], MAX_DAILY_POST_LIMIT);
+    assert_eq!(comment["default"], default_daily_comment_limit());
+    assert_eq!(comment["max"], MAX_DAILY_COMMENT_LIMIT);
+    assert_eq!(post["min"], 0);
+    assert_eq!(comment["min"], 0);
+}
+
+#[test]
+fn daily_cap_validation_matches_contract() {
+    let contract = limits_contract();
+    for case in contract["validationCases"].as_array().unwrap() {
+        let field = case["field"].as_str().unwrap();
+        let value = case["value"].as_i64().unwrap();
+        let expected = crate::test_support::contract_expected(case);
+        let input: CreateCampaignInput =
+            serde_json::from_value(serde_json::json!({ "name": "Caps", field: value })).unwrap();
+        assert_eq!(
+            validate_create(&input).map(|_| ()),
+            expected,
+            "create {field}={value}"
+        );
+        let update: UpdateCampaignInput =
+            serde_json::from_value(serde_json::json!({ "id": 1, field: value })).unwrap();
+        assert_eq!(
+            validate_update(&update).map(|_| ()),
+            expected,
+            "update {field}={value}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn database_defaults_and_checks_match_contract() {
+    let contract = limits_contract();
+    let f = migrated().await;
+    seed(
+        &f.pool,
+        "INSERT INTO campaigns (id,name) VALUES (1,'Defaults');",
+    )
+    .await;
+    for key in ["dailyPostLimit", "dailyCommentLimit"] {
+        let cap = &contract[key];
+        let column = cap["column"].as_str().unwrap();
+        assert_eq!(
+            number(
+                &f.pool,
+                &format!("SELECT {column} FROM campaigns WHERE id=1")
+            )
+            .await,
+            cap["default"].as_i64().unwrap(),
+            "{column} default"
+        );
+        let max = cap["max"].as_i64().unwrap();
+        let min = cap["min"].as_i64().unwrap();
+        for (value, accepted) in [(max, true), (max + 1, false), (min, true), (min - 1, false)] {
+            let result = sqlx::query(&format!("UPDATE campaigns SET {column} = ?1 WHERE id = 1"))
+                .bind(value)
+                .execute(&f.pool)
+                .await;
+            assert_eq!(result.is_ok(), accepted, "{column} = {value}");
+        }
+    }
+}
+
 #[tokio::test]
 async fn create_trims_dedupes_keywords_and_returns_id() {
     let f = fixture().await;

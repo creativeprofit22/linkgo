@@ -276,6 +276,118 @@ fn create_eligibility_rejects_in_documented_order() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Shared contract with the browser fake (tests/helpers/tauri-mocks.ts)
+// ---------------------------------------------------------------------------
+
+fn review_contract() -> serde_json::Value {
+    serde_json::from_str(include_str!(
+        "../../tests/fixtures/approval-review-contract.json"
+    ))
+    .unwrap()
+}
+
+const ALL_STATUSES: [ApprovalStatus; 7] = [
+    ApprovalStatus::NeedsReview,
+    ApprovalStatus::ChangesRequested,
+    ApprovalStatus::Approved,
+    ApprovalStatus::Rejected,
+    ApprovalStatus::Scheduled,
+    ApprovalStatus::Published,
+    ApprovalStatus::Cancelled,
+];
+
+#[test]
+fn transitions_match_shared_contract() {
+    let contract = review_contract();
+    let table = contract["transitions"].as_object().unwrap();
+    assert_eq!(table.len(), ALL_STATUSES.len(), "every status is listed");
+    for current in ALL_STATUSES {
+        let allowed: Vec<&str> = table[current.as_str()]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|status| status.as_str().unwrap())
+            .collect();
+        for next in ALL_STATUSES {
+            assert_eq!(
+                assert_transition(current, next).is_ok(),
+                allowed.contains(&next.as_str()),
+                "{current:?} -> {next:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn readiness_gates_match_shared_contract() {
+    let contract = review_contract();
+    let gates = contract["readinessGates"].as_object().unwrap();
+    for status in ALL_STATUSES {
+        let expected = gates
+            .get(status.as_str())
+            .map(|gate| gate.as_str().unwrap());
+        let actual = readiness_gate(status).map(|gate| match gate {
+            ReadinessGate::RequestedRevision => "requested_revision",
+            ReadinessGate::ReviewedRevision => "reviewed_revision",
+        });
+        assert_eq!(actual, expected, "{status:?}");
+    }
+}
+
+#[test]
+fn create_eligibility_matches_shared_contract() {
+    let contract = review_contract();
+    let base = contract["createBase"].as_object().unwrap();
+    for case in contract["createCases"].as_array().unwrap() {
+        let mut facts = base.clone();
+        for (key, value) in case["facts"].as_object().unwrap() {
+            facts.insert(key.clone(), value.clone());
+        }
+        let selected: Vec<i64> = facts["selectedVariantIds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_i64().unwrap())
+            .collect();
+        let create_facts = CreateFacts {
+            campaign_id: 1,
+            campaign_status: facts["campaignStatus"].as_str().unwrap().into(),
+            draft_status: facts["draftStatus"].as_str().unwrap().into(),
+            selected_variant_id: selected.first().copied(),
+            selected_count: selected.len() as i64,
+            current_revision_ready: facts["currentRevisionReady"].as_bool().unwrap(),
+            block_audit_count: facts["blockAuditCount"].as_i64().unwrap(),
+            existing_approval_count: facts["existingApprovalCount"].as_i64().unwrap(),
+        };
+        let expected = match case["expected"]["ok"].as_i64() {
+            Some(id) => Ok(id),
+            None => Err(case["expected"]["error"].as_str().unwrap()),
+        };
+        assert_eq!(evaluate_create(&create_facts), expected, "{}", case["name"]);
+    }
+}
+
+#[tokio::test]
+async fn returning_to_review_after_an_unchecked_edit_is_rejected() {
+    let f = created().await;
+    set_approval_status(&f.pool, status_input("changes_requested", None, None))
+        .await
+        .unwrap();
+    f.pool
+        .execute("UPDATE draft_variants SET body='An unchecked edit' WHERE id=1")
+        .await
+        .unwrap();
+    let before = snapshot(&f.pool).await;
+    assert_eq!(
+        set_approval_status(&f.pool, status_input("needs_review", None, None))
+            .await
+            .unwrap_err(),
+        STALE_APPROVAL_ERROR
+    );
+    assert_eq!(snapshot(&f.pool).await, before);
+}
+
 #[test]
 fn native_input_validation_fails_closed() {
     assert!(validate_create(CreateApprovalInput {

@@ -10,6 +10,74 @@ use crate::approval_transaction::{insert_safety_audit, settle, SafetyAuditEvent,
 const STORAGE_ERROR: &str = "Could not settle approval schedule";
 const INVALID_SCHEDULED_FOR: &str = "Scheduled time must be a valid date";
 const MAX_SCHEDULE_TEXT_CHARS: usize = 80;
+/// Job statuses that count toward the daily post cap.
+#[cfg(test)]
+pub(crate) const COUNTED_JOB_STATUSES: [&str; 2] = ["scheduled", "completed"];
+pub(crate) const COUNTED_JOB_STATUSES_SQL: &str = "('scheduled', 'completed')";
+/// Existing job statuses that may be rescheduled in place.
+pub(crate) const REUSABLE_JOB_STATUSES: [&str; 2] = ["cancelled", "failed"];
+
+/// Eligibility gates, in order, before any limit or kill-switch decision.
+/// Shared with the browser fake through tests/fixtures/scheduling-contract.json.
+pub(crate) fn evaluate_schedule_eligibility(
+    campaign_status: &str,
+    approval_status: &str,
+    ready_at_reviewed_revision: bool,
+    existing_job_status: Option<&str>,
+) -> Result<(), &'static str> {
+    if campaign_status == "archived" {
+        return Err("Campaign is archived");
+    }
+    if approval_status != "approved" {
+        return Err("Only approved posts can be scheduled");
+    }
+    if !ready_at_reviewed_revision {
+        return Err(STALE_APPROVAL_ERROR);
+    }
+    if existing_job_status.is_some_and(|status| !REUSABLE_JOB_STATUSES.contains(&status)) {
+        return Err("Approval already has an active schedule job");
+    }
+    Ok(())
+}
+
+/// Kill switch then daily cap. Each blocked decision carries the message
+/// returned to the caller; the caller also records the matching audit rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ScheduleLimitDecision {
+    KillSwitch { error: String },
+    LimitReached { summary: String },
+    Allowed { summary: String },
+}
+
+pub(crate) fn evaluate_schedule_limit(
+    kill_switch_reason: Option<&str>,
+    window_key: &str,
+    current_count: i64,
+    daily_post_limit: i64,
+) -> ScheduleLimitDecision {
+    if let Some(reason) = kill_switch_reason {
+        return ScheduleLimitDecision::KillSwitch {
+            error: if reason.is_empty() {
+                "Global kill switch is enabled".to_string()
+            } else {
+                format!("Global kill switch is enabled: {reason}")
+            },
+        };
+    }
+    if current_count < daily_post_limit {
+        ScheduleLimitDecision::Allowed {
+            summary: format!(
+                "Schedule allowed for {window_key}: {current_count}/{daily_post_limit} used"
+            ),
+        }
+    } else {
+        ScheduleLimitDecision::LimitReached {
+            summary: format!(
+                "Daily post scheduling limit reached for {window_key}: {current_count}/{daily_post_limit} used"
+            ),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -177,13 +245,11 @@ async fn execute_schedule(
             .try_get("daily_post_limit")
             .map_err(|_| STORAGE_ERROR.to_string())?,
     };
-    if campaign_status == "archived" {
-        return Ok(Settlement::Rejected("Campaign is archived".to_string()));
-    }
-    if approval.status != "approved" {
-        return Ok(Settlement::Rejected(
-            "Only approved posts can be scheduled".to_string(),
-        ));
+    // Campaign and approval status first, before any further read.
+    if let Err(error) =
+        evaluate_schedule_eligibility(&campaign_status, &approval.status, true, None)
+    {
+        return Ok(Settlement::Rejected(error.to_string()));
     }
     // The human-approved revision must still be the current, ready content:
     // stale edits, current block findings and missing or failing AI audit and
@@ -191,9 +257,8 @@ async fn execute_schedule(
     let reviewed_revision: Option<i64> = row
         .try_get("reviewed_content_revision")
         .map_err(|_| STORAGE_ERROR.to_string())?;
-    if !is_ready_at_revision(connection, approval.id, reviewed_revision, STORAGE_ERROR).await? {
-        return Ok(Settlement::Rejected(STALE_APPROVAL_ERROR.to_string()));
-    }
+    let ready =
+        is_ready_at_revision(connection, approval.id, reviewed_revision, STORAGE_ERROR).await?;
 
     let existing =
         sqlx::query("SELECT id, status FROM schedule_jobs WHERE approval_id = ?1 LIMIT 1")
@@ -202,15 +267,18 @@ async fn execute_schedule(
             .await
             .map_err(|_| STORAGE_ERROR.to_string())?;
     let existing_id = existing.as_ref().map(|row| row.get::<i64, _>("id"));
-    if let Some(row) = existing.as_ref() {
-        let status: String = row
-            .try_get("status")
-            .map_err(|_| STORAGE_ERROR.to_string())?;
-        if status != "cancelled" && status != "failed" {
-            return Ok(Settlement::Rejected(
-                "Approval already has an active schedule job".to_string(),
-            ));
-        }
+    let existing_status: Option<String> = existing
+        .as_ref()
+        .map(|row| row.try_get("status"))
+        .transpose()
+        .map_err(|_| STORAGE_ERROR.to_string())?;
+    if let Err(error) = evaluate_schedule_eligibility(
+        &campaign_status,
+        &approval.status,
+        ready,
+        existing_status.as_deref(),
+    ) {
+        return Ok(Settlement::Rejected(error.to_string()));
     }
 
     sqlx::query("INSERT OR IGNORE INTO safety_settings (id) VALUES (1)")
@@ -223,100 +291,98 @@ async fn execute_schedule(
     .fetch_one(&mut *connection)
     .await
     .map_err(|_| STORAGE_ERROR.to_string())?;
-    let current_count = sqlx::query_scalar::<_, i64>(
+    let current_count = sqlx::query_scalar::<_, i64>(&format!(
         "SELECT COUNT(*) FROM schedule_jobs sj
          INNER JOIN approvals a ON a.id = sj.approval_id
          WHERE a.campaign_id = ?1 AND date(sj.scheduled_for) = date(?2)
-           AND sj.status IN ('scheduled', 'completed')",
-    )
+           AND sj.status IN {COUNTED_JOB_STATUSES_SQL}"
+    ))
     .bind(approval.campaign_id)
     .bind(&input.scheduled_for)
     .fetch_one(&mut *connection)
     .await
     .map_err(|_| STORAGE_ERROR.to_string())?;
 
-    if settings.get::<i64, _>("global_kill_switch") == 1 {
-        let reason: String = settings
-            .try_get("kill_switch_reason")
-            .map_err(|_| STORAGE_ERROR.to_string())?;
-        let audit_summary = "Post scheduling blocked by global kill switch";
-        insert_safety_audit(
-            connection,
-            SafetyAuditEvent {
-                campaign_id: approval.campaign_id,
-                subject_type: "schedule_job",
-                subject_id: existing_id,
-                event_type: "schedule_blocked",
-                severity: "block",
-                summary: audit_summary,
-                metadata: json!({ "reason": reason }),
-            },
-            STORAGE_ERROR,
-        )
-        .await?;
-        let rate_summary = format!(
-            "Post scheduling blocked by global kill switch for {window_key}: {current_count}/{} used",
-            approval.daily_post_limit
-        );
-        insert_rate_limit_event(
-            connection,
-            &approval,
-            &window_key,
-            current_count,
-            "blocked",
-            &rate_summary,
-        )
-        .await?;
-        let error = if reason.is_empty() {
-            "Global kill switch is enabled".to_string()
-        } else {
-            format!("Global kill switch is enabled: {reason}")
-        };
-        return Ok(Settlement::Rejected(error));
-    }
-
-    let allowed = current_count < approval.daily_post_limit;
-    let summary = if allowed {
-        format!(
-            "Schedule allowed for {window_key}: {current_count}/{} used",
-            approval.daily_post_limit
+    let kill_switch_reason: Option<String> = if settings.get::<i64, _>("global_kill_switch") == 1 {
+        Some(
+            settings
+                .try_get("kill_switch_reason")
+                .map_err(|_| STORAGE_ERROR.to_string())?,
         )
     } else {
-        format!(
-            "Daily post scheduling limit reached for {window_key}: {current_count}/{} used",
-            approval.daily_post_limit
-        )
+        None
     };
-    if !allowed {
-        insert_rate_limit_event(
-            connection,
-            &approval,
-            &window_key,
-            current_count,
-            "blocked",
-            &summary,
-        )
-        .await?;
-        insert_safety_audit(
-            connection,
-            SafetyAuditEvent {
-                campaign_id: approval.campaign_id,
-                subject_type: "approval",
-                subject_id: Some(approval.id),
-                event_type: "schedule_blocked",
-                severity: "block",
-                summary: &summary,
-                metadata: json!({
-                    "windowKey": window_key,
-                    "limitValue": approval.daily_post_limit,
-                    "currentCount": current_count,
-                }),
-            },
-            STORAGE_ERROR,
-        )
-        .await?;
-        return Ok(Settlement::Rejected(summary));
-    }
+    let decision = evaluate_schedule_limit(
+        kill_switch_reason.as_deref(),
+        &window_key,
+        current_count,
+        approval.daily_post_limit,
+    );
+
+    let summary = match decision {
+        ScheduleLimitDecision::Allowed { summary } => summary,
+        ScheduleLimitDecision::KillSwitch { error } => {
+            let reason = kill_switch_reason.unwrap_or_default();
+            insert_safety_audit(
+                connection,
+                SafetyAuditEvent {
+                    campaign_id: approval.campaign_id,
+                    subject_type: "schedule_job",
+                    subject_id: existing_id,
+                    event_type: "schedule_blocked",
+                    severity: "block",
+                    summary: "Post scheduling blocked by global kill switch",
+                    metadata: json!({ "reason": reason }),
+                },
+                STORAGE_ERROR,
+            )
+            .await?;
+            let rate_summary = format!(
+                "Post scheduling blocked by global kill switch for {window_key}: {current_count}/{} used",
+                approval.daily_post_limit
+            );
+            insert_rate_limit_event(
+                connection,
+                &approval,
+                &window_key,
+                current_count,
+                "blocked",
+                &rate_summary,
+            )
+            .await?;
+            return Ok(Settlement::Rejected(error));
+        }
+        ScheduleLimitDecision::LimitReached { summary } => {
+            insert_rate_limit_event(
+                connection,
+                &approval,
+                &window_key,
+                current_count,
+                "blocked",
+                &summary,
+            )
+            .await?;
+            insert_safety_audit(
+                connection,
+                SafetyAuditEvent {
+                    campaign_id: approval.campaign_id,
+                    subject_type: "approval",
+                    subject_id: Some(approval.id),
+                    event_type: "schedule_blocked",
+                    severity: "block",
+                    summary: &summary,
+                    metadata: json!({
+                        "windowKey": window_key,
+                        "limitValue": approval.daily_post_limit,
+                        "currentCount": current_count,
+                    }),
+                },
+                STORAGE_ERROR,
+            )
+            .await?;
+            return Ok(Settlement::Rejected(summary));
+        }
+    };
 
     let idempotency_key = format!(
         "approval:{}:linkedin:{}",

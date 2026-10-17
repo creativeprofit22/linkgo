@@ -11,7 +11,9 @@ use tauri::State;
 use crate::auth::linkedin_api::resolve_linkedin_target_urn;
 use crate::auth::publish::escape_linkedin_little_text;
 use crate::comment_audit::audit_comment_variant;
-use crate::comments::{comment_limit_decision, insert_rate_limit_event, ThreadState};
+use crate::comments::{
+    comment_limit_decision, comment_limit_summary, insert_rate_limit_event, ThreadState,
+};
 use crate::db_transaction::{settle, Settlement};
 
 const STORAGE_ERROR: &str = "Could not save comment change";
@@ -188,11 +190,152 @@ async fn thread_for_variant(
     Ok((thread_id, mutable_thread(connection, thread_id).await?))
 }
 
-/// Returns the single selected, non-blocked variant body.
-async fn selected_variant_ready(
+// ---------------------------------------------------------------------------
+// Pure gates, shared with the browser fake through
+// tests/fixtures/comment-review-contract.json.
+// ---------------------------------------------------------------------------
+
+/// A thread may enter or pass review only with exactly one unblocked
+/// selected variant.
+pub(crate) fn evaluate_selected_variant(
+    selected_count: usize,
+    selected_blocked: bool,
+) -> Result<(), &'static str> {
+    if selected_count > 1 {
+        return Err("Choose exactly one selected comment variant");
+    }
+    if selected_count == 0 {
+        return Err("Choose one comment variant before review");
+    }
+    if selected_blocked {
+        return Err("Blocked comment variants cannot be reviewed");
+    }
+    Ok(())
+}
+
+/// Human review moves for a thread, in order. `posted` is only reachable
+/// through recording a posting attempt.
+pub(crate) fn evaluate_thread_status(
+    current: &str,
+    next: &str,
+    selected_count: usize,
+    selected_blocked: bool,
+) -> Result<(), &'static str> {
+    if next == "needs_review" || next == "approved" {
+        evaluate_selected_variant(selected_count, selected_blocked)?;
+    }
+    if next == "posted" {
+        return Err("Use record posted to move comments to posted");
+    }
+    if next == "approved" && current != "needs_review" {
+        return Err("Only comments needing review can be approved");
+    }
+    if next == "changes_requested" && current != "needs_review" {
+        return Err("Only comments needing review can request changes");
+    }
+    if TERMINAL.contains(&current) {
+        return Err("Terminal comment threads cannot change status");
+    }
+    Ok(())
+}
+
+/// Variant status changes, in order.
+pub(crate) fn evaluate_variant_status(
+    thread_status: &str,
+    next: &str,
+    variant_blocked: bool,
+) -> Result<(), &'static str> {
+    if TERMINAL.contains(&thread_status) {
+        return Err("Posted, rejected, and cancelled comments cannot change variants");
+    }
+    if next == "selected" && variant_blocked {
+        return Err("Blocked comment variants cannot be selected");
+    }
+    Ok(())
+}
+
+/// Facts the pre-publish comment check decides on.
+#[derive(Debug, Clone)]
+pub(crate) struct CommentAssertFacts<'a> {
+    pub thread_status: &'a str,
+    pub selected_count: usize,
+    pub selected_blocked: bool,
+    pub commentary_matches: bool,
+    pub target_resolved: bool,
+    pub target_matches: bool,
+    pub idempotency_matches: bool,
+    pub successful_attempt_count: i64,
+    pub kill_switch_reason: Option<&'a str>,
+    pub window_key: &'a str,
+    /// Succeeded attempts for the campaign today.
+    pub daily_count: i64,
+    pub daily_comment_limit: i64,
+}
+
+/// Outcome of the pre-publish comment check. Kill-switch and limit blocks
+/// commit a rate-limit row; plain rejections write nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CommentAssertDecision {
+    Rejected(String),
+    KillSwitch { summary: String, error: String },
+    LimitReached { summary: String },
+    Allowed,
+}
+
+pub(crate) fn evaluate_comment_assert(facts: &CommentAssertFacts<'_>) -> CommentAssertDecision {
+    let reject = |message: &str| CommentAssertDecision::Rejected(message.to_string());
+    if facts.thread_status != "approved" {
+        return reject("Only approved comments can publish via LinkedIn");
+    }
+    if let Err(error) = evaluate_selected_variant(facts.selected_count, facts.selected_blocked) {
+        return reject(error);
+    }
+    if !facts.commentary_matches {
+        return reject("Commentary does not match the approved comment variant");
+    }
+    if !facts.target_resolved {
+        return reject("LinkedIn target URN could not be resolved from the candidate URL");
+    }
+    if !facts.target_matches {
+        return reject("LinkedIn target URN does not match the comment target");
+    }
+    if !facts.idempotency_matches {
+        return reject("Comment idempotency key does not match thread state");
+    }
+    if facts.successful_attempt_count > 0 {
+        return reject("Comment thread already has a successful posting attempt");
+    }
+    if let Some(reason) = facts.kill_switch_reason {
+        return if reason.is_empty() {
+            CommentAssertDecision::KillSwitch {
+                summary: "Comment posting blocked by global kill switch".to_string(),
+                error: "Global kill switch is enabled".to_string(),
+            }
+        } else {
+            CommentAssertDecision::KillSwitch {
+                summary: format!("Comment posting blocked by global kill switch: {reason}"),
+                error: format!("Global kill switch is enabled: {reason}"),
+            }
+        };
+    }
+    let (allowed, summary) = comment_limit_summary(
+        facts.window_key,
+        facts.daily_count,
+        facts.daily_comment_limit,
+    );
+    if allowed {
+        CommentAssertDecision::Allowed
+    } else {
+        CommentAssertDecision::LimitReached { summary }
+    }
+}
+
+/// Selected variant facts: how many are selected, whether the first is
+/// blocked, and its body.
+async fn selected_variant_facts(
     connection: &mut SqliteConnection,
     thread_id: i64,
-) -> Result<String, String> {
+) -> Result<(usize, bool, String), String> {
     let rows = sqlx::query(
         "SELECT cv.body,
                 SUM(CASE WHEN ca.severity = 'block' THEN 1 ELSE 0 END) AS blocked_count
@@ -205,16 +348,14 @@ async fn selected_variant_ready(
     .fetch_all(&mut *connection)
     .await
     .map_err(storage_error)?;
-    if rows.len() > 1 {
-        return Err("Choose exactly one selected comment variant".to_string());
-    }
-    let row = rows
+    let blocked = rows
         .first()
-        .ok_or_else(|| "Choose one comment variant before review".to_string())?;
-    if row.get::<i64, _>("blocked_count") > 0 {
-        return Err("Blocked comment variants cannot be reviewed".to_string());
-    }
-    Ok(row.get("body"))
+        .is_some_and(|row| row.get::<i64, _>("blocked_count") > 0);
+    let body = rows
+        .first()
+        .map(|row| row.get::<String, _>("body"))
+        .unwrap_or_default();
+    Ok((rows.len(), blocked, body))
 }
 
 async fn request_changes_if_reviewing(
@@ -392,11 +533,7 @@ pub(crate) async fn set_variant_status(
     settle(pool, STORAGE_ERROR, move |connection| {
         Box::pin(async move {
             let (thread_id, thread) = thread_for_variant(connection, id).await?;
-            if TERMINAL.contains(&thread.status.as_str()) {
-                return Err(
-                    "Posted, rejected, and cancelled comments cannot change variants".to_string(),
-                );
-            }
+            evaluate_variant_status(&thread.status, &status, false)?;
             if status == "selected" {
                 let blocked: i64 = sqlx::query_scalar(
                     "SELECT COUNT(*) FROM comment_audits WHERE comment_variant_id = ?1 AND severity = 'block'",
@@ -405,9 +542,7 @@ pub(crate) async fn set_variant_status(
                 .fetch_one(&mut *connection)
                 .await
                 .map_err(storage_error)?;
-                if blocked > 0 {
-                    return Err("Blocked comment variants cannot be selected".to_string());
-                }
+                evaluate_variant_status(&thread.status, &status, blocked > 0)?;
                 sqlx::query(
                     "UPDATE comment_variants SET status = 'draft', updated_at = datetime('now')
                      WHERE comment_thread_id = ?1 AND id <> ?2",
@@ -447,21 +582,14 @@ pub(crate) async fn set_thread_status(
         Box::pin(async move {
             // Check order mirrors the previous renderer implementation.
             let thread = mutable_thread(connection, id).await?;
-            if status == "needs_review" || status == "approved" {
-                selected_variant_ready(connection, id).await?;
-            }
-            if status == "posted" {
-                return Err("Use record posted to move comments to posted".to_string());
-            }
-            if status == "approved" && thread.status != "needs_review" {
-                return Err("Only comments needing review can be approved".to_string());
-            }
-            if status == "changes_requested" && thread.status != "needs_review" {
-                return Err("Only comments needing review can request changes".to_string());
-            }
-            if TERMINAL.contains(&thread.status.as_str()) {
-                return Err("Terminal comment threads cannot change status".to_string());
-            }
+            let (selected_count, selected_blocked) =
+                if status == "needs_review" || status == "approved" {
+                    let (count, blocked, _) = selected_variant_facts(connection, id).await?;
+                    (count, blocked)
+                } else {
+                    (1, false)
+                };
+            evaluate_thread_status(&thread.status, &status, selected_count, selected_blocked)?;
             sqlx::query(
                 "UPDATE comment_threads
                  SET status = ?1,
@@ -507,25 +635,30 @@ pub(crate) async fn assert_can_publish(
             .map_err(storage_error)?
             .ok_or_else(|| "Comment thread was not found".to_string())?;
             let thread = mutable_thread(connection, thread_id).await?;
-            if thread.status != "approved" {
-                return Err("Only approved comments can publish via LinkedIn".to_string());
+            let mut facts = CommentAssertFacts {
+                thread_status: &thread.status,
+                selected_count: 1,
+                selected_blocked: false,
+                commentary_matches: true,
+                target_resolved: true,
+                target_matches: true,
+                idempotency_matches: true,
+                successful_attempt_count: 0,
+                kill_switch_reason: None,
+                window_key: "",
+                daily_count: 0,
+                daily_comment_limit: 1,
+            };
+            // Status first, before reading anything else.
+            if let CommentAssertDecision::Rejected(error) = evaluate_comment_assert(&facts) {
+                return Err(error);
             }
-            let selected = selected_variant_ready(connection, thread_id).await?;
-            if escape_linkedin_little_text(&selected) != input.commentary {
-                return Err("Commentary does not match the approved comment variant".to_string());
-            }
+            let (selected_count, selected_blocked, selected_body) =
+                selected_variant_facts(connection, thread_id).await?;
             let resource_urn: String = row.get("platform_resource_urn");
             let url: String = row.get("url");
             let source = if resource_urn.is_empty() { url } else { resource_urn };
-            let expected_urn = resolve_linkedin_target_urn(&source).ok_or_else(|| {
-                "LinkedIn target URN could not be resolved from the candidate URL".to_string()
-            })?;
-            if expected_urn != input.target_urn {
-                return Err("LinkedIn target URN does not match the comment target".to_string());
-            }
-            if input.idempotency_key != format!("comment-thread:{thread_id}:linkedin:manual") {
-                return Err("Comment idempotency key does not match thread state".to_string());
-            }
+            let expected_urn = resolve_linkedin_target_urn(&source);
             let succeeded: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM comment_attempts WHERE comment_thread_id = ?1 AND status = 'succeeded'",
             )
@@ -533,8 +666,18 @@ pub(crate) async fn assert_can_publish(
             .fetch_one(&mut *connection)
             .await
             .map_err(storage_error)?;
-            if succeeded > 0 {
-                return Err("Comment thread already has a successful posting attempt".to_string());
+            facts.selected_count = selected_count;
+            facts.selected_blocked = selected_blocked;
+            facts.commentary_matches =
+                escape_linkedin_little_text(&selected_body) == input.commentary;
+            facts.target_resolved = expected_urn.is_some();
+            facts.target_matches = expected_urn.as_deref() == Some(input.target_urn.as_str());
+            facts.idempotency_matches =
+                input.idempotency_key == format!("comment-thread:{thread_id}:linkedin:manual");
+            facts.successful_attempt_count = succeeded;
+            // Read-only gates, before any write.
+            if let CommentAssertDecision::Rejected(error) = evaluate_comment_assert(&facts) {
+                return Err(error);
             }
             sqlx::query("INSERT OR IGNORE INTO safety_settings (id) VALUES (1)")
                 .execute(&mut *connection)
@@ -546,30 +689,27 @@ pub(crate) async fn assert_can_publish(
             .fetch_one(&mut *connection)
             .await
             .map_err(storage_error)?;
-            let decision = comment_limit_decision(connection, &thread).await?;
-            if settings.get::<i64, _>("global_kill_switch") == 1 {
-                let reason: String = settings.get("kill_switch_reason");
-                let (summary, error) = if reason.is_empty() {
-                    (
-                        "Comment posting blocked by global kill switch".to_string(),
-                        "Global kill switch is enabled".to_string(),
-                    )
-                } else {
-                    (
-                        format!("Comment posting blocked by global kill switch: {reason}"),
-                        format!("Global kill switch is enabled: {reason}"),
-                    )
-                };
-                insert_rate_limit_event(connection, &thread, &decision, "blocked", &summary)
-                    .await?;
-                return Ok(Settlement::Rejected(error));
+            let limit = comment_limit_decision(connection, &thread).await?;
+            let reason: Option<String> = (settings.get::<i64, _>("global_kill_switch") == 1)
+                .then(|| settings.get("kill_switch_reason"));
+            facts.kill_switch_reason = reason.as_deref();
+            facts.window_key = &limit.window_key;
+            facts.daily_count = limit.current_count;
+            facts.daily_comment_limit = thread.daily_comment_limit;
+            match evaluate_comment_assert(&facts) {
+                CommentAssertDecision::Rejected(error) => Err(error),
+                CommentAssertDecision::KillSwitch { summary, error } => {
+                    insert_rate_limit_event(connection, &thread, &limit, "blocked", &summary)
+                        .await?;
+                    Ok(Settlement::Rejected(error))
+                }
+                CommentAssertDecision::LimitReached { summary } => {
+                    insert_rate_limit_event(connection, &thread, &limit, "blocked", &summary)
+                        .await?;
+                    Ok(Settlement::Rejected(summary))
+                }
+                CommentAssertDecision::Allowed => Ok(Settlement::Accepted(())),
             }
-            if !decision.allowed {
-                insert_rate_limit_event(connection, &thread, &decision, "blocked", &decision.summary)
-                    .await?;
-                return Ok(Settlement::Rejected(decision.summary));
-            }
-            Ok(Settlement::Accepted(()))
         })
     })
     .await

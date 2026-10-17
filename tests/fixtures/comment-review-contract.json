@@ -1,0 +1,276 @@
+{
+  "description": "Comment review and pre-publish rules shared by src-tauri/src/comment_threads.rs and comments.rs (checked in comment_threads_tests.rs) and the browser fake in tests/helpers/tauri-mocks.ts (checked in tests/safety-gates-contract.spec.ts). Change both sides together.",
+  "terminalStatuses": ["posted", "rejected", "cancelled"],
+  "threadStatusBase": {
+    "current": "needs_review",
+    "next": "approved",
+    "selectedCount": 1,
+    "selectedBlocked": false
+  },
+  "threadStatusCases": [
+    {
+      "name": "approve a reviewed comment",
+      "facts": {},
+      "expected": { "ok": true }
+    },
+    {
+      "name": "approve without a selected variant",
+      "facts": { "selectedCount": 0, "current": "drafting" },
+      "expected": { "error": "Choose one comment variant before review" }
+    },
+    {
+      "name": "approve with two selected variants",
+      "facts": { "selectedCount": 2 },
+      "expected": { "error": "Choose exactly one selected comment variant" }
+    },
+    {
+      "name": "approve a blocked variant",
+      "facts": { "selectedBlocked": true },
+      "expected": { "error": "Blocked comment variants cannot be reviewed" }
+    },
+    {
+      "name": "send for review without a selected variant",
+      "facts": {
+        "current": "drafting",
+        "next": "needs_review",
+        "selectedCount": 0
+      },
+      "expected": { "error": "Choose one comment variant before review" }
+    },
+    {
+      "name": "send a draft for review",
+      "facts": { "current": "drafting", "next": "needs_review" },
+      "expected": { "ok": true }
+    },
+    {
+      "name": "posted is only reachable by recording an attempt",
+      "facts": { "current": "approved", "next": "posted", "selectedCount": 0 },
+      "expected": { "error": "Use record posted to move comments to posted" }
+    },
+    {
+      "name": "approve without review",
+      "facts": { "current": "drafting" },
+      "expected": { "error": "Only comments needing review can be approved" }
+    },
+    {
+      "name": "approve twice",
+      "facts": { "current": "approved" },
+      "expected": { "error": "Only comments needing review can be approved" }
+    },
+    {
+      "name": "request changes without review",
+      "facts": { "current": "approved", "next": "changes_requested" },
+      "expected": {
+        "error": "Only comments needing review can request changes"
+      }
+    },
+    {
+      "name": "request changes in review",
+      "facts": { "next": "changes_requested" },
+      "expected": { "ok": true }
+    },
+    {
+      "name": "reject a posted comment",
+      "facts": { "current": "posted", "next": "rejected" },
+      "expected": { "error": "Terminal comment threads cannot change status" }
+    },
+    {
+      "name": "reopen a cancelled comment",
+      "facts": { "current": "cancelled", "next": "needs_review" },
+      "expected": { "error": "Terminal comment threads cannot change status" }
+    },
+    {
+      "name": "cancel an approved comment",
+      "facts": {
+        "current": "approved",
+        "next": "cancelled",
+        "selectedCount": 0
+      },
+      "expected": { "ok": true }
+    },
+    {
+      "name": "reject in review",
+      "facts": { "next": "rejected" },
+      "expected": { "ok": true }
+    }
+  ],
+  "variantStatusCases": [
+    {
+      "name": "select a clean variant",
+      "threadStatus": "drafting",
+      "next": "selected",
+      "variantBlocked": false,
+      "expected": { "ok": true }
+    },
+    {
+      "name": "select a blocked variant",
+      "threadStatus": "needs_review",
+      "next": "selected",
+      "variantBlocked": true,
+      "expected": { "error": "Blocked comment variants cannot be selected" }
+    },
+    {
+      "name": "reject a blocked variant",
+      "threadStatus": "needs_review",
+      "next": "rejected",
+      "variantBlocked": true,
+      "expected": { "ok": true }
+    },
+    {
+      "name": "change variants after posting",
+      "threadStatus": "posted",
+      "next": "draft",
+      "variantBlocked": false,
+      "expected": {
+        "error": "Posted, rejected, and cancelled comments cannot change variants"
+      }
+    },
+    {
+      "name": "terminal wins over blocked",
+      "threadStatus": "rejected",
+      "next": "selected",
+      "variantBlocked": true,
+      "expected": {
+        "error": "Posted, rejected, and cancelled comments cannot change variants"
+      }
+    }
+  ],
+  "assertBase": {
+    "threadStatus": "approved",
+    "selectedCount": 1,
+    "selectedBlocked": false,
+    "commentaryMatches": true,
+    "targetResolved": true,
+    "targetMatches": true,
+    "idempotencyMatches": true,
+    "successfulAttemptCount": 0,
+    "killSwitchReason": null,
+    "windowKey": "2026-11-02",
+    "dailyCount": 0,
+    "dailyCommentLimit": 5
+  },
+  "assertCases": [
+    {
+      "name": "approved comment under the cap",
+      "facts": {},
+      "expected": { "decision": "allowed" }
+    },
+    {
+      "name": "not approved wins over everything",
+      "facts": {
+        "threadStatus": "needs_review",
+        "selectedCount": 0,
+        "killSwitchReason": "Stop"
+      },
+      "expected": {
+        "decision": "rejected",
+        "message": "Only approved comments can publish via LinkedIn"
+      }
+    },
+    {
+      "name": "no selected variant",
+      "facts": { "selectedCount": 0 },
+      "expected": {
+        "decision": "rejected",
+        "message": "Choose one comment variant before review"
+      }
+    },
+    {
+      "name": "blocked selected variant",
+      "facts": { "selectedBlocked": true },
+      "expected": {
+        "decision": "rejected",
+        "message": "Blocked comment variants cannot be reviewed"
+      }
+    },
+    {
+      "name": "commentary mismatch",
+      "facts": { "commentaryMatches": false, "successfulAttemptCount": 1 },
+      "expected": {
+        "decision": "rejected",
+        "message": "Commentary does not match the approved comment variant"
+      }
+    },
+    {
+      "name": "target cannot be resolved",
+      "facts": { "targetResolved": false, "targetMatches": false },
+      "expected": {
+        "decision": "rejected",
+        "message": "LinkedIn target URN could not be resolved from the candidate URL"
+      }
+    },
+    {
+      "name": "target mismatch",
+      "facts": { "targetMatches": false },
+      "expected": {
+        "decision": "rejected",
+        "message": "LinkedIn target URN does not match the comment target"
+      }
+    },
+    {
+      "name": "idempotency key mismatch",
+      "facts": { "idempotencyMatches": false },
+      "expected": {
+        "decision": "rejected",
+        "message": "Comment idempotency key does not match thread state"
+      }
+    },
+    {
+      "name": "already posted wins over the kill switch",
+      "facts": { "successfulAttemptCount": 1, "killSwitchReason": "Stop" },
+      "expected": {
+        "decision": "rejected",
+        "message": "Comment thread already has a successful posting attempt"
+      }
+    },
+    {
+      "name": "kill switch with a reason wins over the cap",
+      "facts": { "killSwitchReason": "Incident review", "dailyCount": 5 },
+      "expected": {
+        "decision": "kill_switch",
+        "message": "Global kill switch is enabled: Incident review",
+        "summary": "Comment posting blocked by global kill switch: Incident review"
+      }
+    },
+    {
+      "name": "kill switch without a reason",
+      "facts": { "killSwitchReason": "" },
+      "expected": {
+        "decision": "kill_switch",
+        "message": "Global kill switch is enabled",
+        "summary": "Comment posting blocked by global kill switch"
+      }
+    },
+    {
+      "name": "at the daily cap",
+      "facts": { "dailyCount": 5 },
+      "expected": {
+        "decision": "limit_reached",
+        "message": "Daily comment limit reached for 2026-11-02: 5/5 used"
+      }
+    }
+  ],
+  "limitSummaryCases": [
+    {
+      "windowKey": "2026-11-02",
+      "count": 0,
+      "limit": 5,
+      "allowed": true,
+      "summary": "Comment allowed for 2026-11-02: 0/5 used"
+    },
+    {
+      "windowKey": "2026-11-02",
+      "count": 5,
+      "limit": 5,
+      "allowed": false,
+      "summary": "Daily comment limit reached for 2026-11-02: 5/5 used"
+    },
+    {
+      "windowKey": "2026-11-02",
+      "count": 0,
+      "limit": 0,
+      "allowed": false,
+      "summary": "Daily comment limit reached for 2026-11-02: 0/0 used"
+    }
+  ]
+}

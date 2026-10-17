@@ -1055,3 +1055,264 @@ async fn reconcile_requires_confirmation_current_fence_and_a_linkedin_reference(
         "outcome_unknown"
     );
 }
+
+// ---------------------------------------------------------------- shared contract
+// tests/fixtures/publishing-contract.json is also read by the browser fake
+// (tests/helpers/tauri-mocks.ts); these tests hold the native side to it.
+
+fn publishing_contract() -> serde_json::Value {
+    serde_json::from_str(include_str!(
+        "../../../tests/fixtures/publishing-contract.json"
+    ))
+    .unwrap()
+}
+
+fn strings(value: &serde_json::Value) -> Vec<&str> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect()
+}
+
+#[test]
+fn execution_status_lists_match_contract_and_their_sql() {
+    use super::store::{
+        sql_status_list, OPEN_EXECUTION_ERROR, OPEN_EXECUTION_STATUSES, OPEN_STATUSES_SQL,
+        RECONCILABLE_EXECUTION_STATUSES, RECONCILABLE_STATUSES_SQL, RECOVERABLE_EXECUTION_STATUSES,
+        RECOVERABLE_STATUSES_SQL,
+    };
+    let contract = publishing_contract();
+    assert_eq!(
+        strings(&contract["openExecutionStatuses"]),
+        OPEN_EXECUTION_STATUSES
+    );
+    assert_eq!(
+        strings(&contract["recoverableExecutionStatuses"]),
+        RECOVERABLE_EXECUTION_STATUSES
+    );
+    assert_eq!(
+        strings(&contract["reconcilableExecutionStatuses"]),
+        RECONCILABLE_EXECUTION_STATUSES
+    );
+    assert_eq!(OPEN_STATUSES_SQL, sql_status_list(&OPEN_EXECUTION_STATUSES));
+    assert_eq!(
+        RECOVERABLE_STATUSES_SQL,
+        sql_status_list(&RECOVERABLE_EXECUTION_STATUSES)
+    );
+    assert_eq!(
+        RECONCILABLE_STATUSES_SQL,
+        sql_status_list(&RECONCILABLE_EXECUTION_STATUSES)
+    );
+    assert_eq!(contract["openExecutionError"], OPEN_EXECUTION_ERROR);
+    assert_eq!(contract["reconcileConfirmation"], RECONCILE_CONFIRMATION);
+}
+
+#[tokio::test]
+async fn settled_status_per_remote_outcome_matches_contract() {
+    let contract = publishing_contract();
+    for (remote, expected) in contract["settledStatusByRemoteOutcome"]
+        .as_object()
+        .unwrap()
+    {
+        let (f, id) = approved_fixture().await;
+        let outcome = match remote.as_str() {
+            "created" => created_post(),
+            "rejected" => rejected(),
+            "ambiguous" => ambiguous(),
+            other => panic!("unknown remote outcome {other}"),
+        };
+        let transport = ScriptedTransport::new(vec![outcome]);
+        execute(context(&f.pool, transport), post_request(id))
+            .await
+            .unwrap();
+        let status = scalar_text(
+            &f.pool,
+            "SELECT status FROM publish_executions ORDER BY id DESC LIMIT 1",
+        )
+        .await;
+        assert_eq!(status, expected.as_str().unwrap(), "{remote}");
+    }
+}
+
+#[tokio::test]
+async fn reconciled_status_per_resolution_matches_contract() {
+    let contract = publishing_contract();
+    for (resolution, expected) in contract["reconciledStatusByResolution"]
+        .as_object()
+        .unwrap()
+    {
+        let (f, id) = approved_fixture().await;
+        let execution_id = unknown_post(&f, id).await;
+        let input = match resolution.as_str() {
+            "posted" => reconcile_input(
+                execution_id,
+                1,
+                ReconcileResolution::Posted,
+                Some("https://www.linkedin.com/feed/update/urn:li:share:999/"),
+            ),
+            "not_posted" => reconcile_input(execution_id, 1, ReconcileResolution::NotPosted, None),
+            other => panic!("unknown resolution {other}"),
+        };
+        let result = reconcile(&f.pool, input, now()).await.unwrap();
+        assert_eq!(result.status, expected.as_str().unwrap(), "{resolution}");
+    }
+}
+
+#[tokio::test]
+async fn open_execution_blocking_matches_contract() {
+    use super::store::ensure_no_open_execution;
+    use super::types::ExecutionKind;
+    let contract = publishing_contract();
+    for case in contract["openExecutionBlocking"].as_array().unwrap() {
+        let (f, _) = approved_fixture().await;
+        let open = &case["open"];
+        seed(
+            &f.pool,
+            &format!(
+                "INSERT INTO publish_executions (kind, subject_id, campaign_id, caller, status, owner_token, idempotency_key, content_hash)
+                 VALUES ('{}', {}, 1, '{}', '{}', 'seeded-owner', 'seeded-key', 'seeded-hash');",
+                open["kind"].as_str().unwrap(),
+                open["subject"].as_i64().unwrap(),
+                open["caller"].as_str().unwrap(),
+                open["status"].as_str().unwrap(),
+            ),
+        )
+        .await;
+        let attempt = &case["attempt"];
+        let kind = ExecutionKind::parse(attempt["kind"].as_str().unwrap()).unwrap();
+        let subject = attempt["subject"].as_i64().unwrap();
+        let expected = case["blocked"].as_bool().unwrap();
+        let mut connection = f.pool.acquire().await.unwrap();
+        let blocked = ensure_no_open_execution(&mut connection, kind, subject)
+            .await
+            .is_err();
+        drop(connection);
+        assert_eq!(blocked, expected, "{}", case["name"]);
+
+        // The full reservation path agrees, whoever the caller is.
+        let caller = match attempt["caller"].as_str().unwrap() {
+            "manual" => ExecutionCaller::Manual,
+            _ => ExecutionCaller::Scheduler,
+        };
+        let request = match kind {
+            ExecutionKind::Post => post_request(subject),
+            ExecutionKind::Comment => comment_request(subject),
+        };
+        let refused_as_open = matches!(
+            reserve(&f.pool, request, caller).await.unwrap(),
+            Err(ReserveRefusal::OpenExecution)
+        );
+        assert_eq!(refused_as_open, expected, "reserve: {}", case["name"]);
+    }
+}
+
+#[test]
+fn post_publish_gate_matches_contract() {
+    use crate::auth::publish::{evaluate_post_publish, PostPublishFacts};
+    use crate::test_support::{contract_case, contract_expected};
+    let contract = publishing_contract();
+    for case in contract["postPublishCases"].as_array().unwrap() {
+        let facts = contract_case(&contract["postPublishBase"], &case["facts"]);
+        let actual = evaluate_post_publish(&PostPublishFacts {
+            campaign_status: facts["campaignStatus"].as_str().unwrap(),
+            approval_status: facts["approvalStatus"].as_str().unwrap(),
+            successful_attempt_count: facts["successfulAttemptCount"].as_i64().unwrap(),
+            ready_at_reviewed_revision: facts["readyAtReviewedRevision"].as_bool().unwrap(),
+            requested_schedule_job: facts["requestedScheduleJob"].as_i64(),
+            current_scheduled_job: facts["currentScheduledJob"].as_i64(),
+            idempotency_matches: facts["idempotencyMatches"].as_bool().unwrap(),
+            commentary_matches: facts["commentaryMatches"].as_bool().unwrap(),
+        });
+        assert_eq!(actual, contract_expected(case), "{}", case["name"]);
+    }
+}
+
+#[test]
+fn comment_publish_gate_matches_contract() {
+    use crate::auth::publish::{evaluate_comment_publish, CommentPublishFacts};
+    use crate::test_support::{contract_case, contract_expected};
+    let contract = publishing_contract();
+    for case in contract["commentPublishCases"].as_array().unwrap() {
+        let facts = contract_case(&contract["commentPublishBase"], &case["facts"]);
+        let actual = evaluate_comment_publish(&CommentPublishFacts {
+            campaign_status: facts["campaignStatus"].as_str().unwrap(),
+            thread_status: facts["threadStatus"].as_str().unwrap(),
+            successful_attempt_count: facts["successfulAttemptCount"].as_i64().unwrap(),
+            selected_count: facts["selectedCount"].as_u64().unwrap() as usize,
+            selected_blocked: facts["selectedBlocked"].as_bool().unwrap(),
+            commentary_matches: facts["commentaryMatches"].as_bool().unwrap(),
+            target_resolved: facts["targetResolved"].as_bool().unwrap(),
+            target_matches: facts["targetMatches"].as_bool().unwrap(),
+            idempotency_matches: facts["idempotencyMatches"].as_bool().unwrap(),
+            daily_count: facts["dailyCount"].as_i64().unwrap(),
+            daily_comment_limit: facts["dailyCommentLimit"].as_i64().unwrap(),
+        });
+        assert_eq!(actual, contract_expected(case), "{}", case["name"]);
+    }
+}
+
+#[tokio::test]
+async fn comment_publish_cap_counting_matches_contract() {
+    let contract = publishing_contract();
+    for case in contract["commentPublishCapCounting"]["cases"]
+        .as_array()
+        .unwrap()
+    {
+        let (f, _) = approved_fixture().await;
+        seed(
+            &f.pool,
+            "UPDATE campaigns SET daily_comment_limit=1 WHERE id=1;",
+        )
+        .await;
+        // Rows belong to thread 11; the publish under test is thread 10, so
+        // only the campaign-wide count can block it.
+        for (index, status) in strings(&case["attempts"]).into_iter().enumerate() {
+            let (url, error) = if status == "succeeded" {
+                (
+                    "https://www.linkedin.com/feed/update/urn:li:activity:1/",
+                    "",
+                )
+            } else {
+                ("", "LinkedIn rejected the comment")
+            };
+            seed(
+                &f.pool,
+                &format!(
+                    "INSERT INTO comment_attempts (comment_thread_id, platform, status, external_comment_url, platform_comment_id, idempotency_key, error_message)
+                     VALUES (11, 'linkedin', '{status}', '{url}', '', 'seeded-{index}', '{error}');"
+                ),
+            )
+            .await;
+        }
+        for status in strings(&case["executions"]) {
+            seed(
+                &f.pool,
+                &format!(
+                    "INSERT INTO publish_executions (kind, subject_id, campaign_id, caller, status, owner_token, idempotency_key, content_hash)
+                     VALUES ('comment', 11, 1, 'manual', '{status}', 'seeded-owner', 'seeded-key', 'seeded-hash');"
+                ),
+            )
+            .await;
+        }
+        let outcome = reserve(&f.pool, comment_request(10), ExecutionCaller::Manual)
+            .await
+            .unwrap();
+        let blocked_by_cap = matches!(
+            &outcome,
+            Err(ReserveRefusal::Policy(message)) if message.starts_with("Daily comment limit reached")
+        );
+        let expected = case["blocked"].as_bool().unwrap();
+        assert_eq!(
+            blocked_by_cap,
+            expected,
+            "{}: {:?}",
+            case["name"],
+            outcome.as_ref().err()
+        );
+        if !expected {
+            assert!(outcome.is_ok(), "{}: {:?}", case["name"], outcome.err());
+        }
+    }
+}

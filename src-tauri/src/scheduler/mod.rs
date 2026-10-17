@@ -13,7 +13,7 @@ use crate::auth::publish::{
 use crate::publishing::{
     recovery,
     service::{execute, ExecuteContext},
-    store::ReserveRequest,
+    store::{ReserveRequest, OPEN_STATUSES_SQL},
     transport::{LinkedInTransport, LiveLinkedInTransport},
     types::{ExecutionCaller, ExecutionOutcome},
 };
@@ -269,7 +269,7 @@ async fn is_kill_switch_enabled(pool: &SqlitePool) -> Result<bool, String> {
 }
 
 async fn select_due_jobs(pool: &SqlitePool, max_jobs: i64) -> Result<Vec<DueScheduleJob>, String> {
-    let rows = sqlx::query(
+    let rows = sqlx::query(&format!(
         "SELECT
             sj.id,
             sj.approval_id,
@@ -298,11 +298,11 @@ async fn select_due_jobs(pool: &SqlitePool, max_jobs: i64) -> Result<Vec<DueSche
                 SELECT 1 FROM publish_executions pe
                 WHERE pe.kind = 'post'
                     AND pe.subject_id = sj.approval_id
-                    AND pe.status IN ('reserved', 'in_flight', 'outcome_unknown')
+                    AND pe.status IN {OPEN_STATUSES_SQL}
             )
         ORDER BY datetime(sj.scheduled_for) ASC, sj.id ASC
-        LIMIT ?",
-    )
+        LIMIT ?"
+    ))
     .bind(format!("-{LOCK_STALE_MINUTES} minutes"))
     .bind(max_jobs)
     .fetch_all(pool)
@@ -330,7 +330,7 @@ async fn claim_job(
     job: &mut DueScheduleJob,
     runner_id: &str,
 ) -> Result<bool, String> {
-    let result = sqlx::query(
+    let result = sqlx::query(&format!(
         "UPDATE schedule_jobs
         SET
             locked_at = datetime('now'),
@@ -348,9 +348,9 @@ async fn claim_job(
                 SELECT 1 FROM publish_executions pe
                 WHERE pe.kind = 'post'
                     AND pe.subject_id = schedule_jobs.approval_id
-                    AND pe.status IN ('reserved', 'in_flight', 'outcome_unknown')
-            )",
-    )
+                    AND pe.status IN {OPEN_STATUSES_SQL}
+            )"
+    ))
     .bind(runner_id)
     .bind(job.id)
     .bind(format!("-{LOCK_STALE_MINUTES} minutes"))

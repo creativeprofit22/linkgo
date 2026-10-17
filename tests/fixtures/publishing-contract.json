@@ -1,0 +1,378 @@
+{
+  "description": "LinkedIn publishing rules shared by src-tauri (publishing/store.rs, publishing/recovery.rs, auth/publish.rs; checked in publishing/publishing_tests.rs) and the browser fake in tests/helpers/tauri-mocks.ts (checked in tests/safety-gates-contract.spec.ts). Change both sides together.",
+  "openExecutionStatuses": ["reserved", "in_flight", "outcome_unknown"],
+  "recoverableExecutionStatuses": ["reserved", "in_flight"],
+  "reconcilableExecutionStatuses": ["outcome_unknown"],
+  "openExecutionError": "Another publish for this item is in progress or awaiting reconciliation",
+  "reconcileConfirmation": "RECONCILE",
+  "settledStatusByRemoteOutcome": {
+    "created": "succeeded",
+    "rejected": "failed",
+    "ambiguous": "outcome_unknown"
+  },
+  "reconciledStatusByResolution": {
+    "posted": "reconciled_posted",
+    "not_posted": "reconciled_not_posted"
+  },
+  "openExecutionBlocking": [
+    {
+      "name": "manual reservation blocks the scheduler",
+      "open": {
+        "kind": "post",
+        "subject": 1,
+        "caller": "manual",
+        "status": "reserved"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "scheduler" },
+      "blocked": true
+    },
+    {
+      "name": "scheduler in flight blocks a manual publish",
+      "open": {
+        "kind": "post",
+        "subject": 1,
+        "caller": "scheduler",
+        "status": "in_flight"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "manual" },
+      "blocked": true
+    },
+    {
+      "name": "unknown outcome blocks every caller",
+      "open": {
+        "kind": "post",
+        "subject": 1,
+        "caller": "manual",
+        "status": "outcome_unknown"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "manual" },
+      "blocked": true
+    },
+    {
+      "name": "unknown comment outcome blocks a second comment publish",
+      "open": {
+        "kind": "comment",
+        "subject": 10,
+        "caller": "manual",
+        "status": "outcome_unknown"
+      },
+      "attempt": { "kind": "comment", "subject": 10, "caller": "manual" },
+      "blocked": true
+    },
+    {
+      "name": "settled success no longer locks",
+      "open": {
+        "kind": "post",
+        "subject": 1,
+        "caller": "manual",
+        "status": "succeeded"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "scheduler" },
+      "blocked": false
+    },
+    {
+      "name": "definite failure no longer locks",
+      "open": {
+        "kind": "post",
+        "subject": 1,
+        "caller": "scheduler",
+        "status": "failed"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "manual" },
+      "blocked": false
+    },
+    {
+      "name": "abandoned reservation no longer locks",
+      "open": {
+        "kind": "post",
+        "subject": 1,
+        "caller": "manual",
+        "status": "abandoned"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "manual" },
+      "blocked": false
+    },
+    {
+      "name": "reconciled execution no longer locks",
+      "open": {
+        "kind": "post",
+        "subject": 1,
+        "caller": "manual",
+        "status": "reconciled_not_posted"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "manual" },
+      "blocked": false
+    },
+    {
+      "name": "another approval is not locked",
+      "open": {
+        "kind": "post",
+        "subject": 2,
+        "caller": "manual",
+        "status": "in_flight"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "manual" },
+      "blocked": false
+    },
+    {
+      "name": "a comment lock does not lock a post with the same id",
+      "open": {
+        "kind": "comment",
+        "subject": 1,
+        "caller": "manual",
+        "status": "in_flight"
+      },
+      "attempt": { "kind": "post", "subject": 1, "caller": "manual" },
+      "blocked": false
+    }
+  ],
+  "postPublishBase": {
+    "campaignStatus": "active",
+    "approvalStatus": "approved",
+    "successfulAttemptCount": 0,
+    "readyAtReviewedRevision": true,
+    "requestedScheduleJob": null,
+    "currentScheduledJob": null,
+    "idempotencyMatches": true,
+    "commentaryMatches": true
+  },
+  "postPublishCases": [
+    {
+      "name": "manual publish of an approved post",
+      "facts": {},
+      "expected": { "ok": true }
+    },
+    {
+      "name": "archived campaign wins over everything",
+      "facts": {
+        "campaignStatus": "archived",
+        "approvalStatus": "rejected",
+        "readyAtReviewedRevision": false
+      },
+      "expected": { "error": "Campaign is archived" }
+    },
+    {
+      "name": "approval not approved or scheduled",
+      "facts": { "approvalStatus": "needs_review" },
+      "expected": {
+        "error": "Only approved or scheduled approvals can publish via LinkedIn"
+      }
+    },
+    {
+      "name": "already published",
+      "facts": {
+        "successfulAttemptCount": 1,
+        "readyAtReviewedRevision": false
+      },
+      "expected": {
+        "error": "Approval already has a successful publish attempt"
+      }
+    },
+    {
+      "name": "edited after approval",
+      "facts": {
+        "readyAtReviewedRevision": false,
+        "approvalStatus": "scheduled"
+      },
+      "expected": {
+        "error": "Approval is stale or not ready. Reload and run current AI audit and quality checks."
+      }
+    },
+    {
+      "name": "scheduled approval published manually",
+      "facts": { "approvalStatus": "scheduled", "currentScheduledJob": 5 },
+      "expected": {
+        "error": "Scheduled approvals require the current schedule job"
+      }
+    },
+    {
+      "name": "scheduler publishes its current job",
+      "facts": {
+        "approvalStatus": "scheduled",
+        "requestedScheduleJob": 5,
+        "currentScheduledJob": 5
+      },
+      "expected": { "ok": true }
+    },
+    {
+      "name": "scheduler publishes a superseded job",
+      "facts": {
+        "approvalStatus": "scheduled",
+        "requestedScheduleJob": 4,
+        "currentScheduledJob": 5
+      },
+      "expected": { "error": "Schedule job is not the current scheduled job" }
+    },
+    {
+      "name": "job requested but none is scheduled",
+      "facts": { "requestedScheduleJob": 5 },
+      "expected": { "error": "Schedule job is not the current scheduled job" }
+    },
+    {
+      "name": "manual publish may not bypass a pending scheduled job",
+      "facts": { "approvalStatus": "approved", "currentScheduledJob": 5 },
+      "expected": { "error": "Schedule job is not the current scheduled job" }
+    },
+    {
+      "name": "idempotency key mismatch",
+      "facts": { "idempotencyMatches": false, "commentaryMatches": false },
+      "expected": {
+        "error": "Publish idempotency key does not match approval state"
+      }
+    },
+    {
+      "name": "commentary mismatch",
+      "facts": { "commentaryMatches": false },
+      "expected": {
+        "error": "Publish commentary does not match the approved draft variant"
+      }
+    }
+  ],
+  "commentPublishBase": {
+    "campaignStatus": "active",
+    "threadStatus": "approved",
+    "successfulAttemptCount": 0,
+    "selectedCount": 1,
+    "selectedBlocked": false,
+    "commentaryMatches": true,
+    "targetResolved": true,
+    "targetMatches": true,
+    "idempotencyMatches": true,
+    "dailyCount": 0,
+    "dailyCommentLimit": 5
+  },
+  "commentPublishCases": [
+    {
+      "name": "approved comment under the cap",
+      "facts": {},
+      "expected": { "ok": true }
+    },
+    {
+      "name": "archived campaign wins over everything",
+      "facts": {
+        "campaignStatus": "archived",
+        "threadStatus": "drafting",
+        "dailyCount": 9
+      },
+      "expected": { "error": "Campaign is archived" }
+    },
+    {
+      "name": "thread not approved",
+      "facts": { "threadStatus": "needs_review" },
+      "expected": { "error": "Only approved comments can publish via LinkedIn" }
+    },
+    {
+      "name": "already posted",
+      "facts": { "successfulAttemptCount": 1, "selectedCount": 0 },
+      "expected": {
+        "error": "Comment thread already has a successful posting attempt"
+      }
+    },
+    {
+      "name": "no selected variant",
+      "facts": { "selectedCount": 0 },
+      "expected": { "error": "Choose exactly one selected comment variant" }
+    },
+    {
+      "name": "two selected variants",
+      "facts": { "selectedCount": 2 },
+      "expected": { "error": "Choose exactly one selected comment variant" }
+    },
+    {
+      "name": "blocked variant",
+      "facts": { "selectedBlocked": true, "commentaryMatches": false },
+      "expected": { "error": "Blocked comment variants cannot be reviewed" }
+    },
+    {
+      "name": "commentary mismatch",
+      "facts": { "commentaryMatches": false, "targetResolved": false },
+      "expected": {
+        "error": "Commentary does not match the approved comment variant"
+      }
+    },
+    {
+      "name": "target cannot be resolved",
+      "facts": { "targetResolved": false, "targetMatches": false },
+      "expected": {
+        "error": "LinkedIn target URN could not be resolved from the candidate URL"
+      }
+    },
+    {
+      "name": "target mismatch",
+      "facts": { "targetMatches": false },
+      "expected": {
+        "error": "LinkedIn target URN does not match the comment target"
+      }
+    },
+    {
+      "name": "idempotency key mismatch",
+      "facts": { "idempotencyMatches": false, "dailyCount": 5 },
+      "expected": {
+        "error": "Comment idempotency key does not match thread state"
+      }
+    },
+    {
+      "name": "at the daily cap",
+      "facts": { "dailyCount": 5 },
+      "expected": { "error": "Daily comment limit reached for today: 5/5 used" }
+    },
+    {
+      "name": "a zero cap blocks every comment",
+      "facts": { "dailyCount": 0, "dailyCommentLimit": 0 },
+      "expected": { "error": "Daily comment limit reached for today: 0/0 used" }
+    }
+  ],
+  "commentPublishCapCounting": {
+    "description": "The comment publish cap counts the campaign's succeeded attempts created today plus its open comment executions (any day). Each case seeds rows for one campaign with daily_comment_limit = 1 and checks whether the next comment publish is blocked.",
+    "cases": [
+      {
+        "name": "nothing yet",
+        "attempts": [],
+        "executions": [],
+        "blocked": false
+      },
+      {
+        "name": "a succeeded attempt today",
+        "attempts": ["succeeded"],
+        "executions": [],
+        "blocked": true
+      },
+      {
+        "name": "a failed attempt today",
+        "attempts": ["failed"],
+        "executions": [],
+        "blocked": false
+      },
+      {
+        "name": "a reserved comment execution",
+        "attempts": [],
+        "executions": ["reserved"],
+        "blocked": true
+      },
+      {
+        "name": "an in-flight comment execution",
+        "attempts": [],
+        "executions": ["in_flight"],
+        "blocked": true
+      },
+      {
+        "name": "an unknown-outcome comment execution",
+        "attempts": [],
+        "executions": ["outcome_unknown"],
+        "blocked": true
+      },
+      {
+        "name": "a failed comment execution",
+        "attempts": [],
+        "executions": ["failed"],
+        "blocked": false
+      },
+      {
+        "name": "an abandoned comment execution",
+        "attempts": [],
+        "executions": ["abandoned"],
+        "blocked": false
+      }
+    ]
+  }
+}
