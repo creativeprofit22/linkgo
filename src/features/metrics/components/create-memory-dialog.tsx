@@ -124,7 +124,7 @@ export function CreateMemoryDialog({
             >
               <option value="winner">Winner</option>
               <option value="underperformer">Didn&rsquo;t land</option>
-              <option value="insight">Lesson</option>
+              <option value="insight">Insight</option>
               <option value="avoid">Avoid</option>
             </select>
           </Field>

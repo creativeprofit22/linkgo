@@ -18,6 +18,7 @@ export const BANNED_TERMS = [
   { pattern: /\bworkflows?\b/i, say: "Automation" },
   { pattern: /\bagent runs?\b/i, say: "AI task" },
   { pattern: /\bbatch(es)?\b/i, say: "import" },
+  { pattern: /\bmemory\b/i, say: "lesson" },
   { pattern: /\bpause everything\b/i, say: "emergency pause" },
   { pattern: /\bkill switch\b/i, say: "emergency pause" },
   { pattern: /\bidempotency\b/i, say: "Details for support" },
