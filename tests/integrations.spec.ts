@@ -179,6 +179,8 @@ test("shows a failed-copy message when OAuth URL copy is unavailable", async ({
       configurable: true,
       value: undefined,
     });
+    // The copy fallback probes this legacy API; stub it unsupported.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     document.queryCommandSupported = () => false;
   });
 

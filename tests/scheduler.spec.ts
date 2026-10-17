@@ -6,6 +6,12 @@ import {
 import { setupTauriMocks } from "./helpers/tauri-mocks";
 import { openSection } from "./helpers/navigation";
 
+function firstRow<T>(rows: readonly T[], label: string): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error(`Expected a ${label}`);
+  return row;
+}
+
 test.beforeEach(async ({ page }) => {
   await setupTauriMocks(page);
 });
@@ -65,8 +71,8 @@ test("runs a due scheduled post and records a successful publish", async ({
   await panel.getByRole("button", { name: "Post what's due now" }).click();
   await expectActivity(panel, "Scheduled LinkedIn post was published.");
 
-  const [schedule] = await getScheduleJobs(page);
-  const [attempt] = await getPublishAttempts(page);
+  const schedule = firstRow(await getScheduleJobs(page), "schedule job");
+  const attempt = firstRow(await getPublishAttempts(page), "publish attempt");
   expect(schedule.status).toBe("completed");
   expect(attempt.status).toBe("succeeded");
   expect(attempt.schedule_job_id).toBe(schedule.id);
@@ -96,8 +102,8 @@ test("keeps a failed due publish scheduled for retry", async ({ page }) => {
     "Scheduled LinkedIn publish failed and will retry.",
   );
 
-  const [schedule] = await getScheduleJobs(page);
-  const [attempt] = await getPublishAttempts(page);
+  const schedule = firstRow(await getScheduleJobs(page), "schedule job");
+  const attempt = firstRow(await getPublishAttempts(page), "publish attempt");
   expect(schedule.status).toBe("scheduled");
   expect(schedule.attempt_count).toBe(1);
   expect(schedule.next_attempt_at).toBeTruthy();
@@ -121,7 +127,7 @@ test("moves a terminal scheduler failure to operator follow-up", async ({
   await panel.getByRole("button", { name: "Post what's due now" }).click();
   await expectActivity(panel, "Scheduled LinkedIn publish failed permanently.");
 
-  const [schedule] = await getScheduleJobs(page);
+  const schedule = firstRow(await getScheduleJobs(page), "schedule job");
   const counts = await getStateCounts(page);
   expect(schedule.status).toBe("failed");
   expect(counts.errorQueueItems).toBe(1);
@@ -169,7 +175,7 @@ test("reschedules a failed post from the side panel and hides Reschedule", async
     scheduledFor: "2099-01-01T09:00",
     timezone: "local",
   });
-  const [schedule] = await getScheduleJobs(page);
+  const schedule = firstRow(await getScheduleJobs(page), "schedule job");
   expect(schedule.status).toBe("scheduled");
 
   await expect(failed.getByText("Scheduled again.")).toBeVisible();
@@ -203,7 +209,7 @@ test("global kill switch blocks due jobs without publishing", async ({
   await panel.getByRole("button", { name: "Post what's due now" }).click();
   await expectActivity(panel, "didn't go out because everything is paused");
 
-  const [schedule] = await getScheduleJobs(page);
+  const schedule = firstRow(await getScheduleJobs(page), "schedule job");
   const publishInvokes = await getLinkedInPublishInvokeCount(page);
   expect(schedule.status).toBe("scheduled");
   expect(publishInvokes).toBe(0);

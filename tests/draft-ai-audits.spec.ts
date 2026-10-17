@@ -1018,8 +1018,9 @@ test("reconciles crashes at every draft audit transaction boundary and preserves
   expect(result.clearedApprovalCheckpointCount).toBe(1);
 
   const state = await getAuditState(page);
-  const auditById = (id: number) => state.runs.find((run) => run.id === id);
-  const agentById = (id: number) =>
+  const auditById = (id: number | undefined) =>
+    state.runs.find((run) => run.id === id);
+  const agentById = (id: number | undefined) =>
     state.agents.find((agent) => agent.id === id);
 
   expect(auditById(ids.reservedAudit)).toMatchObject({

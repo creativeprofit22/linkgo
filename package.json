@@ -34,9 +34,10 @@
     "format:check": "prettier --check .",
     "format:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts",
-    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts --fix",
-    "check": "bun run check:renderer-transactions && bun run check:architecture && bun run check:glossary && bun run format:check && bun run format:rust:check && bun run lint && bun run lint:rust && bun run build && bun run test && bun run test:rust"
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"tests-desktop/**/*.ts\" vite.config.ts playwright.config.ts playwright.desktop.config.ts",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"tests-desktop/**/*.ts\" vite.config.ts playwright.config.ts playwright.desktop.config.ts --fix",
+    "typecheck:tests": "node node_modules/typescript/bin/tsc -p tsconfig.tests.json",
+    "check": "bun run check:renderer-transactions && bun run check:architecture && bun run check:glossary && bun run format:check && bun run format:rust:check && bun run lint && bun run typecheck:tests && bun run lint:rust && bun run build && bun run test && bun run test:rust"
   },
   "dependencies": {
     "@tailwindcss/vite": "4.2.4",

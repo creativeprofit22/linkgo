@@ -38,8 +38,8 @@ export function TitleBar({
       const appWindow = await getAppWindow();
       if (!appWindow) return;
       setIsMaximized(await appWindow.isMaximized());
-      const unlisten = appWindow.onResized(async () => {
-        setIsMaximized(await appWindow.isMaximized());
+      const unlisten = appWindow.onResized(() => {
+        void appWindow.isMaximized().then(setIsMaximized);
       });
       cleanup = () => {
         void unlisten.then((fn) => fn());

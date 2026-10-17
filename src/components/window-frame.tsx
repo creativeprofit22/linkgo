@@ -29,8 +29,8 @@ export function WindowFrame({
         await import("@tauri-apps/api/webviewWindow");
       const appWindow = getCurrentWebviewWindow();
       setIsMaximized(await appWindow.isMaximized());
-      const unlistenResize = appWindow.onResized(async () => {
-        setIsMaximized(await appWindow.isMaximized());
+      const unlistenResize = appWindow.onResized(() => {
+        void appWindow.isMaximized().then(setIsMaximized);
       });
       cleanup = () => {
         void unlistenResize.then((fn) => fn());

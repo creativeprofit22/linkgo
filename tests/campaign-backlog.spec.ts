@@ -703,7 +703,7 @@ interface BacklogTestApi {
 
 async function callBacklogApi(
   page: Page,
-  method: keyof BacklogTestApi,
+  method: Exclude<keyof BacklogTestApi, "getNextCampaignBacklogDueAt">,
   input: Record<string, unknown>,
 ): Promise<string> {
   await page.waitForFunction(

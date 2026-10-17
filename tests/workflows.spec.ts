@@ -121,7 +121,9 @@ test("updates duplicate executor-created agent run artifacts in place", async ({
 
     const input = {
       workflowRunId: artifact.workflow_run_id,
-      workflowStepId: artifact.workflow_step_id ?? undefined,
+      ...(artifact.workflow_step_id === null
+        ? {}
+        : { workflowStepId: artifact.workflow_step_id }),
       artifactType: artifact.artifact_type,
       artifactId: artifact.artifact_id,
     };
@@ -2420,6 +2422,8 @@ async function readPlannerAuditState(page: Page): Promise<PlannerAuditState> {
       __LINKGO_SQL_WORKFLOW_EVENTS__: () => PlannerAuditState["events"];
       __LINKGO_PROVIDER_COMMAND_CALLS__?: unknown[];
     };
+    const run = w.__LINKGO_SQL_WORKFLOW_RUNS__()[0];
+    if (!run) throw new Error("Expected a planner workflow run");
     return {
       variants: w.__LINKGO_SQL_DRAFT_VARIANTS__(),
       audits: w.__LINKGO_SQL_DRAFT_AI_AUDIT_RUNS__(),
@@ -2427,7 +2431,7 @@ async function readPlannerAuditState(page: Page): Promise<PlannerAuditState> {
       executions: w
         .__LINKGO_SQL_WORKFLOW_STEP_EXECUTIONS__()
         .filter((row) => row.executor_role === "auditor"),
-      run: w.__LINKGO_SQL_WORKFLOW_RUNS__()[0]!,
+      run,
       events: w.__LINKGO_SQL_WORKFLOW_EVENTS__(),
       calls: w.__LINKGO_PROVIDER_COMMAND_CALLS__ ?? [],
     };

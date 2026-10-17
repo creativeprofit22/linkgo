@@ -34,7 +34,7 @@ async function rendererTransactionCallsSince(
     return calls
       .slice(start)
       .map((call) => call.query.trim().toLocaleUpperCase())
-      .filter((query) => /^(BEGIN|COMMIT|ROLLBACK)/u.test(query));
+      .filter((query) => /^(BEGIN|COMMIT|ROLLBACK)\b/u.test(query));
   }, from);
 }
 

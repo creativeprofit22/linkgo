@@ -10,10 +10,12 @@ export function useAppShortcuts(): void {
     void (async () => {
       const { register, unregister: unregisterShortcut } =
         await import("@tauri-apps/plugin-global-shortcut");
-      await register("CommandOrControl+Shift+L", async () => {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        await getCurrentWindow().show();
-        await getCurrentWindow().setFocus();
+      await register("CommandOrControl+Shift+L", () => {
+        void (async () => {
+          const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          await getCurrentWindow().show();
+          await getCurrentWindow().setFocus();
+        })();
       });
       unregister = () => unregisterShortcut("CommandOrControl+Shift+L");
     })();

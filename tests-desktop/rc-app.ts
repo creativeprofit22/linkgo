@@ -137,6 +137,8 @@ export async function openScreen(page: Page, id: MenuScreenId): Promise<void> {
 }
 
 export const test = base.extend<{ app: Page }>({
+  // Playwright fixtures must destructure their first argument.
+  // eslint-disable-next-line no-empty-pattern
   app: async ({}, use) => {
     assertOnlyRcAppRunning();
     const port = process.env.LINKGO_CDP_PORT ?? "9222";

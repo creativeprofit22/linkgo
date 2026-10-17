@@ -550,8 +550,10 @@ test("URL, URN, and normalized profile contacts block while failed and same-name
     "",
     "already_contacted",
   ]);
-  expect(after.counts.candidatePosts - before.counts.candidatePosts).toBe(2);
-  expect(page.getByRole("button", { name: "Add idea" })).toBeEnabled();
+  expect(
+    (after.counts.candidatePosts ?? 0) - (before.counts.candidatePosts ?? 0),
+  ).toBe(2);
+  await expect(page.getByRole("button", { name: "Add idea" })).toBeEnabled();
   await expect(page.getByTestId("candidate-policy-card")).toContainText(
     "skip these filters",
   );

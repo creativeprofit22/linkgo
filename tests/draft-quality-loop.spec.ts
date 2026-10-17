@@ -23,6 +23,12 @@ async function findFreePort(): Promise<number> {
 }
 
 let componentServer: ViteDevServer;
+
+function componentUrl(): string {
+  const url = componentServer.resolvedUrls?.local[0];
+  if (!url) throw new Error("Component server has no local URL");
+  return url;
+}
 test.beforeAll(async () => {
   componentServer = await createServer({
     server: { host: "127.0.0.1", port: await findFreePort(), strictPort: true },
@@ -67,7 +73,7 @@ for (const fixture of deterministicFixtures.cases) {
   }) => {
     const renderErrors: string[] = [];
     page.on("pageerror", (error) => renderErrors.push(error.message));
-    await page.goto(componentServer.resolvedUrls!.local[0]);
+    await page.goto(componentUrl());
     const rewrite = {
       ...fixture.rewrite,
       body: fixture.rewrite.body.repeat(fixture.bodyRepeat ?? 1),
@@ -75,7 +81,7 @@ for (const fixture of deterministicFixtures.cases) {
     const expected = fixture.expected.map(([rule_key, severity]) => ({
       rule_key,
       severity,
-      message: deterministicFixtures.messages[rule_key][severity],
+      message: deterministicFixtures.messages[rule_key]?.[severity],
     }));
     const result = await page.evaluate(
       async ({ rewrite, checkerOnly, categoryScores }) => {
@@ -148,11 +154,12 @@ for (const fixture of deterministicFixtures.cases) {
         );
         const row = snapshot.draftVariants.find(
           (row) => row.id === scope.draftVariantId,
-        )!;
+        );
+        if (!row) throw new Error("Expected the scored draft variant");
         const rank: Record<string, number> = { block: 0, warning: 1, pass: 2 };
         audits.sort(
           (a, b) =>
-            rank[a.severity] - rank[b.severity] ||
+            (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3) ||
             a.rule_key.localeCompare(b.rule_key),
         );
         let selectionError = "";
@@ -258,6 +265,8 @@ test("quality mock rejects native DTO extra and missing fields before settlement
   }
   for (const key of Object.keys(settlement)) {
     const missing = { ...settlement };
+    // Each malformed payload drops exactly one required key.
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
     delete missing[key];
     malformed.push(missing);
   }
@@ -389,7 +398,7 @@ for (const scenario of [
     }
   });
   test(`quality recovery controls: ${scenario.name}`, async ({ page }) => {
-    await page.goto(componentServer.resolvedUrls!.local[0]);
+    await page.goto(componentUrl());
     // Mount the real component through Vite, independently of read-model filtering.
     await page.evaluate(async (state) => {
       const reactPath = "/node_modules/.vite/deps/react.js";
@@ -654,6 +663,8 @@ test("oversized provider error is bounded before failure settlement", async ({
       (window as unknown as { __LINKGO_FAIL_MESSAGES__: string[] })
         .__LINKGO_FAIL_MESSAGES__,
   );
+  // Count code points, matching the native 1000-character bound.
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread
   expect([...(sent ?? "")].length).toBeLessThanOrEqual(1000);
   expect(sent).toMatch(/^x+…$/);
   await expect(panel.getByText("Didn't finish", { exact: true })).toBeVisible();

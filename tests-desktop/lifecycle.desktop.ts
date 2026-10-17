@@ -11,7 +11,7 @@ import { expect, scenario, test } from "./rc-app";
 const RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 function runEntries(): string[] {
-  let output = "";
+  let output: string;
   try {
     output = execFileSync("reg", ["query", RUN_KEY], { encoding: "latin1" });
   } catch {

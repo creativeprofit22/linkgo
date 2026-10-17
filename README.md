@@ -88,9 +88,11 @@ bun run test:rust
 ```
 
 Use `bun run check` for the full quality gate, in the order shown above. Formatting
+bun run check:glossary
 checks all supported nonignored repository files with `prettier --check .` and all
 Rust workspace members with `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check`.
 Strict Clippy checks all targets and features with
+bun run typecheck:tests
 `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`.
 The Rust toolchain includes the required rustfmt and Clippy components.
 
@@ -100,6 +102,8 @@ scope, including tests and root configuration files. Both Prettier commands resp
 
 The gate stops on the first failure; later checks are not counted as passes.
 Existing formatting failures must remain visible until separately remediated, and
+ESLint and `typecheck:tests` (`tsconfig.tests.json`) cover the app plus the
+Playwright specs, helpers and configs, which Playwright itself never type-checks.
 an interrupted run remains incomplete rather than a release pass.
 GitHub Actions runs this same gate on Windows for pull requests, `main`, version
 tags, and published releases. Only after the quality job succeeds do version tags

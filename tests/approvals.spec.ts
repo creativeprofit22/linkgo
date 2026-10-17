@@ -48,7 +48,8 @@ for (const state of ["running", "failed"] as const) {
           __LINKGO_DRAFTS_TEST_API__: typeof import("../src/features/drafts/data");
         }
       ).__LINKGO_DRAFTS_TEST_API__;
-      const variant = (await api.listDrafts())[0].variants[0];
+      const variant = (await api.listDrafts())[0]?.variants[0];
+      if (!variant) throw new Error("Expected a seeded draft variant");
       const invoke = (
         window as unknown as {
           __TAURI_INTERNALS__: {
@@ -100,7 +101,8 @@ for (const state of ["running", "failed"] as const) {
             __LINKGO_DRAFTS_TEST_API__: typeof import("../src/features/drafts/data");
           }
         ).__LINKGO_DRAFTS_TEST_API__;
-        const variant = (await api.listDrafts())[0].variants[0];
+        const variant = (await api.listDrafts())[0]?.variants[0];
+        if (!variant) throw new Error("Expected a seeded draft variant");
         const invoke = (
           window as unknown as {
             __TAURI_INTERNALS__: {
@@ -108,11 +110,15 @@ for (const state of ["running", "failed"] as const) {
             };
           }
         ).__TAURI_INTERNALS__.invoke;
+        const scorecard = variant.qualityScorecard;
+        const lastAttempt = scorecard?.attempts.at(-1);
+        if (!scorecard || !lastAttempt)
+          throw new Error("Expected a quality scorecard with an attempt");
         await invoke("linkgo_draft_quality_fail", {
           input: {
-            qualityRunId: variant.qualityScorecard!.run.id,
+            qualityRunId: scorecard.run.id,
             draftVariantId: variant.id,
-            attemptId: variant.qualityScorecard!.attempts.at(-1)!.id,
+            attemptId: lastAttempt.id,
             errorMessage: "Interrupted",
           },
         });
@@ -237,9 +243,11 @@ test("normalized no-op edits preserve the reviewed revision and approval", async
         __LINKGO_DRAFTS_TEST_API__: typeof import("../src/features/drafts/data");
       }
     ).__LINKGO_DRAFTS_TEST_API__;
-    const before = (await api.listDrafts())[0].variants[0];
+    const before = (await api.listDrafts())[0]?.variants[0];
+    if (!before) throw new Error("Expected a seeded draft variant");
     await api.updateDraftVariant({ id: before.id, body: `  ${before.body}  ` });
-    const after = (await api.listDrafts())[0].variants[0];
+    const after = (await api.listDrafts())[0]?.variants[0];
+    if (!after) throw new Error("Expected the updated draft variant");
     return [before.content_revision, after.content_revision];
   });
   expect(revisions[0]).toBe(revisions[1]);
