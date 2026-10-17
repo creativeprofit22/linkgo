@@ -3,6 +3,7 @@ name = "linkgo"
 version = "0.1.0"
 description = "Local-first LinkedIn growth operations cockpit"
 authors = ["Linkgo"]
+license-file = "../LICENSE"
 edition = "2021"
 
 [lib]
