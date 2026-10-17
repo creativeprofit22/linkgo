@@ -181,6 +181,11 @@ Reconciliation with the previous 314 Playwright / 521 Rust baseline
 
 ## Rerunning the desktop harness
 
+CI runs the `fresh` and `upgraded` scenarios nightly, on `v*` tags and on
+demand through `.github/workflows/desktop.yml` (launch and CDP wait in
+`scripts/ci-desktop-scenario.ps1`). `recovery` still needs the manual crash
+steps below.
+
 `bun run test:desktop` attaches over CDP to an already running, installed
 `Linkgo RC Test` build. Every spec is gated on `LINKGO_DESKTOP_SCENARIO`, so
 the harness refuses to start unless it is `fresh`, `upgraded` or `recovery`.

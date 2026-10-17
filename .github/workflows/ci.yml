@@ -90,7 +90,9 @@ jobs:
       - name: Audit dependencies against reviewed exceptions
         run: bun run check:deps
 
+      # Secret scanning must not be skipped when the dependency audit fails.
       - name: Download and verify gitleaks
+        if: ${{ !cancelled() }}
         run: |
           $zip = Join-Path $env:RUNNER_TEMP "gitleaks.zip"
           $url = "https://github.com/gitleaks/gitleaks/releases/download/v$env:GITLEAKS_VERSION/gitleaks_$($env:GITLEAKS_VERSION)_windows_x64.zip"
@@ -100,6 +102,7 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath (Join-Path $env:RUNNER_TEMP "gitleaks")
 
       - name: Scan repository history for secrets
+        if: ${{ !cancelled() }}
         run: |
           & (Join-Path $env:RUNNER_TEMP "gitleaks\gitleaks.exe") git . --redact --no-banner --exit-code 1
 

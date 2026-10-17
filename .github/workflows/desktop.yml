@@ -1,0 +1,98 @@
+name: Desktop harness
+
+# Drives the real packaged app (real IPC, ACL, SQLite, keyring and native
+# scheduler) with the tests-desktop/ suite. Too slow for every push, so it
+# runs nightly, on release tags and on demand. Steps follow "Rerunning the
+# desktop harness" in docs/verification/2026-09-27-desktop-release-candidate.md
+# and only ever touch the isolated RC identity `com.linkgo.app.rctest`.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: "1.4.2"
+  CARGO_TERM_COLOR: always
+  LINKGO_CDP_PORT: "9222"
+
+jobs:
+  desktop:
+    name: Desktop harness (fresh, upgraded)
+    runs-on: windows-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch, 2026-09-03
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: windows
+          add-job-id-key: "false"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build RC test app
+        run: bun run tauri:build:rctest
+
+      - name: Install RC test app
+        run: |
+          $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter "Linkgo RC Test_*_x64-setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "RC test installer not found" }
+          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
+          $exe = Join-Path $env:LOCALAPPDATA "Linkgo RC Test\linkgo-rctest.exe"
+          if (-not (Test-Path $exe)) { throw "linkgo-rctest.exe was not installed at $exe" }
+          "RC_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Generate upgrade fixture
+        working-directory: src-tauri
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "rc-fixtures"
+          $env:LINKGO_FIXTURE_OUT = $out
+          cargo test --lib release_fixtures::tests::write_pre_upgrade_fixture -- --ignored --exact
+          if (-not (Test-Path (Join-Path $out "pre-upgrade.db"))) { throw "pre-upgrade.db was not written" }
+          "RC_FIXTURES=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Run fresh scenario
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rcProfile = Join-Path $env:APPDATA "com.linkgo.app.rctest"
+          if (Test-Path $rcProfile) { Remove-Item -Recurse -Force $rcProfile }
+          & ./scripts/ci-desktop-scenario.ps1 -Exe $env:RC_EXE -Scenario fresh -Port $env:LINKGO_CDP_PORT
+
+      - name: Run upgraded scenario
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rcProfile = Join-Path $env:APPDATA "com.linkgo.app.rctest"
+          if (Test-Path $rcProfile) { Remove-Item -Recurse -Force $rcProfile }
+          New-Item -ItemType Directory -Path $rcProfile | Out-Null
+          Copy-Item (Join-Path $env:RC_FIXTURES "pre-upgrade.db") (Join-Path $rcProfile "linkgo.db")
+          & ./scripts/ci-desktop-scenario.ps1 -Exe $env:RC_EXE -Scenario upgraded -Port $env:LINKGO_CDP_PORT
+
+      - name: Stop RC test app
+        if: ${{ always() }}
+        run: |
+          taskkill /IM linkgo-rctest.exe /F 2>$null
+          exit 0

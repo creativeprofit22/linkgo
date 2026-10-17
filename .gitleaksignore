@@ -9,3 +9,9 @@ b0f3b9bd7c95ae659076ea443c0742f2fe693f10:src/features/comments/components/commen
 a67e3eb4bcce6418823d190439db2b2481f609c8:tests/helpers/tauri-mocks.ts:linkedin-client-id:3758
 b0f3b9bd7c95ae659076ea443c0742f2fe693f10:tests/helpers/tauri-mocks.ts:linkedin-client-id:4250
 c20913197d45534bc6c09990ae1d54a5917dbced:tests/helpers/tauri-mocks.ts:linkedin-client-id:20781
+# Reviewed 2026-10-17 (gitleaks 8.30.1, full history, --redact). generic-api-key matches a
+# `const KEY = "..."` test fixture: the literal placeholder "test-key-123456" used to prove the
+# Bright Data key bridge and run log never echo the key. Not a credential.
+deeb03db483e62111fc7747ae973a6f4d4f557a3:market-research/modding-and-ports/scripts/bd-run.test.mjs:generic-api-key:28
+deeb03db483e62111fc7747ae973a6f4d4f557a3:market-research/modding-and-ports/scripts/lib/run-log.test.mjs:generic-api-key:8
+deeb03db483e62111fc7747ae973a6f4d4f557a3:market-research/modding-and-ports/scripts/lib/secret.test.mjs:generic-api-key:12
