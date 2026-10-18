@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { reconcilePublishExecution } from "@/features/publish-reconciliation/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type { ReconcilePublishExecutionInput } from "@/features/publish-reconciliation/types";
 
 interface UseReconcileOpenExecutionState {
@@ -11,9 +11,10 @@ interface UseReconcileOpenExecutionState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong while saving what happened. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong while saving what happened. Try again.",
+  );
 }
 
 /**

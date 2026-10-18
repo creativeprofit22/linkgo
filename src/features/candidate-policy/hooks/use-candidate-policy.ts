@@ -5,7 +5,7 @@ import {
   getCandidateIntakePolicy,
   updateCandidateIntakePolicy,
 } from "@/features/candidate-policy/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   CandidateIntakePolicy,
   UpdateCandidateIntakePolicyInput,
@@ -23,9 +23,10 @@ interface UseCandidatePolicyState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your idea filters. Please try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your idea filters. Please try again.",
+  );
 }
 
 export function useCandidatePolicy(

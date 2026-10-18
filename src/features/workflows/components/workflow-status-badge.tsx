@@ -47,11 +47,3 @@ export function WorkflowStepStatusBadge({
 }): React.ReactNode {
   return <Badge variant={getVariant(status)}>{stepLabels[status]}</Badge>;
 }
-
-export function getWorkflowRunStatusLabel(status: WorkflowRunStatus): string {
-  return runLabels[status];
-}
-
-export function getWorkflowStepStatusLabel(status: WorkflowStepStatus): string {
-  return stepLabels[status];
-}

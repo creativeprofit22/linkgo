@@ -19,7 +19,7 @@ import {
   updateDraftVariant,
   reconcileStaleDraftQuality,
 } from "@/features/drafts/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import {
   runDraftQualityLoop,
   resumeDraftQualityLoop,
@@ -75,9 +75,10 @@ interface UseDraftsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your drafts. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your drafts. Try again.",
+  );
 }
 
 function getDefaultCampaignId(

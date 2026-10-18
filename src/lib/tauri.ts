@@ -1,5 +1,33 @@
 import { invoke, type InvokeArgs } from "@tauri-apps/api/core";
-import { isBrowserPreview } from "@/lib/env";
+import { IS_TEST, isBrowserPreview } from "@/lib/env";
+
+/** Invoke function a Playwright test injects on `window`. */
+export type InjectedInvoke = (
+  command: string,
+  args?: unknown,
+) => Promise<unknown>;
+
+interface InjectedTauriWindow {
+  __TAURI__?: { core?: { invoke?: unknown } };
+  __TAURI_INTERNALS__?: { invoke?: unknown };
+}
+
+/**
+ * Returns the invoke a Playwright test injected on `window`, or `null` outside
+ * test builds (`IS_TEST`), so production never routes through it.
+ */
+export function getInjectedInvoke(): InjectedInvoke | null {
+  if (!IS_TEST || typeof window === "undefined") return null;
+  const tauriWindow = window as unknown as InjectedTauriWindow;
+  const candidate =
+    tauriWindow.__TAURI_INTERNALS__?.invoke ??
+    tauriWindow.__TAURI__?.core?.invoke;
+  return isInjectedInvoke(candidate) ? candidate : null;
+}
+
+function isInjectedInvoke(candidate: unknown): candidate is InjectedInvoke {
+  return typeof candidate === "function";
+}
 
 /** User-facing guidance shown when a desktop-only operation runs in a browser. */
 export const DESKTOP_REQUIRED_MESSAGE =

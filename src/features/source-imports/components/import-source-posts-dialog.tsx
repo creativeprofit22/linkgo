@@ -20,7 +20,7 @@ import type {
   SourceImportBatchResult,
   SourceImportFormRow,
 } from "@/features/source-imports/types";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage, toPlainMessage } from "@/lib/plain-message";
 
 interface DraftRow extends SourceImportFormRow {
   key: number;
@@ -70,9 +70,10 @@ interface ImportSourcePostsDialogProps {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "We couldn't import these posts. Please try again.";
+  return toPlainErrorMessage(
+    error,
+    "We couldn't import these posts. Please try again.",
+  );
 }
 
 function ResultSummary({

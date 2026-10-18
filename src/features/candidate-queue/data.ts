@@ -27,7 +27,6 @@ import type {
   PromoteDiscoveryItemInput,
   RunCandidateDiscoveryInput,
   ScoreCandidatesInput,
-  TargetPost,
   UpdateCandidateInput,
 } from "@/features/candidate-queue/types";
 import {
@@ -41,44 +40,12 @@ import type { AgentToolExecutionContext } from "@/agent/types";
 import { resolveDefaultAgentModel } from "@/features/integrations/data";
 import { applyNativeRelevanceScores } from "@/workflows/relevance-scoring-commands";
 
-interface TargetPostRow {
-  id: number;
-  platform: "linkedin";
-  url: string;
-  normalized_url: string;
-  platform_resource_urn: string;
-  author_name: string;
-  author_profile_url: string;
-  posted_at: string | null;
-  content: string;
-  content_hash: string;
-  created_at: string;
-  updated_at: string;
-}
-
 type CandidateWithTargetRow = z.infer<
   typeof candidateWithTargetRowListSchema
 >[number];
 type CandidateDiscoveryItemRow = z.infer<
   typeof candidateDiscoveryItemRowSchema
 >;
-
-export function mapTargetPost(row: TargetPostRow): TargetPost {
-  return {
-    id: row.id,
-    platform: row.platform,
-    url: row.url,
-    normalized_url: row.normalized_url,
-    platform_resource_urn: row.platform_resource_urn,
-    author_name: row.author_name,
-    author_profile_url: row.author_profile_url,
-    posted_at: row.posted_at,
-    content: row.content,
-    content_hash: row.content_hash,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  };
-}
 
 export function mapCandidateWithTarget(
   row: CandidateWithTargetRow,

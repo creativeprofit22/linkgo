@@ -1,5 +1,9 @@
-import { IS_TAURI, IS_TEST, isBrowserPreview } from "@/lib/env";
-import { DesktopRequiredError, invokeCommand } from "@/lib/tauri";
+import { IS_TAURI, isBrowserPreview } from "@/lib/env";
+import {
+  DesktopRequiredError,
+  getInjectedInvoke,
+  invokeCommand,
+} from "@/lib/tauri";
 import {
   appSettingsRowSchema,
   launchOnLoginSettingsSchema,
@@ -15,26 +19,6 @@ interface AutostartApi {
   isEnabled: () => Promise<boolean>;
   enable: () => Promise<void>;
   disable: () => Promise<void>;
-}
-
-type InvokeFn = (cmd: string, args?: unknown) => Promise<unknown>;
-
-interface TauriWindowLike {
-  __TAURI__?: { core?: { invoke?: unknown } };
-  __TAURI_INTERNALS__?: { invoke?: unknown };
-}
-
-function isInvoke(candidate: unknown): candidate is InvokeFn {
-  return typeof candidate === "function";
-}
-
-function getInjectedInvoke(): InvokeFn | null {
-  if (!IS_TEST || typeof window === "undefined") return null;
-  const tauriWindow = window as unknown as TauriWindowLike;
-  const candidate =
-    tauriWindow.__TAURI_INTERNALS__?.invoke ??
-    tauriWindow.__TAURI__?.core?.invoke;
-  return isInvoke(candidate) ? candidate : null;
 }
 
 function getSafeErrorMessage(error: unknown): string {

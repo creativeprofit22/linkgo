@@ -101,6 +101,14 @@ const PHRASE_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
   ["candidate score application was blocked", "the idea scores weren't saved"],
 ];
 
+/**
+ * Plain-language message for a caught error: the rewritten `Error.message`, or
+ * `fallback` when the thrown value is not an `Error`.
+ */
+export function toPlainErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? toPlainMessage(error.message) : fallback;
+}
+
 /** Rewrites known system phrases inside `text`; unknown text is returned unchanged. */
 export function toPlainMessage(text: string): string {
   let result = text;

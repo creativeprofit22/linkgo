@@ -7,7 +7,7 @@ import {
   setCampaignMemoryStatus,
 } from "@/features/metrics/data";
 import type { CampaignMemory } from "@/features/metrics/types";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 
 /** Saved lessons for one campaign, as shown in Brand voice. */
 export interface CampaignLessons {
@@ -29,9 +29,10 @@ interface UseLessonsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your lessons. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your lessons. Try again.",
+  );
 }
 
 /** Groups lessons by campaign in campaign-list order; empty campaigns drop. */

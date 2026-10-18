@@ -4,9 +4,7 @@ import {
   APPLIED_LESSON_SIGNALS,
   DRAFT_AI_AUDIT_RULE_KEYS,
   DRAFT_CONTENT_INTENTS,
-  DRAFT_QUALITY_ATTEMPT_STATUSES,
   DRAFT_QUALITY_CATEGORY_KEYS,
-  DRAFT_QUALITY_RUN_STATUSES,
 } from "@/features/drafts/types";
 import type { DraftsRouteParams } from "@/features/drafts/types";
 import {
@@ -99,14 +97,6 @@ export const draftAiAuditFindingRowSchema = z
   })
   .strict();
 
-export const draftAiAuditFindingInputSchema = z
-  .object({
-    ruleKey: draftAiAuditRuleKeySchema,
-    severity: draftAuditSeveritySchema,
-    message: z.string().trim().min(1).max(500),
-  })
-  .strict();
-
 function requireEveryAuditRule(
   ruleKeys: string[],
   context: z.RefinementCtx,
@@ -119,16 +109,6 @@ function requireEveryAuditRule(
     });
   }
 }
-
-export const draftAiAuditFindingsSchema = z
-  .array(draftAiAuditFindingInputSchema)
-  .length(DRAFT_AI_AUDIT_RULE_KEYS.length)
-  .superRefine((findings, context) => {
-    requireEveryAuditRule(
-      findings.map((finding) => finding.ruleKey),
-      context,
-    );
-  });
 
 export const draftAiAuditFindingRowsSchema = z
   .array(draftAiAuditFindingRowSchema)
@@ -227,10 +207,6 @@ export const reconcileStalePlannerDraftAuditsSchema = z
 
 export const draftQualityCategoryKeySchema = z.enum(
   DRAFT_QUALITY_CATEGORY_KEYS,
-);
-export const draftQualityRunStatusSchema = z.enum(DRAFT_QUALITY_RUN_STATUSES);
-export const draftQualityAttemptStatusSchema = z.enum(
-  DRAFT_QUALITY_ATTEMPT_STATUSES,
 );
 
 export const draftQualityCategoryScoreInputSchema = z
@@ -398,14 +374,6 @@ export const generatedDraftVariantSchema = z.object({
   cta: z.string().trim().max(240).default(""),
   hashtags: z.array(z.string().trim().min(1).max(40)).max(5).default([]),
 });
-
-export const draftGenerationRequestStatusSchema = z.enum([
-  "pending",
-  "generated",
-  "saved",
-  "failed",
-  "dismissed",
-]);
 
 export const generateDraftVariantsSchema = z.object({
   campaignId: z.number().int().positive(),

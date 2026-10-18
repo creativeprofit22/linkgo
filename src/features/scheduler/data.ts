@@ -1,6 +1,7 @@
 import { IS_TEST, isBrowserPreview } from "@/lib/env";
 import {
   DesktopRequiredError,
+  getInjectedInvoke,
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -19,26 +20,6 @@ import type {
   SchedulerStatusPayload,
   SchedulerTickResult,
 } from "@/features/scheduler/types";
-
-type InvokeFn = (cmd: string, args?: unknown) => Promise<unknown>;
-
-interface TauriWindowLike {
-  __TAURI__?: { core?: { invoke?: unknown } };
-  __TAURI_INTERNALS__?: { invoke?: unknown };
-}
-
-function isInvoke(candidate: unknown): candidate is InvokeFn {
-  return typeof candidate === "function";
-}
-
-function getInjectedInvoke(): InvokeFn | null {
-  if (!IS_TEST || typeof window === "undefined") return null;
-  const tauriWindow = window as unknown as TauriWindowLike;
-  const candidate =
-    tauriWindow.__TAURI_INTERNALS__?.invoke ??
-    tauriWindow.__TAURI__?.core?.invoke;
-  return isInvoke(candidate) ? candidate : null;
-}
 
 async function invokeCommand(cmd: string): Promise<unknown> {
   const injected = getInjectedInvoke();

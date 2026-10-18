@@ -28,8 +28,6 @@ export const commentVariantStatusSchema = z.enum([
   "rejected",
 ]);
 
-export const commentAuditSeveritySchema = z.enum(["pass", "warning", "block"]);
-
 export const commentAttemptStatusSchema = z.enum(["succeeded", "failed"]);
 
 export const commentVariantInputSchema = z.object({

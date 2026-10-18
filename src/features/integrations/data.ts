@@ -2,6 +2,7 @@ import type { InvokeArgs } from "@tauri-apps/api/core";
 import { IS_TEST, IS_TAURI } from "@/lib/env";
 import {
   DesktopRequiredError,
+  getInjectedInvoke,
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -36,7 +37,6 @@ import type {
   SaveApiKeyInput,
 } from "@/features/integrations/types";
 
-type InvokeFn = (cmd: string, args?: unknown) => Promise<unknown>;
 type UnlistenFn = () => void;
 type ListenFn = (
   event: string,
@@ -54,21 +54,8 @@ const localStatus: AuthStatus = {
   events: [],
 };
 
-function isInvoke(candidate: unknown): candidate is InvokeFn {
-  return typeof candidate === "function";
-}
-
 function isListen(candidate: unknown): candidate is ListenFn {
   return typeof candidate === "function";
-}
-
-function getInjectedInvoke(): InvokeFn | null {
-  if (!IS_TEST || typeof window === "undefined") return null;
-  const tauriWindow = window as unknown as TauriWindowLike;
-  const candidate =
-    tauriWindow.__TAURI_INTERNALS__?.invoke ??
-    tauriWindow.__TAURI__?.core?.invoke;
-  return isInvoke(candidate) ? candidate : null;
 }
 
 async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {

@@ -4,7 +4,7 @@ import {
   listOpenPublishExecutions,
   reconcilePublishExecution,
 } from "@/features/publish-reconciliation/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   OpenPublishExecution,
   ReconcilePublishExecutionInput,
@@ -21,9 +21,10 @@ interface UsePublishReconciliationState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong while checking these posts. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong while checking these posts. Try again.",
+  );
 }
 
 export function usePublishReconciliation(): UsePublishReconciliationState {

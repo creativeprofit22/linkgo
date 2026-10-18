@@ -5,7 +5,7 @@ import {
   updatePlaybookOverride,
 } from "@/features/playbooks/data";
 import { announceDataChange } from "@/lib/data-change-events";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   AgentPlaybookView,
   UpdatePlaybookOverrideInput,
@@ -21,9 +21,10 @@ interface UsePlaybooksState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your brand voice guides. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your brand voice guides. Try again.",
+  );
 }
 
 export function usePlaybooks(): UsePlaybooksState {

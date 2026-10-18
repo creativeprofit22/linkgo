@@ -9,7 +9,7 @@ import {
   startScheduler,
   stopScheduler,
 } from "@/features/scheduler/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   SchedulerDashboard,
   SchedulerStatusPayload,
@@ -33,9 +33,10 @@ interface UseSchedulerState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with auto-posting. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with auto-posting. Try again.",
+  );
 }
 
 export function useScheduler(): UseSchedulerState {

@@ -12,7 +12,7 @@ import {
   updateCommentThread,
   updateCommentVariant,
 } from "@/features/comments/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   CommentEligibleCandidate,
   CommentThreadWithDetails,
@@ -56,9 +56,10 @@ interface UseCommentsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your comments. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your comments. Try again.",
+  );
 }
 
 function getDefaultCampaignId(

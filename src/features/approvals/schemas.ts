@@ -30,13 +30,6 @@ export const reviewApprovalStatusSchema = z.enum([
   "cancelled",
 ]);
 
-export const scheduleJobStatusSchema = z.enum([
-  "scheduled",
-  "cancelled",
-  "completed",
-  "failed",
-]);
-
 export const publishAttemptStatusSchema = z.enum(["succeeded", "failed"]);
 
 const optionalTextSchema = (max: number): z.ZodDefault<z.ZodString> =>

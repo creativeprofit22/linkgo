@@ -5,7 +5,7 @@ import {
   createSourceImportBatch,
   listSourceImportBatches,
 } from "@/features/source-imports/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   CreateSourceImportBatchInput,
   SourceImportBatchDetail,
@@ -25,9 +25,10 @@ interface UseSourceImportsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "We couldn't import these posts. Please try again.";
+  return toPlainErrorMessage(
+    error,
+    "We couldn't import these posts. Please try again.",
+  );
 }
 
 function getResultSummary(result: SourceImportBatchResult): string {

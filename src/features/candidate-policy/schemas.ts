@@ -14,13 +14,6 @@ export function normalizeBannedTopic(value: string): string {
     .toLocaleLowerCase();
 }
 
-export const candidatePolicyRuleKeySchema = z.enum([
-  "source",
-  "age",
-  "banned_topic",
-  "already_contacted",
-]);
-
 export const bannedTopicSchema = z
   .string()
   .transform((value) => value.normalize("NFKC").trim().replace(/\s+/gu, " "))

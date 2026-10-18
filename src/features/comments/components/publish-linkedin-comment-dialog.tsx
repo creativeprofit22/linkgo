@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage, toPlainMessage } from "@/lib/plain-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { escapeLinkedInLittleText } from "@/features/approvals/linkedin-format";
@@ -40,9 +40,10 @@ interface UnknownOutcomeState {
 const CONFIRMATION_TEXT = "Post comment";
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "We couldn't post this comment to LinkedIn. Try again later.";
+  return toPlainErrorMessage(
+    error,
+    "We couldn't post this comment to LinkedIn. Try again later.",
+  );
 }
 
 function getIdempotencyKey(threadId: number): string {

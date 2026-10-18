@@ -7,7 +7,7 @@ import {
   setErrorQueueItemStatus,
   setGlobalKillSwitch,
 } from "@/features/safety/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   SafetyDashboard,
   SetErrorQueueItemStatusInput,
@@ -28,9 +28,10 @@ interface UseSafetyState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with safety settings. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with safety settings. Try again.",
+  );
 }
 
 export function useSafety(): UseSafetyState {

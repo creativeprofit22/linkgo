@@ -11,7 +11,7 @@ import {
   resumeAgentRun,
   startAgentRun,
 } from "@/features/agent-runtime/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import { getAuthStatus } from "@/features/integrations/data";
 import type { ConnectedAccount } from "@/features/integrations/types";
 import { listPlaybooks } from "@/features/playbooks/data";
@@ -51,9 +51,10 @@ interface UseAgentRuntimeState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with the AI assistant. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with the AI assistant. Try again.",
+  );
 }
 
 function showResumeFeedback(result: ResumeAgentRunResult): void {

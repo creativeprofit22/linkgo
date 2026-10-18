@@ -15,7 +15,7 @@ import {
   updateCandidate as updateCandidateRecord,
 } from "@/features/candidate-queue/data";
 import { usePostStageIndex, type PostStageIndex } from "@/features/post-stages";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   CandidateDiscoveryItem,
   CandidateStatus,
@@ -52,9 +52,10 @@ interface UseCandidateQueueState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your ideas. Please try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your ideas. Please try again.",
+  );
 }
 
 function getDefaultCampaignId(

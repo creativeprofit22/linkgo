@@ -27,7 +27,7 @@ import type {
   WorkflowRunWithDetails,
   WorkflowScoringInput,
 } from "@/workflows/types";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 
 interface ScoreWorkflowDialogProps {
   run: WorkflowRunWithDetails;
@@ -41,9 +41,7 @@ interface ScoreWorkflowDialogProps {
 type ConnectedProviderKey = Exclude<AgentProviderKey, "dry_run">;
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "We couldn't start scoring. Try again.";
+  return toPlainErrorMessage(error, "We couldn't start scoring. Try again.");
 }
 
 export function ScoreWorkflowDialog({

@@ -8,7 +8,7 @@ import {
   startAutopilotPlanner,
   stopAutopilotPlanner,
 } from "@/features/autopilot-planner/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   AutopilotPlannerDashboard,
   AutopilotPlannerStatusPayload,
@@ -35,9 +35,10 @@ interface UseAutopilotPlannerState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with Autopilot. Please try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with Autopilot. Please try again.",
+  );
 }
 
 function tickSummary(result: AutopilotPlannerTickResult): string {

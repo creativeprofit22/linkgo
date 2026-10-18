@@ -11,7 +11,7 @@ import {
   subscribeToAuthProgress,
 } from "@/features/integrations/data";
 import { announceDataChange } from "@/lib/data-change-events";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   AuthProgressEvent,
   AuthStatus,
@@ -40,9 +40,10 @@ interface UseIntegrationsState extends AuthStatus {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your connected accounts. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your connected accounts. Try again.",
+  );
 }
 
 export function useIntegrations(): UseIntegrationsState {

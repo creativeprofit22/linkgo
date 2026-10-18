@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { InvokeArgs } from "@tauri-apps/api/core";
-import { IS_TEST, isBrowserPreview } from "@/lib/env";
+import { isBrowserPreview } from "@/lib/env";
 import {
   DesktopRequiredError,
+  getInjectedInvoke,
   invokeCommand as invokeNativeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -34,26 +35,6 @@ const agentProviderChunkSchema = z.discriminatedUnion("type", [
 const agentProviderStreamResultSchema = z.object({
   chunks: z.array(agentProviderChunkSchema),
 });
-
-type InvokeFn = (cmd: string, args?: unknown) => Promise<unknown>;
-
-interface TauriWindowLike {
-  __TAURI__?: { core?: { invoke?: unknown } };
-  __TAURI_INTERNALS__?: { invoke?: unknown };
-}
-
-function isInvoke(candidate: unknown): candidate is InvokeFn {
-  return typeof candidate === "function";
-}
-
-function getInjectedInvoke(): InvokeFn | null {
-  if (!IS_TEST || typeof window === "undefined") return null;
-  const tauriWindow = window as unknown as TauriWindowLike;
-  const candidate =
-    tauriWindow.__TAURI_INTERNALS__?.invoke ??
-    tauriWindow.__TAURI__?.core?.invoke;
-  return isInvoke(candidate) ? candidate : null;
-}
 
 async function invokeCommand(cmd: string, args?: unknown): Promise<unknown> {
   const injected = getInjectedInvoke();

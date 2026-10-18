@@ -7,7 +7,7 @@ import {
   setCampaignBacklogItemStatus,
   updateCampaignBacklogItem,
 } from "@/features/campaign-backlog/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   CampaignBacklogDashboard,
   CampaignBacklogFilters,
@@ -23,9 +23,10 @@ import { listCampaigns } from "@/features/campaigns/data";
 import type { CampaignWithKeywords } from "@/features/campaigns/types";
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your tasks. Please try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your tasks. Please try again.",
+  );
 }
 
 const DEFAULT_FILTERS: CampaignBacklogFilters = {

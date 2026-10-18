@@ -7,7 +7,7 @@ import {
   recordPublishAttempt,
   setApprovalStatus,
 } from "@/features/approvals/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   ApprovalEligibleDraft,
   ApprovalWithDetails,
@@ -66,9 +66,10 @@ interface UseApprovalsState {
 type ReloadResult = { ok: true } | { ok: false; error: string };
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with approvals. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with approvals. Try again.",
+  );
 }
 
 /**

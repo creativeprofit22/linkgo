@@ -24,7 +24,6 @@ export const AUTH_PROVIDER_KEYS = [
   "brightdata",
 ] as const;
 
-export type GgAiProviderKey = (typeof GG_AI_PROVIDER_KEYS)[number];
 export type AgentProviderKey = (typeof AGENT_PROVIDER_KEYS)[number];
 export type AuthProviderKey = (typeof AUTH_PROVIDER_KEYS)[number];
 

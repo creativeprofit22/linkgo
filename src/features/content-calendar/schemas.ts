@@ -24,8 +24,6 @@ export const contentCalendarFormatSchema = z.enum([
   "event",
 ]);
 
-export const contentCalendarSlotStatusSchema = z.enum(["planned", "archived"]);
-
 const idSchema = z.number().int().positive();
 
 const slotForSchema = z

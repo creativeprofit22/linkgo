@@ -3,9 +3,6 @@ import { z } from "zod";
 import {
   AGENT_PROVIDER_KEYS,
   AGENT_ROLES,
-  AGENT_RUN_EVENT_TYPES,
-  AGENT_RUN_STATUSES,
-  AGENT_TOOL_CALL_STATUSES,
   AGENT_TOOL_NAMES,
 } from "@/agent/types";
 
@@ -16,9 +13,6 @@ const summarySchema = z.string().trim().max(1000).default("");
 export const agentToolNameSchema = z.enum(AGENT_TOOL_NAMES);
 export const agentRoleSchema = z.enum(AGENT_ROLES);
 export const agentProviderKeySchema = z.enum(AGENT_PROVIDER_KEYS);
-export const agentRunStatusSchema = z.enum(AGENT_RUN_STATUSES);
-export const agentToolCallStatusSchema = z.enum(AGENT_TOOL_CALL_STATUSES);
-export const agentRunEventTypeSchema = z.enum(AGENT_RUN_EVENT_TYPES);
 
 const basicAgentMessageSchema = z
   .object({
@@ -480,41 +474,14 @@ export const collectMetricsOutputSchema = z
   })
   .strict();
 
-export const agentToolInputSchemas = {
-  research_posts: researchPostsInputSchema,
-  score_relevance: scoreRelevanceInputSchema,
-  draft_post: draftPostInputSchema,
-  audit_post: auditPostInputSchema,
-  score_draft_quality: scoreDraftQualityInputSchema,
-  schedule_post: schedulePostInputSchema,
-  collect_metrics: collectMetricsInputSchema,
-} as const;
-
-export const agentToolOutputSchemas = {
-  research_posts: researchPostsOutputSchema,
-  score_relevance: scoreRelevanceOutputSchema,
-  draft_post: draftPostOutputSchema,
-  audit_post: auditPostOutputSchema,
-  score_draft_quality: scoreDraftQualityOutputSchema,
-  schedule_post: schedulePostOutputSchema,
-  collect_metrics: collectMetricsOutputSchema,
-} as const;
-
 export type ResearchPostsInput = z.infer<typeof researchPostsInputSchema>;
 export type ResearchPostsOutput = z.infer<typeof researchPostsOutputSchema>;
 export type ScoreRelevanceInput = z.infer<typeof scoreRelevanceInputSchema>;
 export type ScoreRelevanceOutput = z.infer<typeof scoreRelevanceOutputSchema>;
 export type DraftPostInput = z.infer<typeof draftPostInputSchema>;
-export type DraftPostOutput = z.infer<typeof draftPostOutputSchema>;
 export type AuditPostInput = z.infer<typeof auditPostInputSchema>;
-export type AuditPostOutput = z.infer<typeof auditPostOutputSchema>;
 export type ScoreDraftQualityInput = z.infer<
   typeof scoreDraftQualityInputSchema
 >;
-export type ScoreDraftQualityOutput = z.infer<
-  typeof scoreDraftQualityOutputSchema
->;
 export type SchedulePostInput = z.infer<typeof schedulePostInputSchema>;
-export type SchedulePostOutput = z.infer<typeof schedulePostOutputSchema>;
 export type CollectMetricsInput = z.infer<typeof collectMetricsInputSchema>;
-export type CollectMetricsOutput = z.infer<typeof collectMetricsOutputSchema>;

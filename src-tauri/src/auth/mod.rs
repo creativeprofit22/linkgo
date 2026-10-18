@@ -202,23 +202,6 @@ pub fn unix_timestamp() -> i64 {
         .unwrap_or_default()
 }
 
-#[allow(dead_code)]
-pub fn redact_secret(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    let visible_suffix: String = trimmed
-        .chars()
-        .rev()
-        .take(4)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
-    format!("••••{}", visible_suffix)
-}
-
 pub fn redact_error(error: impl ToString) -> String {
     let message = error.to_string();
     let lowered = message.to_ascii_lowercase();
@@ -232,8 +215,7 @@ pub fn redact_error(error: impl ToString) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        redact_error, redact_secret, ApiKeyCredentials, ConnectionStatus, OAuthCredentials,
-        StoredCredential,
+        redact_error, ApiKeyCredentials, ConnectionStatus, OAuthCredentials, StoredCredential,
     };
 
     #[test]
@@ -339,8 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn redacts_secret_values_and_secret_errors() {
-        assert_eq!(redact_secret("sk-test-secret"), "••••cret");
+    fn redacts_secret_errors() {
         assert_eq!(
             redact_error("api key abc failed"),
             "Credential operation failed; secret details were redacted"

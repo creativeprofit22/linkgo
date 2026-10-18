@@ -9,9 +9,10 @@ import type {
   ReconcileStalePlannerDraftAuditsInput,
   ReconcileStalePlannerDraftAuditsResult,
 } from "@/features/drafts/types";
-import { IS_TEST, isBrowserPreview } from "@/lib/env";
+import { isBrowserPreview } from "@/lib/env";
 import {
   DesktopRequiredError,
+  getInjectedInvoke,
   invokeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -59,22 +60,6 @@ export const reconcileStalePlannerDraftAuditsResultSchema = z
     failedWorkflowRunIds: z.array(positiveIdSchema).max(100),
   })
   .strict();
-
-type InvokeFn = (command: string, args?: unknown) => Promise<unknown>;
-
-interface TauriWindowLike {
-  __TAURI__?: { core?: { invoke?: unknown } };
-  __TAURI_INTERNALS__?: { invoke?: unknown };
-}
-
-function getInjectedInvoke(): InvokeFn | null {
-  if (!IS_TEST || typeof window === "undefined") return null;
-  const tauriWindow = window as unknown as TauriWindowLike;
-  const candidate =
-    tauriWindow.__TAURI_INTERNALS__?.invoke ??
-    tauriWindow.__TAURI__?.core?.invoke;
-  return typeof candidate === "function" ? (candidate as InvokeFn) : null;
-}
 
 async function invokeDraftAuditCommand<T>(
   command: string,

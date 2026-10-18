@@ -27,7 +27,6 @@ import {
 } from "@/features/candidate-queue/data";
 import type {
   AgentRole,
-  AgentToolContract,
   AgentToolExecutionContext,
   AgentToolMetadata,
   AgentToolName,
@@ -287,5 +286,3 @@ export function getAgentToolRegistryForRole(
   }
   return scopedRegistry;
 }
-
-export type AnyAgentToolContract = AgentToolContract;

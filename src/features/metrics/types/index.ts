@@ -1,7 +1,4 @@
-import type {
-  ApprovalStatus,
-  PublishAttempt,
-} from "@/features/approvals/types";
+import type { ApprovalStatus } from "@/features/approvals/types";
 import type { CampaignStatus } from "@/features/campaigns/types";
 
 /** Link params for `#/metrics`; `approvalId` always comes with its campaign. */
@@ -346,8 +343,3 @@ export interface MetricRefreshDashboard {
   events: MetricRefreshEvent[];
   summary: MetricRefreshDashboardSummary;
 }
-
-export type LatestSuccessfulPublishAttempt = Pick<
-  PublishAttempt,
-  "id" | "external_post_url" | "platform_post_id" | "created_at"
->;

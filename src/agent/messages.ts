@@ -122,12 +122,6 @@ export function createToolResultMessage(
   };
 }
 
-export function getDefaultModelForRole(role: AgentRole): string {
-  if (role === "researcher" || role === "drafter") return "gpt-4.1-mini";
-  if (role === "auditor") return "gpt-4.1";
-  return "gpt-4.1-mini";
-}
-
 export function buildAgentMessages(
   role: AgentRole,
   context: AgentPromptContext,

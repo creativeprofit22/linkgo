@@ -1,8 +1,9 @@
 import type { AgentLoopResult, AgentProviderKey } from "@/agent/types";
 import type { AgentPlaybookKey } from "@/agent/playbooks";
-import { IS_TEST, isBrowserPreview } from "@/lib/env";
+import { isBrowserPreview } from "@/lib/env";
 import {
   DesktopRequiredError,
+  getInjectedInvoke,
   invokeCommand,
   toNativeCommandError,
 } from "@/lib/tauri";
@@ -36,26 +37,6 @@ export interface NativeApplyRelevanceScoresInput {
   minimumScore: number;
   autoRejectBelowMinimum: boolean;
   scores: NativeRelevanceScore[];
-}
-
-type InvokeFn = (command: string, args?: unknown) => Promise<unknown>;
-
-interface TauriWindowLike {
-  __TAURI__?: { core?: { invoke?: unknown } };
-  __TAURI_INTERNALS__?: { invoke?: unknown };
-}
-
-function isInvoke(candidate: unknown): candidate is InvokeFn {
-  return typeof candidate === "function";
-}
-
-function getInjectedInvoke(): InvokeFn | null {
-  if (!IS_TEST || typeof window === "undefined") return null;
-  const tauriWindow = window as unknown as TauriWindowLike;
-  const candidate =
-    tauriWindow.__TAURI_INTERNALS__?.invoke ??
-    tauriWindow.__TAURI__?.core?.invoke;
-  return isInvoke(candidate) ? candidate : null;
 }
 
 async function invokeScoringCommand<T>(

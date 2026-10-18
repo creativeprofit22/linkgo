@@ -76,8 +76,6 @@ export const relevanceScoringContextSchema = z
     }
   });
 
-export const dedupeKeyTypeSchema = z.enum(["normalized_url", "content_hash"]);
-
 export const candidateDiscoveryKindSchema = z.enum([
   "keyword",
   "trend",
@@ -143,15 +141,6 @@ export const updateCandidateSchema = z.object({
   relevanceScore: z.number().int().min(0).max(100).nullable().optional(),
   scoreReason: z.string().trim().max(500).optional(),
   notes: z.string().trim().max(1000).optional(),
-});
-
-export const discoverySuggestionSchema = z.object({
-  kind: candidateDiscoveryKindSchema,
-  title: z.string().trim().max(160).default(""),
-  keyword: z.string().trim().max(80).default(""),
-  rationale: z.string().trim().max(500).default(""),
-  sourceKeyword: z.string().trim().max(80).optional().default(""),
-  confidenceScore: z.number().int().min(0).max(100).nullable().optional(),
 });
 
 export const runCandidateDiscoverySchema = z.object({

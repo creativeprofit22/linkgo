@@ -300,8 +300,6 @@ export interface RunDraftAiAuditInput {
   modelName?: string;
 }
 
-export type RunDraftAiAudit = (input: RunDraftAiAuditInput) => Promise<number>;
-
 export interface ReconcileDraftAiAuditLifecycleInput {
   maxAuditRuns?: number;
   maxOrphanAgentRuns?: number;
@@ -321,12 +319,6 @@ export interface StartDraftAiAuditRunInput {
   agentRunId?: number | null;
   providerKey?: AgentProviderKey;
   modelName?: string;
-}
-
-export interface DraftAiAuditFindingInput {
-  ruleKey: DraftAiAuditRuleKey;
-  severity: DraftAuditSeverity;
-  message: string;
 }
 
 /** Identity only: native reads findings from the auditor's own output. */

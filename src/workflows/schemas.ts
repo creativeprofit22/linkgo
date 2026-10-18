@@ -2,21 +2,13 @@ import { z } from "zod";
 import { agentProviderKeySchema } from "@/agent/schemas";
 import {
   WORKFLOW_ARTIFACT_TYPES,
-  WORKFLOW_EVENT_TYPES,
-  WORKFLOW_RUN_STATUSES,
-  WORKFLOW_STEP_KEYS,
   WORKFLOW_STEP_STATUSES,
-  WORKFLOW_TYPES,
 } from "@/workflows/types";
 
 const positiveIdSchema = z.number().int().positive();
 const optionalSummarySchema = z.string().trim().max(1000).default("");
 
-export const workflowTypeSchema = z.enum(WORKFLOW_TYPES);
-export const workflowRunStatusSchema = z.enum(WORKFLOW_RUN_STATUSES);
-export const workflowStepKeySchema = z.enum(WORKFLOW_STEP_KEYS);
 export const workflowStepStatusSchema = z.enum(WORKFLOW_STEP_STATUSES);
-export const workflowEventTypeSchema = z.enum(WORKFLOW_EVENT_TYPES);
 export const workflowArtifactTypeSchema = z.enum(WORKFLOW_ARTIFACT_TYPES);
 
 export const createWorkflowRunSchema = z.object({

@@ -37,6 +37,32 @@
         "Not checked: changes not committed/pushed, so CI on GitHub has not run them; no actionlint/zizmor"
       ]
     },
+    "code-health": {
+      "checkedAt": "2026-10-18T05:09:42.195Z",
+      "commit": "343f54e",
+      "uncommittedChanges": true,
+      "result": "issues",
+      "summary": "Re-check of the 8 recorded findings: dead code, unused exports, the copied invoke hook and the TS error helpers are fixed and verified. The large-file splits are deferred by the owner. The Rust storage_error copies are still open.",
+      "findings": [
+        "Low: storage_error is still redefined in 17 Rust modules, e.g. src-tauri/src/settings.rs:59, each wrapping a module-specific STORAGE_ERROR. Fix: one shared helper or map_err closure, if the owner wants it."
+      ],
+      "accepted": [
+        "Very large React functions (useDrafts, ProviderLoginDialog, GenerateDraftDialog, ApprovalCard): deferred by owner; split when next touched",
+        "Very large Rust modules (relevance_scoring.rs, agent_runtime.rs, draft_quality.rs, autopilot_planner.rs): deferred by owner; split when next touched"
+      ],
+      "evidence": [
+        "Fixed: deleted src/agent/gg-ai-provider.ts, createUnavailableProvider, getDefaultModelForRole, plus 45 unused exports and imports they orphaned",
+        "Fixed: getInjectedInvoke now lives once in src/lib/tauri.ts; the 8 copies are removed (git grep finds 1 definition)",
+        "Fixed: 23 getErrorMessage bodies now use toPlainErrorMessage (src/lib/plain-message.ts); 4 files with different logic kept",
+        "Fixed: removed dead redact_secret in auth/mod.rs and its test assertion",
+        "Re-scan: zero-reference exports in src went from 41 to 0",
+        "tsc --noEmit, tsc -p tsconfig.tests.json, bun run build: pass; bun run lint, format:check: pass",
+        "check:architecture (0 errors, 306 sources), check:renderer-transactions: pass; cargo fmt --check, clippy -D warnings: pass",
+        "cargo test --lib: 753 passed, 0 failed; bun run test (Playwright): 540 passed",
+        "Scope: re-check of the 8 findings recorded earlier today only; not a new review",
+        "Not checked: test:desktop (needs RC build); 4 orphan schemas removed after the Playwright build, but covered by tsc/lint/build"
+      ]
+    },
     "commit-gate": {
       "checkedAt": "2026-10-18T03:03:12.010Z",
       "commit": "343f54e",

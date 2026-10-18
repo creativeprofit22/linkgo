@@ -4,7 +4,7 @@ import {
   getLaunchOnLoginSettings,
   setLaunchOnLogin,
 } from "@/features/settings/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type { LaunchOnLoginSettings } from "@/features/settings/types";
 import { isBrowserPreview } from "@/lib/env";
 import { DESKTOP_REQUIRED_MESSAGE } from "@/lib/tauri";
@@ -21,9 +21,10 @@ interface UseSettingsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with your settings. Please try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with your settings. Please try again.",
+  );
 }
 
 export function useSettings(): UseSettingsState {

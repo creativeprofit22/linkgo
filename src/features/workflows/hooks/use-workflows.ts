@@ -15,7 +15,7 @@ import {
   setWorkflowStepStatus,
   startWorkflowRun,
 } from "@/workflows/data";
-import { toPlainMessage } from "@/lib/plain-message";
+import { toPlainErrorMessage } from "@/lib/plain-message";
 import type {
   AddWorkflowNoteInput,
   CancelWorkflowRunInput,
@@ -47,9 +47,10 @@ interface UseWorkflowsState {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? toPlainMessage(error.message)
-    : "Something went wrong with this automation. Try again.";
+  return toPlainErrorMessage(
+    error,
+    "Something went wrong with this automation. Try again.",
+  );
 }
 
 function getDefaultCampaignId(
