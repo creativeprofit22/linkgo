@@ -117,6 +117,45 @@
       "owner": "creativeprofit22",
       "reviewed": "2026-09-26",
       "expires": "2026-12-24"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2026-0370",
+      "package": "zvariant",
+      "version": "5.15.1",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "linux-only-not-called",
+      "rationale": "Unmaintained notice (z-galaxy/zbus#2043), no known vulnerability and no fixed release. Pulled only on Linux by tauri-plugin-single-instance -> zbus; cargo tree -i prints nothing for the shipped Windows target. Remove when single-instance moves off zbus 5.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-10-17",
+      "expires": "2027-01-14"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2026-0371",
+      "package": "zbus_names",
+      "version": "4.3.5",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "linux-only-not-called",
+      "rationale": "Unmaintained notice (z-galaxy/zbus#2043), no known vulnerability and no fixed release. Pulled only on Linux by tauri-plugin-single-instance -> zbus; cargo tree -i prints nothing for the shipped Windows target. Remove when single-instance moves off zbus 5.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-10-17",
+      "expires": "2027-01-14"
+    },
+    {
+      "ecosystem": "cargo",
+      "id": "RUSTSEC-2026-0372",
+      "package": "zvariant_derive",
+      "version": "5.15.1",
+      "kind": "unmaintained",
+      "severity": "informational",
+      "reachability": "linux-only-not-called",
+      "rationale": "Unmaintained notice (z-galaxy/zbus#2043), no known vulnerability and no fixed release. Pulled only on Linux by tauri-plugin-single-instance -> zbus; cargo tree -i prints nothing for the shipped Windows target. Remove when single-instance moves off zbus 5.",
+      "owner": "creativeprofit22",
+      "reviewed": "2026-10-17",
+      "expires": "2027-01-14"
     }
   ]
 }
