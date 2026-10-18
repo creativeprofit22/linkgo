@@ -30,8 +30,11 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
-# Agent workspace
-.gg/
+# Agent workspace (only the project /commit command is tracked)
+.gg/*
+!.gg/commands/
+.gg/commands/*
+!.gg/commands/commit.md
 
 # OS/editor
 .DS_Store

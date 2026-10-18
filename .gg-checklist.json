@@ -37,6 +37,22 @@
         "Not checked: changes not committed/pushed, so CI on GitHub has not run them; no actionlint/zizmor"
       ]
     },
+    "commit-gate": {
+      "checkedAt": "2026-10-18T03:03:12.010Z",
+      "commit": "343f54e",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 3 findings: project .gg/commands/commit.md pins bun run check (+ check:deps) and reviews Linkgo invariants; .gitignore now tracks it (not yet committed).",
+      "findings": [],
+      "evidence": [
+        "Created .gg/commands/commit.md: bun run check, conditional check:deps, Playwright stall fallback, changed-file-only fixes, Linkgo invariant review brief",
+        ".gitignore: '.gg/' -> '.gg/*' + '!.gg/commands/' + '.gg/commands/*' + '!.gg/commands/commit.md'",
+        "git status: '?? .gg/commands/commit.md'; git check-ignore: polish.md, style-pack.md, .gg/tmp still ignored",
+        "bunx prettier --write .gg/commands/commit.md, then bun run format:check — all files pass",
+        "Scope: re-check of the 3 commit-gate findings recorded today only",
+        "Not checked: did not invoke /commit end to end or run full bun run check; file not committed"
+      ]
+    },
     "docs": {
       "checkedAt": "2026-10-17T05:36:55.434Z",
       "commit": "d033c0f",
