@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "items": {
+    "agent-setup": {
+      "checkedAt": "2026-10-17T05:26:40.883Z",
+      "commit": "d033c0f",
+      "uncommittedChanges": true,
+      "result": "issues",
+      "summary": "AGENTS.md now carries accurate, code-verified project context; no project skills exist yet for recurring work.",
+      "findings": [
+        ".gg/skills/ is empty: no skill for the recurring 'new feature slice' workflow (types, schemas, data API, Rust command + main-commands.toml permission, migration append). Suggest a project skill built from .gg/slice-conventions.md.",
+        "No skill or command for the multi-step desktop RC test run (build rctest, install, launch with CDP, set scenario); it is only documented in AGENTS.md."
+      ],
+      "evidence": [
+        "Scope: AGENTS.md (gg:init block, 4922 bytes), package.json scripts, tauri.conf.json, playwright.desktop.config.ts, tests-desktop/rc-app.ts, migrations/mod.rs, auth/storage.rs, autopilot_planner.rs",
+        "grep checks confirmed max_connections(1), legacy_alter_table/foreign_key_check, keyring identifier mapping, ports 17420/17421, create:false/visible:false, CDP attach, VITE_PLAYWRIGHT",
+        "ls .gg/skills: empty; .gg/commands has polish only",
+        "Not checked: whether hand-written text above the fence (uimaxxxing paths) still matches C:/ggcoder-projects; did not run bun run check"
+      ]
+    },
+    "ci": {
+      "checkedAt": "2026-10-18T02:53:55.953Z",
+      "commit": "16b3a47",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 3 CI findings: all fixed and verified locally. Advisories patched or excepted, both checkouts drop credentials, concurrency group added. Waiting on a CI run on main.",
+      "findings": [],
+      "evidence": [
+        "cargo update: quinn-proto 0.11.15->0.11.19, rustls 0.23.45->0.23.46, zvariant/zbus_names bumped",
+        "package.json overrides source-map-js 1.2.2 (lockfile updated, bun install --frozen-lockfile clean)",
+        "zvariant/zbus_names/zvariant_derive: unmaintained, Linux-only; owned exceptions expire 2027-01-14",
+        "bun run check:deps: 12 findings, 12 covered by active exceptions (pass)",
+        "ci.yml: persist-credentials: false on check + package-windows checkouts; concurrency ci-${{ github.ref }}",
+        "bun run check passed through build; output went quiet and stopped in Playwright; reran parts",
+        "bunx playwright test: 540 passed; cargo test: 753 passed, 0 failed",
+        "Scope: re-check of the 3 findings recorded today only",
+        "Not checked: changes not committed/pushed, so CI on GitHub has not run them; no actionlint/zizmor"
+      ]
+    },
+    "docs": {
+      "checkedAt": "2026-10-17T05:36:55.434Z",
+      "commit": "d033c0f",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 4 recorded docs findings: all fixed (proprietary LICENSE added, .env.example, README Configuration section, check list matches bun run check).",
+      "findings": [],
+      "evidence": [
+        "Added LICENSE (proprietary, all rights reserved, Linkgo 2026); package.json license UNLICENSED; src-tauri/Cargo.toml license-file = ../LICENSE",
+        "cargo metadata --manifest-path src-tauri/Cargo.toml --no-deps --offline — OK (manifest valid)",
+        "prettier --check package.json README.md — pass; bun run test:deps — 0 failed",
+        "Earlier today: .env.example + README Configuration section + check:glossary in list; bun run check:glossary passed; .env.example not gitignored",
+        "Scope: re-check of the 4 findings recorded earlier today only",
+        "Not checked: no full bun run check; not a new review of docs/"
+      ]
+    },
+    "git-github": {
+      "checkedAt": "2026-10-17T06:02:03.857Z",
+      "commit": "d033c0f",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "main has an active ruleset blocking force-push and deletion; the owner will add the required CI check once CI is green.",
+      "findings": [],
+      "accepted": [
+        "Ruleset 25292847 has no required status check yet. Deferred by owner until CI (currently failing) passes on main; then add Quality gate (windows-latest)."
+      ],
+      "evidence": [
+        "gh api rules/branches/main → non_fast_forward, deletion (ruleset 25292847 active)",
+        "gh api commits/main/check-runs → Quality gate and Dependency and secret scanning both failing",
+        "Scope: re-check of the branch-protection finding only",
+        "Not checked: org-level rulesets, collaborator permissions; other items were not re-reviewed"
+      ]
+    },
+    "naming": {
+      "checkedAt": "2026-10-17T05:41:33.109Z",
+      "commit": "d033c0f",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 5 naming findings: all fixed (lesson labels unified, glossary terms + lesson rows, 6 backfilled ADRs, AGENTS.md pointer).",
+      "findings": [],
+      "evidence": [
+        "'insight' now shows 'Insight' in metric-signal-badge.tsx:12 and create-memory-dialog.tsx:127; 'Do more/Avoid' defined in glossary as lesson direction",
+        "docs/glossary.md: lesson/type/direction/result-pattern rows + Terms section (14 definitions); check-glossary.mjs bans 'memory'",
+        "docs/decisions/0002-0007 added: keyring identifier, single DB connection, append-only migrations, no renderer SQL, Rust-only network, fenced publishing",
+        "AGENTS.md: 'Read docs/glossary.md before naming anything' rule added",
+        "bun run check:glossary: 12/12 pass, 'Glossary check passed.'; prettier --check on changed docs/scripts/components: clean; eslint on 2 changed tsx + tsc --noEmit: exit 0",
+        "Scope: re-check of the 5 findings recorded earlier today only",
+        "Not checked: full bun run check / Playwright; AGENTS.md has 4 pre-existing prettier blank-line issues in the gg:init block, left untouched"
+      ]
+    },
+    "quality-tools": {
+      "checkedAt": "2026-10-17T07:01:58.188Z",
+      "commit": "d033c0f",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 3 recorded findings: all fixed. Tests and Playwright configs are now type-checked and linted, the promise rules are back on, and the full bun run check passes. Changes not committed yet.",
+      "findings": [],
+      "evidence": [
+        "Added tsconfig.tests.json + typecheck:tests script, now part of bun run check; README Verification updated",
+        "eslint.config.js: tests block typed via tsconfig.tests.json; lint script covers tests/, tests-desktop/, playwright configs",
+        "Promise rules on (JSX attributes exempt); 3 listener call sites fixed in title-bar, window-frame, use-app-shortcuts",
+        "Fixed 65 test type errors + lint hits (stray \\x08 in a regex, missing await, 19 useless try/catch); 3 rules off for tests only",
+        "bun run check (full gate, standalone): exit 0; Playwright 520 passed, cargo test 729 passed / 3 ignored, clippy -D warnings clean",
+        "Scope: re-check of the 3 findings recorded earlier today only",
+        "Not checked: test:desktop (needs an installed RC build), CI (changes not committed)"
+      ]
+    },
+    "secrets": {
+      "checkedAt": "2026-10-17T06:15:51.638Z",
+      "commit": "d033c0f",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 2 recorded findings: the 3 gitleaks hits were test placeholders, now listed in .gitleaksignore, and the full-history scan is clean. CI secret scan no longer skips when the dependency audit fails. Changes not yet committed.",
+      "findings": [],
+      "evidence": [
+        "Skill: bulletproof (fix and re-check of the recorded findings only)",
+        "Downloaded gitleaks 8.30.1 to a temp folder; its SHA256 matched the one pinned in ci.yml; folder deleted afterwards",
+        "gitleaks git . --redact before the fix: 3 generic-api-key hits, all in deeb03d market-research test files",
+        "Value check (masked): each was the placeholder 'test-key-123456' in a const KEY test fixture, not a credential",
+        ".gitleaksignore: added 3 exact fingerprints with a review note, following the file's existing rules",
+        "gitleaks git . --redact after the fix: 102 commits, 'no leaks found', exit 0",
+        "ci.yml: added if: ${{ !cancelled() }} to the gitleaks download and scan steps; 2 guards confirmed; no tabs",
+        "Scope: re-check of the 2 findings recorded today only; this was not a new review",
+        "Not checked: the CI change has not run on GitHub yet (not committed or pushed); I stopped the gitleaks dir scan of the working tree"
+      ]
+    },
+    "tests": {
+      "checkedAt": "2026-10-17T18:17:18.729Z",
+      "commit": "d033c0f",
+      "uncommittedChanges": true,
+      "result": "issues",
+      "summary": "Re-check of the recorded findings: fake/Rust contracts now cover approval, publishing, scheduling, caps and comments; full gate green. Only desktop.yml (never run on a GitHub runner) is still open.",
+      "findings": [
+        ".github/workflows/desktop.yml (medium): the nightly/tag/manual job that runs test:desktop fresh+upgraded against the real packaged app has never run on a GitHub runner (needs a push). Fix: push, trigger with workflow_dispatch, fix any runner-specific failures."
+      ],
+      "evidence": [
+        "bun run check (full gate incl. clippy -D warnings, fmt, lint, build): exit 0 in 15.4m",
+        "In that run: Playwright 540 passed; cargo test 753 passed, 0 failed, 3 ignored",
+        "New fixtures: publishing, scheduling, campaign-limits, comment-review contracts (plus approval-review); fake reads its rules from them",
+        "Rust contract tests (26 new) and tests/safety-gates-contract.spec.ts (12) check both sides against the same tables",
+        "Fake drift fixed: settled executions locked; due jobs ran despite open execution; UTC day buckets; caps unchecked; publish preflight skipped",
+        "Own regression caught by the existing scheduler tests and fixed: check_post_preflight ran the schedule-job gate early (cargo test --lib publishing:: 33/33)",
+        "Scope: re-check of the findings recorded earlier today only",
+        "Not checked: desktop.yml on a real GitHub runner (not pushed, per instruction); test:desktop locally"
+      ]
+    }
+  }
+}
