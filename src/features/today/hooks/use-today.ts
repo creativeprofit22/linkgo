@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadToday } from "@/features/today/data";
 import type { TodaySnapshot } from "@/features/today/types";
-import { subscribeDataChange } from "@/lib/data-change-events";
+import {
+  createFocusRefreshGate,
+  subscribeDataChange,
+} from "@/lib/data-change-events";
 
 export type TodayState =
   | { status: "loading"; snapshot: null }
@@ -19,8 +22,9 @@ export interface UseTodayResult {
 const SOURCE_COUNT = 4;
 
 /**
- * Loads Today and keeps it fresh: re-reads when the window regains focus or
- * another screen announces saved data. A failed refresh keeps the last list.
+ * Loads Today and keeps it fresh: re-reads when the window regains focus (at
+ * most every 30 s) or another screen announces saved data. A failed refresh
+ * keeps the last list.
  */
 export function useToday(): UseTodayResult {
   const [state, setState] = useState<TodayState>({
@@ -29,8 +33,10 @@ export function useToday(): UseTodayResult {
   });
   const [refreshing, setRefreshing] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
+  const [focusGate] = useState(createFocusRefreshGate);
 
   const reload = useCallback((): void => {
+    focusGate.markRefreshed();
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -61,7 +67,7 @@ export function useToday(): UseTodayResult {
       }
     };
     void run();
-  }, []);
+  }, [focusGate]);
 
   const retry = useCallback((): void => {
     setState((previous) =>
@@ -73,15 +79,18 @@ export function useToday(): UseTodayResult {
   }, [reload]);
 
   useEffect(() => {
+    const onFocus = (): void => {
+      if (focusGate.isDue()) reload();
+    };
     reload();
-    window.addEventListener("focus", reload);
+    window.addEventListener("focus", onFocus);
     const unsubscribe = subscribeDataChange(reload);
     return () => {
       controllerRef.current?.abort();
       unsubscribe();
-      window.removeEventListener("focus", reload);
+      window.removeEventListener("focus", onFocus);
     };
-  }, [reload]);
+  }, [focusGate, reload]);
 
   return { state, refreshing, reload: retry };
 }

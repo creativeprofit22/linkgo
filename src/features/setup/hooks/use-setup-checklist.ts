@@ -5,7 +5,10 @@ import {
   writeSetupPreferences,
 } from "@/features/setup/data";
 import type { SetupChecklist } from "@/features/setup/types";
-import { subscribeDataChange } from "@/lib/data-change-events";
+import {
+  createFocusRefreshGate,
+  subscribeDataChange,
+} from "@/lib/data-change-events";
 
 /** Fired when setup preferences change so every checklist view agrees. */
 const SETUP_CHANGED_EVENT = "linkgo:setup-changed";
@@ -20,8 +23,9 @@ export interface SetupChecklistState {
 
 /**
  * Loads the setup checklist and keeps it fresh: it re-reads when the link
- * changes, the window regains focus, or a saved account, guide or campaign
- * is announced, so finishing a step anywhere updates the progress.
+ * changes, the window regains focus (at most every 30 s), or a saved account,
+ * guide or campaign is announced, so finishing a step anywhere updates the
+ * progress.
  */
 export function useSetupChecklist(): SetupChecklistState {
   const [checklist, setChecklist] = useState<SetupChecklist | null>(null);
@@ -31,7 +35,9 @@ export function useSetupChecklist(): SetupChecklistState {
 
   useEffect(() => {
     let controller = new AbortController();
+    const focusGate = createFocusRefreshGate();
     const reload = async (): Promise<void> => {
+      focusGate.markRefreshed();
       controller.abort();
       controller = new AbortController();
       const { signal } = controller;
@@ -42,21 +48,29 @@ export function useSetupChecklist(): SetupChecklistState {
         // Each source already degrades to "unknown"; keep the last view.
       }
     };
-    const onChange = (): void => {
+    const syncPreferences = (): void => {
       setDismissed(readSetupPreferences().dismissed);
+    };
+    const onChange = (): void => {
+      syncPreferences();
       void reload();
+    };
+    const onFocus = (): void => {
+      syncPreferences();
+      if (focusGate.isDue()) void reload();
     };
     void reload();
     window.addEventListener("hashchange", onChange);
-    window.addEventListener("focus", onChange);
-    window.addEventListener(SETUP_CHANGED_EVENT, onChange);
+    window.addEventListener("focus", onFocus);
+    // Only the stored preference changed; the checklist data did not.
+    window.addEventListener(SETUP_CHANGED_EVENT, syncPreferences);
     const unsubscribeDataChange = subscribeDataChange(onChange);
     return () => {
       controller.abort();
       unsubscribeDataChange();
       window.removeEventListener("hashchange", onChange);
-      window.removeEventListener("focus", onChange);
-      window.removeEventListener(SETUP_CHANGED_EVENT, onChange);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(SETUP_CHANGED_EVENT, syncPreferences);
     };
   }, []);
 

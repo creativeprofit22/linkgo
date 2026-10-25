@@ -138,19 +138,35 @@ export function useBrightDataRuns(
   useEffect(() => {
     if (!runPending || campaignId === null) return undefined;
     let stopped = false;
+    let inFlight = false;
+    let timer: number | null = null;
     const refresh = async (): Promise<void> => {
+      timer = null;
+      // Paused while the window is hidden; resumes when it is shown again.
+      if (stopped || inFlight || document.hidden) return;
+      inFlight = true;
       try {
         const nextRuns = await listBrightDataRuns(campaignId);
         if (!stopped) setRuns(nextRuns);
       } catch {
         // The final reload after the run reports errors.
+      } finally {
+        inFlight = false;
+      }
+      // Wait for each answer before asking again so slow reads never overlap.
+      if (!stopped && !document.hidden) {
+        timer = window.setTimeout(() => void refresh(), RUN_POLL_MS);
       }
     };
-    const timer = window.setInterval(() => void refresh(), RUN_POLL_MS);
+    const onVisibilityChange = (): void => {
+      if (!document.hidden && timer === null) void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     void refresh();
     return () => {
       stopped = true;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [campaignId, runPending]);
 

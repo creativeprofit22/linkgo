@@ -19,6 +19,34 @@ export function announceDataChange(topic: DataChangeTopic): void {
   );
 }
 
+/**
+ * Regaining window focus only *might* mean data went stale, so views re-read
+ * on focus at most this often. Saved-data announcements always re-read.
+ */
+export const FOCUS_REFRESH_MIN_INTERVAL_MS = 30_000;
+
+/** Tracks the last re-read so focus events don't refetch on every alt-tab. */
+export interface FocusRefreshGate {
+  /** Records that a re-read just started. */
+  markRefreshed: () => void;
+  /** True when a focus-triggered re-read is due. */
+  isDue: () => boolean;
+}
+
+export function createFocusRefreshGate(
+  minIntervalMs: number = FOCUS_REFRESH_MIN_INTERVAL_MS,
+  now: () => number = Date.now,
+): FocusRefreshGate {
+  let lastRefreshAt: number | null = null;
+  return {
+    markRefreshed: () => {
+      lastRefreshAt = now();
+    },
+    isDue: () =>
+      lastRefreshAt === null || now() - lastRefreshAt >= minIntervalMs,
+  };
+}
+
 /** Subscribes to every data-change announcement; returns the unsubscribe. */
 export function subscribeDataChange(
   handler: (detail: DataChangeDetail) => void,

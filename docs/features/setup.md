@@ -61,10 +61,11 @@ recommended AI service.
   `linkgo.setup.preferences` (same mechanism as theme and last screen, so it
   survives restart). Reads are schema-validated and fall back to
   `{ dismissed: false }`. No migration.
-- The hook re-reads on `hashchange`, window focus, a `linkgo:setup-changed`
-  event, and `linkgo:data-changed`, so finishing a step anywhere updates every
-  checklist view (including the sidebar launcher and "You're all set")
-  without navigating.
+- The hook re-reads on `hashchange`, window focus (at most every 30 s, via
+  `createFocusRefreshGate`), and `linkgo:data-changed`, so finishing a step
+  anywhere updates every checklist view (including the sidebar launcher and
+  "You're all set") without navigating. `linkgo:setup-changed` only re-syncs
+  the stored `dismissed` preference; it does not re-read the checklist.
 - `linkgo:data-changed` lives in `src/lib/data-change-events.ts`:
   `announceDataChange(topic)` dispatches a window `CustomEvent` with
   `{ topic: "campaigns" | "playbooks" | "accounts" }`, and
