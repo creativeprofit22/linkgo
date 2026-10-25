@@ -256,6 +256,122 @@ async fn delete_missing_candidate_is_rejected() {
     );
 }
 
+const HISTORY_TABLES: &[&str] = &[
+    "candidate_posts",
+    "dedupe_keys",
+    "drafts",
+    "draft_variants",
+    "approvals",
+    "publish_attempts",
+    "comment_threads",
+    "comment_attempts",
+    "publish_executions",
+];
+
+/// Candidate with a draft and selected variant. Approval readiness triggers
+/// are dropped: this only checks the deletion guard, not approval creation.
+async fn seed_candidate_with_draft(f: &Fixture) -> i64 {
+    let candidate = create_candidate(&f.pool, input(1, POST, "history"))
+        .await
+        .unwrap()
+        .id;
+    seed(
+        &f.pool,
+        &format!(
+            "DROP TRIGGER IF EXISTS approvals_validate_insert;
+             DROP TRIGGER IF EXISTS approvals_bind_insert;
+             INSERT INTO drafts (id,campaign_id,candidate_post_id,status) VALUES (20,1,{candidate},'ready_for_review');
+             INSERT INTO draft_variants (id,draft_id,variant_number,hook,body,status) VALUES (21,20,1,'h','b','selected');"
+        ),
+    )
+    .await;
+    candidate
+}
+
+async fn assert_delete_refused(f: &Fixture, candidate: i64, expected: &str) {
+    let before = snapshot(&f.pool, HISTORY_TABLES).await;
+    assert_eq!(
+        delete_candidate(&f.pool, DeleteCandidateInput { id: candidate })
+            .await
+            .unwrap_err(),
+        expected
+    );
+    assert_eq!(snapshot(&f.pool, HISTORY_TABLES).await, before);
+}
+
+#[tokio::test]
+async fn delete_refuses_candidate_with_published_approval() {
+    let f = fixture().await;
+    let candidate = seed_candidate_with_draft(&f).await;
+    seed(
+        &f.pool,
+        "INSERT INTO approvals (id,campaign_id,draft_id,draft_variant_id,status) VALUES (30,1,20,21,'published');
+         INSERT INTO publish_attempts (approval_id,status) VALUES (30,'succeeded');",
+    )
+    .await;
+    assert_delete_refused(&f, candidate, CANDIDATE_HAS_HISTORY_MESSAGE).await;
+}
+
+#[tokio::test]
+async fn delete_refuses_candidate_with_any_approval() {
+    let f = fixture().await;
+    let candidate = seed_candidate_with_draft(&f).await;
+    seed(
+        &f.pool,
+        "INSERT INTO approvals (id,campaign_id,draft_id,draft_variant_id,status) VALUES (30,1,20,21,'needs_review');",
+    )
+    .await;
+    assert_delete_refused(&f, candidate, CANDIDATE_HAS_HISTORY_MESSAGE).await;
+}
+
+#[tokio::test]
+async fn delete_refuses_candidate_with_posted_comment() {
+    let f = fixture().await;
+    let candidate = create_candidate(&f.pool, input(1, POST, "comment"))
+        .await
+        .unwrap()
+        .id;
+    seed(
+        &f.pool,
+        &format!(
+            "INSERT INTO comment_threads (id,campaign_id,candidate_post_id,status) VALUES (40,1,{candidate},'drafting');
+             INSERT INTO comment_attempts (comment_thread_id,status) VALUES (40,'failed');"
+        ),
+    )
+    .await;
+    assert_delete_refused(&f, candidate, CANDIDATE_HAS_HISTORY_MESSAGE).await;
+}
+
+#[tokio::test]
+async fn delete_refuses_while_publish_execution_is_open() {
+    let f = fixture().await;
+    let candidate = create_candidate(&f.pool, input(1, POST, "open"))
+        .await
+        .unwrap()
+        .id;
+    seed(
+        &f.pool,
+        &format!(
+            "INSERT INTO comment_threads (id,campaign_id,candidate_post_id,status) VALUES (40,1,{candidate},'drafting');
+             INSERT INTO publish_executions (kind,subject_id,campaign_id,caller,status,owner_token,idempotency_key,content_hash)
+               VALUES ('comment',40,1,'manual','outcome_unknown','owner','key-40','hash');"
+        ),
+    )
+    .await;
+    assert_delete_refused(&f, candidate, CANDIDATE_OPEN_PUBLISH_MESSAGE).await;
+}
+
+#[tokio::test]
+async fn delete_allows_candidate_with_unapproved_draft() {
+    let f = fixture().await;
+    let candidate = seed_candidate_with_draft(&f).await;
+    delete_candidate(&f.pool, DeleteCandidateInput { id: candidate })
+        .await
+        .unwrap();
+    assert_eq!(count(&f.pool, "candidate_posts").await, 0);
+    assert_eq!(count(&f.pool, "drafts").await, 0);
+}
+
 #[tokio::test]
 async fn promote_keyword_adds_trimmed_keyword_once() {
     let f = fixture().await;

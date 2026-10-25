@@ -301,6 +301,58 @@ pub(crate) async fn create_candidate(
     .await
 }
 
+pub(crate) const CANDIDATE_OPEN_PUBLISH_MESSAGE: &str =
+    "This idea has a publish in progress. Wait for it to finish or reconcile it in Safety before deleting.";
+pub(crate) const CANDIDATE_HAS_HISTORY_MESSAGE: &str =
+    "This idea has approvals or publish history, so it can't be deleted. Archive the campaign instead to keep that history.";
+
+/// Deleting a candidate cascades through drafts, approvals, schedules, publish
+/// attempts, metrics and comment threads. Refuse while any of that holds
+/// review or publish history, or while a publish execution is still open
+/// (`publish_executions.subject_id` has no FK, so it would be orphaned).
+async fn candidate_deletion_blocker(
+    connection: &mut SqliteConnection,
+    id: i64,
+) -> Result<Option<&'static str>, String> {
+    let row = sqlx::query(
+        "WITH post_approvals AS (
+             SELECT a.id FROM approvals a
+             JOIN drafts d ON d.id = a.draft_id
+             WHERE d.candidate_post_id = ?1
+         ),
+         threads AS (
+             SELECT id, status FROM comment_threads WHERE candidate_post_id = ?1
+         )
+         SELECT
+             (SELECT COUNT(*) FROM publish_executions pe
+              WHERE pe.status IN ('reserved', 'in_flight', 'outcome_unknown')
+                AND ((pe.kind = 'post' AND pe.subject_id IN (SELECT id FROM post_approvals))
+                  OR (pe.kind = 'comment' AND pe.subject_id IN (SELECT id FROM threads))))
+                 AS open_executions,
+             (SELECT COUNT(*) FROM post_approvals)
+             + (SELECT COUNT(*) FROM threads t
+                WHERE t.status IN ('approved', 'posted')
+                   OR EXISTS (SELECT 1 FROM comment_attempts ca WHERE ca.comment_thread_id = t.id))
+             + (SELECT COUNT(*) FROM publish_executions pe
+                WHERE (pe.kind = 'post' AND pe.subject_id IN (SELECT id FROM post_approvals))
+                   OR (pe.kind = 'comment' AND pe.subject_id IN (SELECT id FROM threads)))
+                 AS history",
+    )
+    .bind(id)
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(storage_error)?;
+    let open_executions: i64 = row.try_get("open_executions").map_err(storage_error)?;
+    let history: i64 = row.try_get("history").map_err(storage_error)?;
+    if open_executions > 0 {
+        return Ok(Some(CANDIDATE_OPEN_PUBLISH_MESSAGE));
+    }
+    if history > 0 {
+        return Ok(Some(CANDIDATE_HAS_HISTORY_MESSAGE));
+    }
+    Ok(None)
+}
+
 pub(crate) async fn delete_candidate(
     pool: &SqlitePool,
     input: DeleteCandidateInput,
@@ -311,6 +363,9 @@ pub(crate) async fn delete_candidate(
     let id = input.id;
     settle(pool, STORAGE_ERROR, move |connection| {
         Box::pin(async move {
+            if let Some(reason) = candidate_deletion_blocker(connection, id).await? {
+                return Ok(Settlement::Rejected(reason.to_string()));
+            }
             settle_linked_draft_requests_for_candidate_deletion(connection, id, STORAGE_ERROR)
                 .await?;
             sqlx::query("DELETE FROM dedupe_keys WHERE candidate_post_id = ?1")
