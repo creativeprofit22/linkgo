@@ -28,19 +28,24 @@ async fn fixture() -> Fixture {
     )
     .await;
     for variant in 1..=3 {
-        seed(
-            &f.pool,
-            &format!(
-                "INSERT INTO draft_audits (draft_variant_id,rule_key,severity,message) SELECT {variant},value,'pass','ok' FROM json_each('{DETERMINISTIC_RULES}');
-                 INSERT INTO draft_ai_audit_runs (draft_variant_id,content_revision,provider_key,status,completed_at) SELECT id,content_revision,'dry_run','completed',datetime('now') FROM draft_variants WHERE id={variant};
-                 INSERT INTO draft_ai_audit_findings (audit_run_id,rule_key,severity,message) SELECT (SELECT MAX(id) FROM draft_ai_audit_runs),value,'pass','ok' FROM json_each('{AUDIT_RULES}');
-                 INSERT INTO draft_quality_runs (draft_variant_id,starting_content_revision,current_content_revision,provider_key,status,final_score,completed_at)
-                   SELECT id,content_revision,content_revision,'dry_run','passed',80,datetime('now') FROM draft_variants WHERE id={variant};"
-            ),
-        )
-        .await;
+        seed_readiness(&f, variant).await;
     }
     f
+}
+
+/// Full deterministic, AI audit and quality evidence for one variant.
+async fn seed_readiness(f: &Fixture, variant: i64) {
+    seed(
+        &f.pool,
+        &format!(
+            "INSERT INTO draft_audits (draft_variant_id,rule_key,severity,message) SELECT {variant},value,'pass','ok' FROM json_each('{DETERMINISTIC_RULES}');
+             INSERT INTO draft_ai_audit_runs (draft_variant_id,content_revision,provider_key,status,completed_at) SELECT id,content_revision,'dry_run','completed',datetime('now') FROM draft_variants WHERE id={variant};
+             INSERT INTO draft_ai_audit_findings (audit_run_id,rule_key,severity,message) SELECT (SELECT MAX(id) FROM draft_ai_audit_runs),value,'pass','ok' FROM json_each('{AUDIT_RULES}');
+             INSERT INTO draft_quality_runs (draft_variant_id,starting_content_revision,current_content_revision,provider_key,status,final_score,completed_at)
+               SELECT id,content_revision,content_revision,'dry_run','passed',80,datetime('now') FROM draft_variants WHERE id={variant};"
+        ),
+    )
+    .await;
 }
 
 async fn approve_draft(f: &Fixture, draft_id: i64) -> i64 {
@@ -313,6 +318,48 @@ async fn publish_preflight_enforces_state_and_schedule() {
             .unwrap_err(),
         "Campaign is archived"
     );
+}
+
+#[tokio::test]
+async fn publish_preflight_enforces_daily_post_limit() {
+    let f = fixture().await;
+    let id = approve_draft(&f, 1).await;
+    seed(
+        &f.pool,
+        "UPDATE campaigns SET daily_post_limit=1 WHERE id=1;
+         INSERT INTO target_posts (id,url,normalized_url,content,content_hash)
+           VALUES (4,'https://e.com/4','https://e.com/4','Four','h4');
+         INSERT INTO candidate_posts (id,campaign_id,target_post_id,source_keyword) VALUES (4,1,4,'ai');
+         INSERT INTO drafts (id,campaign_id,candidate_post_id,status) VALUES (4,1,4,'ready_for_review');
+         INSERT INTO draft_variants (id,draft_id,variant_number,hook,body,status)
+           VALUES (4,4,1,'We learned from 12 customer interviews','Our team tested a specific change.','selected');",
+    )
+    .await;
+    seed_readiness(&f, 4).await;
+    let earlier = approve_draft(&f, 4).await;
+    seed(
+        &f.pool,
+        &format!(
+            "INSERT INTO publish_attempts (approval_id,status) VALUES ({earlier},'succeeded');"
+        ),
+    )
+    .await;
+    assert_eq!(
+        publish_preflight(&f.pool, preflight(id, None))
+            .await
+            .unwrap_err(),
+        "Daily post limit reached for today: 1/1 used"
+    );
+    // Other campaigns' posts do not count against this campaign.
+    let other = approve_draft(&f, 2).await;
+    seed(
+        &f.pool,
+        "UPDATE campaigns SET daily_post_limit=1 WHERE id=2;",
+    )
+    .await;
+    publish_preflight(&f.pool, preflight(other, None))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

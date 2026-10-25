@@ -24,6 +24,7 @@ async fn test_pool() -> SqlitePool {
          CREATE TABLE draft_variants (id INTEGER PRIMARY KEY, content_revision INTEGER NOT NULL);
          CREATE TABLE approval_ready_variants (draft_variant_id INTEGER, draft_id INTEGER, campaign_id INTEGER, content_revision INTEGER);
          CREATE TABLE schedule_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL UNIQUE, platform TEXT NOT NULL, scheduled_for TEXT NOT NULL, timezone TEXT NOT NULL, status TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT);
+         CREATE TABLE publish_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL, schedule_job_id INTEGER, status TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
          CREATE TABLE safety_settings (id INTEGER PRIMARY KEY, global_kill_switch INTEGER NOT NULL DEFAULT 0, kill_switch_reason TEXT NOT NULL DEFAULT '');
          INSERT INTO safety_settings (id) VALUES (1);
          CREATE TABLE rate_limit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER NOT NULL, action TEXT NOT NULL, window_key TEXT NOT NULL, limit_value INTEGER NOT NULL, current_count INTEGER NOT NULL, decision TEXT NOT NULL, summary TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
@@ -458,6 +459,91 @@ async fn counted_job_statuses_fill_the_daily_cap_like_contract() {
         let blocked = matches!(&result, Err(message) if message.starts_with("Daily post scheduling limit reached"));
         assert_eq!(blocked, counted.contains(&status), "{status}: {result:?}");
     }
+}
+
+#[tokio::test]
+async fn counted_rows_match_contract() {
+    let contract = scheduling_contract();
+    for case in contract["countedRowCases"].as_array().unwrap() {
+        let pool = test_pool().await;
+        for approval in contract["countedRowApprovals"].as_array().unwrap() {
+            sqlx::query("INSERT INTO approvals VALUES (?1, ?2, 1, 1, 1, 'published', NULL)")
+                .bind(approval["id"].as_i64().unwrap())
+                .bind(approval["campaignId"].as_i64().unwrap())
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        for job in case["jobs"].as_array().unwrap() {
+            sqlx::query(
+                "INSERT INTO schedule_jobs (id, approval_id, platform, scheduled_for, timezone, status, idempotency_key)
+                 VALUES (?1, ?2, 'linkedin', ?3, 'UTC', ?4, ?1)",
+            )
+            .bind(job["id"].as_i64().unwrap())
+            .bind(job["approvalId"].as_i64().unwrap())
+            .bind(job["scheduledFor"].as_str().unwrap())
+            .bind(job["status"].as_str().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        for attempt in case["attempts"].as_array().unwrap() {
+            sqlx::query(
+                "INSERT INTO publish_attempts (approval_id, schedule_job_id, status, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )
+            .bind(attempt["approvalId"].as_i64().unwrap())
+            .bind(attempt["scheduleJobId"].as_i64())
+            .bind(attempt["status"].as_str().unwrap())
+            .bind(attempt["createdAt"].as_str().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let mut connection = pool.acquire().await.unwrap();
+        let actual =
+            count_scheduled_posts(&mut connection, 1, case["scheduledFor"].as_str().unwrap())
+                .await
+                .unwrap();
+        assert_eq!(actual, case["expectedCount"], "{}", case["name"]);
+    }
+}
+
+#[tokio::test]
+async fn manual_post_published_today_blocks_scheduling_for_today() {
+    let pool = test_pool().await;
+    pool.execute(
+        "UPDATE campaigns SET daily_post_limit = 1 WHERE id = 1;
+         INSERT INTO approvals VALUES (2, 1, 2, 2, 1, 'published', NULL);
+         INSERT INTO publish_attempts (approval_id, schedule_job_id, status) VALUES (2, NULL, 'succeeded');",
+    )
+    .await
+    .unwrap();
+    let today: String = sqlx::query_scalar("SELECT date('now')")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let result = schedule_approval(
+        &pool,
+        ScheduleApprovalInput {
+            approval_id: 1,
+            scheduled_for: format!("{today}T23:59:00Z"),
+            timezone: "UTC".to_string(),
+        },
+    )
+    .await;
+    assert_eq!(
+        result.unwrap_err(),
+        format!("Daily post scheduling limit reached for {today}: 1/1 used")
+    );
+    assert_eq!(count(&pool, "schedule_jobs").await, 0);
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT decision FROM rate_limit_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "blocked"
+    );
 }
 
 #[tokio::test]

@@ -202,6 +202,41 @@ async fn insert_rate_limit_event(
     Ok(())
 }
 
+/// Posts that fill a campaign's daily cap on the day of `scheduled_for`:
+/// counted schedule jobs for that day, plus succeeded publish attempts created
+/// that day that are not already counted through their own schedule job
+/// (manual publishes, or a scheduled post that went out on a later day). This
+/// keeps the schedule gate in step with the publish-time gate in
+/// `auth::publish::check_post_preflight`, which counts succeeded attempts.
+pub(crate) async fn count_scheduled_posts(
+    connection: &mut SqliteConnection,
+    campaign_id: i64,
+    scheduled_for: &str,
+) -> Result<i64, String> {
+    sqlx::query_scalar::<_, i64>(&format!(
+        "SELECT
+            (SELECT COUNT(*) FROM schedule_jobs sj
+             INNER JOIN approvals a ON a.id = sj.approval_id
+             WHERE a.campaign_id = ?1 AND date(sj.scheduled_for) = date(?2)
+               AND sj.status IN {COUNTED_JOB_STATUSES_SQL})
+          + (SELECT COUNT(*) FROM publish_attempts pa
+             INNER JOIN approvals a ON a.id = pa.approval_id
+             WHERE a.campaign_id = ?1 AND pa.status = 'succeeded'
+               AND date(pa.created_at) = date(?2)
+               AND NOT EXISTS (
+                 SELECT 1 FROM schedule_jobs counted_job
+                 WHERE counted_job.id = pa.schedule_job_id
+                   AND date(counted_job.scheduled_for) = date(?2)
+                   AND counted_job.status IN {COUNTED_JOB_STATUSES_SQL}
+               ))"
+    ))
+    .bind(campaign_id)
+    .bind(scheduled_for)
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(|_| STORAGE_ERROR.to_string())
+}
+
 async fn execute_schedule(
     connection: &mut SqliteConnection,
     input: ScheduleApprovalInput,
@@ -291,17 +326,8 @@ async fn execute_schedule(
     .fetch_one(&mut *connection)
     .await
     .map_err(|_| STORAGE_ERROR.to_string())?;
-    let current_count = sqlx::query_scalar::<_, i64>(&format!(
-        "SELECT COUNT(*) FROM schedule_jobs sj
-         INNER JOIN approvals a ON a.id = sj.approval_id
-         WHERE a.campaign_id = ?1 AND date(sj.scheduled_for) = date(?2)
-           AND sj.status IN {COUNTED_JOB_STATUSES_SQL}"
-    ))
-    .bind(approval.campaign_id)
-    .bind(&input.scheduled_for)
-    .fetch_one(&mut *connection)
-    .await
-    .map_err(|_| STORAGE_ERROR.to_string())?;
+    let current_count =
+        count_scheduled_posts(connection, approval.campaign_id, &input.scheduled_for).await?;
 
     let kill_switch_reason: Option<String> = if settings.get::<i64, _>("global_kill_switch") == 1 {
         Some(

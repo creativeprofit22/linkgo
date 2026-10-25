@@ -9,6 +9,7 @@ use sqlx::{sqlite::SqliteRow, Row, SqliteConnection, SqlitePool};
 use tauri::State;
 
 use crate::approval_review::assert_publish_ready;
+use crate::auth::publish::daily_post_count;
 
 const READ_ERROR: &str = "Could not load approvals";
 pub(crate) const APPROVAL_LIST_LIMIT: i64 = 500;
@@ -451,7 +452,8 @@ pub(crate) async fn list_eligible_drafts(
 
 /// Read-only publish preflight with the renderer's previous checks and
 /// messages, in order: kill switch, approval, campaign, status, prior
-/// success, reviewed-revision readiness, then the current schedule job.
+/// success, reviewed-revision readiness, the current schedule job, then the
+/// campaign's daily post limit (same order and messages as the publish gate).
 pub(crate) async fn publish_preflight(
     pool: &SqlitePool,
     input: PublishPreflightInput,
@@ -480,7 +482,8 @@ pub(crate) async fn publish_preflight(
         }
     }
     let approval = sqlx::query(
-        "SELECT a.status, c.status AS campaign_status,
+        "SELECT a.status, a.campaign_id, c.status AS campaign_status,
+                c.daily_post_limit,
                 (SELECT COUNT(*) FROM publish_attempts pa
                  WHERE pa.approval_id = a.id AND pa.status = 'succeeded') AS successes
          FROM approvals a INNER JOIN campaigns c ON c.id = a.campaign_id
@@ -510,23 +513,33 @@ pub(crate) async fn publish_preflight(
     .fetch_optional(&mut *transaction)
     .await
     .map_err(read_error)?;
+    let daily_count = daily_post_count(&mut transaction, approval.get("campaign_id"))
+        .await
+        .map_err(read_error)?;
     transaction.commit().await.map_err(read_error)?;
 
-    let Some(requested) = input.schedule_job_id else {
-        return if status == "scheduled" {
-            Err("Scheduled approvals require the current schedule job".to_string())
-        } else {
-            Ok(())
-        };
-    };
-    let is_current = current.is_some_and(|row| {
-        row.get::<i64, _>("id") == requested && row.get::<String, _>("status") == "scheduled"
-    });
-    if is_current {
-        Ok(())
-    } else {
-        Err("Schedule job is not the current scheduled job".to_string())
+    match input.schedule_job_id {
+        None if status == "scheduled" => {
+            return Err("Scheduled approvals require the current schedule job".to_string());
+        }
+        None => {}
+        Some(requested) => {
+            let is_current = current.is_some_and(|row| {
+                row.get::<i64, _>("id") == requested
+                    && row.get::<String, _>("status") == "scheduled"
+            });
+            if !is_current {
+                return Err("Schedule job is not the current scheduled job".to_string());
+            }
+        }
     }
+    let daily_post_limit: i64 = approval.get("daily_post_limit");
+    if daily_count >= daily_post_limit {
+        return Err(format!(
+            "Daily post limit reached for today: {daily_count}/{daily_post_limit} used"
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]

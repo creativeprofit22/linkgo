@@ -11710,6 +11710,53 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           };
     }
 
+    type CountedRowFacts = {
+      campaignId: number;
+      scheduledFor: string;
+      approvalCampaigns: Array<{ id: number; campaignId: number }>;
+      jobs: Array<{
+        id: number;
+        approvalId: number;
+        status: string;
+        scheduledFor: string;
+      }>;
+      attempts: Array<{
+        approvalId: number;
+        scheduleJobId: number | null;
+        status: string;
+        createdAt: string;
+      }>;
+    };
+
+    /**
+     * Mirrors `count_scheduled_posts` in approval_scheduling.rs: counted jobs
+     * that day plus succeeded attempts created that day that are not already
+     * counted through their own schedule job (manual publishes).
+     */
+    function countScheduledPosts(facts: CountedRowFacts): number {
+      const windowKey = sqliteWindowKey(facts.scheduledFor);
+      const inCampaign = (approvalId: number): boolean =>
+        facts.approvalCampaigns.some(
+          (row) => row.id === approvalId && row.campaignId === facts.campaignId,
+        );
+      const isCountedJob = (job: CountedRowFacts["jobs"][number]): boolean =>
+        sqliteWindowKey(job.scheduledFor) === windowKey &&
+        schedulingContract.countedJobStatuses.includes(job.status);
+      const jobs = facts.jobs.filter(
+        (job) => inCampaign(job.approvalId) && isCountedJob(job),
+      ).length;
+      const attempts = facts.attempts.filter(
+        (attempt) =>
+          inCampaign(attempt.approvalId) &&
+          attempt.status === "succeeded" &&
+          sqliteWindowKey(attempt.createdAt) === windowKey &&
+          !facts.jobs.some(
+            (job) => job.id === attempt.scheduleJobId && isCountedJob(job),
+          ),
+      ).length;
+      return jobs + attempts;
+    }
+
     /** Mirrors `evaluate_selected_variant` in comment_threads.rs. */
     function evaluateSelectedVariant(
       selectedCount: number,
@@ -11882,6 +11929,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       }
     }
 
+    /** Mirrors `daily_post_count`: succeeded posts today plus open post executions, campaign-wide. */
+    function mockDailyPostCount(campaignId: number): number {
+      return (
+        publishAttempts.filter((attempt) => {
+          const owner = approvals.find((row) => row.id === attempt.approval_id);
+          return (
+            owner?.campaign_id === campaignId &&
+            attempt.status === "succeeded" &&
+            attempt.created_at.slice(0, 10) === getNow().slice(0, 10)
+          );
+        }).length +
+        publishExecutionStore().filter(
+          (execution) =>
+            execution.kind === "post" &&
+            execution.campaignId === campaignId &&
+            isOpenPublishExecution(execution),
+        ).length
+      );
+    }
+
     /** Mirrors `check_post_preflight`: kill switch, then the post gate. */
     function mockPostPublishPreflight(input: {
       approvalId: number;
@@ -11934,24 +12001,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           input.idempotencyKey ===
           `approval:${approval.id}:linkedin:${requested ?? "manual"}`,
         commentaryMatches: input.commentary === commentary,
-        // Succeeded posts today plus open post executions, campaign-wide.
-        dailyCount:
-          publishAttempts.filter((attempt) => {
-            const owner = approvals.find(
-              (row) => row.id === attempt.approval_id,
-            );
-            return (
-              owner?.campaign_id === approval.campaign_id &&
-              attempt.status === "succeeded" &&
-              attempt.created_at.slice(0, 10) === getNow().slice(0, 10)
-            );
-          }).length +
-          publishExecutionStore().filter(
-            (execution) =>
-              execution.kind === "post" &&
-              execution.campaignId === approval.campaign_id &&
-              isOpenPublishExecution(execution),
-          ).length,
+        dailyCount: mockDailyPostCount(approval.campaign_id),
         dailyPostLimit: campaign?.daily_post_limit ?? 0,
       });
       return "error" in gate ? gate.error : null;
@@ -13157,20 +13207,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
             throw new Error(
               "Scheduled approvals require the current schedule job",
             );
-          return Promise.resolve(null);
+        } else {
+          const current = [...scheduleJobs]
+            .filter((job) => job.approval_id === approval.id)
+            .sort(
+              (left, right) =>
+                right.updated_at.localeCompare(left.updated_at) ||
+                right.id - left.id,
+            )[0];
+          if (
+            current?.id !== input.scheduleJobId ||
+            current.status !== "scheduled"
+          )
+            throw new Error("Schedule job is not the current scheduled job");
         }
-        const current = [...scheduleJobs]
-          .filter((job) => job.approval_id === approval.id)
-          .sort(
-            (left, right) =>
-              right.updated_at.localeCompare(left.updated_at) ||
-              right.id - left.id,
-          )[0];
-        if (
-          current?.id !== input.scheduleJobId ||
-          current.status !== "scheduled"
-        )
-          throw new Error("Schedule job is not the current scheduled job");
+        const dailyCount = mockDailyPostCount(approval.campaign_id);
+        const dailyPostLimit = campaign?.daily_post_limit ?? 0;
+        if (dailyCount >= dailyPostLimit)
+          throw new Error(
+            `Daily post limit reached for today: ${dailyCount}/${dailyPostLimit} used`,
+          );
         return Promise.resolve(null);
       } catch (error) {
         return Promise.reject(
@@ -13231,14 +13287,26 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if ("error" in eligibility) throw new Error(eligibility.error);
       // SQLite `date()` buckets by UTC day when an offset is given.
       const windowKey = sqliteWindowKey(scheduledFor);
-      const currentCount = scheduleJobs.filter((job) => {
-        const owner = approvals.find((row) => row.id === job.approval_id);
-        return (
-          owner?.campaign_id === approval.campaign_id &&
-          sqliteWindowKey(job.scheduled_for) === windowKey &&
-          schedulingContract.countedJobStatuses.includes(job.status)
-        );
-      }).length;
+      const currentCount = countScheduledPosts({
+        campaignId: approval.campaign_id,
+        scheduledFor,
+        approvalCampaigns: approvals.map((row) => ({
+          id: row.id,
+          campaignId: row.campaign_id,
+        })),
+        jobs: scheduleJobs.map((job) => ({
+          id: job.id,
+          approvalId: job.approval_id,
+          status: job.status,
+          scheduledFor: job.scheduled_for,
+        })),
+        attempts: publishAttempts.map((attempt) => ({
+          approvalId: attempt.approval_id,
+          scheduleJobId: attempt.schedule_job_id,
+          status: attempt.status,
+          createdAt: attempt.created_at,
+        })),
+      });
       const limit = campaign?.daily_post_limit ?? 0;
       const limitDecision = evaluateScheduleLimit({
         killSwitchReason:
@@ -22403,6 +22471,7 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         evaluateCommentPublish,
         evaluateScheduleEligibility,
         evaluateScheduleLimit,
+        countScheduledPosts,
         evaluateThreadStatus,
         evaluateVariantStatus,
         evaluateCommentAssert,

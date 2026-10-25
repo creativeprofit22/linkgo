@@ -185,7 +185,7 @@ pub(crate) async fn check_post_preflight(
     ensure_publish_input(input)?;
     check_kill_switch(transaction).await?;
 
-    let approval = sqlx::query(&format!(
+    let approval = sqlx::query(
         "SELECT
             approvals.campaign_id AS campaign_id,
             approvals.status AS approval_status,
@@ -199,25 +199,12 @@ pub(crate) async fn check_post_preflight(
                 SELECT COUNT(*) FROM publish_attempts
                 WHERE publish_attempts.approval_id = approvals.id
                     AND publish_attempts.status = 'succeeded'
-            ) AS successful_publish_attempt_count,
-            (
-                SELECT COUNT(*) FROM publish_attempts
-                INNER JOIN approvals counted_approvals
-                    ON counted_approvals.id = publish_attempts.approval_id
-                WHERE counted_approvals.campaign_id = approvals.campaign_id
-                    AND date(publish_attempts.created_at) = date('now')
-                    AND publish_attempts.status = 'succeeded'
-            ) + (
-                SELECT COUNT(*) FROM publish_executions
-                WHERE publish_executions.kind = 'post'
-                    AND publish_executions.campaign_id = approvals.campaign_id
-                    AND publish_executions.status IN {OPEN_STATUSES_SQL}
-            ) AS daily_post_count
+            ) AS successful_publish_attempt_count
         FROM approvals
         INNER JOIN campaigns ON campaigns.id = approvals.campaign_id
         INNER JOIN draft_variants ON draft_variants.id = approvals.draft_variant_id
-        WHERE approvals.id = ?"
-    ))
+        WHERE approvals.id = ?",
+    )
     .bind(input.approval_id)
     .fetch_optional(&mut *transaction)
     .await
@@ -289,6 +276,10 @@ pub(crate) async fn check_post_preflight(
             .unwrap_or_default(),
     );
     let commentary = escape_linkedin_little_text(&raw_commentary);
+    let campaign_id: i64 = approval.try_get("campaign_id").unwrap_or_default();
+    let daily_count = daily_post_count(transaction, campaign_id)
+        .await
+        .map_err(|_| "Could not read approval".to_string())?;
     evaluate_post_publish(&PostPublishFacts {
         campaign_status: &campaign_status,
         approval_status: &approval_status,
@@ -298,14 +289,41 @@ pub(crate) async fn check_post_preflight(
         current_scheduled_job: current_scheduled_id,
         idempotency_matches: input.idempotency_key == expected_idempotency_key,
         commentary_matches: commentary == input.commentary,
-        daily_count: approval.try_get("daily_post_count").unwrap_or(0),
+        daily_count,
         daily_post_limit: approval.try_get("daily_post_limit").unwrap_or(0),
     })?;
 
     Ok(PublishApprovalPreflight {
         commentary,
-        campaign_id: approval.try_get("campaign_id").unwrap_or_default(),
+        campaign_id,
     })
+}
+
+/// Posts counted against a campaign's daily post limit: today's succeeded
+/// post attempts plus open post executions. Shared by the publish gate and
+/// `linkgo_approval_publish_preflight` so both report the same count.
+pub(crate) async fn daily_post_count(
+    connection: &mut SqliteConnection,
+    campaign_id: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(&format!(
+        "SELECT (
+            SELECT COUNT(*) FROM publish_attempts
+            INNER JOIN approvals counted_approvals
+                ON counted_approvals.id = publish_attempts.approval_id
+            WHERE counted_approvals.campaign_id = ?1
+                AND date(publish_attempts.created_at) = date('now')
+                AND publish_attempts.status = 'succeeded'
+        ) + (
+            SELECT COUNT(*) FROM publish_executions
+            WHERE publish_executions.kind = 'post'
+                AND publish_executions.campaign_id = ?1
+                AND publish_executions.status IN {OPEN_STATUSES_SQL}
+        )"
+    ))
+    .bind(campaign_id)
+    .fetch_one(&mut *connection)
+    .await
 }
 
 /// Facts the post publish gate decides on, loaded by `check_post_preflight`.

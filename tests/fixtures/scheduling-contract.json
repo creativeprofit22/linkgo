@@ -126,5 +126,132 @@
     { "scheduledFor": "2026-11-02T23:30-05:00", "windowKey": "2026-11-03" },
     { "scheduledFor": "2026-11-02T00:30+02:00", "windowKey": "2026-11-01" },
     { "scheduledFor": "2026-12-31T22:00-03:00", "windowKey": "2027-01-01" }
+  ],
+  "countedRowsNote": "Rows that fill campaign 1's daily cap for scheduledFor: counted schedule jobs that day, plus succeeded publish attempts created that day (UTC) that are not already counted through their own schedule job. Matches the publish-time gate, which counts succeeded attempts.",
+  "countedRowApprovals": [
+    { "id": 2, "campaignId": 1 },
+    { "id": 3, "campaignId": 1 },
+    { "id": 4, "campaignId": 2 }
+  ],
+  "countedRowCases": [
+    {
+      "name": "manual post succeeded that day",
+      "scheduledFor": "2026-08-20T10:00:00Z",
+      "jobs": [],
+      "attempts": [
+        {
+          "approvalId": 2,
+          "scheduleJobId": null,
+          "status": "succeeded",
+          "createdAt": "2026-08-20 08:00:00"
+        }
+      ],
+      "expectedCount": 1
+    },
+    {
+      "name": "failed manual attempt does not count",
+      "scheduledFor": "2026-08-20T10:00:00Z",
+      "jobs": [],
+      "attempts": [
+        {
+          "approvalId": 2,
+          "scheduleJobId": null,
+          "status": "failed",
+          "createdAt": "2026-08-20 08:00:00"
+        }
+      ],
+      "expectedCount": 0
+    },
+    {
+      "name": "manual post on another day does not count",
+      "scheduledFor": "2026-08-20T10:00:00Z",
+      "jobs": [],
+      "attempts": [
+        {
+          "approvalId": 2,
+          "scheduleJobId": null,
+          "status": "succeeded",
+          "createdAt": "2026-08-19 23:59:59"
+        }
+      ],
+      "expectedCount": 0
+    },
+    {
+      "name": "manual post in another campaign does not count",
+      "scheduledFor": "2026-08-20T10:00:00Z",
+      "jobs": [],
+      "attempts": [
+        {
+          "approvalId": 4,
+          "scheduleJobId": null,
+          "status": "succeeded",
+          "createdAt": "2026-08-20 08:00:00"
+        }
+      ],
+      "expectedCount": 0
+    },
+    {
+      "name": "completed job and its attempt count once",
+      "scheduledFor": "2026-08-20T10:00:00Z",
+      "jobs": [
+        {
+          "id": 10,
+          "approvalId": 2,
+          "status": "completed",
+          "scheduledFor": "2026-08-20T08:00:00Z"
+        }
+      ],
+      "attempts": [
+        {
+          "approvalId": 2,
+          "scheduleJobId": 10,
+          "status": "succeeded",
+          "createdAt": "2026-08-20 08:00:05"
+        }
+      ],
+      "expectedCount": 1
+    },
+    {
+      "name": "scheduled post that went out a day late counts on the publish day",
+      "scheduledFor": "2026-08-20T10:00:00Z",
+      "jobs": [
+        {
+          "id": 10,
+          "approvalId": 2,
+          "status": "completed",
+          "scheduledFor": "2026-08-19T08:00:00Z"
+        }
+      ],
+      "attempts": [
+        {
+          "approvalId": 2,
+          "scheduleJobId": 10,
+          "status": "succeeded",
+          "createdAt": "2026-08-20 00:00:05"
+        }
+      ],
+      "expectedCount": 1
+    },
+    {
+      "name": "scheduled job and a manual post both count",
+      "scheduledFor": "2026-08-20T10:00:00Z",
+      "jobs": [
+        {
+          "id": 10,
+          "approvalId": 2,
+          "status": "scheduled",
+          "scheduledFor": "2026-08-20T12:00:00Z"
+        }
+      ],
+      "attempts": [
+        {
+          "approvalId": 3,
+          "scheduleJobId": null,
+          "status": "succeeded",
+          "createdAt": "2026-08-20 09:00:00"
+        }
+      ],
+      "expectedCount": 2
+    }
   ]
 }

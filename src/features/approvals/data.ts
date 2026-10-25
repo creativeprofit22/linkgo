@@ -318,7 +318,8 @@ export async function cancelSchedule(
  * Read-only publish preflight, run before any LinkedIn call. Native checks,
  * in order: kill switch, approval exists, campaign not archived, status is
  * approved or scheduled, no earlier success, ready at the reviewed revision,
- * and the current scheduled job. The actual publish re-checks natively.
+ * the current scheduled job, and the campaign's daily post limit. The actual
+ * publish re-checks natively.
  */
 export async function assertApprovalCanPublishViaLinkedIn(
   input: AssertApprovalCanPublishViaLinkedInInput,

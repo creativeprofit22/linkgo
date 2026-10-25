@@ -52,6 +52,14 @@ type SchedulingTable = {
     Case<Record<string, unknown>, { decision: string; message: string }>
   >;
   windowKeyCases: Array<{ scheduledFor: string; windowKey: string }>;
+  countedRowApprovals: Array<{ id: number; campaignId: number }>;
+  countedRowCases: Array<{
+    name: string;
+    scheduledFor: string;
+    jobs: Array<Record<string, unknown>>;
+    attempts: Array<Record<string, unknown>>;
+    expectedCount: number;
+  }>;
 };
 const scheduling = readContract("scheduling-contract.json") as SchedulingTable;
 
@@ -187,6 +195,23 @@ test("fake schedule cap and kill switch match the native contract", async ({
       await callFakeGate<boolean>(page, "isCountedJobStatus", [status]),
       status,
     ).toBe(scheduling.countedJobStatuses.includes(status));
+  }
+});
+
+test("fake schedule cap counts the same rows as the native gate", async ({
+  page,
+}) => {
+  for (const testCase of scheduling.countedRowCases) {
+    const actual = await callFakeGate<number>(page, "countScheduledPosts", [
+      {
+        campaignId: 1,
+        scheduledFor: testCase.scheduledFor,
+        approvalCampaigns: scheduling.countedRowApprovals,
+        jobs: testCase.jobs,
+        attempts: testCase.attempts,
+      },
+    ]);
+    expect(actual, testCase.name).toBe(testCase.expectedCount);
   }
 });
 
