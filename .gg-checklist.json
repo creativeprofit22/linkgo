@@ -95,6 +95,26 @@
         "Not checked: no full bun run check; not a new review of docs/"
       ]
     },
+    "errors-logging": {
+      "checkedAt": "2026-10-18T06:50:06.977Z",
+      "commit": "45a5d0a",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "All 7 findings from the 2026-10-18 review are fixed and verified; this re-check covered only those findings.",
+      "findings": [],
+      "evidence": [
+        "Scheduler + metric refresh workers now record tick_failed events; migration 40 rebuilds both event tables (rows+indexes kept)",
+        "Autopilot tick_failed keeps the real error; approvals.rs maps DB errors to STORAGE_ERROR; due-job decode errors propagate",
+        "main.tsx: window.show failure logged; AppErrorBoundary wraps app with Reload screen",
+        "bun run test:rust — 755 passed, 0 failed; bun run lint:rust (clippy -D warnings) — exit 0; format:rust:check — exit 0",
+        "format:check, lint, typecheck:tests, check:architecture, check:renderer-transactions, check:glossary, build — all exit 0",
+        "Playwright app/scheduler/metrics/autopilot/approvals specs — 84 passed incl. new render-crash test",
+        "New tests: worker_tick_failures migration upgrade + constraint tests; autopilot summary assertion; approvals storage-error assertion",
+        "Skill loaded: durable (inline gate for migration 40; only temp test DBs touched)",
+        "Scope: re-check of the 7 recorded findings only, not a new review",
+        "Not checked: full Playwright suite, desktop RC tests, a real upgraded user DB"
+      ]
+    },
     "git-github": {
       "checkedAt": "2026-10-17T06:02:03.857Z",
       "commit": "d033c0f",
