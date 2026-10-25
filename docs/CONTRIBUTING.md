@@ -9,7 +9,9 @@ exports when moving responsibilities; keep behavioral fixes separate.
   [architecture boundary map](architecture-boundaries.md) and
   [machine policy](../scripts/architecture-policy.json).
 - Add a migration **when storage changes**, owned by the feature that uses it.
-  Never create unused tables or speculative shared frameworks.
+  Never create unused tables or speculative shared frameworks. Pin each new
+  migration's checksum in `src-tauri/src/migrations/shipped_checksums.rs`
+  (the test failure prints it); never change an existing pin.
 - Define types and Zod schemas at the public contract boundary.
 - Expose typed feature capability/data APIs. Native code owns authoritative durable
   mutations; orchestration belongs to workflows, not React hooks or agent tools.

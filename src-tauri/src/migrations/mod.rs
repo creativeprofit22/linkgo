@@ -32,6 +32,8 @@ pub mod publish_executions;
 pub mod relevance_scoring;
 pub mod safety;
 pub mod scheduler;
+#[cfg(test)]
+mod shipped_checksums;
 pub mod source_imports;
 pub mod worker_tick_failures;
 pub mod workflow_artifacts;
@@ -83,6 +85,15 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(draft_lessons::migrations());
     migrations.extend(worker_tick_failures::migrations());
     migrations
+}
+
+/// Highest migration version this build ships.
+pub fn latest_version() -> i64 {
+    get_migrations()
+        .iter()
+        .map(|migration| migration.version)
+        .max()
+        .unwrap_or(0)
 }
 
 fn sqlx_migrator() -> Migrator {
