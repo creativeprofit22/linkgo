@@ -19,6 +19,8 @@ use crate::auth::{
 };
 
 const LOCK_STALE_MINUTES: i64 = 10;
+/// Bounds the error text copied into a `tick_failed` event summary.
+const MAX_TICK_ERROR_CHARS: usize = 500;
 const LINKEDIN_READ_SCOPE_ERROR: &str =
     "LinkedIn read access with r_member_social_feed is required; reconnect after access is approved";
 const API_SOURCE_NOTE: &str =
@@ -876,10 +878,44 @@ fn current_worker() -> (bool, Option<String>) {
     }
 }
 
+/// Runs one tick and records a failure as a `tick_failed` event so it shows
+/// in the analytics activity list instead of vanishing.
+async fn run_worker_tick(app: &AppHandle, runner_id: &str) {
+    let Err(error) = run_tick(app, runner_id).await else {
+        return;
+    };
+    let Ok(pool) = sqlite_pool(app).await else {
+        return;
+    };
+    // Last resort: the app has no log sink, so if this write fails too the
+    // missing event is the only trace. The next tick retries normally.
+    let _ = record_tick_failure(&pool, runner_id, &error).await;
+}
+
+pub(crate) async fn record_tick_failure(
+    pool: &SqlitePool,
+    runner_id: &str,
+    error: &str,
+) -> Result<(), String> {
+    let error: String = error.chars().take(MAX_TICK_ERROR_CHARS).collect();
+    insert_refresh_event(
+        pool,
+        None,
+        None,
+        None,
+        None,
+        "tick_failed",
+        "error",
+        &format!("Metric refresh tick failed: {error}"),
+        &serde_json::json!({ "runnerId": runner_id, "error": error }).to_string(),
+    )
+    .await
+}
+
 fn spawn_worker(app: AppHandle, runner_id: String, stop: Arc<AtomicBool>) {
     std::thread::spawn(move || {
         while !stop.load(Ordering::SeqCst) {
-            let _ = tauri::async_runtime::block_on(run_tick(&app, &runner_id));
+            tauri::async_runtime::block_on(run_worker_tick(&app, &runner_id));
             let sleep_minutes = tauri::async_runtime::block_on(async {
                 let pool = sqlite_pool(&app).await?;
                 let settings = load_settings(&pool).await?;
@@ -1067,7 +1103,7 @@ mod tests {
                     approval_id INTEGER REFERENCES approvals(id) ON DELETE SET NULL,
                     metric_refresh_job_id INTEGER REFERENCES metric_refresh_jobs(id) ON DELETE SET NULL,
                     post_metric_id INTEGER REFERENCES post_metrics(id) ON DELETE SET NULL,
-                    event_type TEXT NOT NULL CHECK(event_type IN ('refresh_started', 'refresh_completed', 'refresh_retry_scheduled', 'refresh_unavailable', 'refresh_failed', 'refresh_blocked', 'worker_started', 'worker_stopped', 'tick_started', 'tick_completed')),
+                    event_type TEXT NOT NULL CHECK(event_type IN ('refresh_started', 'refresh_completed', 'refresh_retry_scheduled', 'refresh_unavailable', 'refresh_failed', 'refresh_blocked', 'worker_started', 'worker_stopped', 'tick_started', 'tick_completed', 'tick_failed')),
                     severity TEXT NOT NULL DEFAULT 'info' CHECK(severity IN ('info', 'warning', 'error')),
                     summary TEXT NOT NULL,
                     metadata_json TEXT NOT NULL DEFAULT '{}',

@@ -81,6 +81,7 @@ export const schedulerEventSchema = z
       "scheduler_stopped",
       "tick_started",
       "tick_completed",
+      "tick_failed",
       "job_claimed",
       "job_blocked",
       "job_published",

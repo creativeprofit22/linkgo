@@ -19,6 +19,9 @@ use crate::publishing::{
 };
 
 const LOCK_STALE_MINUTES: i64 = 10;
+const DUE_JOBS_READ_ERROR: &str = "Could not read due schedule jobs";
+/// Bounds the error text copied into a `tick_failed` event summary.
+const MAX_TICK_ERROR_CHARS: usize = 500;
 
 static WORKER: OnceLock<Mutex<Option<SchedulerWorker>>> = OnceLock::new();
 
@@ -307,22 +310,28 @@ async fn select_due_jobs(pool: &SqlitePool, max_jobs: i64) -> Result<Vec<DueSche
     .bind(max_jobs)
     .fetch_all(pool)
     .await
-    .map_err(|_| "Could not read due schedule jobs".to_string())?;
+    .map_err(|_| DUE_JOBS_READ_ERROR.to_string())?;
 
-    Ok(rows
-        .into_iter()
-        .map(|row| DueScheduleJob {
-            id: row.try_get("id").unwrap_or_default(),
-            approval_id: row.try_get("approval_id").unwrap_or_default(),
-            campaign_id: row.try_get("campaign_id").unwrap_or_default(),
-            attempt_count: row.try_get("attempt_count").unwrap_or_default(),
-            max_attempts: row.try_get("max_attempts").unwrap_or(3),
-            hook: row.try_get("hook").unwrap_or_default(),
-            body: row.try_get("body").unwrap_or_default(),
-            cta: row.try_get("cta").unwrap_or_default(),
-            hashtags: row.try_get("hashtags").unwrap_or_default(),
-        })
-        .collect())
+    rows.iter()
+        .map(due_job_from_row)
+        .collect::<Result<Vec<_>, sqlx::Error>>()
+        .map_err(|_| DUE_JOBS_READ_ERROR.to_string())
+}
+
+/// A column that fails to decode fails the tick instead of becoming job id 0
+/// or an empty post body.
+fn due_job_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<DueScheduleJob, sqlx::Error> {
+    Ok(DueScheduleJob {
+        id: row.try_get("id")?,
+        approval_id: row.try_get("approval_id")?,
+        campaign_id: row.try_get("campaign_id")?,
+        attempt_count: row.try_get("attempt_count")?,
+        max_attempts: row.try_get("max_attempts")?,
+        hook: row.try_get("hook")?,
+        body: row.try_get("body")?,
+        cta: row.try_get("cta")?,
+        hashtags: row.try_get("hashtags")?,
+    })
 }
 
 async fn claim_job(
@@ -552,10 +561,43 @@ fn current_worker() -> (bool, Option<String>) {
     }
 }
 
+/// Runs one tick and records a failure as a `tick_failed` event so it shows
+/// in the scheduler activity list instead of vanishing.
+async fn run_worker_tick(app: &AppHandle, runner_id: &str) {
+    let Err(error) = run_tick(app, runner_id).await else {
+        return;
+    };
+    let Ok(pool) = sqlite_pool(app).await else {
+        return;
+    };
+    // Last resort: the app has no log sink, so if this write fails too the
+    // missing event is the only trace. The next tick retries normally.
+    let _ = record_tick_failure(&pool, runner_id, &error).await;
+}
+
+pub(crate) async fn record_tick_failure(
+    pool: &SqlitePool,
+    runner_id: &str,
+    error: &str,
+) -> Result<(), String> {
+    let error: String = error.chars().take(MAX_TICK_ERROR_CHARS).collect();
+    insert_scheduler_event(
+        pool,
+        None,
+        None,
+        None,
+        "tick_failed",
+        "error",
+        &format!("Scheduler tick failed: {error}"),
+        &serde_json::json!({ "runnerId": runner_id, "error": error }).to_string(),
+    )
+    .await
+}
+
 fn spawn_worker(app: AppHandle, runner_id: String, stop: Arc<AtomicBool>) {
     std::thread::spawn(move || {
         while !stop.load(Ordering::SeqCst) {
-            let _ = tauri::async_runtime::block_on(run_tick(&app, &runner_id));
+            tauri::async_runtime::block_on(run_worker_tick(&app, &runner_id));
             let sleep_seconds = tauri::async_runtime::block_on(async {
                 let pool = sqlite_pool(&app).await?;
                 let settings = load_settings(&pool).await?;

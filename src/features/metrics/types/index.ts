@@ -29,7 +29,8 @@ export type MetricRefreshEventType =
   | "worker_started"
   | "worker_stopped"
   | "tick_started"
-  | "tick_completed";
+  | "tick_completed"
+  | "tick_failed";
 
 export type MetricRefreshEventSeverity = "info" | "warning" | "error";
 

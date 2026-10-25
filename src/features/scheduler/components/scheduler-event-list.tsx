@@ -10,6 +10,7 @@ const eventTypeLabels: Record<SchedulerEventType, string> = {
   scheduler_stopped: "Turned off",
   tick_started: "Check started",
   tick_completed: "Check done",
+  tick_failed: "Check failed",
   job_claimed: "Posting…",
   job_blocked: "Held back",
   job_published: "Posted",

@@ -50,6 +50,7 @@ const refreshEventTypeLabels: Record<MetricRefreshEventType, string> = {
   worker_stopped: "Auto-update turned off",
   tick_started: "Check started",
   tick_completed: "Check done",
+  tick_failed: "Check failed",
 };
 
 const refreshEventSeverityLabels: Record<MetricRefreshEventSeverity, string> = {

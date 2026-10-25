@@ -994,7 +994,15 @@ fn poll_interval(poll_interval_minutes: i64) -> Duration {
     Duration::from_secs(poll_interval_minutes.clamp(5, 1440) as u64 * 60)
 }
 
-async fn record_tick_failure(pool: &SqlitePool, runner_id: &str) -> Result<(), String> {
+/// Bounds the error text copied into a `tick_failed` event summary.
+const MAX_TICK_ERROR_CHARS: usize = 500;
+
+async fn record_tick_failure(
+    pool: &SqlitePool,
+    runner_id: &str,
+    error: &str,
+) -> Result<(), String> {
+    let error: String = error.chars().take(MAX_TICK_ERROR_CHARS).collect();
     insert_event(
         pool,
         None,
@@ -1002,15 +1010,17 @@ async fn record_tick_failure(pool: &SqlitePool, runner_id: &str) -> Result<(), S
         None,
         "tick_failed",
         "error",
-        "Autopilot planner tick failed due to a local database error.",
-        &json!({ "runnerId": runner_id }).to_string(),
+        &format!("Autopilot planner tick failed: {error}"),
+        &json!({ "runnerId": runner_id, "error": error }).to_string(),
     )
     .await
 }
 
 async fn run_worker_tick(pool: &SqlitePool, runner_id: &str) {
-    if run_tick_with_pool(pool, runner_id).await.is_err() {
-        let _ = record_tick_failure(pool, runner_id).await;
+    if let Err(error) = run_tick_with_pool(pool, runner_id).await {
+        // Last resort: the app has no log sink, so if this write fails too
+        // the missing event is the only trace. The next tick retries.
+        let _ = record_tick_failure(pool, runner_id, &error).await;
     }
 }
 
@@ -1730,13 +1740,13 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let pool = migrated_pool(2).await;
 
-            record_tick_failure(&pool, "worker-failure")
+            record_tick_failure(&pool, "worker-failure", "Could not load planner settings")
                 .await
                 .expect("tick_failed should satisfy the planner event constraint");
 
             let event = sqlx::query(
                 "SELECT campaign_id, source_import_batch_id, autopilot_plan_id,
-                        event_type, severity, metadata_json
+                        event_type, severity, summary, metadata_json
                    FROM autopilot_planner_events",
             )
             .fetch_one(&pool)
@@ -1750,6 +1760,14 @@ mod tests {
             assert!(event
                 .get::<String, _>("metadata_json")
                 .contains("worker-failure"));
+            // The real cause is kept, not replaced by a generic message.
+            assert_eq!(
+                event.get::<String, _>("summary"),
+                "Autopilot planner tick failed: Could not load planner settings"
+            );
+            assert!(event
+                .get::<String, _>("metadata_json")
+                .contains("Could not load planner settings"));
             pool.close().await;
         });
     }

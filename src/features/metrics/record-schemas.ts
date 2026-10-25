@@ -176,6 +176,7 @@ const refreshEventSchema = z.strictObject({
     "worker_stopped",
     "tick_started",
     "tick_completed",
+    "tick_failed",
   ]),
   severity: z.enum(["info", "warning", "error"]),
   summary: z.string(),

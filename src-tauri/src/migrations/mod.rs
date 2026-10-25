@@ -33,6 +33,7 @@ pub mod relevance_scoring;
 pub mod safety;
 pub mod scheduler;
 pub mod source_imports;
+pub mod worker_tick_failures;
 pub mod workflow_artifacts;
 pub mod workflows;
 use sqlx::{
@@ -80,6 +81,7 @@ pub fn get_migrations() -> Vec<Migration> {
     migrations.extend(publish_executions::migrations());
     migrations.extend(brightdata_connector::migrations());
     migrations.extend(draft_lessons::migrations());
+    migrations.extend(worker_tick_failures::migrations());
     migrations
 }
 
