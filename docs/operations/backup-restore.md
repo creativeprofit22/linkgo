@@ -1,16 +1,34 @@
 # Backup and restore (operator procedure)
 
 Linkgo keeps all campaign, draft, approval, schedule, safety and publish
-history in one local SQLite database. There is no cloud copy and no in-app
-backup feature: **your backup is the last manual copy you made** (RPO = time
-of the last copy). Verified on Windows 10 x64; see
+history in one local SQLite database. There is no cloud copy. Manual
+procedure verified on Windows 10 x64; see
 `docs/verification/2026-09-27-desktop-release-candidate.md`.
+
+## Automatic snapshots
+
+On startup Linkgo writes consistent copies (`VACUUM INTO`) into a `backups`
+folder next to the database:
+
+- `linkgo-pre-migration-v<N>-<UTC stamp>.db` before it upgrades an existing
+  database (newest 5 kept). If this copy fails, Linkgo stops and does not
+  upgrade.
+- `linkgo-daily-<UTC stamp>.db` at most once every 24 hours (newest 7 kept;
+  best effort, retried next launch).
+
+These copies sit on the same disk, so they cover bad upgrades and mistakes,
+not disk loss: RPO is up to 24 hours plus the time since your last launch.
+Copy the `backups` folder (or make a manual backup) to another drive to
+survive a disk failure. Restore a snapshot by following **Restore** below,
+renaming the snapshot to `linkgo.db`. Other files in the folder are never
+pruned.
 
 ## What is where (Windows)
 
 | Item                          | Location                                                                          | In the backup?                                    |
 | ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------- |
 | Database                      | `%APPDATA%\com.linkgo.app\linkgo.db`                                              | Yes                                               |
+| Automatic snapshots           | `%APPDATA%\com.linkgo.app\backups\`                                               | Optional — copy to another drive                  |
 | Database side files           | `linkgo.db-wal`, `linkgo.db-shm`, `linkgo.db-journal` next to it, if present      | Yes — always copy together with `linkgo.db`       |
 | AI and LinkedIn credentials   | Windows Credential Manager, service `linkgo`                                      | **No** — reconnect after restore                  |
 | Plaintext credential fallback | `linkgo-credentials.json` (only if `LINKGO_CREDENTIAL_FILE_FALLBACK` was enabled) | Not recommended; treat as a secret if you copy it |

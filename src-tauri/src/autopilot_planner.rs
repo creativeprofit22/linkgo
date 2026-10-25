@@ -949,11 +949,23 @@ pub(crate) async fn managed_pool(app: &AppHandle) -> Result<SqlitePool, String> 
             .map_err(|error| format!("Could not create Linkgo database directory: {error}"))?;
     }
     let options = SqliteConnectOptions::new()
-        .filename(sqlite_path)
+        .filename(&sqlite_path)
         .create_if_missing(true)
         .foreign_keys(true)
         .busy_timeout(Duration::from_secs(5));
+    // Never upgrade the only copy without a way back: a failed pre-migration
+    // snapshot stops startup before any migration runs.
+    crate::db_backup::backup_before_migration(
+        &sqlite_path,
+        crate::migrations::latest_version(),
+        chrono::Utc::now(),
+    )
+    .await
+    .map_err(|error| format!("{error}. Linkgo did not upgrade your data."))?;
     crate::migrations::migrate_database(&options).await?;
+    // Best effort: a missed daily snapshot is retried on the next launch and
+    // must not keep the app from opening.
+    let _ = crate::db_backup::backup_daily(&sqlite_path, chrono::Utc::now()).await;
 
     let pool = SqlitePoolOptions::new()
         .max_connections(1)

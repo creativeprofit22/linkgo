@@ -22,6 +22,7 @@ mod comment_reads;
 mod comment_threads;
 mod comments;
 mod content_calendar;
+mod db_backup;
 mod db_transaction;
 mod draft_ai_audits;
 mod draft_generation;
