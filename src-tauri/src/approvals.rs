@@ -129,21 +129,23 @@ pub(crate) async fn execute_record_publish_attempt(
     .bind(input.approval_id)
     .fetch_optional(&mut *connection)
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|_| STORAGE_ERROR.to_string())?
     .ok_or_else(|| "Approval was not found".to_string())?;
 
     let campaign_status: String = row
         .try_get("campaign_status")
-        .map_err(|error| error.to_string())?;
+        .map_err(|_| STORAGE_ERROR.to_string())?;
     let approval = ApprovalState {
-        id: row.try_get("id").map_err(|error| error.to_string())?,
+        id: row.try_get("id").map_err(|_| STORAGE_ERROR.to_string())?,
         campaign_id: row
             .try_get("campaign_id")
-            .map_err(|error| error.to_string())?,
-        status: row.try_get("status").map_err(|error| error.to_string())?,
+            .map_err(|_| STORAGE_ERROR.to_string())?,
+        status: row
+            .try_get("status")
+            .map_err(|_| STORAGE_ERROR.to_string())?,
         reviewed_content_revision: row
             .try_get("reviewed_content_revision")
-            .map_err(|error| error.to_string())?,
+            .map_err(|_| STORAGE_ERROR.to_string())?,
     };
 
     let operator = mode == PublishRecordMode::Operator;
@@ -179,7 +181,7 @@ pub(crate) async fn execute_record_publish_attempt(
         .bind(schedule_job_id)
         .fetch_optional(&mut *connection)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|_| STORAGE_ERROR.to_string())?;
         if schedule_approval_id != Some(input.approval_id) {
             return Err("Schedule job was not found".to_string());
         }
@@ -225,7 +227,7 @@ pub(crate) async fn execute_record_publish_attempt(
     .bind(&input.error_message)
     .execute(&mut *connection)
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|_| STORAGE_ERROR.to_string())?
     .last_insert_rowid();
 
     if input.status == "succeeded" {
@@ -236,7 +238,7 @@ pub(crate) async fn execute_record_publish_attempt(
             .bind(input.approval_id)
             .execute(&mut *connection)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|_| STORAGE_ERROR.to_string())?;
         }
         if let Some(schedule_job_id) = input.schedule_job_id {
             sqlx::query(
@@ -245,7 +247,7 @@ pub(crate) async fn execute_record_publish_attempt(
             .bind(schedule_job_id)
             .execute(&mut *connection)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|_| STORAGE_ERROR.to_string())?;
         }
     } else if can_transition && approval.status != "published" {
         sqlx::query("UPDATE approvals SET status = ?2, updated_at = datetime('now') WHERE id = ?1")
@@ -257,7 +259,7 @@ pub(crate) async fn execute_record_publish_attempt(
             })
             .execute(&mut *connection)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|_| STORAGE_ERROR.to_string())?;
         if let Some(schedule_job_id) = input.schedule_job_id {
             sqlx::query(
                 "UPDATE schedule_jobs SET status = 'failed', updated_at = datetime('now') WHERE id = ?1",
@@ -265,7 +267,7 @@ pub(crate) async fn execute_record_publish_attempt(
             .bind(schedule_job_id)
             .execute(&mut *connection)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|_| STORAGE_ERROR.to_string())?;
         }
     }
 
@@ -302,7 +304,7 @@ pub(crate) async fn execute_record_publish_attempt(
     .bind(metadata)
     .execute(&mut *connection)
     .await
-    .map_err(|error| error.to_string())?;
+    .map_err(|_| STORAGE_ERROR.to_string())?;
 
     if input.status == "failed" {
         let error_item_id = sqlx::query(
@@ -315,7 +317,7 @@ pub(crate) async fn execute_record_publish_attempt(
         .bind(&input.error_message)
         .execute(&mut *connection)
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|_| STORAGE_ERROR.to_string())?
         .last_insert_rowid();
 
         let error_metadata = json!({
@@ -334,7 +336,7 @@ pub(crate) async fn execute_record_publish_attempt(
         .bind(error_metadata)
         .execute(&mut *connection)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|_| STORAGE_ERROR.to_string())?;
     }
 
     Ok(attempt_id)
@@ -345,18 +347,25 @@ pub(crate) async fn record_publish_attempt(
     input: RecordPublishAttemptInput,
 ) -> Result<i64, String> {
     let input = validate_record_publish_attempt(input)?;
-    let mut connection = pool.acquire().await.map_err(|error| error.to_string())?;
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(|_| STORAGE_ERROR.to_string())?;
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *connection)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|_| STORAGE_ERROR.to_string())?;
 
     match execute_record_publish_attempt(&mut connection, &input, PublishRecordMode::Operator).await
     {
         Ok(attempt_id) => {
-            if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
+            if sqlx::query("COMMIT")
+                .execute(&mut *connection)
+                .await
+                .is_err()
+            {
                 let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                Err(error.to_string())
+                Err(STORAGE_ERROR.to_string())
             } else {
                 Ok(attempt_id)
             }
@@ -618,7 +627,8 @@ mod tests {
 
         let result = record_publish_attempt(&pool, input("failed")).await;
 
-        assert!(result.unwrap_err().contains("injected late failure"));
+        // Raw database text never reaches the operator.
+        assert_eq!(result.unwrap_err(), STORAGE_ERROR);
         assert_eq!(
             sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM publish_attempts")
                 .fetch_one(&pool)
