@@ -25,7 +25,8 @@ import type {
   UpdateDraftVariantInput,
   ClaimDraftQualityInput,
 } from "@/features/drafts/types";
-import { IS_TAURI } from "@/lib/env";
+import { AppErrorBoundary } from "@/components/app-error-boundary";
+import { IS_TAURI, IS_TEST } from "@/lib/env";
 import type {
   CreateWorkflowArtifactInput,
   CreateWorkflowRunInput,
@@ -208,7 +209,10 @@ function RootShell(): React.ReactNode {
     void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
       void getCurrentWindow()
         .show()
-        .catch(() => {});
+        .catch((error: unknown) => {
+          // The window starts hidden; leave a trace if it can't be shown.
+          console.error("Showing the main window failed", error);
+        });
     });
     void import("@/features/drafts/data")
       .then(({ reconcileStaleDraftQuality }) => reconcileStaleDraftQuality())
@@ -227,8 +231,20 @@ function RootShell(): React.ReactNode {
   return <HomePage />;
 }
 
+/** Test-only: throws during render so tests can reach the crash screen. */
+function TestRenderCrash(): React.ReactNode {
+  throw new Error("Forced render crash for tests");
+}
+
+const forceRenderCrash =
+  IS_TEST &&
+  (window as { __LINKGO_FORCE_RENDER_CRASH__?: boolean })
+    .__LINKGO_FORCE_RENDER_CRASH__ === true;
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <RootShell />
+    <AppErrorBoundary>
+      {forceRenderCrash ? <TestRenderCrash /> : <RootShell />}
+    </AppErrorBoundary>
   </React.StrictMode>,
 );

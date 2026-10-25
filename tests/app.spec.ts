@@ -25,6 +25,23 @@ test("app root renders campaigns by default", async ({ page }) => {
   await expect(page.getByText("0 of 4 done")).toBeVisible();
 });
 
+test("a render crash shows a recovery screen instead of a blank window", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (
+      window as { __LINKGO_FORCE_RENDER_CRASH__?: boolean }
+    ).__LINKGO_FORCE_RENDER_CRASH__ = true;
+  });
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+
+  const alert = page.getByRole("alert");
+  await expect(
+    alert.getByRole("heading", { name: "Something went wrong" }),
+  ).toBeVisible();
+  await expect(alert.getByRole("button", { name: "Reload" })).toBeVisible();
+});
+
 test("sidebar sections scroll vertically when the window is short", async ({
   page,
 }) => {
