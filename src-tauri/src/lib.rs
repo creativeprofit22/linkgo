@@ -9,6 +9,7 @@ mod approval_transaction;
 mod approvals;
 mod auth;
 mod autopilot_planner;
+mod blocking_command;
 mod brightdata;
 mod campaign_backlog;
 mod campaigns;

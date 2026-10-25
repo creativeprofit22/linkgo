@@ -7,6 +7,8 @@ use std::sync::{
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
+use crate::blocking_command::run_blocking;
+
 use crate::auth::publish::{
     compose_linkedin_commentary, escape_linkedin_little_text, sqlite_pool, LinkedInPublishPostInput,
 };
@@ -627,7 +629,11 @@ fn spawn_worker(app: AppHandle, runner_id: String, stop: Arc<AtomicBool>) {
 }
 
 #[tauri::command]
-pub fn linkgo_scheduler_status(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
+pub async fn linkgo_scheduler_status(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
+    run_blocking(move || scheduler_status_blocking(app)).await
+}
+
+fn scheduler_status_blocking(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
     let pool = tauri::async_runtime::block_on(sqlite_pool(&app))?;
     let settings = tauri::async_runtime::block_on(load_settings(&pool))?;
     let (running, runner_id) = current_worker();
@@ -635,7 +641,11 @@ pub fn linkgo_scheduler_status(app: AppHandle) -> Result<SchedulerStatusPayload,
 }
 
 #[tauri::command]
-pub fn linkgo_scheduler_start(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
+pub async fn linkgo_scheduler_start(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
+    run_blocking(move || scheduler_start_blocking(app)).await
+}
+
+fn scheduler_start_blocking(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
     let pool = tauri::async_runtime::block_on(sqlite_pool(&app))?;
     if let Some(reason) = tauri::async_runtime::block_on(kill_switch_block_reason(&pool))? {
         return Err(reason);
@@ -681,11 +691,15 @@ pub fn linkgo_scheduler_start(app: AppHandle) -> Result<SchedulerStatusPayload, 
         spawn_worker(app.clone(), runner_id, stop);
     }
 
-    linkgo_scheduler_status(app)
+    scheduler_status_blocking(app)
 }
 
 #[tauri::command]
-pub fn linkgo_scheduler_stop(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
+pub async fn linkgo_scheduler_stop(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
+    run_blocking(move || scheduler_stop_blocking(app)).await
+}
+
+fn scheduler_stop_blocking(app: AppHandle) -> Result<SchedulerStatusPayload, String> {
     let pool = tauri::async_runtime::block_on(sqlite_pool(&app))?;
     tauri::async_runtime::block_on(set_enabled(&pool, false))?;
 
@@ -713,11 +727,15 @@ pub fn linkgo_scheduler_stop(app: AppHandle) -> Result<SchedulerStatusPayload, S
         ),
     ))?;
 
-    linkgo_scheduler_status(app)
+    scheduler_status_blocking(app)
 }
 
 #[tauri::command]
-pub fn linkgo_scheduler_tick(app: AppHandle) -> Result<SchedulerTickResult, String> {
+pub async fn linkgo_scheduler_tick(app: AppHandle) -> Result<SchedulerTickResult, String> {
+    run_blocking(move || scheduler_tick_blocking(app)).await
+}
+
+fn scheduler_tick_blocking(app: AppHandle) -> Result<SchedulerTickResult, String> {
     let runner = current_worker()
         .1
         .unwrap_or_else(|| format!("manual-{}", unix_timestamp()));

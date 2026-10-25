@@ -5,7 +5,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+
+use crate::blocking_command::run_blocking;
 
 #[path = "agent_codex.rs"]
 mod agent_codex;
@@ -1214,7 +1216,18 @@ fn execute_with_oauth_using(
 }
 
 #[tauri::command]
-pub fn linkgo_agent_provider_stream(
+pub async fn linkgo_agent_provider_stream(
+    app: AppHandle,
+    input: AgentProviderStreamInput,
+) -> Result<AgentProviderStreamResult, String> {
+    run_blocking(move || {
+        let locks = app.state::<OAuthRefreshLocks>();
+        agent_provider_stream_blocking(app.clone(), locks, input)
+    })
+    .await
+}
+
+fn agent_provider_stream_blocking(
     app: AppHandle,
     locks: tauri::State<'_, OAuthRefreshLocks>,
     input: AgentProviderStreamInput,

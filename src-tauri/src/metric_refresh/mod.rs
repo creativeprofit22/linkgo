@@ -7,6 +7,8 @@ use std::sync::{
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
+use crate::blocking_command::run_blocking;
+
 use crate::auth::storage::AuthStorage;
 use crate::auth::{
     linkedin::refresh_linkedin_credential,
@@ -945,7 +947,13 @@ fn spawn_worker(app: AppHandle, runner_id: String, stop: Arc<AtomicBool>) {
 }
 
 #[tauri::command]
-pub fn linkgo_metric_refresh_status(app: AppHandle) -> Result<MetricRefreshStatusPayload, String> {
+pub async fn linkgo_metric_refresh_status(
+    app: AppHandle,
+) -> Result<MetricRefreshStatusPayload, String> {
+    run_blocking(move || metric_refresh_status_blocking(app)).await
+}
+
+fn metric_refresh_status_blocking(app: AppHandle) -> Result<MetricRefreshStatusPayload, String> {
     let pool = tauri::async_runtime::block_on(sqlite_pool(&app))?;
     let settings = tauri::async_runtime::block_on(load_settings(&pool))?;
     let (running, runner_id) = current_worker();
@@ -953,7 +961,13 @@ pub fn linkgo_metric_refresh_status(app: AppHandle) -> Result<MetricRefreshStatu
 }
 
 #[tauri::command]
-pub fn linkgo_metric_refresh_start(app: AppHandle) -> Result<MetricRefreshStatusPayload, String> {
+pub async fn linkgo_metric_refresh_start(
+    app: AppHandle,
+) -> Result<MetricRefreshStatusPayload, String> {
+    run_blocking(move || metric_refresh_start_blocking(app)).await
+}
+
+fn metric_refresh_start_blocking(app: AppHandle) -> Result<MetricRefreshStatusPayload, String> {
     let pool = tauri::async_runtime::block_on(sqlite_pool(&app))?;
     tauri::async_runtime::block_on(set_enabled(&pool, true))?;
 
@@ -991,11 +1005,17 @@ pub fn linkgo_metric_refresh_start(app: AppHandle) -> Result<MetricRefreshStatus
         spawn_worker(app.clone(), runner_id, stop);
     }
 
-    linkgo_metric_refresh_status(app)
+    metric_refresh_status_blocking(app)
 }
 
 #[tauri::command]
-pub fn linkgo_metric_refresh_stop(app: AppHandle) -> Result<MetricRefreshStatusPayload, String> {
+pub async fn linkgo_metric_refresh_stop(
+    app: AppHandle,
+) -> Result<MetricRefreshStatusPayload, String> {
+    run_blocking(move || metric_refresh_stop_blocking(app)).await
+}
+
+fn metric_refresh_stop_blocking(app: AppHandle) -> Result<MetricRefreshStatusPayload, String> {
     let pool = tauri::async_runtime::block_on(sqlite_pool(&app))?;
     tauri::async_runtime::block_on(set_enabled(&pool, false))?;
 
@@ -1024,11 +1044,15 @@ pub fn linkgo_metric_refresh_stop(app: AppHandle) -> Result<MetricRefreshStatusP
         ),
     ))?;
 
-    linkgo_metric_refresh_status(app)
+    metric_refresh_status_blocking(app)
 }
 
 #[tauri::command]
-pub fn linkgo_metric_refresh_tick(app: AppHandle) -> Result<MetricRefreshTickResult, String> {
+pub async fn linkgo_metric_refresh_tick(app: AppHandle) -> Result<MetricRefreshTickResult, String> {
+    run_blocking(move || metric_refresh_tick_blocking(app)).await
+}
+
+fn metric_refresh_tick_blocking(app: AppHandle) -> Result<MetricRefreshTickResult, String> {
     let runner = current_worker()
         .1
         .unwrap_or_else(|| format!("manual-{}", unix_timestamp()));

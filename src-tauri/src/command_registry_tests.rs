@@ -371,3 +371,66 @@ fn test_only_mock_commands_are_never_registered() {
         );
     }
 }
+
+/// Sync commands Tauri may run on the main thread because they only touch the
+/// window or tray. Everything else must be `async` (see `blocking_command`).
+const MAIN_THREAD_COMMANDS: [&str; 1] = ["update_tray_menu"];
+
+fn rust_sources(dir: &Path, into: &mut Vec<PathBuf>) {
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("read src dir")
+        .map(|entry| entry.expect("dir entry").path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        if path.is_dir() {
+            rust_sources(&path, into);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            into.push(path);
+        }
+    }
+}
+
+/// Names of `#[tauri::command]` functions declared without `async`.
+fn sync_commands(source: &str) -> Vec<String> {
+    let lines: Vec<&str> = source.lines().collect();
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.trim_start().starts_with("#[tauri::command"))
+        .filter_map(|(index, _)| lines.get(index + 1))
+        .map(|line| line.trim_start())
+        .filter_map(|line| line.strip_prefix("pub ").or(Some(line)))
+        .filter_map(|line| line.strip_prefix("fn "))
+        .filter_map(|rest| rest.split('(').next())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn sync_command_scanner_ignores_async_commands() {
+    let source = concat!(
+        "#[tauri::command]\npub fn a(x: u8) {}\n",
+        "#[tauri::command]\npub async fn b() {}\n",
+        "#[tauri::command]\nfn c() {}\n",
+    );
+    assert_eq!(
+        sync_commands(source),
+        vec!["a".to_string(), "c".to_string()]
+    );
+}
+
+#[test]
+fn native_commands_never_block_the_main_thread() {
+    let mut files = Vec::new();
+    rust_sources(&manifest_dir().join("src"), &mut files);
+    let offenders: Vec<String> = files
+        .iter()
+        .flat_map(|path| sync_commands(&fs::read_to_string(path).expect("read source")))
+        .filter(|name| !MAIN_THREAD_COMMANDS.contains(&name.as_str()))
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "sync commands run on the UI thread; make them async with run_blocking: {offenders:?}"
+    );
+}

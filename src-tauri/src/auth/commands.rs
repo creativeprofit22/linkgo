@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::blocking_command::run_blocking;
 
 use super::claude_code_version;
 use super::external_browser;
@@ -195,7 +197,11 @@ fn validated_destination(input: &SaveApiKeyInput) -> Result<Option<ProviderDesti
 }
 
 #[tauri::command]
-pub fn linkgo_auth_status(app: AppHandle) -> Result<AuthStatusPayload, String> {
+pub async fn linkgo_auth_status(app: AppHandle) -> Result<AuthStatusPayload, String> {
+    run_blocking(move || auth_status_blocking(app)).await
+}
+
+fn auth_status_blocking(app: AppHandle) -> Result<AuthStatusPayload, String> {
     let storage = AuthStorage::new(&app)?;
     let accounts = storage
         .list_statuses()?
@@ -211,7 +217,14 @@ pub fn linkgo_auth_status(app: AppHandle) -> Result<AuthStatusPayload, String> {
 }
 
 #[tauri::command]
-pub fn linkgo_auth_api_key(
+pub async fn linkgo_auth_api_key(
+    app: AppHandle,
+    input: SaveApiKeyInput,
+) -> Result<AuthStatusPayload, String> {
+    run_blocking(move || auth_api_key_blocking(app, input)).await
+}
+
+fn auth_api_key_blocking(
     app: AppHandle,
     input: SaveApiKeyInput,
 ) -> Result<AuthStatusPayload, String> {
@@ -244,7 +257,7 @@ pub fn linkgo_auth_api_key(
             auth_url: None,
         },
     );
-    linkgo_auth_status(app).map_err(redact_error)
+    auth_status_blocking(app).map_err(redact_error)
 }
 
 /// OpenAI/Anthropic sign-in reuses Codex/Claude Code public client IDs, so
@@ -259,7 +272,14 @@ fn ensure_ai_scopes_unset(scopes: &Option<Vec<String>>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn linkgo_auth_oauth_start(
+pub async fn linkgo_auth_oauth_start(
+    app: AppHandle,
+    input: OAuthStartInput,
+) -> Result<OAuthStartResult, String> {
+    run_blocking(move || auth_oauth_start_blocking(app, input)).await
+}
+
+fn auth_oauth_start_blocking(
     app: AppHandle,
     input: OAuthStartInput,
 ) -> Result<OAuthStartResult, String> {
@@ -318,14 +338,21 @@ pub fn linkgo_auth_oauth_start(
 }
 
 #[tauri::command]
-pub fn linkgo_auth_oauth_code(
+pub async fn linkgo_auth_oauth_code(
+    app: AppHandle,
+    input: OAuthCodeInput,
+) -> Result<AuthStatusPayload, String> {
+    run_blocking(move || auth_oauth_code_blocking(app, input)).await
+}
+
+fn auth_oauth_code_blocking(
     app: AppHandle,
     input: OAuthCodeInput,
 ) -> Result<AuthStatusPayload, String> {
     ensure_known_provider(&input.provider_key)?;
     if let Some(provider) = AiOAuthProvider::from_key(&input.provider_key) {
         ai_signin::submit_pasted(&app, provider, &input.code, &input.state)?;
-        return linkgo_auth_status(app).map_err(redact_error);
+        return auth_status_blocking(app).map_err(redact_error);
     }
     if input.provider_key != "linkedin" {
         return Err("OAuth code exchange is currently available for LinkedIn".to_string());
@@ -346,13 +373,20 @@ pub fn linkgo_auth_oauth_code(
             auth_url: None,
         },
     );
-    linkgo_auth_status(app).map_err(redact_error)
+    auth_status_blocking(app).map_err(redact_error)
 }
 
 /// Stops a waiting OpenAI/Anthropic sign-in (loopback listener and pending
 /// PKCE session). No credential is changed.
 #[tauri::command]
-pub fn linkgo_auth_oauth_cancel(
+pub async fn linkgo_auth_oauth_cancel(
+    app: AppHandle,
+    input: ProviderInput,
+) -> Result<AuthStatusPayload, String> {
+    run_blocking(move || auth_oauth_cancel_blocking(app, input)).await
+}
+
+fn auth_oauth_cancel_blocking(
     app: AppHandle,
     input: ProviderInput,
 ) -> Result<AuthStatusPayload, String> {
@@ -360,14 +394,18 @@ pub fn linkgo_auth_oauth_cancel(
     let provider = AiOAuthProvider::from_key(&input.provider_key)
         .ok_or_else(|| "Sign-in cancel is available for OpenAI and Anthropic".to_string())?;
     ai_signin::cancel(&app, provider)?;
-    linkgo_auth_status(app).map_err(redact_error)
+    auth_status_blocking(app).map_err(redact_error)
 }
 
 #[tauri::command]
-pub fn linkgo_auth_logout(
+pub async fn linkgo_auth_logout(
     app: AppHandle,
     input: ProviderInput,
 ) -> Result<AuthStatusPayload, String> {
+    run_blocking(move || auth_logout_blocking(app, input)).await
+}
+
+fn auth_logout_blocking(app: AppHandle, input: ProviderInput) -> Result<AuthStatusPayload, String> {
     ensure_known_provider(&input.provider_key)?;
     if let Some(provider) = AiOAuthProvider::from_key(&input.provider_key) {
         // Silent: logout emits its own "disconnected" event below.
@@ -384,11 +422,22 @@ pub fn linkgo_auth_logout(
             auth_url: None,
         },
     );
-    linkgo_auth_status(app).map_err(redact_error)
+    auth_status_blocking(app).map_err(redact_error)
 }
 
 #[tauri::command]
-pub fn linkgo_auth_check(
+pub async fn linkgo_auth_check(
+    app: AppHandle,
+    input: ProviderInput,
+) -> Result<AuthStatusPayload, String> {
+    run_blocking(move || {
+        let locks = app.state::<OAuthRefreshLocks>();
+        auth_check_blocking(app.clone(), locks, input)
+    })
+    .await
+}
+
+fn auth_check_blocking(
     app: AppHandle,
     locks: tauri::State<'_, OAuthRefreshLocks>,
     input: ProviderInput,
@@ -426,7 +475,7 @@ pub fn linkgo_auth_check(
                 }
             }
         }
-        return linkgo_auth_status(app).map_err(redact_error);
+        return auth_status_blocking(app).map_err(redact_error);
     }
     if let Some(StoredCredential::OAuth(mut credentials)) = storage.load(&input.provider_key)? {
         if credentials.provider_key == "linkedin" {
@@ -460,7 +509,7 @@ pub fn linkgo_auth_check(
             }
         }
     }
-    linkgo_auth_status(app).map_err(redact_error)
+    auth_status_blocking(app).map_err(redact_error)
 }
 
 fn unix_now() -> i64 {
