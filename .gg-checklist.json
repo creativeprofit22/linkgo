@@ -79,6 +79,24 @@
         "Not checked: did not invoke /commit end to end or run full bun run check; file not committed"
       ]
     },
+    "dependencies": {
+      "checkedAt": "2026-10-25T15:57:31.454Z",
+      "commit": "7652fad",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 5 recorded findings: all fixed; check:deps reports 0 unreviewed advisories and the unused npm package is removed.",
+      "findings": [],
+      "evidence": [
+        "bun run check:deps: exit 0, 12 findings, all 12 covered by existing reviewed exceptions, 0 unreviewed",
+        "cargo update: rustls-webpki 0.103.16, webpki-roots 1.0.11, tokio 1.54.1",
+        "package.json: zod 4.6.7 (+ override, single locked copy), vite 8.1.6, @tauri-apps/plugin-sql removed; README updated",
+        "src/workflows/data.ts: removed cast the zod bump made redundant (lint error)",
+        "Passed: format:check, lint, typecheck:tests, build, check:renderer-transactions, check:architecture",
+        "cargo test: 755 passed, 3 ignored; bun run test (Playwright): 541 passed",
+        "Scope: re-check of the 5 findings recorded earlier today only, not a new review",
+        "Not checked: cargo clippy/fmt after lock bump, desktop tests (test:desktop), transitive unused deps"
+      ]
+    },
     "docs": {
       "checkedAt": "2026-10-17T05:36:55.434Z",
       "commit": "d033c0f",
