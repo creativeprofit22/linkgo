@@ -1,6 +1,6 @@
 # Dependency and supply-chain risk
 
-Owner: creativeprofit22. Last full review: 2026-09-26. Next review due: before the earliest
+Owner: creativeprofit22. Last full review: 2026-10-25. Next review due: before the earliest
 exception expiry (2026-12-24), or whenever a dependency changes.
 
 ## How to scan
@@ -54,29 +54,49 @@ Every third-party action is pinned to a full commit SHA with a version comment. 
 `dtolnay/rust-toolchain` has no releases; it is pinned to a `stable` branch commit and sets
 `toolchain: stable` explicitly.
 
-## Current state (2026-09-26)
+## Current state (2026-10-25)
+
+Remediated by manifest pin and lockfile updates (see
+[`../verification/2026-10-25-dependency-scan.md`](../verification/2026-10-25-dependency-scan.md)):
+
+- JS: vite 8.0.16 → 8.1.6 (pin), clearing GHSA-587h-7wmj-h5pm, GHSA-698v-4r3x-3vcv,
+  GHSA-9jrq-w75r-8gcw, GHSA-r825-w8mm-5pxw and GHSA-rq7h-c2jc-7f22. zod 4.6.7 (pin plus a
+  `zod` entry in `overrides`, so eslint-plugin-react-hooks no longer locks zod 4.4.3), clearing
+  GHSA-mrhx-c7xc-m3w5. `@tauri-apps/plugin-sql` removed. `bun audit` is clean.
+- Rust (`Cargo.lock` only): rustls-webpki 0.103.16, webpki-roots 1.0.11 and tokio 1.54.1,
+  clearing RUSTSEC-2026-0381, RUSTSEC-2026-0382 and RUSTSEC-2026-0386.
+
+Remaining findings (12), each covered by a dated exception in
+[`dependency-exceptions.json`](dependency-exceptions.json):
+
+| Advisory          | Crate                    | Kind          | Reachability                                               | Blocked on                        | Expires    |
+| ----------------- | ------------------------ | ------------- | ---------------------------------------------------------- | --------------------------------- | ---------- |
+| RUSTSEC-2026-0235 | rkyv 0.7.46              | vulnerability | Not compiled for any target (sqlx-mysql/rust_decimal only) | upstream sqlx                     | 2026-12-24 |
+| RUSTSEC-2023-0071 | rsa 0.9.10               | vulnerability | Not compiled for any target (sqlx-mysql only)              | no patched release                | 2026-12-24 |
+| RUSTSEC-2024-0429 | glib 0.18.5              | unsound       | Linux only; affected `VariantStrIter` never called         | Tauri gtk-rs major upgrade        | 2026-12-24 |
+| RUSTSEC-2024-0370 | proc-macro-error 1.0.4   | unmaintained  | Build-time proc-macro (Linux gtk chain)                    | upstream gtk-rs                   | 2026-12-24 |
+| RUSTSEC-2025-0081 | unic-char-property 0.9.0 | unmaintained  | urlpattern via tauri-utils; no known vulnerability         | upstream urlpattern / Tauri       | 2026-12-24 |
+| RUSTSEC-2025-0075 | unic-char-range 0.9.0    | unmaintained  | urlpattern via tauri-utils; no known vulnerability         | upstream urlpattern / Tauri       | 2026-12-24 |
+| RUSTSEC-2025-0080 | unic-common 0.9.0        | unmaintained  | urlpattern via tauri-utils; no known vulnerability         | upstream urlpattern / Tauri       | 2026-12-24 |
+| RUSTSEC-2025-0100 | unic-ucd-ident 0.9.0     | unmaintained  | urlpattern via tauri-utils; no known vulnerability         | upstream urlpattern / Tauri       | 2026-12-24 |
+| RUSTSEC-2025-0098 | unic-ucd-version 0.9.0   | unmaintained  | urlpattern via tauri-utils; no known vulnerability         | upstream urlpattern / Tauri       | 2026-12-24 |
+| RUSTSEC-2026-0370 | zvariant 5.15.1          | unmaintained  | Linux only (tauri-plugin-single-instance → zbus)           | single-instance moving off zbus 5 | 2027-01-14 |
+| RUSTSEC-2026-0371 | zbus_names 4.3.5         | unmaintained  | Linux only (tauri-plugin-single-instance → zbus)           | single-instance moving off zbus 5 | 2027-01-14 |
+| RUSTSEC-2026-0372 | zvariant_derive 5.15.1   | unmaintained  | Linux only (tauri-plugin-single-instance → zbus)           | single-instance moving off zbus 5 | 2027-01-14 |
+
+Reachability was traced with `cargo tree -i <crate> -e normal,build --target <triple>` for
+`x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`, plus
+`--target all -e all --all-features`.
+
+## Earlier state (2026-09-26)
 
 Remediated by lockfile/pin updates (see
 [`../verification/2026-09-26-dependency-scan.md`](../verification/2026-09-26-dependency-scan.md)):
 
 - JS: vite 8.0.10 → 8.0.16 (pin), postcss 8.5.28, nanoid 3.3.19, brace-expansion 5.0.12,
-  browserslist 4.28.7, baseline-browser-mapping 2.11.26. `bun audit` is clean.
+  browserslist 4.28.7, baseline-browser-mapping 2.11.26.
 - Rust: rustls 0.23.45 (shipped TLS client), quick-xml 0.42.0 via plist 1.10.1,
   anyhow 1.0.104, event-listener 5.4.2, spin 0.9.9 (was yanked).
-
-Remaining findings, each covered by a dated exception:
-
-| Advisory          | Crate                    | Kind          | Reachability                                               | Blocked on                  |
-| ----------------- | ------------------------ | ------------- | ---------------------------------------------------------- | --------------------------- |
-| RUSTSEC-2026-0235 | rkyv 0.7.46              | vulnerability | Not compiled for any target (sqlx-mysql/rust_decimal only) | upstream sqlx               |
-| RUSTSEC-2023-0071 | rsa 0.9.10               | vulnerability | Not compiled for any target (sqlx-mysql only)              | no patched release          |
-| RUSTSEC-2024-0429 | glib 0.18.5              | unsound       | Linux only; affected `VariantStrIter` never called         | Tauri gtk-rs major upgrade  |
-| RUSTSEC-2024-0370 | proc-macro-error 1.0.4   | unmaintained  | Build-time proc-macro (Linux gtk chain)                    | upstream gtk-rs             |
-| RUSTSEC-2025-00xx | unic-\* 0.9.0 (5 crates) | unmaintained  | urlpattern via tauri-utils; no known vulnerability         | upstream urlpattern / Tauri |
-
-Reachability was traced with `cargo tree -i <crate> -e normal,build --target <triple>` for
-`x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`, plus
-`--target all -e all --all-features`.
 
 ## Exception policy
 
