@@ -3814,6 +3814,9 @@ export async function setupTauriMocks(page: Page): Promise<void> {
 
     function selectSql(args?: unknown): unknown[] {
       const { query, values } = readSqlArgs(args);
+      if (query.includes("AS open_executions")) {
+        return selectCandidateDeletionBlockers(Number(values[0] ?? 0));
+      }
       if (isAutopilotPlannerQuery(query)) {
         return selectAutopilotPlanner(query, values);
       }
@@ -9250,6 +9253,54 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       );
       if (!request) throw new Error("Draft generation request was not found");
       Object.assign(request, patch);
+    };
+    /** Gives the newest candidate a post approval, so deletion must refuse. */
+    w.__LINKGO_SQL_SEED_CANDIDATE_APPROVAL__ = () => {
+      const candidate = candidatePosts.at(-1);
+      if (candidate === undefined) throw new Error("Candidate was not found");
+      const now = getNow();
+      const draftId = nextDraftId++;
+      const draftVariantId = nextDraftVariantId++;
+      const approvalId = nextApprovalId++;
+      drafts.push({
+        id: draftId,
+        campaign_id: candidate.campaign_id,
+        candidate_post_id: candidate.id,
+        angle: "Approval history fixture",
+        notes: "",
+        content_intent: "idea",
+        status: "drafting",
+        created_at: now,
+        updated_at: now,
+      });
+      draftVariants.push({
+        id: draftVariantId,
+        draft_id: draftId,
+        variant_number: 1,
+        hook: "Approval fixture hook",
+        body: "Approval fixture body",
+        cta: "Approval fixture CTA",
+        hashtags: "#Linkgo",
+        content_revision: 1,
+        status: "selected",
+        created_at: now,
+        updated_at: now,
+      });
+      approvals.push({
+        id: approvalId,
+        campaign_id: candidate.campaign_id,
+        draft_id: draftId,
+        draft_variant_id: draftVariantId,
+        reviewed_content_revision: 1,
+        status: "needs_review",
+        reviewer_notes: "",
+        approved_at: null,
+        rejected_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      persistReloadSnapshot();
+      return { candidateId: candidate.id, approvalId };
     };
     w.__LINKGO_SQL_SEED_LINKED_DRAFT_CANDIDATE_DELETE__ = () => {
       const candidate = candidatePosts.at(-1);
@@ -19634,9 +19685,67 @@ export async function setupTauriMocks(page: Page): Promise<void> {
         : `${normalized.slice(0, 999).trimEnd()}…`;
     }
 
+    // Copied verbatim from src-tauri/src/candidate_queue.rs.
+    const CANDIDATE_OPEN_PUBLISH_MESSAGE =
+      "This idea has a publish in progress. Wait for it to finish or reconcile it in Safety before deleting.";
+    const CANDIDATE_HAS_HISTORY_MESSAGE =
+      "This idea has approvals or publish history, so it can't be deleted. Archive the campaign instead to keep that history.";
+    const CANDIDATE_DELETION_BLOCKER_QUERY = `WITH post_approvals AS ( SELECT a.id FROM approvals a JOIN drafts d ON d.id = a.draft_id WHERE d.candidate_post_id = $1 ), threads AS ( SELECT id, status FROM comment_threads WHERE candidate_post_id = $1 ) SELECT (SELECT COUNT(*) FROM publish_executions pe WHERE pe.status IN ('reserved', 'in_flight', 'outcome_unknown') AND ((pe.kind = 'post' AND pe.subject_id IN (SELECT id FROM post_approvals)) OR (pe.kind = 'comment' AND pe.subject_id IN (SELECT id FROM threads)))) AS open_executions, (SELECT COUNT(*) FROM post_approvals) + (SELECT COUNT(*) FROM threads t WHERE t.status IN ('approved', 'posted') OR EXISTS (SELECT 1 FROM comment_attempts ca WHERE ca.comment_thread_id = t.id)) + (SELECT COUNT(*) FROM publish_executions pe WHERE (pe.kind = 'post' AND pe.subject_id IN (SELECT id FROM post_approvals)) OR (pe.kind = 'comment' AND pe.subject_id IN (SELECT id FROM threads))) AS history`;
+
+    /** Mirrors the counts computed by `candidate_deletion_blocker`. */
+    function selectCandidateDeletionBlockers(
+      candidateId: number,
+    ): Array<{ open_executions: number; history: number }> {
+      const draftIds = new Set(
+        drafts
+          .filter((draft) => draft.candidate_post_id === candidateId)
+          .map((draft) => draft.id),
+      );
+      const approvalIds = new Set(
+        approvals
+          .filter((approval) => draftIds.has(approval.draft_id))
+          .map((approval) => approval.id),
+      );
+      const threads = commentThreads.filter(
+        (thread) => thread.candidate_post_id === candidateId,
+      );
+      const threadIds = new Set(threads.map((thread) => thread.id));
+      const executions = publishExecutionStore().filter(
+        (execution) =>
+          (execution.kind === "post" && approvalIds.has(execution.subjectId)) ||
+          (execution.kind === "comment" && threadIds.has(execution.subjectId)),
+      );
+      const reviewedThreads = threads.filter(
+        (thread) =>
+          thread.status === "approved" ||
+          thread.status === "posted" ||
+          commentAttempts.some(
+            (attempt) => attempt.comment_thread_id === thread.id,
+          ),
+      ).length;
+      return [
+        {
+          open_executions: executions.filter((execution) =>
+            ["reserved", "in_flight", "outcome_unknown"].includes(
+              execution.status,
+            ),
+          ).length,
+          history: approvalIds.size + reviewedThreads + executions.length,
+        },
+      ];
+    }
+
     function deleteCandidateCommand(args: unknown): Promise<unknown> {
       return runNativeMutation(() => {
         const { id } = nativeInput<{ id: number }>(args);
+        const [blockers] = mockSqlSelect<{
+          open_executions: number;
+          history: number;
+        }>(CANDIDATE_DELETION_BLOCKER_QUERY, [id]);
+        if ((blockers?.open_executions ?? 0) > 0)
+          throw new Error(CANDIDATE_OPEN_PUBLISH_MESSAGE);
+        if ((blockers?.history ?? 0) > 0)
+          throw new Error(CANDIDATE_HAS_HISTORY_MESSAGE);
         const requests = mockSqlSelect<{
           request_id: number;
           request_status: string;
@@ -22325,11 +22434,15 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           entry.label = String(input.label ?? "");
           return Promise.resolve(entry);
         }
-        case "linkgo_brightdata_watchlist_remove":
+        case "linkgo_brightdata_watchlist_remove": {
+          if (!brightData.watchlist.some((e) => e.id === input.id)) {
+            throw new Error("Watchlist entry not found");
+          }
           brightData.watchlist = brightData.watchlist.filter(
             (e) => e.id !== input.id,
           );
           return Promise.resolve(null);
+        }
         case "linkgo_brightdata_recover_interrupted": {
           // CLI runs left active by a previous session cannot resume.
           let recovered = 0;

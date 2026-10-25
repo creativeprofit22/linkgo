@@ -342,6 +342,50 @@ test("candidate deletion requires confirmation", async ({ page }) => {
   ).toBeHidden();
 });
 
+test("candidate deletion refuses an idea with approval history", async ({
+  page,
+}) => {
+  await page.goto("/#/campaigns", { waitUntil: "domcontentloaded" });
+  await createCampaign(page);
+  await openQueue(page);
+  await addCandidate(page);
+
+  const fixture = await page.evaluate(() =>
+    (
+      window as unknown as {
+        __LINKGO_SQL_SEED_CANDIDATE_APPROVAL__: () => { candidateId: number };
+      }
+    ).__LINKGO_SQL_SEED_CANDIDATE_APPROVAL__(),
+  );
+
+  page.on("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+
+  await expect(page.getByText("We couldn't delete this idea")).toBeVisible();
+  await expect(
+    page.getByText(
+      "This idea has approvals or publish history, so it can't be deleted. Archive the campaign instead to keep that history.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Jane Operator" }),
+  ).toBeVisible();
+  const candidate = await page.evaluate(
+    (candidateId) =>
+      (
+        window as unknown as {
+          __LINKGO_SQL_CANDIDATE_POSTS__: () => Array<{ id: number }>;
+        }
+      )
+        .__LINKGO_SQL_CANDIDATE_POSTS__()
+        .find((row) => row.id === candidateId),
+    fixture.candidateId,
+  );
+  expect(candidate).toBeDefined();
+});
+
 test("linked draft deletion blocks its workflow and rolls back atomically", async ({
   page,
 }) => {
