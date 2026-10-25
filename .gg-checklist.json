@@ -203,6 +203,27 @@
         "Not checked: the CI change has not run on GitHub yet (not committed or pushed); I stopped the gitleaks dir scan of the working tree"
       ]
     },
+    "security": {
+      "checkedAt": "2026-10-25T17:31:37.548Z",
+      "commit": "68b10f7",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 3 Low findings from the 2026-10-25 full review: post cap fixed and tested; SQL plugin finding withdrawn; installer signing accepted.",
+      "findings": [],
+      "accepted": [
+        "Low: ci.yml:146-160 Windows installers uploaded unsigned. Accepted by owner for now: needs a code-signing certificate in CI secrets.",
+        "Low: lib.rs:75 tauri_plugin_sql registered. Withdrawn on re-check: command_registry_tests.rs:164 already fails on any sql: grant, and managed_pool needs the plugin's DbInstances."
+      ],
+      "evidence": [
+        "Fixed auth/publish.rs check_post_preflight: counts today's succeeded posts + open post executions vs daily_post_limit",
+        "New test manual_post_publish_respects_daily_post_limit: 4 cases pass",
+        "cargo test --lib: 756 passed, 0 failed; cargo fmt --check OK; clippy -D warnings clean",
+        "Playwright safety-gates-contract + approvals specs: 53 passed (fake gate mirrors new contract cases)",
+        "Prettier check, ESLint and tsc -p tsconfig.tests.json clean on changed TS/JSON/docs",
+        "Scope: re-check of the 3 findings recorded earlier today only, not a new review",
+        "Not checked: full bun run check / test:desktop not run; installer signing still open as accepted"
+      ]
+    },
     "tests": {
       "checkedAt": "2026-10-17T18:17:18.729Z",
       "commit": "d033c0f",
