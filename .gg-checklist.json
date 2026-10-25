@@ -184,6 +184,28 @@
         "Not checked: full bun run check / Playwright; AGENTS.md has 4 pre-existing prettier blank-line issues in the gg:init block, left untouched"
       ]
     },
+    "performance": {
+      "checkedAt": "2026-10-25T21:39:20.047Z",
+      "commit": "3c50266",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "Re-check of the 8 findings from the static + bundle review: 6 fixed and verified (main-thread commands, focus refetch, polling), 2 accepted by the owner. Nothing measured at runtime.",
+      "findings": [],
+      "accepted": [
+        "Low: ~55 ORDER BY/WHERE datetime(col) queries skip indexes. Accepted by owner: mixed timestamp formats make datetime() a sort-correctness guard, and every list query is LIMITed.",
+        "Low: append-only event tables (metric_refresh_events, agent_run_events, safety audit events) are never pruned. Accepted by owner: keep full history, including the safety audit trail."
+      ],
+      "evidence": [
+        "Fixed: all 16 sync tauri commands (agent_runtime, auth/commands, scheduler, metric_refresh) are now async via the new blocking_command::run_blocking",
+        "Guard: command_registry_tests::native_commands_never_block_the_main_thread + blocking_command tests (nested block_on works off the caller thread)",
+        "cargo fmt --check OK; cargo clippy -D warnings OK; cargo test: 774 passed, 0 failed, 3 ignored",
+        "Fixed: focus refetch in use-setup-checklist/use-today gated to 30s (createFocusRefreshGate); setup-changed event no longer refetches; Bright Data poll is chained, non-overlapping, paused while hidden",
+        "bun run lint OK; tsc + typecheck:tests OK; format:check OK; check:architecture 0 errors",
+        "Playwright: data-change-events, setup, today, source-imports, brightdata-connector, integrations, scheduler, metrics: 105 passed",
+        "Scope: re-check of the 8 findings recorded earlier today only; not a new review",
+        "Not checked: runtime profiling of the desktop build (no CDP run), full Playwright suite, desktop tests"
+      ]
+    },
     "quality-tools": {
       "checkedAt": "2026-10-17T07:01:58.188Z",
       "commit": "d033c0f",
