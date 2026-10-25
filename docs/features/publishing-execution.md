@@ -161,6 +161,7 @@ Live LinkedIn actions and any data-destructive recovery (deleting rows, editing 
 - Scope checks (`w_member_social`, `w_member_social_feed`) in the live transport before any request.
 - Reviewed-revision readiness gate, content-bound idempotency-key check and typed-confirmation dialogs are unchanged.
 - Daily comment limit counts succeeded attempts plus open comment executions, so concurrent comments cannot exceed it.
+- Daily post limit is enforced at publish time too, not only when scheduling: it counts the campaign's succeeded post attempts today plus open post executions, so manual publishes cannot exceed it.
 - No new LinkedIn destinations or scopes.
 
 ## Tests

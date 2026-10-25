@@ -134,7 +134,9 @@
     "requestedScheduleJob": null,
     "currentScheduledJob": null,
     "idempotencyMatches": true,
-    "commentaryMatches": true
+    "commentaryMatches": true,
+    "dailyCount": 0,
+    "dailyPostLimit": 1
   },
   "postPublishCases": [
     {
@@ -222,10 +224,20 @@
     },
     {
       "name": "commentary mismatch",
-      "facts": { "commentaryMatches": false },
+      "facts": { "commentaryMatches": false, "dailyCount": 1 },
       "expected": {
         "error": "Publish commentary does not match the approved draft variant"
       }
+    },
+    {
+      "name": "daily post limit reached",
+      "facts": { "dailyCount": 1, "dailyPostLimit": 1 },
+      "expected": { "error": "Daily post limit reached for today: 1/1 used" }
+    },
+    {
+      "name": "under a raised daily post limit",
+      "facts": { "dailyCount": 2, "dailyPostLimit": 3 },
+      "expected": { "ok": true }
     }
   ],
   "commentPublishBase": {

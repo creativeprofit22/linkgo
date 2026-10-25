@@ -64,7 +64,7 @@ Tests in `src-tauri/src/safety_dashboard_tests.rs` cover campaign filtering, lis
 - `scheduleApproval` checks the kill switch and campaign daily post limit before creating or updating a schedule.
 - Allowed and blocked schedule decisions create rate-limit and safety audit rows.
 - `cancelSchedule` records `schedule_cancelled`.
-- Explicit OAuth-backed LinkedIn publishing is available only for approved or scheduled posts and records success or failure locally.
+- Explicit OAuth-backed LinkedIn publishing is available only for approved or scheduled posts and records success or failure locally. The native post gate also enforces the campaign daily post limit at publish time.
 - `recordPublishAttempt` records publish success/failure and creates an error item on failure.
 - `setApprovalStatus` records rejected approvals and creates an error item.
 

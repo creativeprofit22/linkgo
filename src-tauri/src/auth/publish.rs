@@ -185,11 +185,12 @@ pub(crate) async fn check_post_preflight(
     ensure_publish_input(input)?;
     check_kill_switch(transaction).await?;
 
-    let approval = sqlx::query(
+    let approval = sqlx::query(&format!(
         "SELECT
             approvals.campaign_id AS campaign_id,
             approvals.status AS approval_status,
             campaigns.status AS campaign_status,
+            campaigns.daily_post_limit AS daily_post_limit,
             draft_variants.hook AS hook,
             draft_variants.body AS body,
             draft_variants.cta AS cta,
@@ -198,12 +199,25 @@ pub(crate) async fn check_post_preflight(
                 SELECT COUNT(*) FROM publish_attempts
                 WHERE publish_attempts.approval_id = approvals.id
                     AND publish_attempts.status = 'succeeded'
-            ) AS successful_publish_attempt_count
+            ) AS successful_publish_attempt_count,
+            (
+                SELECT COUNT(*) FROM publish_attempts
+                INNER JOIN approvals counted_approvals
+                    ON counted_approvals.id = publish_attempts.approval_id
+                WHERE counted_approvals.campaign_id = approvals.campaign_id
+                    AND date(publish_attempts.created_at) = date('now')
+                    AND publish_attempts.status = 'succeeded'
+            ) + (
+                SELECT COUNT(*) FROM publish_executions
+                WHERE publish_executions.kind = 'post'
+                    AND publish_executions.campaign_id = approvals.campaign_id
+                    AND publish_executions.status IN {OPEN_STATUSES_SQL}
+            ) AS daily_post_count
         FROM approvals
         INNER JOIN campaigns ON campaigns.id = approvals.campaign_id
         INNER JOIN draft_variants ON draft_variants.id = approvals.draft_variant_id
-        WHERE approvals.id = ?",
-    )
+        WHERE approvals.id = ?"
+    ))
     .bind(input.approval_id)
     .fetch_optional(&mut *transaction)
     .await
@@ -284,6 +298,8 @@ pub(crate) async fn check_post_preflight(
         current_scheduled_job: current_scheduled_id,
         idempotency_matches: input.idempotency_key == expected_idempotency_key,
         commentary_matches: commentary == input.commentary,
+        daily_count: approval.try_get("daily_post_count").unwrap_or(0),
+        daily_post_limit: approval.try_get("daily_post_limit").unwrap_or(0),
     })?;
 
     Ok(PublishApprovalPreflight {
@@ -305,6 +321,9 @@ pub(crate) struct PostPublishFacts<'a> {
     pub current_scheduled_job: Option<i64>,
     pub idempotency_matches: bool,
     pub commentary_matches: bool,
+    /// Succeeded post attempts today plus open post executions, campaign-wide.
+    pub daily_count: i64,
+    pub daily_post_limit: i64,
 }
 
 /// The first three post gates, which need only the approval row.
@@ -360,6 +379,14 @@ pub(crate) fn evaluate_post_publish(facts: &PostPublishFacts<'_>) -> Result<(), 
     }
     if !facts.commentary_matches {
         return Err("Publish commentary does not match the approved draft variant".to_string());
+    }
+    // Enforced at publish time too, so manual publishes cannot exceed the
+    // campaign's daily post limit that scheduling already respects.
+    if facts.daily_count >= facts.daily_post_limit {
+        return Err(format!(
+            "Daily post limit reached for today: {}/{} used",
+            facts.daily_count, facts.daily_post_limit
+        ));
     }
     Ok(())
 }

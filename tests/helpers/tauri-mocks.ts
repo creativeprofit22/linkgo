@@ -11551,6 +11551,8 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       currentScheduledJob: number | null;
       idempotencyMatches: boolean;
       commentaryMatches: boolean;
+      dailyCount: number;
+      dailyPostLimit: number;
     };
 
     /** Mirrors `evaluate_post_publish` in auth/publish.rs. */
@@ -11590,6 +11592,10 @@ export async function setupTauriMocks(page: Page): Promise<void> {
       if (!facts.commentaryMatches)
         return {
           error: "Publish commentary does not match the approved draft variant",
+        };
+      if (facts.dailyCount >= facts.dailyPostLimit)
+        return {
+          error: `Daily post limit reached for today: ${facts.dailyCount}/${facts.dailyPostLimit} used`,
         };
       return { ok: true };
     }
@@ -11928,6 +11934,25 @@ export async function setupTauriMocks(page: Page): Promise<void> {
           input.idempotencyKey ===
           `approval:${approval.id}:linkedin:${requested ?? "manual"}`,
         commentaryMatches: input.commentary === commentary,
+        // Succeeded posts today plus open post executions, campaign-wide.
+        dailyCount:
+          publishAttempts.filter((attempt) => {
+            const owner = approvals.find(
+              (row) => row.id === attempt.approval_id,
+            );
+            return (
+              owner?.campaign_id === approval.campaign_id &&
+              attempt.status === "succeeded" &&
+              attempt.created_at.slice(0, 10) === getNow().slice(0, 10)
+            );
+          }).length +
+          publishExecutionStore().filter(
+            (execution) =>
+              execution.kind === "post" &&
+              execution.campaignId === approval.campaign_id &&
+              isOpenPublishExecution(execution),
+          ).length,
+        dailyPostLimit: campaign?.daily_post_limit ?? 0,
       });
       return "error" in gate ? gate.error : null;
     }

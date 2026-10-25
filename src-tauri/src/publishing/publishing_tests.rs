@@ -1224,6 +1224,8 @@ fn post_publish_gate_matches_contract() {
             current_scheduled_job: facts["currentScheduledJob"].as_i64(),
             idempotency_matches: facts["idempotencyMatches"].as_bool().unwrap(),
             commentary_matches: facts["commentaryMatches"].as_bool().unwrap(),
+            daily_count: facts["dailyCount"].as_i64().unwrap(),
+            daily_post_limit: facts["dailyPostLimit"].as_i64().unwrap(),
         });
         assert_eq!(actual, contract_expected(case), "{}", case["name"]);
     }
@@ -1250,6 +1252,62 @@ fn comment_publish_gate_matches_contract() {
             daily_comment_limit: facts["dailyCommentLimit"].as_i64().unwrap(),
         });
         assert_eq!(actual, contract_expected(case), "{}", case["name"]);
+    }
+}
+
+/// Regression: the daily post limit used to apply only when scheduling, so
+/// manual publishes could exceed it. Another approval's success today, or an
+/// open post execution in the same campaign, now blocks the reservation.
+#[tokio::test]
+async fn manual_post_publish_respects_daily_post_limit() {
+    for (name, extra_sql, blocked) in [
+        ("nothing yet", "", false),
+        (
+            "another post succeeded today",
+            "INSERT INTO publish_attempts (approval_id, status) VALUES (900, 'succeeded');",
+            true,
+        ),
+        (
+            "another post succeeded yesterday",
+            "INSERT INTO publish_attempts (approval_id, status, created_at)
+               VALUES (900, 'succeeded', datetime('now', '-1 day'));",
+            false,
+        ),
+        (
+            "another post execution is open",
+            "INSERT INTO publish_executions (kind, subject_id, campaign_id, caller, status, owner_token, idempotency_key, content_hash)
+               VALUES ('post', 900, 1, 'manual', 'in_flight', 'seeded-owner', 'seeded-key', 'seeded-hash');",
+            true,
+        ),
+    ] {
+        let (f, id) = approved_fixture().await;
+        seed(
+            &f.pool,
+            &format!(
+                "UPDATE campaigns SET daily_post_limit=1 WHERE id=1;
+                 INSERT INTO drafts (id,campaign_id,candidate_post_id,status) VALUES (900,1,2,'ready_for_review');
+                 INSERT INTO draft_variants (id,draft_id,variant_number,hook,body,status) VALUES (900,900,1,'{HOOK}','{BODY}','selected');
+                 INSERT INTO draft_audits (draft_variant_id,rule_key,severity,message) SELECT 900,value,'pass','ok' FROM json_each('{DETERMINISTIC_RULES}');
+                 INSERT INTO draft_ai_audit_runs (draft_variant_id,content_revision,provider_key,status,completed_at) SELECT id,content_revision,'dry_run','completed',datetime('now') FROM draft_variants WHERE id=900;
+                 INSERT INTO draft_ai_audit_findings (audit_run_id,rule_key,severity,message) SELECT (SELECT MAX(id) FROM draft_ai_audit_runs),value,'pass','ok' FROM json_each('{AUDIT_RULES}');
+                 INSERT INTO draft_quality_runs (draft_variant_id,starting_content_revision,current_content_revision,provider_key,status,final_score,completed_at)
+                   SELECT id,content_revision,content_revision,'dry_run','passed',80,datetime('now') FROM draft_variants WHERE id=900;
+                 INSERT INTO approvals (id,campaign_id,draft_id,draft_variant_id,status) VALUES (900,1,900,900,'approved');
+                 {extra_sql}"
+            ),
+        )
+        .await;
+        let outcome = reserve(&f.pool, post_request(id), ExecutionCaller::Manual)
+            .await
+            .unwrap();
+        let blocked_by_cap = matches!(
+            &outcome,
+            Err(ReserveRefusal::Policy(message)) if message.starts_with("Daily post limit reached")
+        );
+        assert_eq!(blocked_by_cap, blocked, "{name}: {:?}", outcome.as_ref().err());
+        if !blocked {
+            assert!(outcome.is_ok(), "{name}: {:?}", outcome.err());
+        }
     }
 }
 
