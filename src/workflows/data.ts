@@ -305,13 +305,7 @@ export async function executeWorkflowRun(
       ? { id: parsed.id }
       : {
           id: parsed.id,
-          scoring: {
-            ...parsed.scoring,
-            providerKey: parsed.scoring.providerKey as Exclude<
-              typeof parsed.scoring.providerKey,
-              "dry_run"
-            >,
-          },
+          scoring: parsed.scoring,
         };
   await runContentPipelineExecutor(executeInput);
 }

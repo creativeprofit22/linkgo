@@ -8,7 +8,7 @@ Current status: the app shell, Campaigns slice, persistent Campaign Backlog slic
 
 - Bun, Vite, React, TypeScript
 - Tailwind CSS v4
-- Tauri v2 with SQLite via `@tauri-apps/plugin-sql`
+- Tauri v2 with SQLite through native SQLx commands (no SQL in the renderer)
 - Zod feature schemas
 - Playwright end-to-end tests
 - Rust plugin and migration wiring

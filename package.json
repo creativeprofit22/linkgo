@@ -44,7 +44,6 @@
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-autostart": "2.5.1",
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",
-    "@tauri-apps/plugin-sql": "^2.4.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "1.14.0",
@@ -55,7 +54,7 @@
     "sonner": "2.0.7",
     "tailwind-merge": "3.5.0",
     "tailwindcss": "4.2.4",
-    "zod": "4.1.13"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
@@ -73,9 +72,10 @@
     "prettier-plugin-tailwindcss": "0.8.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.59.2",
-    "vite": "8.0.16"
+    "vite": "8.1.6"
   },
   "overrides": {
-    "source-map-js": "1.2.2"
+    "source-map-js": "1.2.2",
+    "zod": "4.6.7"
   }
 }
