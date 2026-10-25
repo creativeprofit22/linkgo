@@ -422,7 +422,7 @@ Delivered:
 - Operator backup/restore procedure (`docs/operations/backup-restore.md`).
 - Evidence: `docs/verification/2026-09-27-desktop-release-candidate.md`.
 
-Explicit exclusions: Windows 10 x64 NSIS only; live AI, LinkedIn OAuth/publishing, MSI install, Windows 11/ARM, macOS and Linux are unverified. No in-app backup feature.
+Explicit exclusions: Windows 10 x64 NSIS only; live AI, LinkedIn OAuth/publishing, MSI install, Windows 11/ARM, macOS and Linux are unverified. No in-app backup feature at RC time; automatic pre-migration and daily local snapshots were added on 2026-10-25 (`src-tauri/src/db_backup.rs`, see `docs/operations/backup-restore.md`).
 
 ## Future slices
 
