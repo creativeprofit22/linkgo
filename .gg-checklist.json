@@ -79,6 +79,23 @@
         "Not checked: did not invoke /commit end to end or run full bun run check; file not committed"
       ]
     },
+    "data-safety": {
+      "checkedAt": "2026-10-25T18:41:16.773Z",
+      "commit": "10bed86",
+      "uncommittedChanges": true,
+      "result": "pass",
+      "summary": "All 5 findings from the 2026-10-25 review are fixed and tested: automatic backups, a guarded idea delete, pinned migration checksums, and a confirmed watchlist removal.",
+      "findings": [],
+      "evidence": [
+        "bun run check (full CI gate: architecture, glossary, format, eslint, tsc, clippy -D warnings, build, Playwright, cargo test): exit 0; Rust 770 passed, 0 failed",
+        "New db_backup.rs: VACUUM INTO before pending migrations (fails startup if the copy fails) plus a daily copy, with retention; db_backup_tests.rs has canary-restore and prune tests",
+        "candidate_queue.rs candidate_deletion_blocker: refuses when approvals, comment history or open publish_executions exist; 5 new tests check that a refused delete leaves the tables unchanged",
+        "migrations/shipped_checksums.rs pins all 40 migration checksums (migration SQL matches HEAD); docs/CONTRIBUTING.md explains how to pin new ones",
+        "watchlist.rs remove now errors when no row matched (unit test); brightdata-panel.tsx confirm is covered by the Playwright dismiss/accept test",
+        "Scope: re-check of the 5 findings recorded earlier today only",
+        "Not checked: a real restore of a production user DB, off-disk backup copy (documented as manual), the /polish visual floor for the confirm dialog (native window.confirm, no visual change)"
+      ]
+    },
     "dependencies": {
       "checkedAt": "2026-10-25T15:57:31.454Z",
       "commit": "7652fad",
