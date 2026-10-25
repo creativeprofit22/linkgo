@@ -220,7 +220,15 @@ function WatchlistEditor({
                   size="sm"
                   disabled={disabled}
                   aria-label={`Remove ${entry.label || entry.url}`}
-                  onClick={() => void state.removeEntry(entry.id)}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Remove ${entry.label || entry.url} from the watchlist? You'll need to add it again to fetch its posts.`,
+                      )
+                    ) {
+                      void state.removeEntry(entry.id);
+                    }
+                  }}
                 >
                   <Trash2 className="size-4" aria-hidden="true" />
                 </Button>

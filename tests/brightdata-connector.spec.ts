@@ -185,6 +185,20 @@ test("watchlist entries can be added, rejected, paused, and removed", async ({
   await include.click();
   await expect(include).toHaveAttribute("aria-checked", "false");
 
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toBe(
+      "Remove Ada from the watchlist? You'll need to add it again to fetch its posts.",
+    );
+    await dialog.dismiss();
+  });
+  await panel.getByRole("button", { name: "Remove Ada" }).click();
+  await expect(
+    panel.getByText("https://www.linkedin.com/in/ada"),
+  ).toBeVisible();
+
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
   await panel.getByRole("button", { name: "Remove Ada" }).click();
   await expect(panel.getByText("No profiles or companies yet.")).toBeVisible();
 });

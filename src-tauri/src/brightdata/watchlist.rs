@@ -153,11 +153,14 @@ pub(crate) async fn update(
 }
 
 pub(crate) async fn remove(pool: &SqlitePool, id: i64) -> Result<(), String> {
-    sqlx::query("DELETE FROM source_watchlist_entries WHERE id = ?1")
+    let done = sqlx::query("DELETE FROM source_watchlist_entries WHERE id = ?1")
         .bind(id)
         .execute(pool)
         .await
         .map_err(|_| STORAGE_ERROR.to_string())?;
+    if done.rows_affected() == 0 {
+        return Err("Watchlist entry not found".to_string());
+    }
     Ok(())
 }
 
@@ -231,5 +234,9 @@ mod tests {
 
         remove(&f.pool, added.id).await.unwrap();
         assert!(list(&f.pool, 1).await.unwrap().is_empty());
+        assert_eq!(
+            remove(&f.pool, added.id).await.unwrap_err(),
+            "Watchlist entry not found"
+        );
     }
 }
